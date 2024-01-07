@@ -1,0 +1,166 @@
+
+struct Parameters {
+    drum_bottom_radius: Length = 50mm;
+    drum_top_radius: Length = 51mm;
+    drum_height: Length = 50mm;
+    
+    thickness: Length = 10mm;
+    depth: Length = 10mm;
+    
+    support_ring_thickness_scalar: Number = 0.2;
+    ring_position_on_bucket: Length = 25mm;
+    
+    printer_preferred_slope: Angle = 60degrees;
+    
+    #[min(1), integer]
+    number_of_segments: Number = 4;
+    
+    
+    #[min(0)]
+    bearing_gap: Length = 0.5mm;
+
+    groove_depth: Length = 1mm;
+}
+
+struct CommonDerived {
+    drum_slope: Length,
+    outer_starting_radius: Length,
+    outer_ending_radius: Length,
+    mid_radius: Length,
+    support_ring_thickness: Length,
+    bearing_space: Length,
+    bearing_radius: Length,
+}
+
+function common_derived(parameters: Parameters) -> CommonDerived {
+    CommonDerived {
+        drum_slope: (parameters.drum_top_radius - parameters.drum_bottom_radius) / parameters.drum_height,
+	outer_starting_radius: parameters.drum_bottom_radius + parameters.ring_position_on_bucket * parameters.drum_slope,
+	outer_ending_radius: parameters.outer_starting_radius - parameters.thickness * parameters.drum_slope,
+	mid_radius: parameters.outer_starting_radius - parameters.thickness * 0.5,
+	support_ring_thickness: parameters.support_ring_thickness_scalar * parameters.thickness,
+	bearing_space: parameters.thickness - parameters.support_ring_thickness * 2,
+	bearing_radius: parameters.bearing_space - parameters.bearing_gap,
+	groove_width: tan(parameters.printer_preferred_slope) * parameters.groove_depth,
+    }
+}
+
+// sketch RingPolygon() {}
+
+widget OuterRing(parameters: Parameters) {
+    let derived = common_derived(parameters);
+
+    let ring_points =
+        [V2(outer_starting_radius, 0), V2(outer_ending_radius, depth),
+    	    V2(derived.mid_radius + derived.bearing_space * 0.5 + parameters.groove_depth, parameters.depth),
+            V2(derived.mid_radius + derived.bearing_space * 0.5, parameters.depth - tan(parameters.printer_preferred_slope) * parameters.groove_depth),
+       	    V2(derived.mid_radius + derived.bearing_space * 0.5, tan(parameters.printer_preferred_slope) * parameters.groove_depth),
+            V2(derived.mid_radius + derived.bearing_space * 0.5 + parameters.groove_depth, 0)];
+
+    let sketch = polygon(ring_points);
+    let main_rail = sketch.rotate_extrude(360degrees / parameteres.number_of_segments);
+
+    let mid_point = V2(outer_starting_radius - groove_depth * 0.8, depth/2);
+    
+    let male_tongue_points = [
+        mid_point,
+        ring_points[2],
+        ring_points[3],
+        ring_points[4],
+        ring_points[5]];
+
+    let sketch = polygon(male_tongue_points);
+    let male_tongue = sketch.rotate_extrude(-10degrees);
+    
+    let female_tonge_points = [
+        outer_ring_points[2],
+        mid_point,
+        outer_ring_points[5],
+        outer_ring_points[0],
+        outer_ring_points[1]];
+
+    let sketch = polygon(female_tonge_points);
+    let female_tonge = sketch.rotate_extrude(10degrees);
+    let female_tonge.rotate(V3(0mm, 0mm, 1mm), 360degrees / parameters.number_of_segments);
+
+    female_tonge
+}
+
+
+// module InnerRing() {
+//     inner_starting_radius_mm = OUTER_STARTING__MM - THICKNESS_MM;
+//     inner_ending_radius_mm = OUTER_ENDING_RADIUS_MM - THICKNESS_MM;
+//     
+//     outer_ring_points =
+//     [[inner_starting_radius_mm, 0], [inner_ending_radius_mm, DEPTH_MM],
+//         [MID_RADIUS_MM - BEARING_SPACE_MM * 0.5 - GROOVE_DEPTH_MM, DEPTH_MM],
+//         [MID_RADIUS_MM - BEARING_SPACE_MM * 0.5, DEPTH_MM - GROOVE_WIDTH_MM],
+//         [MID_RADIUS_MM - BEARING_SPACE_MM * 0.5, GROOVE_WIDTH_MM],
+//         [MID_RADIUS_MM - BEARING_SPACE_MM * 0.5 - GROOVE_DEPTH_MM, 0]];
+//     
+//     rotate_extrude(angle = 360 / NUMBER_OF_SEGMENTS, $fn=360) {
+//         polygon(outer_ring_points);
+//     }
+//     
+//     mid_point = [inner_starting_radius_mm + GROOVE_DEPTH_MM * 0.8, DEPTH_MM/2];
+//     
+//     male_tongue_points = [
+//         mid_point,
+//         outer_ring_points[2],
+//         outer_ring_points[3],
+//         outer_ring_points[4],
+//         outer_ring_points[5]];
+//     
+//     rotate_extrude(angle = -10, $fn=360) {
+//         polygon(male_tongue_points);
+//     }
+//     
+//     female_tonge_points = [
+//         outer_ring_points[2],
+//         mid_point,
+//         outer_ring_points[5],
+//         outer_ring_points[0],
+//         outer_ring_points[1]];
+//     
+//     rotate([0, 0, 360 / NUMBER_OF_SEGMENTS]) {
+//         rotate_extrude(angle = 10, $fn=360) {
+//             polygon(female_tonge_points);
+//         }
+//     }
+// }
+// 
+// module Bearing() {
+//     roller_radius_mm = BEARING_RADIUS_MM * 0.5;
+//     flange_radius_mm = roller_radius_mm + GROOVE_DEPTH_MM;
+//     
+//     points = [
+//         [0.0, 0.0],
+//         [flange_radius_mm, 0.0],
+//         [roller_radius_mm, GROOVE_WIDTH_MM],
+//         [roller_radius_mm, DEPTH_MM - GROOVE_WIDTH_MM],
+//         [flange_radius_mm, DEPTH_MM],
+//         [0.0, DEPTH_MM]];
+//     
+//     rotate_extrude($fn=360) {
+//         polygon(points);
+//     }
+// }
+// 
+// if (EXPORT == "PREVIEW") {
+//     for (i = [0:NUMBER_OF_SEGMENTS]) {
+//         rotate([0, 0, i*(360/NUMBER_OF_SEGMENTS)]) {
+//             OuterRing();
+//             InnerRing();
+//         }
+//     }
+//     
+//     number_of_bearings = floor((MID_RADIUS_MM * PI * 2) / (BEARING_SPACE_MM + GROOVE_DEPTH_MM * 2));
+//     
+//     for (i = [0:number_of_bearings]) {
+//         rotate([0, 0, i*(360/number_of_bearings)]) {
+//             translate([MID_RADIUS_MM, 0, 0]) {
+//                 Bearing();
+//             }
+//         }
+//     }
+// }
