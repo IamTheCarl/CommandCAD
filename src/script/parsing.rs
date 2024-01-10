@@ -18,30 +18,32 @@ use nom_locate::LocatedSpan;
 
 pub type VResult<I, O> = IResult<I, O, nom::error::VerboseError<I>>;
 
-pub trait Span<'a>:
+pub trait Span:
     nom::InputIter<Item = char>
-    + nom::Compare<&'a str>
+    + for<'b> nom::Compare<&'b str>
     + nom::InputLength
     + nom::InputTake
     + nom::InputTakeAtPosition<Item = char>
     + nom::Slice<RangeFrom<usize>>
     + nom::Slice<RangeTo<usize>>
     + nom::Offset
-    + nom::FindSubstring<&'a str>
+    + for<'b> nom::FindSubstring<&'b str>
     + Clone
     + std::fmt::Debug
 {
 }
 
-impl<'a, 'b> Span<'b> for &'a str {}
-impl<'a, 'b> Span<'b> for LocatedSpan<&'a str> {}
+impl<'a> Span for &'a str {}
+impl<'a> Span for LocatedSpan<&'a str> {}
+impl Span for imstr::ImString {}
+impl Span for LocatedSpan<imstr::ImString> {}
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct FileAST<S: for<'a> Span<'a>> {
+pub struct FileAST<S: Span> {
     pub root_elements: Vec<RootElement<S>>,
 }
 
-impl<S: for<'a> Span<'a>> FileAST<S> {
+impl<S: Span> FileAST<S> {
     pub fn parse(input: S) -> VResult<S, Self> {
         all_consuming(map(
             many0(delimited(space0, RootElement::parse, space0)),
@@ -51,7 +53,7 @@ impl<S: for<'a> Span<'a>> FileAST<S> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum RootElement<S: for<'a> Span<'a>> {
+pub enum RootElement<S: Span> {
     Import(Import<S>),
     Struct(Struct<S>),
     Sketch(Sketch<S>),
@@ -59,7 +61,7 @@ pub enum RootElement<S: for<'a> Span<'a>> {
     Function(Function<S>),
 }
 
-impl<S: for<'a> Span<'a>> RootElement<S> {
+impl<S: Span> RootElement<S> {
     fn parse(input: S) -> VResult<S, Self> {
         alt((
             map(Import::parse, Self::Import),
@@ -72,12 +74,12 @@ impl<S: for<'a> Span<'a>> RootElement<S> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Import<S: for<'a> Span<'a>> {
-    path: Vec<S>,
-    external: bool,
+pub struct Import<S: Span> {
+    pub path: Vec<S>,
+    pub external: bool,
 }
 
-impl<S: for<'a> Span<'a>> Import<S> {
+impl<S: Span> Import<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(
@@ -100,12 +102,12 @@ impl<S: for<'a> Span<'a>> Import<S> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Struct<S: for<'a> Span<'a>> {
+pub struct Struct<S: Span> {
     pub name: S,
     pub assignments: Vec<MemberVariable<S>>,
 }
 
-impl<S: for<'a> Span<'a>> Struct<S> {
+impl<S: Span> Struct<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(
@@ -128,11 +130,11 @@ impl<S: for<'a> Span<'a>> Struct<S> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Sketch<S: for<'a> Span<'a>> {
-    named_block: NamedBlock<S>,
+pub struct Sketch<S: Span> {
+    pub named_block: NamedBlock<S>,
 }
 
-impl<S: for<'a> Span<'a>> Sketch<S> {
+impl<S: Span> Sketch<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(pair(take_keyword("sketch"), space1), NamedBlock::parse),
@@ -142,11 +144,11 @@ impl<S: for<'a> Span<'a>> Sketch<S> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Widget<S: for<'a> Span<'a>> {
-    named_block: NamedBlock<S>,
+pub struct Widget<S: Span> {
+    pub named_block: NamedBlock<S>,
 }
 
-impl<S: for<'a> Span<'a>> Widget<S> {
+impl<S: Span> Widget<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(pair(take_keyword("widget"), space1), NamedBlock::parse),
@@ -156,12 +158,12 @@ impl<S: for<'a> Span<'a>> Widget<S> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Function<S: for<'a> Span<'a>> {
-    named_block: NamedBlock<S>,
-    return_type: VariableType<S>,
+pub struct Function<S: Span> {
+    pub named_block: NamedBlock<S>,
+    pub return_type: VariableType<S>,
 }
 
-impl<S: for<'a> Span<'a>> Function<S> {
+impl<S: Span> Function<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(
@@ -177,14 +179,14 @@ impl<S: for<'a> Span<'a>> Function<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum MemberVariableConstraint<S: for<'a> Span<'a>> {
+pub enum MemberVariableConstraint<S: Span> {
     Min(Litteral<S>),
     Max(Litteral<S>),
     Enum(Vec<Litteral<S>>),
     Integer,
 }
 
-impl<S: for<'a> Span<'a>> MemberVariableConstraint<S> {
+impl<S: Span> MemberVariableConstraint<S> {
     fn parse(input: S) -> VResult<S, Self> {
         alt((
             Self::parametric_constraint("min", map(Litteral::parse, Self::Min)),
@@ -219,11 +221,11 @@ impl<S: for<'a> Span<'a>> MemberVariableConstraint<S> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct MemberVariableConstraintList<S: for<'a> Span<'a>> {
+pub struct MemberVariableConstraintList<S: Span> {
     constraints: Vec<MemberVariableConstraint<S>>,
 }
 
-impl<S: for<'a> Span<'a>> MemberVariableConstraintList<S> {
+impl<S: Span> MemberVariableConstraintList<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             delimited(
@@ -243,14 +245,14 @@ impl<S: for<'a> Span<'a>> MemberVariableConstraintList<S> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct MemberVariable<S: for<'a> Span<'a>> {
+pub struct MemberVariable<S: Span> {
     pub name: S,
     pub ty: VariableType<S>,
     pub constraints: Option<MemberVariableConstraintList<S>>,
     pub default_value: Option<Litteral<S>>,
 }
 
-impl<S: for<'a> Span<'a>> MemberVariable<S> {
+impl<S: Span> MemberVariable<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             tuple((
@@ -273,13 +275,13 @@ impl<S: for<'a> Span<'a>> MemberVariable<S> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct NamedBlock<S: for<'a> Span<'a>> {
+pub struct NamedBlock<S: Span> {
     pub name: S,
     pub parameters: Vec<MemberVariable<S>>,
     pub block: Block<S>,
 }
 
-impl<S: for<'a> Span<'a>> NamedBlock<S> {
+impl<S: Span> NamedBlock<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             Self::parse_internal(success(())),
@@ -329,13 +331,13 @@ impl<S: for<'a> Span<'a>> NamedBlock<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum BlockStatement<S: for<'a> Span<'a>> {
+pub enum BlockStatement<S: Span> {
     Closed(Statement<S>),
     Open(Statement<S>),
     Blank,
 }
 
-impl<S: for<'a> Span<'a>> BlockStatement<S> {
+impl<S: Span> BlockStatement<S> {
     fn parse(input: S) -> VResult<S, Self> {
         alt((
             map(
@@ -349,11 +351,11 @@ impl<S: for<'a> Span<'a>> BlockStatement<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Block<S: for<'a> Span<'a>> {
+pub struct Block<S: Span> {
     pub statements: Vec<BlockStatement<S>>,
 }
 
-impl<S: for<'a> Span<'a>> Block<S> {
+impl<S: Span> Block<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             delimited(
@@ -370,7 +372,7 @@ impl<S: for<'a> Span<'a>> Block<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Statement<S: for<'a> Span<'a>> {
+pub enum Statement<S: Span> {
     Expression(Expression<S>),
     Assign(Assign<S>),
     Return(Return<S>),
@@ -383,7 +385,7 @@ pub enum Statement<S: for<'a> Span<'a>> {
     Continue(Continue<S>),
 }
 
-impl<S: for<'a> Span<'a>> Statement<S> {
+impl<S: Span> Statement<S> {
     fn parse(input: S) -> VResult<S, Self> {
         context(
             "Failed to parse statement",
@@ -404,12 +406,12 @@ impl<S: for<'a> Span<'a>> Statement<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct AssignableVariable<S: for<'a> Span<'a>> {
+pub struct AssignableVariable<S: Span> {
     path: VariablePath<S>,
     ty: Option<VariableType<S>>,
 }
 
-impl<S: for<'a> Span<'a>> AssignableVariable<S> {
+impl<S: Span> AssignableVariable<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             pair(
@@ -422,12 +424,12 @@ impl<S: for<'a> Span<'a>> AssignableVariable<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Assignable<S: for<'a> Span<'a>> {
+pub enum Assignable<S: Span> {
     Variable(AssignableVariable<S>),
     List(Vec<AssignableVariable<S>>),
 }
 
-impl<S: for<'a> Span<'a>> Assignable<S> {
+impl<S: Span> Assignable<S> {
     fn parse(input: S) -> VResult<S, Self> {
         alt((
             map(AssignableVariable::parse, Self::Variable),
@@ -448,13 +450,13 @@ impl<S: for<'a> Span<'a>> Assignable<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Assign<S: for<'a> Span<'a>> {
+pub struct Assign<S: Span> {
     pub is_new: bool,
     pub to_assign: Assignable<S>,
     pub statement: Box<Statement<S>>,
 }
 
-impl<S: for<'a> Span<'a>> Assign<S> {
+impl<S: Span> Assign<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             tuple((
@@ -472,11 +474,11 @@ impl<S: for<'a> Span<'a>> Assign<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Return<S: for<'a> Span<'a>> {
+pub struct Return<S: Span> {
     pub expression: Option<Expression<S>>,
 }
 
-impl<S: for<'a> Span<'a>> Return<S> {
+impl<S: Span> Return<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(
@@ -489,19 +491,19 @@ impl<S: for<'a> Span<'a>> Return<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct If<S: for<'a> Span<'a>> {
+pub struct If<S: Span> {
     pub expression: Expression<S>,
     pub block: Block<S>,
     pub else_statement: Option<Else<S>>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Else<S: for<'a> Span<'a>> {
+pub enum Else<S: Span> {
     Else(Block<S>),
     IfElse(Box<If<S>>),
 }
 
-impl<S: for<'a> Span<'a>> If<S> {
+impl<S: Span> If<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(
@@ -540,12 +542,12 @@ impl<S: for<'a> Span<'a>> If<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Match<S: for<'a> Span<'a>> {
+pub struct Match<S: Span> {
     pub expression: Expression<S>,
     pub branches: Vec<MatchBranch<S>>,
 }
 
-impl<S: for<'a> Span<'a>> Match<S> {
+impl<S: Span> Match<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(
@@ -571,12 +573,12 @@ impl<S: for<'a> Span<'a>> Match<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct MatchBranch<S: for<'a> Span<'a>> {
+pub struct MatchBranch<S: Span> {
     expression: Expression<S>,
     block: Block<S>,
 }
 
-impl<S: for<'a> Span<'a>> MatchBranch<S> {
+impl<S: Span> MatchBranch<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             separated_pair(
@@ -597,14 +599,14 @@ impl<S: for<'a> Span<'a>> MatchBranch<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct For<S: for<'a> Span<'a>> {
+pub struct For<S: Span> {
     pub name: Option<S>,
     pub variable_expression: Expression<S>,
     pub iterator_expression: Expression<S>,
     pub block: Block<S>,
 }
 
-impl<S: for<'a> Span<'a>> For<S> {
+impl<S: Span> For<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             tuple((
@@ -642,13 +644,13 @@ impl<S: for<'a> Span<'a>> For<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct While<S: for<'a> Span<'a>> {
+pub struct While<S: Span> {
     pub name: Option<S>,
     pub expression: Expression<S>,
     pub block: Block<S>,
 }
 
-impl<S: for<'a> Span<'a>> While<S> {
+impl<S: Span> While<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             tuple((
@@ -679,12 +681,12 @@ impl<S: for<'a> Span<'a>> While<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Loop<S: for<'a> Span<'a>> {
+pub struct Loop<S: Span> {
     pub name: Option<S>,
     pub block: Block<S>,
 }
 
-impl<S: for<'a> Span<'a>> Loop<S> {
+impl<S: Span> Loop<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             tuple((
@@ -707,12 +709,12 @@ impl<S: for<'a> Span<'a>> Loop<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Break<S: for<'a> Span<'a>> {
+pub struct Break<S: Span> {
     pub loop_name: Option<S>,
     pub expression: Option<Expression<S>>,
 }
 
-impl<S: for<'a> Span<'a>> Break<S> {
+impl<S: Span> Break<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(
@@ -731,11 +733,11 @@ impl<S: for<'a> Span<'a>> Break<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Continue<S: for<'a> Span<'a>> {
+pub struct Continue<S: Span> {
     pub loop_name: Option<S>,
 }
 
-impl<S: for<'a> Span<'a>> Continue<S> {
+impl<S: Span> Continue<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(
@@ -748,7 +750,7 @@ impl<S: for<'a> Span<'a>> Continue<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum VariableType<S: for<'a> Span<'a>> {
+pub enum VariableType<S: Span> {
     Length,
     Angle,
     Number,
@@ -757,7 +759,7 @@ pub enum VariableType<S: for<'a> Span<'a>> {
     Struct(S),
 }
 
-impl<S: for<'a> Span<'a>> VariableType<S> {
+impl<S: Span> VariableType<S> {
     fn parse(input: S) -> VResult<S, Self> {
         context(
             "Invalid type",
@@ -790,7 +792,7 @@ pub enum UnitType {
 }
 
 impl UnitType {
-    fn parse<S: for<'a> Span<'a>>(input: S) -> VResult<S, Self> {
+    fn parse<S: Span>(input: S) -> VResult<S, Self> {
         alt((
             value(Self::Millimeter, tag("mm")),
             value(Self::Centimeter, tag("cm")),
@@ -806,13 +808,13 @@ impl UnitType {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Expression<S: for<'a> Span<'a>> {
+pub enum Expression<S: Span> {
     And(Box<Self>, Comparison<S>),
     Or(Box<Self>, Comparison<S>),
     Buffer(Comparison<S>),
 }
 
-impl<S: for<'a> Span<'a>> Expression<S> {
+impl<S: Span> Expression<S> {
     fn parse(input: S) -> VResult<S, Self> {
         #[derive(Clone)]
         enum Operator {
@@ -850,7 +852,7 @@ impl<S: for<'a> Span<'a>> Expression<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Comparison<S: for<'a> Span<'a>> {
+pub enum Comparison<S: Span> {
     LessThan(Box<Self>, ArithmeticExpression<S>),
     LessThanEqual(Box<Self>, ArithmeticExpression<S>),
     Equal(Box<Self>, ArithmeticExpression<S>),
@@ -859,7 +861,7 @@ pub enum Comparison<S: for<'a> Span<'a>> {
     None(ArithmeticExpression<S>),
 }
 
-impl<S: for<'a> Span<'a>> Comparison<S> {
+impl<S: Span> Comparison<S> {
     fn parse(input: S) -> VResult<S, Self> {
         #[derive(Clone)]
         enum Operator {
@@ -912,13 +914,13 @@ impl<S: for<'a> Span<'a>> Comparison<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum ArithmeticExpression<S: for<'a> Span<'a>> {
+pub enum ArithmeticExpression<S: Span> {
     Addition(Box<Self>, Term<S>),
     Subtraction(Box<Self>, Term<S>),
     Term(Term<S>),
 }
 
-impl<S: for<'a> Span<'a>> ArithmeticExpression<S> {
+impl<S: Span> ArithmeticExpression<S> {
     fn parse(input: S) -> VResult<S, Self> {
         #[derive(Clone)]
         enum Operator {
@@ -953,13 +955,13 @@ impl<S: for<'a> Span<'a>> ArithmeticExpression<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Term<S: for<'a> Span<'a>> {
+pub enum Term<S: Span> {
     Multiply(Box<Self>, Trailer<S>),
     Divide(Box<Self>, Trailer<S>),
     Trailer(Trailer<S>),
 }
 
-impl<S: for<'a> Span<'a>> Term<S> {
+impl<S: Span> Term<S> {
     fn parse(input: S) -> VResult<S, Self> {
         #[derive(Clone)]
         enum Operator {
@@ -994,17 +996,17 @@ impl<S: for<'a> Span<'a>> Term<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Trailer<S: for<'a> Span<'a>> {
+pub enum Trailer<S: Span> {
     None(Factor<S>),
     Attribute(Box<Trailer<S>>, S),
     Call(Box<Trailer<S>>, Vec<Expression<S>>),
     Index(Box<Trailer<S>>, Box<Expression<S>>),
 }
 
-impl<S: for<'a> Span<'a>> Trailer<S> {
+impl<S: Span> Trailer<S> {
     fn parse(input: S) -> VResult<S, Self> {
         #[derive(Clone)]
-        enum Operation<S: for<'a> Span<'a>> {
+        enum Operation<S: Span> {
             Attribute(S),
             Call(Vec<Expression<S>>),
             Index(Expression<S>),
@@ -1060,7 +1062,7 @@ impl<S: for<'a> Span<'a>> Trailer<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Factor<S: for<'a> Span<'a>> {
+pub enum Factor<S: Span> {
     Litteral(Litteral<S>),
     Variable(S),
     Parenthesis(Box<Expression<S>>),
@@ -1070,7 +1072,7 @@ pub enum Factor<S: for<'a> Span<'a>> {
     StructInitalization(StructInitialization<S>),
 }
 
-impl<S: for<'a> Span<'a>> Factor<S> {
+impl<S: Span> Factor<S> {
     fn parse(input: S) -> VResult<S, Self> {
         alt((
             map(
@@ -1097,13 +1099,13 @@ impl<S: for<'a> Span<'a>> Factor<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct StructInitialization<S: for<'a> Span<'a>> {
+pub struct StructInitialization<S: Span> {
     name: S,
     assignments: Vec<(S, Expression<S>)>,
     inheritance: Option<Box<Trailer<S>>>,
 }
 
-impl<S: for<'a> Span<'a>> StructInitialization<S> {
+impl<S: Span> StructInitialization<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(
@@ -1147,7 +1149,7 @@ impl<S: for<'a> Span<'a>> StructInitialization<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Litteral<S: for<'a> Span<'a>> {
+pub enum Litteral<S: Span> {
     Measurement(Measurement<S>),
     Number(Number<S>),
     String(PString<S>),
@@ -1159,12 +1161,12 @@ pub enum Litteral<S: for<'a> Span<'a>> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Vector2<S: for<'a> Span<'a>> {
+pub struct Vector2<S: Span> {
     x: Expression<S>,
     y: Expression<S>,
 }
 
-impl<S: for<'a> Span<'a>> Vector2<S> {
+impl<S: Span> Vector2<S> {
     fn parse(input: S) -> VResult<S, Self> {
         preceded(
             pair(tag("V2"), space0),
@@ -1191,13 +1193,13 @@ impl<S: for<'a> Span<'a>> Vector2<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Vector3<S: for<'a> Span<'a>> {
+pub struct Vector3<S: Span> {
     x: Expression<S>,
     y: Expression<S>,
     z: Expression<S>,
 }
 
-impl<S: for<'a> Span<'a>> Vector3<S> {
+impl<S: Span> Vector3<S> {
     fn parse(input: S) -> VResult<S, Self> {
         preceded(
             pair(tag("V3"), space0),
@@ -1228,7 +1230,7 @@ impl<S: for<'a> Span<'a>> Vector3<S> {
     }
 }
 
-impl<S: for<'a> Span<'a>> Litteral<S> {
+impl<S: Span> Litteral<S> {
     fn parse(input: S) -> VResult<S, Self> {
         alt((
             map(Measurement::parse, Self::Measurement),
@@ -1245,11 +1247,11 @@ impl<S: for<'a> Span<'a>> Litteral<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct List<S: for<'a> Span<'a>> {
+pub struct List<S: Span> {
     expressions: Vec<Expression<S>>,
 }
 
-impl<S: for<'a> Span<'a>> List<S> {
+impl<S: Span> List<S> {
     fn parse(input: S) -> VResult<S, Self> {
         let (input, expressions) = delimited(
             nom_char('['),
@@ -1262,11 +1264,11 @@ impl<S: for<'a> Span<'a>> List<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct PString<S: for<'a> Span<'a>> {
+pub struct PString<S: Span> {
     value: S,
 }
 
-impl<S: for<'a> Span<'a>> PString<S> {
+impl<S: Span> PString<S> {
     fn parse(input: S) -> VResult<S, Self> {
         let (input, value) = delimited(
             nom_char('"'),
@@ -1283,12 +1285,12 @@ impl<S: for<'a> Span<'a>> PString<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Measurement<S: for<'a> Span<'a>> {
+pub struct Measurement<S: Span> {
     pub number: Number<S>,
     pub ty: UnitType,
 }
 
-impl<S: for<'a> Span<'a>> Measurement<S> {
+impl<S: Span> Measurement<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             separated_pair(Number::parse, space0, UnitType::parse),
@@ -1298,11 +1300,11 @@ impl<S: for<'a> Span<'a>> Measurement<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct VariablePath<S: for<'a> Span<'a>> {
+pub struct VariablePath<S: Span> {
     parts: Vec<S>,
 }
 
-impl<S: for<'a> Span<'a>> VariablePath<S> {
+impl<S: Span> VariablePath<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             separated_list1(delimited(space0, nom_char('.'), space0), parse_name),
@@ -1315,11 +1317,11 @@ fn is_digit(c: char) -> bool {
     "0123456789".contains(c)
 }
 
-fn parse_integer<S: for<'a> Span<'a>>(input: S) -> VResult<S, S> {
+fn parse_integer<S: Span>(input: S) -> VResult<S, S> {
     take_while1(is_digit)(input)
 }
 
-fn parse_name<S: for<'a> Span<'a>>(input: S) -> VResult<S, S> {
+fn parse_name<S: Span>(input: S) -> VResult<S, S> {
     fn is_alpha(c: char) -> bool {
         c.is_alphabetic() || matches!(c, '_')
     }
@@ -1335,12 +1337,12 @@ fn parse_name<S: for<'a> Span<'a>>(input: S) -> VResult<S, S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Number<S: for<'a> Span<'a>> {
+pub struct Number<S: Span> {
     integer: Option<S>,
     fractional: Option<S>,
 }
 
-impl<S: for<'a> Span<'a>> Number<S> {
+impl<S: Span> Number<S> {
     fn parse(input: S) -> VResult<S, Self> {
         let (input, (integer, fractional)) = alt((
             separated_pair(
@@ -1371,7 +1373,7 @@ impl<S: for<'a> Span<'a>> Number<S> {
     }
 }
 
-fn take_keyword<S: for<'a> Span<'a>>(keyword: &'static str) -> impl FnMut(S) -> VResult<S, S> {
+fn take_keyword<S: Span>(keyword: &'static str) -> impl FnMut(S) -> VResult<S, S> {
     verify(parse_name::<S>, move |name| {
         matches!(name.compare(keyword), CompareResult::Ok) && name.input_len() == keyword.len()
     })
@@ -1381,7 +1383,7 @@ fn is_space(c: char) -> bool {
     matches!(c, ' ' | '\t' | '\r' | '\n')
 }
 
-fn consume_space_token<S: for<'a> Span<'a>>(input: S) -> VResult<S, ()> {
+fn consume_space_token<S: Span>(input: S) -> VResult<S, ()> {
     value(
         (),
         alt((
@@ -1392,17 +1394,34 @@ fn consume_space_token<S: for<'a> Span<'a>>(input: S) -> VResult<S, ()> {
     )(input)
 }
 
-fn space0<S: for<'a> Span<'a>>(input: S) -> VResult<S, ()> {
+fn space0<S: Span>(input: S) -> VResult<S, ()> {
     value((), fold_many0(consume_space_token, || (), |_, _| {}))(input)
 }
 
-fn space1<S: for<'a> Span<'a>>(input: S) -> VResult<S, ()> {
+fn space1<S: Span>(input: S) -> VResult<S, ()> {
     value((), fold_many1(consume_space_token, || (), |_, _| {}))(input)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn span_types() {
+        assert_eq!(
+            PString::parse(r#""test""#),
+            Ok(("", PString { value: "test" }))
+        );
+
+        assert_eq!(
+            PString::parse(LocatedSpan::new(r#""test""#))
+                .unwrap()
+                .1
+                .value
+                .fragment(),
+            &"test"
+        );
+    }
 
     #[test]
     fn unit_type() {
@@ -3354,7 +3373,7 @@ mod test {
                 r#"
             /// My Struct
             struct MyStruct {}
-
+    
             /* My Sketch */
             sketch my_sketch() {}
             widget my_widget() {}
