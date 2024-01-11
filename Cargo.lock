@@ -466,6 +466,7 @@ dependencies = [
  "clap",
  "fj",
  "git2",
+ "imstr",
  "log",
  "nom",
  "nom_locate",
@@ -1076,6 +1077,14 @@ dependencies = [
  "num-rational",
  "num-traits",
  "png",
+]
+
+[[package]]
+name = "imstr"
+version = "0.2.0"
+source = "git+https://github.com/IamTheCarl/imstr#a679d58d06f06a8e87c8640922aa157a0f86693f"
+dependencies = [
+ "nom",
 ]
 
 [[package]]

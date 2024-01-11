@@ -17,4 +17,5 @@ git2 = "0.18"
 log = "0.4"
 nom = "7.1"
 nom_locate = "4.2"
+imstr = { git = "https://github.com/IamTheCarl/imstr", version = "0.2", features = [ "std", "nom" ] }
 
