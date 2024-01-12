@@ -1,10 +1,15 @@
-use std::ops::{RangeFrom, RangeTo};
+use std::{
+    borrow::Cow,
+    ops::{RangeFrom, RangeTo},
+};
 
 use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_until, take_while, take_while1},
     character::complete::{char as nom_char, one_of},
-    combinator::{all_consuming, cut, flat_map, map, opt, recognize, success, value, verify},
+    combinator::{
+        all_consuming, consumed, cut, flat_map, map, opt, recognize, success, value, verify,
+    },
     error::context,
     multi::{fold_many0, fold_many1, many0, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
@@ -12,7 +17,7 @@ use nom::{
 };
 use nom_locate::LocatedSpan;
 
-// TODO currently add comments are just discarded.
+// TODO currently all comments are just discarded.
 // I would like to start tracking them for auto-formatting and generation
 // of documentation.
 
@@ -34,13 +39,55 @@ pub trait Span:
     + PartialEq
     + std::hash::Hash
     + ToString
+    + AsStr
 {
+    fn chars(&self) -> impl Iterator<Item = char>;
 }
 
-impl<'a> Span for &'a str {}
-impl<'a> Span for LocatedSpan<&'a str> {}
-impl Span for imstr::ImString {}
-impl Span for LocatedSpan<imstr::ImString> {}
+pub trait AsStr {
+    fn as_str(&self) -> &str;
+}
+impl<'a> AsStr for &'a str {
+    fn as_str(&self) -> &str {
+        self
+    }
+}
+impl<'a> AsStr for LocatedSpan<&'a str> {
+    fn as_str(&self) -> &str {
+        self.fragment()
+    }
+}
+impl AsStr for imstr::ImString {
+    fn as_str(&self) -> &str {
+        self.as_str()
+    }
+}
+impl AsStr for LocatedSpan<imstr::ImString> {
+    fn as_str(&self) -> &str {
+        self.fragment().as_str()
+    }
+}
+
+impl<'a> Span for &'a str {
+    fn chars(&self) -> impl Iterator<Item = char> {
+        str::chars(self)
+    }
+}
+impl<'a> Span for LocatedSpan<&'a str> {
+    fn chars(&self) -> impl Iterator<Item = char> {
+        self.fragment().chars()
+    }
+}
+impl Span for imstr::ImString {
+    fn chars(&self) -> impl Iterator<Item = char> {
+        imstr::ImString::chars(self)
+    }
+}
+impl Span for LocatedSpan<imstr::ImString> {
+    fn chars(&self) -> impl Iterator<Item = char> {
+        self.fragment().chars()
+    }
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct FileAST<S: Span> {
@@ -105,7 +152,7 @@ impl<S: Span> Import<S> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Struct<S: Span> {
     pub starting_span: S,
     pub name: S,
@@ -121,11 +168,8 @@ impl<S: Span> Struct<S> {
                     delimited(space0, parse_name, space0),
                     delimited(
                         pair(nom_char('{'), space0),
-                        separated_list0(
-                            nom_char(','),
-                            delimited(space0, MemberVariable::parse, space0),
-                        ),
-                        nom_char('}'),
+                        separated_list0(nom_char(','), preceded(space0, MemberVariable::parse)),
+                        preceded(space0, nom_char('}')),
                     ),
                 ),
             ),
@@ -261,7 +305,7 @@ impl<S: Span> MemberVariableConstraint<S> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MemberVariableConstraintList<S: Span> {
     constraints: Vec<MemberVariableConstraint<S>>,
 }
@@ -285,7 +329,7 @@ impl<S: Span> MemberVariableConstraintList<S> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MemberVariable<S: Span> {
     pub name: S,
     pub ty: VariableType<S>,
@@ -315,9 +359,10 @@ impl<S: Span> MemberVariable<S> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct NamedBlock<S: Span> {
     pub name: S,
+    pub parameter_span: S,
     pub parameters: Vec<MemberVariable<S>>,
     pub block: Block<S>,
 }
@@ -345,11 +390,13 @@ impl<S: Span> NamedBlock<S> {
                 parse_name,
                 context(
                     "Expected parameter list",
-                    delimited(
-                        pair(space0, nom_char('(')),
-                        separated_list0(
-                            nom_char(','),
-                            delimited(space0, MemberVariable::parse, space0),
+                    terminated(
+                        pair(
+                            preceded(space0, tag("(")),
+                            separated_list0(
+                                nom_char(','),
+                                delimited(space0, MemberVariable::parse, space0),
+                            ),
                         ),
                         pair(nom_char(')'), space0),
                     ),
@@ -357,10 +404,11 @@ impl<S: Span> NamedBlock<S> {
                 delimited(space0, return_type_parser, space0),
                 Block::parse,
             )),
-            |(name, parameters, return_type, block)| {
+            |(name, (parameter_span, parameters), return_type, block)| {
                 (
                     Self {
                         name,
+                        parameter_span,
                         parameters,
                         block,
                     },
@@ -397,11 +445,11 @@ impl<S: Span> BlockStatement<S> {
         }
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         match self {
             BlockStatement::Closed(spanable) => spanable.get_span(),
             BlockStatement::Open(spanable) => spanable.get_span(),
-            BlockStatement::Blank(spanable) => spanable.clone(),
+            BlockStatement::Blank(spanable) => spanable,
         }
     }
 }
@@ -412,7 +460,7 @@ pub struct Block<S: Span> {
 }
 
 impl<S: Span> Block<S> {
-    fn parse(input: S) -> VResult<S, Self> {
+    pub fn parse(input: S) -> VResult<S, Self> {
         map(
             delimited(
                 context("Block is missing opening bracket", nom_char('{')),
@@ -442,7 +490,7 @@ pub enum Statement<S: Span> {
 }
 
 impl<S: Span> Statement<S> {
-    fn parse(input: S) -> VResult<S, Self> {
+    pub fn parse(input: S) -> VResult<S, Self> {
         context(
             "Failed to parse statement",
             alt((
@@ -460,7 +508,7 @@ impl<S: Span> Statement<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         match self {
             Statement::Expression(spanable) => spanable.get_span(),
             Statement::Assign(spanable) => spanable.get_span(),
@@ -478,7 +526,7 @@ impl<S: Span> Statement<S> {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct AssignableVariable<S: Span> {
-    pub path: VariablePath<S>,
+    pub name: S,
     pub ty: Option<VariableType<S>>,
 }
 
@@ -486,15 +534,15 @@ impl<S: Span> AssignableVariable<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             pair(
-                terminated(VariablePath::parse, space0),
+                terminated(parse_name, space0),
                 opt(preceded(pair(nom_char(':'), space0), VariableType::parse)),
             ),
-            |(path, ty)| Self { path, ty },
+            |(name, ty)| Self { name, ty },
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.path.get_span()
+    pub fn get_span(&self) -> &S {
+        &self.name
     }
 }
 
@@ -568,10 +616,10 @@ impl<S: Span> Assignable<S> {
         }
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         match self {
             Assignable::Variable(spanable) => spanable.get_span(),
-            Assignable::List(spanable, _) => spanable.clone(),
+            Assignable::List(spanable, _) => spanable,
         }
     }
 }
@@ -588,14 +636,14 @@ impl<S: Span> Assign<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             tuple((
-                opt(terminated(take_keyword("let"), space1)),
+                opt(terminated(take_keyword::<S>("let"), space1)),
                 Assignable::parse,
                 preceded(delimited(space0, nom_char('='), space0), Statement::parse),
             )),
             |(let_keyword, to_assign, statement)| {
                 let is_new = let_keyword.is_some();
                 Self {
-                    starting_span: let_keyword.unwrap_or(to_assign.get_span()),
+                    starting_span: let_keyword.unwrap_or_else(|| to_assign.get_span().clone()),
                     is_new,
                     to_assign,
                     statement: Box::new(statement),
@@ -604,8 +652,8 @@ impl<S: Span> Assign<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
@@ -629,8 +677,8 @@ impl<S: Span> Return<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
@@ -686,8 +734,8 @@ impl<S: Span> If<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
@@ -723,33 +771,35 @@ impl<S: Span> Match<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MatchBranch<S: Span> {
-    expression: Expression<S>,
-    block: Block<S>,
+    pub litteral: Litteral<S>,
+    pub block: Block<S>,
 }
 
 impl<S: Span> MatchBranch<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             separated_pair(
-                context(
-                    "Match branch must start with an expression",
-                    Expression::parse,
-                ),
+                context("Match branch must start with a litteral", Litteral::parse),
                 delimited(
                     space0,
                     context("Match branch missing `=>` token", tag("=>")),
                     space0,
                 ),
-                Block::parse,
+                alt((
+                    Block::parse,
+                    map(Expression::parse, |expression| Block {
+                        statements: vec![BlockStatement::Open(Statement::Expression(expression))],
+                    }),
+                )),
             ),
-            |(expression, block)| Self { expression, block },
+            |(litteral, block)| Self { litteral, block },
         )(input)
     }
 }
@@ -758,7 +808,7 @@ impl<S: Span> MatchBranch<S> {
 pub struct For<S: Span> {
     pub starting_span: S,
     pub name: Option<S>,
-    pub variable_expression: Expression<S>,
+    pub variable_assignment: Assignable<S>,
     pub iterator_expression: Expression<S>,
     pub block: Block<S>,
 }
@@ -777,7 +827,7 @@ impl<S: Span> For<S> {
                     cut(tuple((
                         delimited(
                             space0,
-                            context("Missing variable expression", Expression::parse),
+                            context("Missing variable assignment", Assignable::parse),
                             space0,
                         ),
                         context("Missing `in` keyword", take_keyword("in")),
@@ -790,11 +840,11 @@ impl<S: Span> For<S> {
                     ))),
                 ),
             )),
-            |(name, (starting_span, (variable_expression, _in, iterator_expression, block)))| {
+            |(name, (starting_span, (variable_assignment, _in, iterator_expression, block)))| {
                 Self {
                     starting_span,
                     name,
-                    variable_expression,
+                    variable_assignment,
                     iterator_expression,
                     block,
                 }
@@ -802,8 +852,8 @@ impl<S: Span> For<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
@@ -845,8 +895,8 @@ impl<S: Span> While<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
@@ -882,8 +932,8 @@ impl<S: Span> Loop<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
@@ -912,8 +962,8 @@ impl<S: Span> Break<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
@@ -937,19 +987,20 @@ impl<S: Span> Continue<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum VariableType<S: Span> {
-    Length,
-    Angle,
     Number,
+    String,
     List,
     Boolean,
+    Range,
     Struct(S),
+    Measurement(S),
 }
 
 impl<S: Span> VariableType<S> {
@@ -957,46 +1008,30 @@ impl<S: Span> VariableType<S> {
         context(
             "Invalid type",
             alt((
-                value(Self::Length, tag("Length")),
-                value(Self::Angle, tag("Angle")),
                 value(Self::Number, tag("Number")),
+                value(Self::String, tag("String")),
                 value(Self::List, tag("List")),
                 value(Self::Boolean, tag("Boolean")),
+                value(Self::Range, tag("Range")),
                 map(
                     preceded(pair(take_keyword("struct"), space0), parse_name),
                     Self::Struct,
                 ),
+                map(parse_name, Self::Measurement),
             )),
         )(input)
     }
-}
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum UnitType {
-    Millimeter,
-    Centimeter,
-    Meter,
-    Inch,
-    Mil,
-    Foot,
-    Yard,
-    Degree,
-    Radian,
-}
-
-impl UnitType {
-    fn parse<S: Span>(input: S) -> VResult<S, Self> {
-        alt((
-            value(Self::Millimeter, tag("mm")),
-            value(Self::Centimeter, tag("cm")),
-            value(Self::Inch, tag("in")),
-            value(Self::Mil, tag("mil")),
-            value(Self::Meter, tag("m")),
-            value(Self::Foot, tag("ft")),
-            value(Self::Yard, tag("yd")),
-            value(Self::Degree, tag("deg")),
-            value(Self::Radian, tag("rad")),
-        ))(input)
+    pub fn name(&self) -> Cow<'static, str> {
+        match self {
+            VariableType::Number => "Number".into(),
+            VariableType::String => "String".into(),
+            VariableType::List => "List".into(),
+            VariableType::Boolean => "Boolean".into(),
+            VariableType::Range => "Range".into(),
+            VariableType::Struct(name) => format!("struct {}", name.as_str()).into(),
+            VariableType::Measurement(name) => name.to_string().into(),
+        }
     }
 }
 
@@ -1008,7 +1043,7 @@ pub enum Expression<S: Span> {
 }
 
 impl<S: Span> Expression<S> {
-    fn parse(input: S) -> VResult<S, Self> {
+    pub(super) fn parse(input: S) -> VResult<S, Self> {
         #[derive(Clone)]
         enum Operator {
             And,
@@ -1043,7 +1078,7 @@ impl<S: Span> Expression<S> {
         ))(input)
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         match self {
             Expression::And(spanable, _) => spanable.get_span(),
             Expression::Or(spanable, _) => spanable.get_span(),
@@ -1113,7 +1148,7 @@ impl<S: Span> Comparison<S> {
         ))(input)
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         match self {
             Comparison::LessThan(spanable, _) => spanable.get_span(),
             Comparison::LessThanEqual(spanable, _) => spanable.get_span(),
@@ -1165,7 +1200,7 @@ impl<S: Span> ArithmeticExpression<S> {
         ))(input)
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         match self {
             ArithmeticExpression::Addition(spanable, _) => spanable.get_span(),
             ArithmeticExpression::Subtraction(spanable, _) => spanable.get_span(),
@@ -1178,6 +1213,7 @@ impl<S: Span> ArithmeticExpression<S> {
 pub enum Term<S: Span> {
     Multiply(Box<Self>, Trailer<S>),
     Divide(Box<Self>, Trailer<S>),
+    Range(Range<S>),
     Trailer(Trailer<S>),
 }
 
@@ -1190,7 +1226,8 @@ impl<S: Span> Term<S> {
         }
 
         alt((
-            flat_map(Trailer::parse, |first_accessor| {
+            map(Range::parse, Self::Range),
+            flat_map(Trailer::parse, |first_trailer| {
                 fold_many0(
                     pair(
                         delimited(
@@ -1201,9 +1238,9 @@ impl<S: Span> Term<S> {
                             )),
                             space0,
                         ),
-                        Trailer::parse,
+                        context("Expected right side term.", cut(Trailer::parse)),
                     ),
-                    move || Term::Trailer(first_accessor.clone()),
+                    move || Self::Trailer(first_trailer.clone()),
                     |term, (operator, accessor)| match operator {
                         Operator::Multiplication => Self::Multiply(Box::new(term), accessor),
                         Operator::Division => Self::Divide(Box::new(term), accessor),
@@ -1214,12 +1251,65 @@ impl<S: Span> Term<S> {
         ))(input)
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         match self {
             Term::Multiply(spanable, _) => spanable.get_span(),
             Term::Divide(spanable, _) => spanable.get_span(),
+            Term::Range(spannable) => spannable.get_span(),
             Term::Trailer(spanable) => spanable.get_span(),
         }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct Range<S: Span> {
+    comparison_operator: S,
+    pub lower_bound: Option<Trailer<S>>,
+    pub upper_bound_is_inclusive: bool,
+    pub upper_bound: Option<Trailer<S>>,
+}
+
+impl<S: Span> Range<S> {
+    pub fn parse(input: S) -> VResult<S, Self> {
+        enum RangeType<S> {
+            Exclusive(S),
+            Inclusive(S),
+        }
+
+        map(
+            tuple((
+                opt(Trailer::parse),
+                delimited(
+                    space0,
+                    alt((
+                        map(tag("..="), RangeType::Inclusive),
+                        map(tag(".."), RangeType::Exclusive),
+                    )),
+                    space0,
+                ),
+                opt(Trailer::parse),
+            )),
+            |(lower_bound, range_type, upper_bound)| {
+                let (comparison_operator, upper_bound_is_inclusive) = match range_type {
+                    RangeType::Inclusive(operator) => (operator, true),
+                    RangeType::Exclusive(operator) => (operator, false),
+                };
+
+                Self {
+                    comparison_operator,
+                    upper_bound,
+                    upper_bound_is_inclusive,
+                    lower_bound,
+                }
+            },
+        )(input)
+    }
+
+    pub fn get_span(&self) -> &S {
+        self.lower_bound
+            .as_ref()
+            .map(|expression| expression.get_span())
+            .unwrap_or(&self.comparison_operator)
     }
 }
 
@@ -1228,6 +1318,7 @@ pub enum Trailer<S: Span> {
     None(Factor<S>),
     Attribute(Box<Trailer<S>>, S),
     Call(Box<Trailer<S>>, Vec<Expression<S>>),
+    MethodCall(Box<Trailer<S>>, S, Vec<Expression<S>>),
     Index(Box<Trailer<S>>, Box<Expression<S>>),
 }
 
@@ -1237,6 +1328,7 @@ impl<S: Span> Trailer<S> {
         enum Operation<S: Span> {
             Attribute(S),
             Call(Vec<Expression<S>>),
+            MethodCall(S, Vec<Expression<S>>),
             Index(Expression<S>),
         }
 
@@ -1246,6 +1338,25 @@ impl<S: Span> Trailer<S> {
                     delimited(
                         space0,
                         alt((
+                            map(
+                                pair(
+                                    preceded(pair(nom_char('.'), space0), parse_name),
+                                    preceded(
+                                        space0,
+                                        delimited(
+                                            nom_char('('),
+                                            separated_list0(
+                                                nom_char(','),
+                                                delimited(space0, Expression::parse, space0),
+                                            ),
+                                            nom_char(')'),
+                                        ),
+                                    ),
+                                ),
+                                |(attribute, arguments)| {
+                                    Operation::MethodCall(attribute, arguments)
+                                },
+                            ),
                             map(
                                 preceded(pair(nom_char('.'), space0), parse_name),
                                 Operation::Attribute,
@@ -1278,6 +1389,9 @@ impl<S: Span> Trailer<S> {
                             Self::Attribute(Box::new(trailer), member_name)
                         }
                         Operation::Call(arguments) => Self::Call(Box::new(trailer), arguments),
+                        Operation::MethodCall(member_name, arguments) => {
+                            Self::MethodCall(Box::new(trailer), member_name, arguments)
+                        }
                         Operation::Index(indexer) => {
                             Self::Index(Box::new(trailer), Box::new(indexer))
                         }
@@ -1288,11 +1402,12 @@ impl<S: Span> Trailer<S> {
         ))(input)
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         match self {
             Trailer::None(spanable) => spanable.get_span(),
             Trailer::Attribute(spanable, _) => spanable.get_span(),
             Trailer::Call(spanable, _) => spanable.get_span(),
+            Trailer::MethodCall(spanable, _, _) => spanable.get_span(),
             Trailer::Index(spanable, _) => spanable.get_span(),
         }
     }
@@ -1334,10 +1449,10 @@ impl<S: Span> Factor<S> {
         ))(input)
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         match self {
             Factor::Litteral(spanable) => spanable.get_span(),
-            Factor::Variable(spanable) => spanable.clone(),
+            Factor::Variable(spanable) => spanable,
             Factor::Parenthesis(spanable) => spanable.get_span(),
             Factor::UnaryPlus(spanable) => spanable.get_span(),
             Factor::UnaryMinus(spanable) => spanable.get_span(),
@@ -1349,10 +1464,10 @@ impl<S: Span> Factor<S> {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct StructInitialization<S: Span> {
-    starting_span: S,
-    name: S,
-    assignments: Vec<(S, Expression<S>)>,
-    inheritance: Option<Box<Trailer<S>>>,
+    pub starting_span: S,
+    pub name: S,
+    pub assignments: Vec<(S, Expression<S>)>,
+    pub inheritance: Option<Box<Trailer<S>>>,
 }
 
 impl<S: Span> StructInitialization<S> {
@@ -1364,27 +1479,39 @@ impl<S: Span> StructInitialization<S> {
                     delimited(space0, parse_name, space0),
                     delimited(
                         pair(context("Missing opening bracket", nom_char('{')), space0),
-                        pair(
-                            separated_list0(
-                                nom_char(','),
-                                delimited(
-                                    space0,
-                                    separated_pair(
-                                        parse_name,
-                                        delimited(space0, nom_char('='), space0),
-                                        Expression::parse,
+                        alt((
+                            pair(
+                                success(vec![]),
+                                map(
+                                    preceded(
+                                        terminated(tag(".."), space0),
+                                        map(Trailer::parse, Box::new),
                                     ),
-                                    space0,
+                                    Some,
                                 ),
                             ),
-                            opt(preceded(
-                                pair(
-                                    pair(space0, nom_char(',')),
-                                    delimited(space0, tag(".."), space0),
+                            pair(
+                                separated_list0(
+                                    nom_char(','),
+                                    delimited(
+                                        space0,
+                                        separated_pair(
+                                            parse_name,
+                                            delimited(space0, nom_char('='), space0),
+                                            Expression::parse,
+                                        ),
+                                        space0,
+                                    ),
                                 ),
-                                map(Trailer::parse, Box::new),
-                            )),
-                        ),
+                                opt(preceded(
+                                    pair(
+                                        pair(space0, nom_char(',')),
+                                        delimited(space0, tag(".."), space0),
+                                    ),
+                                    map(Trailer::parse, Box::new),
+                                )),
+                            ),
+                        )),
                         pair(space0, context("Missing closing bracket", nom_char('}'))),
                     ),
                 )),
@@ -1398,8 +1525,8 @@ impl<S: Span> StructInitialization<S> {
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
@@ -1409,131 +1536,39 @@ pub enum Litteral<S: Span> {
     Number(Number<S>),
     String(PString<S>),
     List(List<S>),
-    Vector2(Box<Vector2<S>>),
-    Vector3(Box<Vector3<S>>),
     Boolean(S, bool),
     Default(S),
 }
 
 impl<S: Span> Litteral<S> {
-    fn parse(input: S) -> VResult<S, Self> {
+    pub(super) fn parse(input: S) -> VResult<S, Self> {
         alt((
             map(Measurement::parse, Self::Measurement),
             map(Number::parse, Self::Number),
             map(PString::parse, Self::String),
             map(List::parse, Self::List),
-            map(Vector2::parse, |v| Self::Vector2(Box::new(v))),
-            map(Vector3::parse, |v| Self::Vector3(Box::new(v))),
             map(take_keyword("true"), |span| Self::Boolean(span, true)),
             map(take_keyword("false"), |span| Self::Boolean(span, false)),
             map(take_keyword("default"), Self::Default),
         ))(input)
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         match self {
             Litteral::Measurement(spanable) => spanable.get_span(),
             Litteral::Number(spanable) => spanable.get_span(),
             Litteral::String(spanable) => spanable.get_span(),
             Litteral::List(spanable) => spanable.get_span(),
-            Litteral::Vector2(spanable) => spanable.get_span(),
-            Litteral::Vector3(spanable) => spanable.get_span(),
-            Litteral::Boolean(spanable, _) => spanable.clone(),
-            Litteral::Default(spanable) => spanable.clone(),
+            Litteral::Boolean(spanable, _) => spanable,
+            Litteral::Default(spanable) => spanable,
         }
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Vector2<S: Span> {
-    starting_span: S,
-    x: Expression<S>,
-    y: Expression<S>,
-}
-
-impl<S: Span> Vector2<S> {
-    fn parse(input: S) -> VResult<S, Self> {
-        map(
-            pair(
-                terminated(tag("V2"), space0),
-                delimited(
-                    nom_char('('),
-                    alt((
-                        separated_pair(
-                            delimited(space0, Expression::parse, space0),
-                            nom_char(','),
-                            delimited(space0, Expression::parse, space0),
-                        ),
-                        map(delimited(space0, Expression::parse, space0), |splat| {
-                            (splat.clone(), splat)
-                        }),
-                    )),
-                    nom_char(')'),
-                ),
-            ),
-            |(starting_span, (x, y))| Self {
-                starting_span,
-                x,
-                y,
-            },
-        )(input)
-    }
-
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Vector3<S: Span> {
-    starting_span: S,
-    x: Expression<S>,
-    y: Expression<S>,
-    z: Expression<S>,
-}
-
-impl<S: Span> Vector3<S> {
-    fn parse(input: S) -> VResult<S, Self> {
-        map(
-            pair(
-                terminated(tag("V3"), space0),
-                delimited(
-                    nom_char('('),
-                    alt((
-                        separated_pair(
-                            separated_pair(
-                                delimited(space0, Expression::parse, space0),
-                                nom_char(','),
-                                delimited(space0, Expression::parse, space0),
-                            ),
-                            nom_char(','),
-                            delimited(space0, Expression::parse, space0),
-                        ),
-                        map(delimited(space0, Expression::parse, space0), |splat| {
-                            ((splat.clone(), splat.clone()), splat)
-                        }),
-                    )),
-                    nom_char(')'),
-                ),
-            ),
-            |(starting_span, ((x, y), z))| Self {
-                starting_span,
-                x,
-                y,
-                z,
-            },
-        )(input)
-    }
-
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct List<S: Span> {
-    starting_span: S,
-    expressions: Vec<Expression<S>>,
+    pub starting_span: S,
+    pub expressions: Vec<Expression<S>>,
 }
 
 impl<S: Span> List<S> {
@@ -1555,14 +1590,14 @@ impl<S: Span> List<S> {
         ))
     }
 
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct PString<S: Span> {
-    value: S,
+    pub value: S,
 }
 
 impl<S: Span> PString<S> {
@@ -1580,26 +1615,86 @@ impl<S: Span> PString<S> {
         Ok((input, PString { value }))
     }
 
-    pub fn get_span(&self) -> S {
-        self.value.clone()
+    pub fn get_span(&self) -> &S {
+        &self.value
+    }
+}
+
+impl<S: Span> ToString for PString<S> {
+    fn to_string(&self) -> String {
+        let mut char_iterator = self.value.chars().peekable();
+        let iterator = std::iter::from_fn(|| {
+            char_iterator
+                .next()
+                .map(|next| (next, char_iterator.peek().copied()))
+        });
+        let mut string = String::default();
+
+        for (current, next) in iterator {
+            if current == '\\' {
+                match next {
+                    Some('"') => string.push('"'),
+                    Some('\n') => string.push('\n'),
+                    Some('\\') => string.push('\\'),
+                    _ => {} // Shouldn't be possible to get an unrecognized char. This could happen for a downslash at the end of the string though.
+                }
+            } else {
+                string.push(current);
+            }
+        }
+
+        string
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Measurement<S: Span> {
     pub number: Number<S>,
-    pub ty: UnitType,
+    pub ty: S,
 }
 
 impl<S: Span> Measurement<S> {
-    fn parse(input: S) -> VResult<S, Self> {
+    pub fn parse(input: S) -> VResult<S, Self> {
+        // TODO the unit type parsing is terribly under-tested.
         map(
-            separated_pair(Number::parse, space0, UnitType::parse),
+            separated_pair(Number::parse, space0, Self::parse_type),
             |(number, ty)| Measurement { number, ty },
         )(input)
     }
 
-    pub fn get_span(&self) -> S {
+    fn parse_type(input: S) -> VResult<S, S> {
+        fn take_body<S: Span>(input: S) -> VResult<S, S> {
+            take_while1(|c: char| {
+                c.is_alphanumeric() || matches!(c, '^' | '/' | '_' | '.' | '%' | '<' | '-' | '\\')
+            })(input)
+        }
+
+        verify(
+            map(
+                consumed(fold_many0(
+                    alt((
+                        // This can't handle nested () but none of our supported unit types need that.
+                        take_body,
+                        delimited(nom_char('('), take_body, nom_char(')')),
+                    )),
+                    || (),
+                    |_, _| (),
+                )),
+                |(span, _)| span,
+            ),
+            |input: &S| {
+                // The unit type must start with a letter or number.
+                input
+                    .as_str()
+                    .chars()
+                    .next()
+                    .map(|input| input.is_alphanumeric())
+                    .unwrap_or(false)
+            },
+        )(input)
+    }
+
+    pub fn get_span(&self) -> &S {
         self.number.get_span()
     }
 }
@@ -1654,21 +1749,27 @@ pub struct Number<S: Span> {
 }
 
 impl<S: Span> Number<S> {
-    fn parse(input: S) -> VResult<S, Self> {
+    pub fn parse(input: S) -> VResult<S, Self> {
+        fn take_dot<S: Span>(input: S) -> VResult<S, S> {
+            verify(take_while1(|c| c == '.'), |output: &S| {
+                output.as_str().len() == 1
+            })(input)
+        }
+
         let (input, (integer, dot, fractional)) = alt((
             tuple((
                 map(parse_integer, Some),
-                map(delimited(space0, tag("."), space0), Some),
+                map(delimited(space0, take_dot, space0), Some),
                 map(parse_integer, Some),
             )),
             tuple((
                 success(None),
-                map(delimited(space0, tag("."), space0), Some),
+                map(delimited(space0, take_dot, space0), Some),
                 map(parse_integer, Some),
             )),
             tuple((
                 map(parse_integer, Some),
-                map(delimited(space0, tag("."), space0), Some),
+                map(delimited(space0, take_dot, space0), Some),
                 success(None),
             )),
             tuple((map(parse_integer, Some), success(None), success(None))),
@@ -1684,14 +1785,29 @@ impl<S: Span> Number<S> {
         ))
     }
 
-    pub fn get_span(&self) -> S {
+    pub fn get_span(&self) -> &S {
         // We accept '0.0', '.0', '0.', and '.', but not ''. It should not be possible for this to fail.
-        self.integer.as_ref().cloned().unwrap_or(
+        self.integer.as_ref().unwrap_or_else(|| {
             self.dot
                 .as_ref()
-                .cloned()
-                .unwrap_or(self.fractional.as_ref().cloned().unwrap()),
-        )
+                .unwrap_or_else(|| self.fractional.as_ref().unwrap())
+        })
+    }
+
+    pub fn to_float<P>(&self) -> Result<P, P::Err>
+    where
+        P: std::str::FromStr,
+    {
+        match (self.integer.as_ref(), self.fractional.as_ref()) {
+            (None, None) => P::from_str("0.0"),
+            (Some(integer), None) => P::from_str(&integer.to_string()),
+            (None, Some(fractional)) => P::from_str(&format!(".{}", fractional.to_string())),
+            (Some(integer), Some(fractional)) => P::from_str(&format!(
+                "{}.{}",
+                integer.to_string(),
+                fractional.to_string()
+            )),
+        }
     }
 }
 
@@ -1743,19 +1859,6 @@ mod test {
                 .fragment(),
             &"test"
         );
-    }
-
-    #[test]
-    fn unit_type() {
-        assert_eq!(UnitType::parse("mm"), Ok(("", UnitType::Millimeter)));
-        assert_eq!(UnitType::parse("cm"), Ok(("", UnitType::Centimeter)));
-        assert_eq!(UnitType::parse("m"), Ok(("", UnitType::Meter)));
-        assert_eq!(UnitType::parse("in"), Ok(("", UnitType::Inch)));
-        assert_eq!(UnitType::parse("mil"), Ok(("", UnitType::Mil)));
-        assert_eq!(UnitType::parse("ft"), Ok(("", UnitType::Foot)));
-        assert_eq!(UnitType::parse("yd"), Ok(("", UnitType::Yard)));
-        assert_eq!(UnitType::parse("deg"), Ok(("", UnitType::Degree)));
-        assert_eq!(UnitType::parse("rad"), Ok(("", UnitType::Radian)));
     }
 
     #[test]
@@ -1837,7 +1940,7 @@ mod test {
                         dot: None,
                         fractional: None
                     },
-                    ty: UnitType::Meter
+                    ty: "m"
                 }
             ))
         );
@@ -1852,7 +1955,7 @@ mod test {
                         dot: None,
                         fractional: None
                     },
-                    ty: UnitType::Meter
+                    ty: "m"
                 }
             ))
         );
@@ -1867,7 +1970,7 @@ mod test {
                         dot: Some("."),
                         fractional: Some("44"),
                     },
-                    ty: UnitType::Meter
+                    ty: "m"
                 }
             ))
         );
@@ -2003,40 +2106,6 @@ mod test {
                 )
             ))
         );
-
-        assert_eq!(
-            Trailer::parse("test.sub_call()"),
-            Ok((
-                "",
-                Trailer::Call(
-                    Box::new(Trailer::Attribute(
-                        Box::new(Trailer::None(Factor::Variable("test"))),
-                        "sub_call"
-                    )),
-                    vec![]
-                )
-            ))
-        );
-
-        assert_eq!(
-            Trailer::parse("test.sub_call().returned()"),
-            Ok((
-                "",
-                Trailer::Call(
-                    Box::new(Trailer::Attribute(
-                        Box::new(Trailer::Call(
-                            Box::new(Trailer::Attribute(
-                                Box::new(Trailer::None(Factor::Variable("test"))),
-                                "sub_call"
-                            )),
-                            vec![]
-                        )),
-                        "returned"
-                    )),
-                    vec![]
-                )
-            ))
-        );
     }
 
     #[test]
@@ -2101,6 +2170,52 @@ mod test {
     }
 
     #[test]
+    fn trailer_method_call() {
+        assert_eq!(
+            Trailer::parse("test.sub_call()"),
+            Ok((
+                "",
+                Trailer::MethodCall(
+                    Box::new(Trailer::None(Factor::Variable("test"))),
+                    "sub_call",
+                    vec![]
+                ),
+            ))
+        );
+
+        assert_eq!(
+            Trailer::parse("test.sub_call(a, b)"),
+            Ok((
+                "",
+                Trailer::MethodCall(
+                    Box::new(Trailer::None(Factor::Variable("test"))),
+                    "sub_call",
+                    vec![
+                        Expression::parse("a").unwrap().1,
+                        Expression::parse("b").unwrap().1
+                    ]
+                ),
+            ))
+        );
+
+        assert_eq!(
+            Trailer::parse("test.sub_call().returned()"),
+            Ok((
+                "",
+                Trailer::MethodCall(
+                    Box::new(Trailer::MethodCall(
+                        Box::new(Trailer::None(Factor::Variable("test"))),
+                        "sub_call",
+                        vec![]
+                    )),
+                    "returned",
+                    vec![]
+                )
+            ))
+        );
+    }
+
+    #[test]
     fn litteral() {
         // Measurement(Measurement<S>),
         assert_eq!(
@@ -2113,7 +2228,7 @@ mod test {
                         dot: Some("."),
                         fractional: Some("5678")
                     },
-                    ty: UnitType::Meter
+                    ty: "m"
                 })
             ))
         );
@@ -2146,33 +2261,6 @@ mod test {
                     starting_span: "[",
                     expressions: vec![]
                 })
-            ))
-        );
-
-        // Vector2(Box<Vector2<S>>),
-        assert_eq!(
-            Litteral::parse("V2(a, b)"),
-            Ok((
-                "",
-                Litteral::Vector2(Box::new(Vector2 {
-                    starting_span: "V2",
-                    x: Expression::parse("a").unwrap().1,
-                    y: Expression::parse("b").unwrap().1,
-                }))
-            ))
-        );
-
-        // Vector3(Box<Vector3<S>>),
-        assert_eq!(
-            Litteral::parse("V3(a, b, c)"),
-            Ok((
-                "",
-                Litteral::Vector3(Box::new(Vector3 {
-                    starting_span: "V3",
-                    x: Expression::parse("a").unwrap().1,
-                    y: Expression::parse("b").unwrap().1,
-                    z: Expression::parse("c").unwrap().1,
-                }))
             ))
         );
 
@@ -2399,6 +2487,75 @@ mod test {
             Term::parse("x"),
             Ok(("", Term::Trailer(Trailer::None(Factor::Variable("x")))))
         );
+
+        // Range(Range<S>),
+        assert_eq!(
+            Term::parse("a..b"),
+            Ok((
+                "",
+                Term::Range(Range {
+                    comparison_operator: "..",
+                    upper_bound: Some(Trailer::None(Factor::Variable("b"))),
+                    lower_bound: Some(Trailer::None(Factor::Variable("a"))),
+                    upper_bound_is_inclusive: false,
+                })
+            ))
+        );
+        assert_eq!(
+            Term::parse(".."),
+            Ok((
+                "",
+                Term::Range(Range {
+                    comparison_operator: "..",
+                    upper_bound: None,
+                    lower_bound: None,
+                    upper_bound_is_inclusive: false,
+                })
+            ))
+        );
+    }
+
+    #[test]
+    fn range() {
+        assert_eq!(
+            Range::parse(".."),
+            Ok((
+                "",
+                Range {
+                    comparison_operator: "..",
+                    upper_bound: None,
+                    upper_bound_is_inclusive: false,
+                    lower_bound: None,
+                }
+            ))
+        );
+        assert_eq!(
+            Range::parse("..="),
+            Ok((
+                "",
+                Range {
+                    comparison_operator: "..=",
+                    upper_bound: None,
+                    upper_bound_is_inclusive: true,
+                    lower_bound: None,
+                }
+            ))
+        );
+        assert_eq!(
+            Range::parse("a..b"),
+            Ok((
+                "",
+                Range {
+                    comparison_operator: "..",
+                    upper_bound: Some(Trailer::None(Factor::Variable("b"))),
+                    lower_bound: Some(Trailer::None(Factor::Variable("a"))),
+                    upper_bound_is_inclusive: false,
+                }
+            ))
+        );
+
+        assert_eq!(*Range::parse("..").unwrap().1.get_span(), "..");
+        assert_eq!(*Range::parse("a..").unwrap().1.get_span(), "a");
     }
 
     #[test]
@@ -2501,73 +2658,32 @@ mod test {
                 })
             ))
         );
-    }
-
-    #[test]
-    fn vector2() {
         assert_eq!(
-            Vector2::parse("V2(22m, 44m)"),
+            Factor::parse("struct MyStruct { ..default }"),
             Ok((
                 "",
-                Vector2 {
-                    starting_span: "V2",
-                    x: Expression::parse("22m").unwrap().1,
-                    y: Expression::parse("44m").unwrap().1,
-                }
+                Factor::StructInitalization(StructInitialization {
+                    starting_span: "struct",
+                    name: "MyStruct",
+                    assignments: vec![],
+                    inheritance: Some(Box::new(Trailer::None(Factor::Litteral(
+                        Litteral::Default("default")
+                    ))))
+                })
             ))
         );
-
-        assert_eq!(
-            Vector2::parse("V2(22m)"),
-            Ok((
-                "",
-                Vector2 {
-                    starting_span: "V2",
-                    x: Expression::parse("22m").unwrap().1,
-                    y: Expression::parse("22m").unwrap().1,
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn vector3() {
-        assert_eq!(
-            Vector3::parse("V3(22m, 44m, 66m)"),
-            Ok((
-                "",
-                Vector3 {
-                    starting_span: "V3",
-                    x: Expression::parse("22m").unwrap().1,
-                    y: Expression::parse("44m").unwrap().1,
-                    z: Expression::parse("66m").unwrap().1,
-                }
-            ))
-        );
-
-        assert_eq!(
-            Vector3::parse("V3(22m)"),
-            Ok((
-                "",
-                Vector3 {
-                    starting_span: "V3",
-                    x: Expression::parse("22m").unwrap().1,
-                    y: Expression::parse("22m").unwrap().1,
-                    z: Expression::parse("22m").unwrap().1,
-                }
-            ))
-        );
-
-        assert!(Vector2::parse("V3(22m 44m)").is_err());
     }
 
     #[test]
     fn variable_type() {
         assert_eq!(
             VariableType::parse("Length"),
-            Ok(("", VariableType::Length))
+            Ok(("", VariableType::Measurement("Length")))
         );
-        assert_eq!(VariableType::parse("Angle"), Ok(("", VariableType::Angle)));
+        assert_eq!(
+            VariableType::parse("Angle"),
+            Ok(("", VariableType::Measurement("Angle")))
+        );
         assert_eq!(
             VariableType::parse("Number"),
             Ok(("", VariableType::Number))
@@ -2590,9 +2706,7 @@ mod test {
             Ok((
                 "",
                 AssignableVariable {
-                    path: VariablePath {
-                        parts: vec!["variable"]
-                    },
+                    name: "variable",
                     ty: None
                 }
             ))
@@ -2603,10 +2717,8 @@ mod test {
             Ok((
                 "",
                 AssignableVariable {
-                    path: VariablePath {
-                        parts: vec!["variable"]
-                    },
-                    ty: Some(VariableType::Length),
+                    name: "variable",
+                    ty: Some(VariableType::Measurement("Length")),
                 }
             ))
         );
@@ -2619,9 +2731,7 @@ mod test {
             Ok((
                 "",
                 Assignable::Variable(AssignableVariable {
-                    path: VariablePath {
-                        parts: vec!["variable"]
-                    },
+                    name: "variable",
                     ty: None
                 })
             ))
@@ -2635,11 +2745,11 @@ mod test {
                     "[",
                     vec![
                         AssignableVariable {
-                            path: VariablePath { parts: vec!["a"] },
+                            name: "a",
                             ty: None
                         },
                         AssignableVariable {
-                            path: VariablePath { parts: vec!["b"] },
+                            name: "b",
                             ty: None
                         }
                     ]
@@ -2655,12 +2765,12 @@ mod test {
                     "[",
                     vec![
                         AssignableVariable {
-                            path: VariablePath { parts: vec!["a"] },
-                            ty: Some(VariableType::Length)
+                            name: "a",
+                            ty: Some(VariableType::Measurement("Length"))
                         },
                         AssignableVariable {
-                            path: VariablePath { parts: vec!["b"] },
-                            ty: Some(VariableType::Angle)
+                            name: "b",
+                            ty: Some(VariableType::Measurement("Angle"))
                         }
                     ]
                 )
@@ -2678,7 +2788,7 @@ mod test {
                     starting_span: "a",
                     is_new: false,
                     to_assign: Assignable::Variable(AssignableVariable {
-                        path: VariablePath { parts: vec!["a"] },
+                        name: "a",
                         ty: None,
                     }),
                     statement: Box::new(Statement::parse("b").unwrap().1)
@@ -2694,8 +2804,8 @@ mod test {
                     starting_span: "a",
                     is_new: false,
                     to_assign: Assignable::Variable(AssignableVariable {
-                        path: VariablePath { parts: vec!["a"] },
-                        ty: Some(VariableType::Length),
+                        name: "a",
+                        ty: Some(VariableType::Measurement("Length")),
                     }),
                     statement: Box::new(Statement::parse("b").unwrap().1)
                 }
@@ -2710,7 +2820,7 @@ mod test {
                     starting_span: "a",
                     is_new: false,
                     to_assign: Assignable::Variable(AssignableVariable {
-                        path: VariablePath { parts: vec!["a"] },
+                        name: "a",
                         ty: None,
                     }),
                     statement: Box::new(Statement::parse("loop {}").unwrap().1),
@@ -2726,7 +2836,7 @@ mod test {
                     starting_span: "let",
                     is_new: true,
                     to_assign: Assignable::Variable(AssignableVariable {
-                        path: VariablePath { parts: vec!["a"] },
+                        name: "a",
                         ty: None,
                     }),
                     statement: Box::new(Statement::parse("b").unwrap().1)
@@ -2816,12 +2926,27 @@ mod test {
     #[test]
     fn match_branch() {
         assert_eq!(
-            MatchBranch::parse("a => {}"),
+            MatchBranch::parse("1 => {}"),
             Ok((
                 "",
                 MatchBranch {
-                    expression: Expression::parse("a").unwrap().1,
+                    litteral: Litteral::parse("1").unwrap().1,
                     block: Block { statements: vec![] }
+                }
+            ))
+        );
+
+        assert_eq!(
+            MatchBranch::parse("1 => false"),
+            Ok((
+                "",
+                MatchBranch {
+                    litteral: Litteral::parse("1").unwrap().1,
+                    block: Block {
+                        statements: vec![BlockStatement::Open(Statement::Expression(
+                            Expression::parse("false").unwrap().1
+                        ))]
+                    }
                 }
             ))
         );
@@ -2842,14 +2967,14 @@ mod test {
         );
 
         assert_eq!(
-            Match::parse("match a { b => {} }"),
+            Match::parse("match a { 1 => {} }"),
             Ok((
                 "",
                 Match {
                     starting_span: "match",
                     expression: Expression::parse("a").unwrap().1,
                     branches: vec![MatchBranch {
-                        expression: Expression::parse("b").unwrap().1,
+                        litteral: Litteral::parse("1").unwrap().1,
                         block: Block { statements: vec![] }
                     }]
                 }
@@ -2857,7 +2982,7 @@ mod test {
         );
 
         assert_eq!(
-            Match::parse("match a { b => {}, c => {}}"),
+            Match::parse("match a { 1 => {}, 2 => {}}"),
             Ok((
                 "",
                 Match {
@@ -2865,11 +2990,11 @@ mod test {
                     expression: Expression::parse("a").unwrap().1,
                     branches: vec![
                         MatchBranch {
-                            expression: Expression::parse("b").unwrap().1,
+                            litteral: Litteral::parse("1").unwrap().1,
                             block: Block { statements: vec![] }
                         },
                         MatchBranch {
-                            expression: Expression::parse("c").unwrap().1,
+                            litteral: Litteral::parse("2").unwrap().1,
                             block: Block { statements: vec![] }
                         }
                     ]
@@ -2889,7 +3014,7 @@ mod test {
                 For {
                     starting_span: "for",
                     name: None,
-                    variable_expression: Expression::parse("a").unwrap().1,
+                    variable_assignment: Assignable::parse("a").unwrap().1,
                     iterator_expression: Expression::parse("b").unwrap().1,
                     block: Block { statements: vec![] }
                 }
@@ -2903,7 +3028,7 @@ mod test {
                 For {
                     starting_span: "for",
                     name: Some("my_for_loop"),
-                    variable_expression: Expression::parse("a").unwrap().1,
+                    variable_assignment: Assignable::parse("a").unwrap().1,
                     iterator_expression: Expression::parse("b").unwrap().1,
                     block: Block { statements: vec![] }
                 }
@@ -3053,7 +3178,7 @@ mod test {
                     starting_span: "a",
                     is_new: false,
                     to_assign: Assignable::Variable(AssignableVariable {
-                        path: VariablePath { parts: vec!["a"] },
+                        name: "a",
                         ty: None,
                     }),
                     statement: Box::new(Statement::parse("b").unwrap().1)
@@ -3091,7 +3216,7 @@ mod test {
                 Statement::For(For {
                     starting_span: "for",
                     name: None,
-                    variable_expression: Expression::parse("a").unwrap().1,
+                    variable_assignment: Assignable::parse("a").unwrap().1,
                     iterator_expression: Expression::parse("b").unwrap().1,
                     block: Block { statements: vec![] }
                 })
@@ -3176,7 +3301,7 @@ mod test {
                             starting_span: "a",
                             is_new: false,
                             to_assign: Assignable::Variable(AssignableVariable {
-                                path: VariablePath { parts: vec!["a"] },
+                                name: "a",
                                 ty: None,
                             }),
                             statement: Box::new(Statement::parse("b").unwrap().1)
@@ -3195,7 +3320,7 @@ mod test {
                         starting_span: "a",
                         is_new: false,
                         to_assign: Assignable::Variable(AssignableVariable {
-                            path: VariablePath { parts: vec!["a"] },
+                            name: "a",
                             ty: None,
                         }),
                         statement: Box::new(Statement::parse("b").unwrap().1)
@@ -3219,7 +3344,7 @@ mod test {
                             starting_span: "a",
                             is_new: false,
                             to_assign: Assignable::Variable(AssignableVariable {
-                                path: VariablePath { parts: vec!["a"] },
+                                name: "a",
                                 ty: None,
                             }),
                             statement: Box::new(Statement::parse("b").unwrap().1)
@@ -3456,6 +3581,7 @@ mod test {
                 "",
                 NamedBlock {
                     name: "my_thing",
+                    parameter_span: "(",
                     parameters: vec![],
                     block: Block { statements: vec![] }
                 }
@@ -3468,9 +3594,10 @@ mod test {
                 "",
                 NamedBlock {
                     name: "my_thing",
+                    parameter_span: "(",
                     parameters: vec![MemberVariable {
                         name: "one",
-                        ty: VariableType::Length,
+                        ty: VariableType::Measurement("Length"),
                         constraints: None,
                         default_value: None
                     }],
@@ -3485,16 +3612,17 @@ mod test {
                 "",
                 NamedBlock {
                     name: "my_thing",
+                    parameter_span: "(",
                     parameters: vec![
                         MemberVariable {
                             name: "one",
-                            ty: VariableType::Length,
+                            ty: VariableType::Measurement("Length"),
                             constraints: None,
                             default_value: None
                         },
                         MemberVariable {
                             name: "two",
-                            ty: VariableType::Angle,
+                            ty: VariableType::Measurement("Angle"),
                             constraints: None,
                             default_value: Some(Litteral::Number(Number {
                                 integer: Some("2"),
@@ -3514,16 +3642,17 @@ mod test {
                 "",
                 NamedBlock {
                     name: "my_thing",
+                    parameter_span: "(",
                     parameters: vec![
                         MemberVariable {
                             name: "one",
-                            ty: VariableType::Length,
+                            ty: VariableType::Measurement("Length"),
                             constraints: None,
                             default_value: None
                         },
                         MemberVariable {
                             name: "two",
-                            ty: VariableType::Angle,
+                            ty: VariableType::Measurement("Angle"),
                             constraints: None,
                             default_value: Some(Litteral::Number(Number {
                                 integer: Some("2"),
@@ -3552,6 +3681,7 @@ mod test {
                 (
                     NamedBlock {
                         name: "my_thing",
+                        parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
@@ -3584,7 +3714,7 @@ mod test {
                     name: "MyStruct",
                     members: vec![MemberVariable {
                         name: "a",
-                        ty: VariableType::Length,
+                        ty: VariableType::Measurement("Length"),
                         constraints: None,
                         default_value: None
                     }]
@@ -3602,13 +3732,13 @@ mod test {
                     members: vec![
                         MemberVariable {
                             name: "a",
-                            ty: VariableType::Length,
+                            ty: VariableType::Measurement("Length"),
                             constraints: None,
                             default_value: None
                         },
                         MemberVariable {
                             name: "b",
-                            ty: VariableType::Angle,
+                            ty: VariableType::Measurement("Angle"),
                             constraints: Some(MemberVariableConstraintList {
                                 constraints: vec![MemberVariableConstraint::Integer]
                             }),
@@ -3631,10 +3761,11 @@ mod test {
                     starting_span: "function",
                     named_block: NamedBlock {
                         name: "my_function",
+                        parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
-                    return_type: VariableType::Length
+                    return_type: VariableType::Measurement("Length")
                 }
             ))
         );
@@ -3651,6 +3782,7 @@ mod test {
                     starting_span: "sketch",
                     named_block: NamedBlock {
                         name: "my_sketch",
+                        parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
@@ -3670,6 +3802,7 @@ mod test {
                     starting_span: "widget",
                     named_block: NamedBlock {
                         name: "my_widget",
+                        parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
@@ -3773,6 +3906,7 @@ mod test {
                     starting_span: "sketch",
                     named_block: NamedBlock {
                         name: "my_sketch",
+                        parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
@@ -3789,6 +3923,7 @@ mod test {
                     starting_span: "widget",
                     named_block: NamedBlock {
                         name: "my_widget",
+                        parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
@@ -3805,10 +3940,11 @@ mod test {
                     starting_span: "function",
                     named_block: NamedBlock {
                         name: "my_function",
+                        parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
-                    return_type: VariableType::Length
+                    return_type: VariableType::Measurement("Length")
                 })
             ))
         );
@@ -3841,6 +3977,7 @@ mod test {
                             starting_span: "sketch",
                             named_block: NamedBlock {
                                 name: "my_sketch",
+                                parameter_span: "(",
                                 parameters: vec![],
                                 block: Block { statements: vec![] }
                             },
@@ -3849,6 +3986,7 @@ mod test {
                             starting_span: "widget",
                             named_block: NamedBlock {
                                 name: "my_widget",
+                                parameter_span: "(",
                                 parameters: vec![],
                                 block: Block { statements: vec![] }
                             },
@@ -3857,10 +3995,11 @@ mod test {
                             starting_span: "function",
                             named_block: NamedBlock {
                                 name: "my_function",
+                                parameter_span: "(",
                                 parameters: vec![],
                                 block: Block { statements: vec![] }
                             },
-                            return_type: VariableType::Length
+                            return_type: VariableType::Measurement("Length")
                         }),
                     ]
                 }

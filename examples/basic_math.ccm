@@ -1,0 +1,4 @@
+
+function addition(a: Number, b: Number) -> Number {
+	 a + b
+}

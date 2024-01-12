@@ -1,25 +1,21 @@
 use std::collections::HashMap;
 
-use anyhow::{anyhow, bail, Result};
-use nom_locate::LocatedSpan;
+use anyhow::{anyhow, Result};
 
-use super::parsing;
+use super::{parsing, LogMessage, RuntimeLog};
 use parsing::Span;
 
 const RESERVED_KEYWORDS: &[&str] = &[
     "let", "import", "extern", "struct", "sketch", "widget", "function", "return", "if", "else",
     "match", "for", "while", "loop", "in", "break", "continue", "struct", "true", "false",
-    "default",
+    "default", "self",
 ];
 
 fn is_reserved_keyword<S: Span>(word: &S) -> Option<&'static str> {
-    for keyword in RESERVED_KEYWORDS {
-        if matches!(word.compare(keyword), nom::CompareResult::Ok) {
-            return Some(keyword);
-        }
-    }
-
-    None
+    RESERVED_KEYWORDS
+        .iter()
+        .find(|keyword| word.as_str() == **keyword)
+        .copied()
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -32,14 +28,13 @@ enum CallableReference {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Module<S: Span> {
-    file_name: String,
-    root_elements: RootElements<S>,
-    callables: HashMap<String, CallableReference>,
+    pub(super) file_name: String,
+    pub(super) root_elements: RootElements<S>,
 }
 
 impl<S: Span> Module<S> {
     pub fn load(
-        log: &mut ValidationLog<S>,
+        log: &mut RuntimeLog<S>,
         file_name: impl Into<String>,
         code: impl Into<S>,
     ) -> Result<Self> {
@@ -86,12 +81,9 @@ impl<S: Span> Module<S> {
             CallableReference::Widget,
         );
 
-        dbg!(&callables);
-
         let module = Self {
             file_name,
             root_elements,
-            callables,
         };
 
         module.validate(log);
@@ -129,7 +121,7 @@ impl<S: Span> Module<S> {
     }
 
     fn check_for_name_conflicts<T, I, FI, FN, FS, FBR>(
-        log: &mut ValidationLog<S>,
+        log: &mut RuntimeLog<S>,
         root_elements: &RootElements<S>,
         callables: &mut HashMap<String, CallableReference>,
         get_iter: FI,
@@ -144,8 +136,7 @@ impl<S: Span> Module<S> {
         FBR: Fn(usize) -> CallableReference,
     {
         for (index, item) in get_iter().enumerate() {
-            if let Some(old) =
-                callables.insert(dbg!(get_name(&item).to_string()), build_reference(index))
+            if let Some(old) = callables.insert(get_name(&item).to_string(), build_reference(index))
             {
                 let old_span = match old {
                     CallableReference::Struct(index) => root_elements.structs[index].name.clone(),
@@ -161,29 +152,29 @@ impl<S: Span> Module<S> {
                 };
                 let new_span = get_span(index);
 
-                log.push(ValidationMessage::DuplicateGlobal(old_span, new_span));
+                log.push(LogMessage::DuplicateGlobal(old_span, new_span));
             }
         }
     }
 
     /// Validation is checking for errors that don't require the context of execution.
-    fn validate(&self, log: &mut ValidationLog<S>) {
+    fn validate(&self, log: &mut RuntimeLog<S>) {
         self.root_elements.validate(log);
     }
 }
 
 #[derive(Debug, Eq, PartialEq)]
-struct RootElements<S: Span> {
-    imports: Vec<parsing::Import<S>>,
-    structs: Vec<parsing::Struct<S>>,
-    functions: Vec<parsing::Function<S>>,
-    sketches: Vec<parsing::Sketch<S>>,
-    widgets: Vec<parsing::Widget<S>>,
+pub(super) struct RootElements<S: Span> {
+    pub(super) imports: Vec<parsing::Import<S>>,
+    pub(super) structs: Vec<parsing::Struct<S>>,
+    pub(super) functions: Vec<parsing::Function<S>>,
+    pub(super) sketches: Vec<parsing::Sketch<S>>,
+    pub(super) widgets: Vec<parsing::Widget<S>>,
 }
 
 impl<S: Span> RootElements<S> {
     /// Validation is checking for errors that don't require the context of execution.1
-    fn validate(&self, log: &mut ValidationLog<S>) {
+    fn validate(&self, log: &mut RuntimeLog<S>) {
         // There is no validation to be done for imports.
 
         for structure in self.structs.iter() {
@@ -200,49 +191,37 @@ impl<S: Span> RootElements<S> {
         }
     }
 
-    fn validate_struct(log: &mut ValidationLog<S>, structure: &parsing::Struct<S>) {
+    fn validate_struct(log: &mut RuntimeLog<S>, structure: &parsing::Struct<S>) {
         // Name should not be a reserved keyword.
         if let Some(keyword) = is_reserved_keyword(&structure.name) {
-            log.push(ValidationMessage::ReservedKeyword(
-                structure.name.clone(),
-                keyword,
-            ));
+            log.push(LogMessage::ReservedKeyword(structure.name.clone(), keyword));
         }
 
         // None of the members should have a reserved keyword for a name.
         for member in structure.members.iter() {
             if let Some(keyword) = is_reserved_keyword(&member.name) {
-                log.push(ValidationMessage::ReservedKeyword(
-                    member.name.clone(),
-                    keyword,
-                ));
+                log.push(LogMessage::ReservedKeyword(member.name.clone(), keyword));
             }
         }
     }
 
-    fn validate_named_block(log: &mut ValidationLog<S>, block: &parsing::NamedBlock<S>) {
+    fn validate_named_block(log: &mut RuntimeLog<S>, block: &parsing::NamedBlock<S>) {
         // Name should not be a reserved keyword.
         if let Some(keyword) = is_reserved_keyword(&block.name) {
-            log.push(ValidationMessage::ReservedKeyword(
-                block.name.clone(),
-                keyword,
-            ));
+            log.push(LogMessage::ReservedKeyword(block.name.clone(), keyword));
         }
 
         // Parameter names should not be reserved keywords.
         for parameter in block.parameters.iter() {
             if let Some(keyword) = is_reserved_keyword(&parameter.name) {
-                log.push(ValidationMessage::ReservedKeyword(
-                    parameter.name.clone(),
-                    keyword,
-                ));
+                log.push(LogMessage::ReservedKeyword(parameter.name.clone(), keyword));
             }
         }
 
         Self::validate_block(log, &block.block);
     }
 
-    fn validate_block(log: &mut ValidationLog<S>, block: &parsing::Block<S>) {
+    fn validate_block(log: &mut RuntimeLog<S>, block: &parsing::Block<S>) {
         let mut core_iter = block.statements.iter().peekable();
         let statement_iter = std::iter::from_fn(|| {
             core_iter
@@ -254,10 +233,8 @@ impl<S: Span> RootElements<S> {
             // Variables should not contain keywords.
             if let Some(parsing::Statement::Assign(assignment)) = statement.get() {
                 for to_assign in assignment.to_assign.iter() {
-                    for part in to_assign.path.parts.iter() {
-                        if let Some(keyword) = is_reserved_keyword(part) {
-                            log.push(ValidationMessage::ReservedKeyword(part.clone(), keyword));
-                        }
+                    if let Some(keyword) = is_reserved_keyword(&to_assign.name) {
+                        log.push(LogMessage::ReservedKeyword(to_assign.name.clone(), keyword));
                     }
                 }
             }
@@ -275,110 +252,12 @@ impl<S: Span> RootElements<S> {
 
                         _ => None,
                     } {
-                        log.push(ValidationMessage::UnclosedStatement(span));
+                        log.push(LogMessage::UnclosedStatement(span.clone()));
                     }
                 }
             }
         }
     }
-}
-
-#[derive(Debug, Eq, PartialEq, Default)]
-pub struct ValidationLog<S> {
-    entries: Vec<ValidationMessage<S>>,
-}
-
-impl<S: Span> ValidationLog<S> {
-    fn push(&mut self, message: ValidationMessage<S>) {
-        self.entries.push(message);
-    }
-
-    fn containes_error(&self) -> bool {
-        for message in self.entries.iter() {
-            if matches!(message.log_level(), ValidationLogLevel::Error) {
-                return true;
-            }
-        }
-
-        false
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-enum ValidationMessage<S> {
-    UnclosedStatement(S),
-    ReservedKeyword(S, &'static str),
-    DuplicateGlobal(S, S),
-}
-
-impl<S> ValidationMessage<S> {
-    fn log_level(&self) -> ValidationLogLevel {
-        match self {
-            Self::UnclosedStatement(_) => ValidationLogLevel::Error,
-            Self::ReservedKeyword(_, _) => ValidationLogLevel::Error,
-            Self::DuplicateGlobal(_, _) => ValidationLogLevel::Error,
-        }
-    }
-}
-
-impl<S: Span + FormatSpan> std::fmt::Display for ValidationMessage<S> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnclosedStatement(span) => {
-                write!(
-                    f,
-                    "{}: Non-tail expressions must be closed with a semicolon",
-                    span.format_span()
-                )
-            }
-            Self::ReservedKeyword(span, keyword) => {
-                write!(
-                    f,
-                    "{}: Keyword `{}` is reserved",
-                    span.format_span(),
-                    keyword
-                )
-            }
-            Self::DuplicateGlobal(first_instance, second_instance) => {
-                write!(
-                    f,
-                    "Duplicate global {}:{}",
-                    first_instance.format_span(),
-                    second_instance.format_span()
-                )
-            }
-        }
-    }
-}
-
-pub trait FormatSpan {
-    fn format_span(&self) -> String;
-}
-
-impl<'a> FormatSpan for &'a str {
-    fn format_span(&self) -> String {
-        format!("`{}`", self)
-    }
-}
-impl<'a> FormatSpan for LocatedSpan<&'a str> {
-    fn format_span(&self) -> String {
-        format!("[Line:{}]", self.location_line())
-    }
-}
-impl FormatSpan for imstr::ImString {
-    fn format_span(&self) -> String {
-        format!("`{}`", self)
-    }
-}
-impl FormatSpan for LocatedSpan<imstr::ImString> {
-    fn format_span(&self) -> String {
-        format!("[Line:{}]", self.location_line())
-    }
-}
-
-enum ValidationLogLevel {
-    Warning,
-    Error,
 }
 
 #[cfg(test)]
@@ -395,7 +274,7 @@ mod test {
 
     #[test]
     fn load_module() {
-        let mut log = ValidationLog::default();
+        let mut log = RuntimeLog::default();
         assert!(Module::<&str>::load(&mut log, "my_module.ccm", "").is_ok());
     }
 
@@ -425,6 +304,7 @@ mod test {
                 starting_span: "sketch",
                 named_block: parsing::NamedBlock {
                     name: "my_sketch",
+                    parameter_span: "(",
                     parameters: vec![],
                     block: parsing::Block { statements: vec![] }
                 },
@@ -436,6 +316,7 @@ mod test {
                 starting_span: "widget",
                 named_block: parsing::NamedBlock {
                     name: "my_widget",
+                    parameter_span: "(",
                     parameters: vec![],
                     block: parsing::Block { statements: vec![] }
                 },
@@ -447,94 +328,100 @@ mod test {
                 starting_span: "function",
                 named_block: parsing::NamedBlock {
                     name: "my_function",
+                    parameter_span: "(",
                     parameters: vec![],
                     block: parsing::Block { statements: vec![] }
                 },
-                return_type: parsing::VariableType::Length
+                return_type: parsing::VariableType::Measurement("Length")
             }]
         );
     }
 
-    fn validate(code: &str) -> ValidationLog<&str> {
-        let mut log = ValidationLog::default();
-        Module::<&str>::load(&mut log, "my_module.ccs", code).unwrap(); // Even if validation "fails" we get the validation log back.
+    fn validate(code: &'static str) -> RuntimeLog<&str> {
+        let mut log = RuntimeLog::default();
+        Module::load(&mut log, "my_module.ccs", code).unwrap(); // Even if validation "fails" we get the validation log back.
 
         log
     }
 
     #[test]
     fn validate_block_empty() {
-        assert_eq!(validate("widget MyWidget() {}").entries, []);
+        assert_eq!(validate("widget MyWidget() {}").messages, []);
     }
 
     #[test]
     fn validate_block_tail_expressions() {
-        assert_eq!(validate("widget MyWidget() { let a = b; }").entries, []);
-        assert_eq!(validate("widget MyWidget() { let a = b }").entries, []);
+        assert_eq!(validate("widget MyWidget() { let a = b; }").messages, []);
+        assert_eq!(validate("widget MyWidget() { let a = b }").messages, []);
         assert_eq!(
-            validate("widget MyWidget() { let a = b; let c = d }").entries,
+            validate("widget MyWidget() { let a = b; let c = d }").messages,
             []
         );
         assert_eq!(
-            validate("widget MyWidget() { let a = b let c = d }").entries,
-            [ValidationMessage::UnclosedStatement("let"),]
+            validate("widget MyWidget() { let a = b let c = d }").messages,
+            [LogMessage::UnclosedStatement("let"),]
         );
     }
 
     #[test]
     fn validate_assignment_keyword_resurvation() {
         assert_eq!(
-            validate("widget MyWidget() { let break = b; }").entries,
-            [ValidationMessage::ReservedKeyword("break", "break")]
+            validate("widget MyWidget() { let break = b; }").messages,
+            [LogMessage::ReservedKeyword("break", "break")]
+        );
+
+        assert_eq!(
+            validate("widget MyWidget() { let break_beat = b; }").messages,
+            []
         );
     }
 
     #[test]
     fn validate_named_block_keyword_resurvation() {
         assert_eq!(
-            validate("widget break() { }").entries,
-            [ValidationMessage::ReservedKeyword("break", "break")]
+            validate("widget break() { }").messages,
+            [LogMessage::ReservedKeyword("break", "break")]
         );
     }
 
     #[test]
     fn validate_parameter_names_are_not_keywords() {
-        assert_eq!(validate("widget MyWidget() { }").entries, []);
+        assert_eq!(validate("widget MyWidget() { }").messages, []);
 
-        assert_eq!(validate("widget MyWidget(okay: Length) { }").entries, []);
+        assert_eq!(validate("widget MyWidget(okay: Length) { }").messages, []);
 
         assert_eq!(
-            validate("widget MyWidget(break: Length) { }").entries,
-            [ValidationMessage::ReservedKeyword("break", "break")]
+            validate("widget MyWidget(break: Length) { }").messages,
+            [LogMessage::ReservedKeyword("break", "break")]
         );
     }
 
     #[test]
     fn validate_struct_name_not_keyword() {
-        assert_eq!(validate("struct MyStruct { }").entries, []);
+        assert_eq!(validate("struct MyStruct { }").messages, []);
         assert_eq!(
-            validate("struct break { }").entries,
-            [ValidationMessage::ReservedKeyword("break", "break")]
+            validate("struct break { }").messages,
+            [LogMessage::ReservedKeyword("break", "break")]
         );
     }
 
     #[test]
     fn validate_struct_member_not_keyword() {
-        assert_eq!(validate("struct MyStruct { }").entries, []);
-        assert_eq!(validate("struct MyStruct { okay: Length }").entries, []);
+        assert_eq!(validate("struct MyStruct { }").messages, []);
+        assert_eq!(validate("struct MyStruct { okay: Length }").messages, []);
         assert_eq!(
-            validate("struct MyStruct { break: Length }").entries,
-            [ValidationMessage::ReservedKeyword("break", "break")]
+            validate("struct MyStruct { break: Length }").messages,
+            [LogMessage::ReservedKeyword("break", "break")]
         );
     }
 
     #[test]
     fn validate_no_duplicate_global_names() {
-        assert_eq!(validate("struct MyThing1 {} function MyThing2() -> Length {} sketch MyThing3() {} widget MyThing4() {}").entries, []);
-        assert_eq!(validate("struct MyThing {} function MyThing() -> Length {} sketch MyThing() {} widget MyThing() {}").entries, [ 
-	    ValidationMessage::DuplicateGlobal("MyThing", "MyThing"),
-	    ValidationMessage::DuplicateGlobal("MyThing", "MyThing"),
-	    ValidationMessage::DuplicateGlobal("MyThing", "MyThing"),
+        assert_eq!(validate("struct MyThing1 {} function MyThing2() -> Length {} sketch MyThing3() {} widget MyThing4() {}").messages, []);
+        assert_eq!(validate("struct MyThing {} function MyThing() -> Length {} sketch MyThing() {} widget MyThing() {}").messages, [ 
+	    LogMessage::DuplicateGlobal("MyThing", "MyThing"),
+	    LogMessage::DuplicateGlobal("MyThing", "MyThing"),
+	    LogMessage::DuplicateGlobal("MyThing", "MyThing"),
 	]);
     }
 }
