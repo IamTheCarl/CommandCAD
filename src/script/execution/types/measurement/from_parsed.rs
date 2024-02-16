@@ -85,19 +85,25 @@ macro_rules! build_lookup_tables {
 }
 
 impl Measurement {
-    pub fn from_parsed<'a, S: Span>(
+    pub fn from_parsed_raw<S: Span>(
         measurement: &parsing::Measurement<S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Self> {
         if let Some(converter) = CONVERT_FLOAT_TO_MEASUREMENT.get(measurement.ty.as_str()) {
             let value = unwrap_float(measurement.number.get_span().clone(), &measurement.number)?;
 
-            Ok(converter(value.into_inner()).into())
+            Ok(converter(value.into_inner()))
         } else {
             Err(Failure::UnknownUnitType(
                 measurement.ty.clone(),
                 measurement.ty.to_string().into(),
             ))
         }
+    }
+
+    pub fn from_parsed<'a, S: Span>(
+        measurement: &parsing::Measurement<S>,
+    ) -> OperatorResult<S, Value<'a, S>> {
+        Self::from_parsed_raw(measurement).map(|measurement| measurement.into())
     }
 
     pub fn from_number<'a, S: Span>(

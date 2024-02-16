@@ -10,3 +10,13 @@ function recursive_addition(number_of_cycles: Number) -> Number {
     0
   }
 }
+
+function convert_to_meters(input: Length) -> Number {
+  // We can't return measurements to the CLI.
+  // External programs won't know how to interpret those, so we have to convert it to a number.
+  input.to_number("m")
+}
+
+function default_value(input: Length = 42m) -> Number {
+  input.to_number("m")
+}

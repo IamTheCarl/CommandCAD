@@ -5,7 +5,7 @@ use crate::script::{
         expressions::{run_expression, run_trailer},
         ExecutionContext, Failure,
     },
-    parsing::{self, StructInitialization, VariableType},
+    parsing::{self, MemberVariable, StructInitialization, VariableType},
     RuntimeLog, Span,
 };
 
@@ -67,6 +67,39 @@ impl<'a, S: Span, const N: usize> From<(S, [(String, Value<'a, S>); N])> for Str
         Self {
             type_name,
             members: Rc::new(HashMap::from(value)),
+        }
+    }
+}
+
+pub fn validate_assignment_type<'a, S: Span>(
+    context: &mut ExecutionContext<'a, S>,
+    member: &MemberVariable<S>,
+    variable_assignment: &S,
+    value: Value<'a, S>,
+) -> OperatorResult<S, Value<'a, S>> {
+    match value {
+        Value::Default(_) => {
+            // They want to use a default value.
+            if let Some(default) = member.default_value.as_ref() {
+                Value::from_litteral(context, default)
+            } else {
+                Err(Failure::NoDefault(
+                    variable_assignment.clone(),
+                    variable_assignment.clone(),
+                ))
+            }
+        }
+        // No request for default. Check the type.
+        value => {
+            if value.matches_type(&member.ty) {
+                Ok(value)
+            } else {
+                Err(Failure::ExpectedGot(
+                    variable_assignment.clone(),
+                    member.ty.name(),
+                    value.type_name(),
+                ))
+            }
         }
     }
 }
@@ -133,7 +166,7 @@ impl<'a, S: Span> Structure<'a, S> {
         for member in struct_source.members.iter() {
             let name = member.name.as_str();
 
-            let assignment_expression =
+            let assignment =
                 initalization
                     .assignments
                     .iter()
@@ -145,20 +178,20 @@ impl<'a, S: Span> Structure<'a, S> {
                         }
                     });
 
-            let value = if let Some(expression) = assignment_expression {
+            let value = if let Some(expression) = assignment {
                 match run_expression(context, expression) {
-                    Ok(value) => {
-                        if value.matches_type(&member.ty) {
-                            value
-                        } else {
-                            failures.push(Failure::ExpectedGot(
-                                expression.get_span().clone(),
-                                member.ty.name(),
-                                value.type_name().into(),
-                            ));
+                    Ok(value) => match validate_assignment_type(
+                        context,
+                        member,
+                        expression.get_span(),
+                        value,
+                    ) {
+                        Ok(value) => value,
+                        Err(failure) => {
+                            failures.push(failure);
                             continue;
                         }
-                    }
+                    },
                     Err(failure) => {
                         failures.push(failure);
                         continue;
@@ -208,11 +241,10 @@ impl<'a, S: Span> Structure<'a, S> {
 
         // Make sure there aren't extra assignments.
         for (name, _expression) in initalization.assignments.iter() {
-            if struct_source
+            if !struct_source
                 .members
                 .iter()
-                .find(|member| member.name.as_str() == name.as_str())
-                .is_none()
+                .any(|member| member.name.as_str() == name.as_str())
             {
                 failures.push(Failure::StructExcessAssignment(name.clone()));
             }
@@ -332,6 +364,19 @@ mod test {
             run_expression(
                 &mut context,
                 &Expression::parse("struct DefaultStruct { ..default }")
+                    .unwrap()
+                    .1
+            ),
+            Ok(Structure::from((
+                "DefaultStruct",
+                [("value".into(), Number::new(42.0).unwrap().into())]
+            ))
+            .into())
+        );
+        assert_eq!(
+            run_expression(
+                &mut context,
+                &Expression::parse("struct DefaultStruct { value = default }")
                     .unwrap()
                     .1
             ),

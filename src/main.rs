@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, io::Write};
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
@@ -64,16 +64,22 @@ fn run(run_args: arguments::RunArgs) {
             }
         }
 
-        let output_stream = std::io::stdout();
+        let mut output_stream = std::io::stdout();
 
         match result {
             Ok(result) => {
                 match run_args.output_format {
-                    arguments::OutputFormat::Yaml => serde_yaml::to_writer(output_stream, &result)
-                        .context("Failed to serialize results")?,
-                    arguments::OutputFormat::Json => serde_json::to_writer(output_stream, &result)
-                        .context("Failed to serialize results")?,
+                    arguments::OutputFormat::Yaml => {
+                        serde_yaml::to_writer(&mut output_stream, &result)
+                            .context("Failed to serialize results")?
+                    }
+                    arguments::OutputFormat::Json => {
+                        serde_json::to_writer(&mut output_stream, &result)
+                            .context("Failed to serialize results")?
+                    }
                 };
+
+                writeln!(output_stream)?;
             }
             Err(failure) => {
                 log::error!("{}", failure);

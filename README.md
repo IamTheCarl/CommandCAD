@@ -48,7 +48,3 @@ In my frustration with the state of CAD software as a whole, I lost my mind and 
 * Structs can be defined from all scopes, but only be accessed from child scopes
 * Struct construction should not require the keyword `struct` in front
   * Struct construction will instead be a trailer operator type
-* It should be possible to deserialize measurements, but not to serialize measurements
-  * Serializing a measurement is problematic because we don't know what unit to output in (meters, inches, kilometers?)
-  * Losing precision in ways outside of the user's control could be very dangerous
-* Error handling can be improved. Instead of pushing errors to the log, they should be part of the `failure` type.

@@ -14,7 +14,7 @@ mod none;
 pub use none::NoneType;
 
 mod default;
-pub use default::Default;
+pub use default::DefaultValue;
 
 mod boolean;
 pub use boolean::Boolean;
@@ -26,7 +26,7 @@ pub mod function;
 pub use function::{BuiltinFunction, UserFunction};
 
 mod structures;
-pub use structures::{StructDefinition, Structure};
+pub use structures::{validate_assignment_type, StructDefinition, Structure};
 
 mod list;
 pub use list::List;
@@ -205,7 +205,7 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
 #[derive(Debug, Clone, PartialEq, EnumDowncast)]
 pub enum Value<'a, S: Span> {
     NoneType,
-    Default,
+    Default(DefaultValue),
     Boolean,
     Number,
     BuiltinFunction(BuiltinFunction<'a, S>),
@@ -268,7 +268,7 @@ impl<'a, S: Span> Value<'a, S> {
             Litteral::String(string) => SString::from_parsed(string),
             Litteral::List(list) => List::from_parsed(context, list),
             Litteral::Boolean(_span, value) => Ok(Self::Boolean(*value)),
-            Litteral::Default(_span) => Ok(Default.into()),
+            Litteral::Default(_span) => Ok(DefaultValue.into()),
         }
     }
 }

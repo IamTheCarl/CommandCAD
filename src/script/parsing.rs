@@ -11,7 +11,7 @@ use nom::{
         all_consuming, consumed, cut, flat_map, map, opt, recognize, success, value, verify,
     },
     error::context,
-    multi::{fold_many0, fold_many1, many0, separated_list0, separated_list1},
+    multi::{fold_many0, fold_many1, many0, separated_list0},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     CompareResult, IResult,
 };
@@ -180,10 +180,6 @@ impl<S: Span> Struct<S> {
             },
         )(input)
     }
-
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -205,10 +201,6 @@ impl<S: Span> Sketch<S> {
             },
         )(input)
     }
-
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -229,10 +221,6 @@ impl<S: Span> Widget<S> {
                 named_block,
             },
         )(input)
-    }
-
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
     }
 }
 
@@ -256,10 +244,6 @@ impl<S: Span> Function<S> {
                 return_type,
             },
         )(input)
-    }
-
-    pub fn get_span(&self) -> S {
-        self.starting_span.clone()
     }
 }
 
@@ -1696,25 +1680,6 @@ impl<S: Span> Measurement<S> {
 
     pub fn get_span(&self) -> &S {
         self.number.get_span()
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct VariablePath<S: Span> {
-    pub parts: Vec<S>,
-}
-
-impl<S: Span> VariablePath<S> {
-    fn parse(input: S) -> VResult<S, Self> {
-        map(
-            separated_list1(delimited(space0, nom_char('.'), space0), parse_name),
-            |parts| Self { parts },
-        )(input)
-    }
-
-    pub fn get_span(&self) -> S {
-        // A path should never be empty, so this shouldn't fail.
-        self.parts[0].clone()
     }
 }
 
@@ -3390,31 +3355,6 @@ mod test {
 
         assert!(Block::parse("{ break a = b }").is_err());
         assert!(Block::parse("{ break a = b; }").is_err());
-    }
-
-    #[test]
-    fn variable_path() {
-        assert_eq!(
-            VariablePath::parse("name"),
-            Ok((
-                "",
-                VariablePath {
-                    parts: vec!["name"]
-                }
-            ))
-        );
-
-        assert_eq!(
-            VariablePath::parse("name.subname"),
-            Ok((
-                "",
-                VariablePath {
-                    parts: vec!["name", "subname"]
-                }
-            ))
-        );
-
-        assert!(VariablePath::parse("").is_err());
     }
 
     #[test]

@@ -69,8 +69,8 @@ impl<'a, S: Span> Object<'a, S> for Range {
 }
 
 impl Range {
-    pub fn from_parsed<'a, S: Span>(
-        context: &mut ExecutionContext<'a, S>,
+    pub fn from_parsed<S: Span>(
+        context: &mut ExecutionContext<S>,
         range: &parsing::Range<S>,
     ) -> OperatorResult<S, Self> {
         let lower_bound = if let Some(lower_bound) = &range.lower_bound {

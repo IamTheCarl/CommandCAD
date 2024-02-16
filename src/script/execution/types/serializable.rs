@@ -1,6 +1,6 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::script::{
     execution::{types::StructDefinition, ExecutionContext, Failure},
@@ -10,36 +10,56 @@ use crate::script::{
 
 use super::{
     number::{RawNumber, UnwrapNotNan},
-    List, Number, OperatorResult, SString, Structure, Value,
+    structures::validate_assignment_type,
+    DefaultValue, List, Measurement, Number, Object, OperatorResult, SString, Structure, Value,
 };
 
 // TODO add the ability to deserialize Default and Measurements. You should not be able to serialize these values.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case", untagged)]
+#[serde(rename_all = "snake_case")]
 pub enum SerializableValue {
+    #[serde(skip_serializing)]
+    Default,
+    #[serde(untagged)]
     Boolean(bool),
+    #[serde(untagged)]
     Number(RawNumber),
+    #[serde(untagged)]
     Struct {
         #[serde(rename = "type")]
         ty: String,
         members: HashMap<String, SerializableValue>,
     },
+    #[serde(untagged)]
     List(Vec<SerializableValue>),
+    #[serde(
+        untagged,
+        skip_serializing,
+        deserialize_with = "SerializableValue::parse_measurement"
+    )]
+    Measurement(Measurement),
+    #[serde(untagged)]
     String(String),
-    // #[serde(skip_serializing)]
-    // Measurement(Measurement),
-
-    // #[serde(skip_serializing)]
-    // Default,
 }
 
 impl SerializableValue {
+    pub fn parse_measurement<'de, D>(deserializer: D) -> Result<Measurement, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        let s = String::deserialize(deserializer)?;
+        Measurement::from_str(&s).map_err(|error| D::Error::custom(format!("{:?}", error)))
+    }
+
     pub fn into_value_without_type_check<'a, S: Span>(
         self,
         context: &mut ExecutionContext<'a, S>,
         span: &S,
     ) -> OperatorResult<S, Value<'a, S>> {
         match self {
+            Self::Default => Ok(DefaultValue.into()),
             Self::Boolean(value) => Ok((value).into()),
             Self::Number(value) => Number::new(value).unwrap_not_nan(span),
             Self::Struct {
@@ -59,7 +79,12 @@ impl SerializableValue {
                     if let Some(value) = values.remove(member.name.as_str()) {
                         match value.into_value(context, span, &member.ty) {
                             Ok(value) => {
-                                table.insert(member.name.to_string(), value);
+                                match validate_assignment_type(context, member, span, value) {
+                                    Ok(value) => {
+                                        table.insert(member.name.to_string(), value);
+                                    }
+                                    Err(failure) => failures.push(failure),
+                                }
                             }
                             Err(failure) => {
                                 failures.push(failure);
@@ -90,6 +115,7 @@ impl SerializableValue {
                 Ok(List::from(collected_values).into())
             }
             Self::String(value) => Ok(SString::from(value).into()),
+            Self::Measurement(measurement) => Ok(measurement.into()),
         }
     }
 
@@ -117,27 +143,35 @@ impl SerializableValue {
             (Self::Struct { ty: s_ty, .. }, VariableType::Struct(v_ty)) => v_ty.as_str() == s_ty,
             (Self::List(_), VariableType::List) => true,
             (Self::String(_), VariableType::String) => true,
+            (Self::Measurement(measurement), ty) => measurement.matches_type(ty),
+            (Self::Default, _) => true,
             _ => false,
         }
     }
 
     fn type_name(&self) -> Cow<'static, str> {
         match self {
+            SerializableValue::Default => "Default".into(),
             SerializableValue::Boolean(_) => "Boolean".into(),
             SerializableValue::Number(_) => "Number".into(),
             SerializableValue::Struct { ty, members: _ } => format!("struct {}", ty).into(),
             SerializableValue::List(_) => "List".into(),
             SerializableValue::String(_) => "String".into(),
+            SerializableValue::Measurement(measurement) => {
+                <Measurement as Object<&'static str>>::type_name(measurement)
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod test {
+    use uom::si::{f64::Length, length::millimeter};
+
     use crate::script::{
         execution::{
             expressions::run_expression,
-            types::{Object, SString},
+            types::{Measurement, Object, SString},
             ModuleScope, Stack,
         },
         module::Module,
@@ -224,7 +258,7 @@ mod test {
         let module = Module::load(
             &mut log,
             "test_module.ccm",
-            r#"struct MyStruct { value: Number }"#,
+            r#"struct MyStruct { value: Number = 1 }"#,
         )
         .unwrap();
 
@@ -250,6 +284,26 @@ mod test {
             run_expression(
                 &mut context,
                 &Expression::parse("struct MyStruct { value = 42 }")
+                    .unwrap()
+                    .1
+            )
+            .unwrap()
+        );
+
+        let struct_def = r#"
+                   type: MyStruct
+                   members:
+                     value: default"#;
+
+        let structure = serde_yaml::from_str::<SerializableValue>(struct_def)
+            .unwrap()
+            .into_value(&mut context, &"", &VariableType::Struct("MyStruct"));
+
+        assert_eq!(
+            structure.unwrap(),
+            run_expression(
+                &mut context,
+                &Expression::parse("struct MyStruct { ..default }")
                     .unwrap()
                     .1
             )
@@ -389,5 +443,55 @@ mod test {
             value.export(&mut context.log, &""),
             Ok(SerializableValue::String("This is a test".to_string()))
         );
+    }
+
+    #[test]
+    fn deserialize_measurement() {
+        let mut context = ExecutionContext::<&str> {
+            log: Default::default(),
+            stack: Default::default(),
+        };
+
+        assert_eq!(
+            serde_yaml::from_str::<SerializableValue>("42mm")
+                .unwrap()
+                .into_value(&mut context, &"", &VariableType::Measurement("Length")),
+            Ok(Measurement::try_from(Length::new::<millimeter>(42.0))
+                .unwrap()
+                .into())
+        );
+    }
+
+    #[test]
+    fn serialize_measurement() {
+        let value = SerializableValue::Measurement(
+            Measurement::try_from(Length::new::<millimeter>(42.0)).unwrap(),
+        );
+
+        // It's supposed to fail.
+        assert!(serde_yaml::to_string(&value).is_err());
+    }
+
+    #[test]
+    fn deserialize_default() {
+        let mut context = ExecutionContext::<&str> {
+            log: Default::default(),
+            stack: Default::default(),
+        };
+
+        assert_eq!(
+            serde_yaml::from_str::<SerializableValue>("default")
+                .unwrap()
+                .into_value(&mut context, &"", &VariableType::Measurement("Length")),
+            Ok(DefaultValue.into())
+        );
+    }
+
+    #[test]
+    fn serialize_default() {
+        let value = SerializableValue::Default;
+
+        // It's supposed to fail.
+        assert!(serde_yaml::to_string(&value).is_err());
     }
 }

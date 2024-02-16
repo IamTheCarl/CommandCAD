@@ -1,4 +1,4 @@
-use std::{borrow::Cow, cmp::Ordering};
+use std::{borrow::Cow, cmp::Ordering, str::FromStr};
 
 use uom::{
     si::{self, Dimension, Quantity, Units},
@@ -7,7 +7,7 @@ use uom::{
 
 use crate::script::{
     execution::Failure,
-    parsing::{Expression, VariableType},
+    parsing::{self, Expression, VariableType},
     RuntimeLog, Span,
 };
 
@@ -88,7 +88,7 @@ macro_rules! named_measurement_branchs {
 		    paste::paste! { [<$name:snake:upper _IS_INFORMATION_KIND>] },
 		    paste::paste! { [<$name:snake:upper _IS_SOLID_ANGLE_KIND>] },
 		    paste::paste! { [<$name:snake:upper _IS_TEMPERATURE_KIND>] },
-       		) => "$name".into(),)*
+       		) => stringify!($name).into(),)*
        		_ => format!(
                     "Measurement<L{}, M{}, T{}, I{}, Th{}, N{}, J{}>",
                     $self.length,
@@ -520,14 +520,18 @@ where
     }
 }
 
-// impl FromStr for Measurement {
-//     type Err = ();
-//
-//     fn from_str(s: &str) -> Result<Self, Self::Err> {
-//         let parsed = parsing::Measurement::parse(s)?;
-//         Self::from_parsed(log, measurement) // I think I need to overhaul how failures are reported to do this.
-//     }
-// }
+impl FromStr for Measurement {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (_leftover, measurement) = parsing::Measurement::parse(s)
+            .map_err(|error| anyhow::anyhow!("Failed to parse measurement: {}", error))?;
+        let measurement = Self::from_parsed_raw(&measurement)
+            .map_err(|failure| anyhow::anyhow!("{}", failure))?;
+
+        Ok(measurement)
+    }
+}
 
 #[cfg(test)]
 mod test {

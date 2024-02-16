@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::script::execution::types::NoneType;
 
-use self::types::Object;
+use self::types::validate_assignment_type;
 
 use super::{
     module::Module,
@@ -303,20 +303,17 @@ fn run_named_block<'a, S: Span>(
             let mut failures = Vec::new();
 
             // Validate the arguments and put them into scope..
-            for (span, (argument, variable)) in spans
+            for (span, (argument, parameter)) in spans
                 .iter()
                 .map(|expression| expression.get_span())
                 .chain(std::iter::repeat(default_span))
                 .zip(arguments.into_iter().zip(&block.parameters))
             {
-                if argument.matches_type(&variable.ty) {
-                    context.stack.new_variable(&variable.name, argument);
-                } else {
-                    failures.push(Failure::ExpectedGot(
-                        span.clone(),
-                        variable.ty.name(),
-                        argument.type_name(),
-                    ));
+                match validate_assignment_type(context, parameter, span, argument) {
+                    Ok(value) => {
+                        context.stack.new_variable(&parameter.name, value);
+                    }
+                    Err(failure) => failures.push(failure),
                 }
             }
 
@@ -393,6 +390,33 @@ mod test {
         let result = run_block(
             &mut context,
             &parsing::Block::parse("{ my_function(5) }").unwrap().1,
+        );
+        assert_eq!(result, Ok(Number::new(5.0).unwrap().into()));
+    }
+
+    #[test]
+    fn default_function() {
+        let mut log = Vec::new();
+
+        let module = Module::load(
+            &mut log,
+            "test_module.ccm",
+            "function my_function(input: Number = 5) -> Number { input }",
+        )
+        .unwrap();
+
+        assert!(log.is_empty());
+
+        let module_scope = ModuleScope::new(&module);
+
+        let mut context = ExecutionContext {
+            log: Default::default(),
+            stack: Stack::new(module_scope),
+        };
+
+        let result = run_block(
+            &mut context,
+            &parsing::Block::parse("{ my_function(default) }").unwrap().1,
         );
         assert_eq!(result, Ok(Number::new(5.0).unwrap().into()));
     }

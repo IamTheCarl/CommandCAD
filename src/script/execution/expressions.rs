@@ -38,8 +38,8 @@ pub fn run_comparison<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
     comparison: &Comparison<S>,
 ) -> Result<S, Value<'a, S>> {
-    fn cmp<'a, S: Span>(
-        context: &mut ExecutionContext<'a, S>,
+    fn cmp<S: Span>(
+        context: &mut ExecutionContext<S>,
         a: &Comparison<S>,
         b: &ArithmeticExpression<S>,
     ) -> Result<S, Ordering> {
@@ -184,7 +184,7 @@ pub fn run_factor<'a, S: Span>(
 
 #[cfg(test)]
 mod test {
-    use super::super::types::Default;
+    use super::super::types::DefaultValue;
     use super::*;
     use ordered_float::NotNan;
 
@@ -330,7 +330,7 @@ mod test {
         // Default
         assert_eq!(
             Value::from_litteral(&mut context, &Litteral::parse("default").unwrap().1),
-            Ok(Default.into())
+            Ok(DefaultValue.into())
         );
     }
 
