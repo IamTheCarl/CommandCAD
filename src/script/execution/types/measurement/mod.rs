@@ -6,13 +6,14 @@ use uom::{
 };
 
 use crate::script::{
-    execution::{ControlFlow, ExecutionResult},
+    execution::Failure,
     parsing::{Expression, VariableType},
-    LogMessage, RuntimeLog, Span,
+    RuntimeLog, Span,
 };
 
 use super::{
-    function::AutoCall, number::UnwrapNotNan, NamedObject, Number, Object, SString, Value,
+    function::AutoCall, number::UnwrapNotNan, NamedObject, Number, Object, OperatorResult, SString,
+    Value,
 };
 
 mod from_parsed;
@@ -233,10 +234,10 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
         log: &mut RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         let rhs = self.unpack_for_addition_or_subtraction(log, span, rhs)?;
 
-        let value = Number::new(*self.value + *rhs.value).unwrap_not_nan_raw(log, span)?;
+        let value = Number::new(*self.value + *rhs.value).unwrap_not_nan_raw(span)?;
 
         Ok(Self { value, ..*self }.into())
     }
@@ -245,22 +246,22 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
         log: &mut RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         let rhs = self.unpack_for_addition_or_subtraction(log, span, rhs)?;
 
-        let value = Number::new(*self.value - *rhs.value).unwrap_not_nan_raw(log, span)?;
+        let value = Number::new(*self.value - *rhs.value).unwrap_not_nan_raw(span)?;
 
         Ok(Self { value, ..*self }.into())
     }
     fn multiply(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         match rhs {
             Value::Measurement(rhs) => {
-                let value = Number::new(*self.value * *rhs.value).unwrap_not_nan_raw(log, span)?;
+                let value = Number::new(*self.value * *rhs.value).unwrap_not_nan_raw(span)?;
 
                 Ok(Self {
                     length: self.length + rhs.length,
@@ -282,29 +283,26 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
                 .into())
             }
             Value::Number(rhs) => {
-                let value = Number::new(*self.value * **rhs).unwrap_not_nan_raw(log, span)?;
+                let value = Number::new(*self.value * **rhs).unwrap_not_nan_raw(span)?;
 
                 Ok(Self { value, ..*self }.into())
             }
-            _ => {
-                log.push(LogMessage::ExpectedGot(
-                    span.clone(),
-                    "Measurement or Number".into(),
-                    rhs.type_name(),
-                ));
-                Err(ControlFlow::Failure)
-            }
+            _ => Err(Failure::ExpectedGot(
+                span.clone(),
+                "Measurement or Number".into(),
+                rhs.type_name(),
+            )),
         }
     }
     fn divide(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         match rhs {
             Value::Measurement(rhs) => {
-                let value = Number::new(*self.value / *rhs.value).unwrap_not_nan_raw(log, span)?;
+                let value = Number::new(*self.value / *rhs.value).unwrap_not_nan_raw(span)?;
 
                 Ok(Self {
                     length: self.length - rhs.length,
@@ -326,32 +324,21 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
                 .into())
             }
             Value::Number(rhs) => {
-                let value = Number::new(*self.value / **rhs).unwrap_not_nan_raw(log, span)?;
+                let value = Number::new(*self.value / **rhs).unwrap_not_nan_raw(span)?;
 
                 Ok(Self { value, ..*self }.into())
             }
-            _ => {
-                log.push(LogMessage::ExpectedGot(
-                    span.clone(),
-                    "Measurement or Number".into(),
-                    rhs.type_name(),
-                ));
-                Err(ControlFlow::Failure)
-            }
+            _ => Err(Failure::ExpectedGot(
+                span.clone(),
+                "Measurement or Number".into(),
+                rhs.type_name(),
+            )),
         }
     }
-    fn unary_plus(
-        &self,
-        _log: &mut RuntimeLog<S>,
-        _span: &S,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    fn unary_plus(&self, _log: &mut RuntimeLog<S>, _span: &S) -> OperatorResult<S, Value<'a, S>> {
         Ok(self.clone().into())
     }
-    fn unary_minus(
-        &self,
-        _log: &mut RuntimeLog<S>,
-        _span: &S,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    fn unary_minus(&self, _log: &mut RuntimeLog<S>, _span: &S) -> OperatorResult<S, Value<'a, S>> {
         Ok(Self {
             value: -self.value,
             ..self.clone()
@@ -360,11 +347,11 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
     }
     fn cmp(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Ordering> {
-        let rhs = rhs.downcast_ref::<Self>(log, span)?;
+    ) -> OperatorResult<S, Ordering> {
+        let rhs = rhs.downcast_ref::<Self>(span)?;
         if self.length == rhs.length
             && self.mass == rhs.mass
             && self.time == rhs.time
@@ -380,12 +367,11 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
         {
             Ok(std::cmp::Ord::cmp(&self.value, &rhs.value))
         } else {
-            log.push(LogMessage::ExpectedGot(
+            Err(Failure::ExpectedGot(
                 span.clone(),
                 Object::<S>::type_name(self),
                 Object::<S>::type_name(rhs),
-            ));
-            Err(ControlFlow::Failure)
+            ))
         }
     }
     fn method_call(
@@ -395,18 +381,15 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
         attribute: &S,
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         match attribute.as_str() {
             "to_number" => {
-                |log: &mut RuntimeLog<S>, span: &S, ty: SString| -> ExecutionResult<S, Value<S>> {
-                    self.to_number(log, span, ty.as_str())
+                |_log: &mut RuntimeLog<S>, span: &S, ty: SString| -> OperatorResult<S, Value<S>> {
+                    self.to_number(span, ty.as_str())
                 }
                 .auto_call(log, span, arguments, expressions)
             }
-            _ => {
-                log.push(LogMessage::UnknownAttribute(attribute.clone()));
-                Err(ControlFlow::Failure)
-            }
+            _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
     }
 }
@@ -418,12 +401,12 @@ impl NamedObject for Measurement {
 }
 
 impl Measurement {
-    fn unpack_for_addition_or_subtraction<'a, 'b, S: Span>(
+    fn unpack_for_addition_or_subtraction<'b, S: Span>(
         &'b self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
-        rhs: &'b Value<'a, S>,
-    ) -> ExecutionResult<'a, S, &Self> {
+        rhs: &'b Value<'_, S>,
+    ) -> OperatorResult<S, &Self> {
         if let Value::Measurement(rhs) = rhs {
             if rhs.length == self.length
                 && rhs.mass == self.mass
@@ -436,20 +419,18 @@ impl Measurement {
             {
                 Ok(rhs)
             } else {
-                log.push(LogMessage::ExpectedGot(
+                Err(Failure::ExpectedGot(
                     span.clone(),
                     <Self as Object<S>>::type_name(self),
                     <Self as Object<S>>::type_name(rhs),
-                ));
-                Err(ControlFlow::Failure)
+                ))
             }
         } else {
-            log.push(LogMessage::ExpectedGot(
+            Err(Failure::ExpectedGot(
                 span.clone(),
                 <Self as Object<S>>::type_name(self),
                 rhs.type_name(),
-            ));
-            Err(ControlFlow::Failure)
+            ))
         }
     }
 }
@@ -468,7 +449,7 @@ where
 {
     type Error = ordered_float::FloatIsNan;
 
-    fn try_from(value: Quantity<D, U, f64>) -> Result<Self, Self::Error> {
+    fn try_from(value: Quantity<D, U, f64>) -> std::result::Result<Self, Self::Error> {
         let angle_kind: bool = has_impl::has_impl!(D::Kind: si::marker::AngleKind);
         let constituent_concentration_kind: bool =
             has_impl::has_impl!(D::Kind: si::marker::ConstituentConcentrationKind);
@@ -518,7 +499,7 @@ where
 {
     type Error = ();
 
-    fn try_into(self) -> Result<Quantity<D, U, f64>, Self::Error> {
+    fn try_into(self) -> std::result::Result<Quantity<D, U, f64>, Self::Error> {
         if D::L::INT == self.length
             && D::M::INT == self.mass
             && D::T::INT == self.time
@@ -538,6 +519,15 @@ where
         }
     }
 }
+
+// impl FromStr for Measurement {
+//     type Err = ();
+//
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         let parsed = parsing::Measurement::parse(s)?;
+//         Self::from_parsed(log, measurement) // I think I need to overhaul how failures are reported to do this.
+//     }
+// }
 
 #[cfg(test)]
 mod test {

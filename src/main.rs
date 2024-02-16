@@ -61,7 +61,6 @@ fn run(run_args: arguments::RunArgs) {
         for message in runtime.log().messages.iter() {
             match message.log_level() {
                 script::LogLevel::Warning => log::warn!("{}", message),
-                script::LogLevel::Error => log::error!("{}", message),
             }
         }
 
@@ -76,8 +75,8 @@ fn run(run_args: arguments::RunArgs) {
                         .context("Failed to serialize results")?,
                 };
             }
-            Err(_) => {
-                // Error should have already been logged.
+            Err(failure) => {
+                log::error!("{}", failure);
             }
         }
 

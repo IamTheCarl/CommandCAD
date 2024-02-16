@@ -1,4 +1,12 @@
 
 function addition(a: Number, b: Number) -> Number {
-	 a + b
+  a + b
+}
+
+function recursive_addition(number_of_cycles: Number) -> Number {
+  if number_of_cycles > 0 {
+    number_of_cycles + recursive_addition(number_of_cycles - 1)
+  } else {
+    0
+  }
 }

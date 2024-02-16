@@ -3,12 +3,12 @@ use std::{fmt::Debug, rc::Rc};
 use fortuples::fortuples;
 
 use crate::script::{
-    execution::{run_named_block, ControlFlow, ExecutionContext, ExecutionResult},
+    execution::{run_named_block, ExecutionContext, Failure},
     parsing::{Expression, NamedBlock, VariableType},
     LogMessage, RuntimeLog, Span,
 };
 
-use super::{NamedObject, Object, Value};
+use super::{NamedObject, Object, OperatorResult, Value};
 
 #[derive(Clone)]
 pub struct UserFunction<'a, S: Span> {
@@ -27,10 +27,9 @@ impl<'a, S: Span> Object<'a, S> for UserFunction<'a, S> {
         span: &S,
         arguments: Vec<Value<'a, S>>,
         spans: &[Expression<S>],
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         context.new_isolated_scope(|context| {
             run_named_block(context, self.block, arguments, spans, span)
-                .map_err(|_| ControlFlow::Failure)
         })
     }
 }
@@ -54,12 +53,7 @@ impl<'a, S: Span> NamedObject for UserFunction<'a, S> {
 }
 
 pub trait BuiltinFunctionPointer<'a, S: Span + 'a>:
-    Fn(
-    &mut RuntimeLog<S>,
-    &S,
-    Vec<Value<'a, S>>,
-    &[Expression<S>],
-) -> ExecutionResult<'a, S, Value<'a, S>>
+    Fn(&mut RuntimeLog<S>, &S, Vec<Value<'a, S>>, &[Expression<S>]) -> OperatorResult<S, Value<'a, S>>
 {
 }
 
@@ -71,7 +65,7 @@ where
         &S,
         Vec<Value<'a, S>>,
         &[Expression<S>],
-    ) -> ExecutionResult<'a, S, Value<'a, S>>,
+    ) -> OperatorResult<S, Value<'a, S>>,
 {
 }
 
@@ -89,7 +83,7 @@ impl<'a, S: Span> Object<'a, S> for BuiltinFunction<'a, S> {
         span: &S,
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         self.0(&mut context.log, span, arguments, expressions)
     }
 }
@@ -118,7 +112,7 @@ pub trait UnpackArguments<'a, S: Span, Tuple> {
         span: &S,
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
-    ) -> ExecutionResult<'a, S, Tuple>;
+    ) -> OperatorResult<S, Tuple>;
 }
 
 #[rustfmt::skip]
@@ -134,16 +128,15 @@ fortuples! {
             _span: &S,
             mut arguments: Vec<Value<'a, S>>,
             expressions: &[Expression<S>],
-	) -> ExecutionResult<'a, S, #Tuple> {
+	) -> OperatorResult<S, #Tuple> {
 	    arguments.reverse();
 	    let mut _expression_iter = expressions.iter();
 	    
 	    #(let casey::lower!(#Member) = {
 		if let Some(value) = arguments.pop() {
-		    value.downcast(log, _expression_iter.next().unwrap().get_span())?
+		    value.downcast(_expression_iter.next().unwrap().get_span())?
 		} else {
-		    log.push(LogMessage::MissingArguments(_span.clone()));
-		    return Err(ControlFlow::Failure);
+		    return Err(Failure::MissingArguments(_span.clone()));
 		}
 	    };)*
 
@@ -168,7 +161,7 @@ where
         span: &S,
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
-    ) -> ExecutionResult<'a, S, Value<'a, S>>;
+    ) -> OperatorResult<S, Value<'a, S>>;
 }
 
 #[rustfmt::skip]
@@ -178,7 +171,7 @@ fortuples! {
 	S: Span + 'a,
 	#(#Member: NamedObject),*
         #(Value<'a, S>: TryInto<#Member>),*
-	F: Fn(&mut RuntimeLog<S>, &S, #(#Member),*) -> ExecutionResult<'a, S, Value<'a, S>>,
+	F: Fn(&mut RuntimeLog<S>, &S, #(#Member),*) -> OperatorResult<S, Value<'a, S>>,
     {
 	type Unpacker = #Tuple;
 
@@ -188,7 +181,7 @@ fortuples! {
             span: &S,
             arguments: Vec<Value<'a, S>>,
             expressions: &[Expression<S>],
-	) -> ExecutionResult<'a, S, Value<'a, S>> {
+	) -> OperatorResult<S, Value<'a, S>> {
             let (#(casey::lower!(#Member)),*) = Self::Unpacker::unpack_arguments(log, span, arguments, expressions)?;
 
             (self)(log, span, #(casey::lower!(#Member)),*)
@@ -205,12 +198,12 @@ pub trait IntoBuiltinFunction<'a, S: Span, T>: AutoCall<'a, S, T> {
      impl<'a, S, F> IntoBuiltinFunction<'a, S, #Tuple> for F
      where
  	S: Span +'a,
- 	F: Fn(&mut RuntimeLog<S>, &S, #(#Member),*) -> ExecutionResult<'a, S, Value<'a, S>> + 'static,
+ 	F: Fn(&mut RuntimeLog<S>, &S, #(#Member),*) -> OperatorResult<S, Value<'a, S>> + 'static,
  	#(#Member: NamedObject),*
          #(Value<'a, S>: TryInto<#Member>),*
      {
  	fn into_builtin_function(self) -> BuiltinFunction<'a, S> {
- 	    BuiltinFunction(Rc::new(move |log: &mut RuntimeLog<S>, span: &S, arguments: Vec<Value<'a, S>>, expressions: &[Expression<S>]| -> ExecutionResult<'a, S, Value<'a, S>> {
+ 	    BuiltinFunction(Rc::new(move |log: &mut RuntimeLog<S>, span: &S, arguments: Vec<Value<'a, S>>, expressions: &[Expression<S>]| -> OperatorResult<S, Value<'a, S>> {
  		self.auto_call(log, span, arguments, expressions)
  	    }))
  	}

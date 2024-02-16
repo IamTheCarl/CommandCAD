@@ -1,11 +1,11 @@
 use std::fmt::Write;
 
-use crate::script::{execution::ExecutionResult, parsing::VariableType, RuntimeLog, Span};
+use crate::script::{parsing::VariableType, RuntimeLog, Span};
 
 use super::{
     serializable::SerializableValue,
     string::formatting::{Style, UnsupportedMessage, UnwrapFormattingResult},
-    NamedObject, Object, Value,
+    NamedObject, Object, OperatorResult, Value,
 };
 
 pub type Boolean = bool;
@@ -17,52 +17,52 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
 
     fn format(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         f: &mut dyn Write,
         style: Style,
         precision: Option<u8>,
-    ) -> ExecutionResult<'a, S, ()> {
+    ) -> OperatorResult<S, ()> {
         match (style, precision) {
             (Style::Default | Style::Debug, None) => {
-                write!(f, "{}", self).unwrap_formatting_result(log, span)
+                write!(f, "{}", self).unwrap_formatting_result(span)
             }
-            (_, None) => style.unsupported_message(self, log, span),
-            (Style::Default | Style::Debug, _) => style.unsupported_message(self, log, span),
+            (_, None) => style.unsupported_message(self, span),
+            (Style::Default | Style::Debug, _) => style.unsupported_message(self, span),
             _ => {
-                style.unsupported_message(self, log, span).ok();
-                precision.unsupported_message(self, log, span)
+                style.unsupported_message(self, span).ok();
+                precision.unsupported_message(self, span)
             }
         }
     }
 
     fn eq(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, bool> {
-        let rhs = rhs.downcast_ref::<Boolean>(log, span)?;
+    ) -> OperatorResult<S, bool> {
+        let rhs = rhs.downcast_ref::<Boolean>(span)?;
         Ok(*self == *rhs)
     }
 
     fn and(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        let rhs = rhs.downcast_ref(log, span)?;
+    ) -> OperatorResult<S, Value<'a, S>> {
+        let rhs = rhs.downcast_ref(span)?;
         Ok((*self && *rhs).into())
     }
 
     fn or(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        let rhs = rhs.downcast_ref(log, span)?;
+    ) -> OperatorResult<S, Value<'a, S>> {
+        let rhs = rhs.downcast_ref(span)?;
         Ok((*self || *rhs).into())
     }
 
@@ -70,15 +70,11 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
         &self,
         _log: &mut RuntimeLog<S>,
         _span: &S,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         Ok((!(*self)).into())
     }
 
-    fn export(
-        &self,
-        _log: &mut RuntimeLog<S>,
-        _span: &S,
-    ) -> ExecutionResult<'a, S, SerializableValue> {
+    fn export(&self, _log: &mut RuntimeLog<S>, _span: &S) -> OperatorResult<S, SerializableValue> {
         Ok(SerializableValue::Boolean(*self))
     }
 }

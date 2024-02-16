@@ -1,10 +1,10 @@
 use crate::script::{
-    execution::{expressions::run_trailer, ControlFlow, ExecutionContext, ExecutionResult},
+    execution::{expressions::run_trailer, ExecutionContext, Failure},
     parsing::{self, VariableType},
-    LogMessage, RuntimeLog, Span,
+    RuntimeLog, Span,
 };
 
-use super::{NamedObject, Number, Object, Value};
+use super::{NamedObject, Number, Object, OperatorResult, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Range {
@@ -20,46 +20,34 @@ impl<'a, S: Span> Object<'a, S> for Range {
 
     fn iterate(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
-    ) -> ExecutionResult<'a, S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
+    ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
         match (
             self.lower_bound,
             self.upper_bound,
             self.upper_bound_is_inclusive,
         ) {
-            (None, None, false) => {
-                log.push(LogMessage::CannotConvertFromTo(
-                    span.clone(),
-                    "..".into(),
-                    "iterator".into(),
-                ));
-                Err(ControlFlow::Failure)
-            }
-            (Some(_lower_bound), None, false) => {
-                log.push(LogMessage::CannotConvertFromTo(
-                    span.clone(),
-                    "lower_bound..".into(),
-                    "iterator".into(),
-                ));
-                Err(ControlFlow::Failure)
-            }
-            (None, Some(_upper_bound), false) => {
-                log.push(LogMessage::CannotConvertFromTo(
-                    span.clone(),
-                    "..upper_bound".into(),
-                    "iterator".into(),
-                ));
-                Err(ControlFlow::Failure)
-            }
-            (None, Some(_upper_bound), true) => {
-                log.push(LogMessage::CannotConvertFromTo(
-                    span.clone(),
-                    "..=upper_bound".into(),
-                    "iterator".into(),
-                ));
-                Err(ControlFlow::Failure)
-            }
+            (None, None, false) => Err(Failure::CannotConvertFromTo(
+                span.clone(),
+                "..".into(),
+                "iterator".into(),
+            )),
+            (Some(_lower_bound), None, false) => Err(Failure::CannotConvertFromTo(
+                span.clone(),
+                "lower_bound..".into(),
+                "iterator".into(),
+            )),
+            (None, Some(_upper_bound), false) => Err(Failure::CannotConvertFromTo(
+                span.clone(),
+                "..upper_bound".into(),
+                "iterator".into(),
+            )),
+            (None, Some(_upper_bound), true) => Err(Failure::CannotConvertFromTo(
+                span.clone(),
+                "..=upper_bound".into(),
+                "iterator".into(),
+            )),
             (Some(lower_bound), Some(upper_bound), false) => {
                 let lower_bound = lower_bound.trunc() as isize;
                 let upper_bound = upper_bound.trunc() as isize;
@@ -84,10 +72,10 @@ impl Range {
     pub fn from_parsed<'a, S: Span>(
         context: &mut ExecutionContext<'a, S>,
         range: &parsing::Range<S>,
-    ) -> ExecutionResult<'a, S, Self> {
+    ) -> OperatorResult<S, Self> {
         let lower_bound = if let Some(lower_bound) = &range.lower_bound {
             let span = lower_bound.get_span();
-            Some(run_trailer(context, lower_bound)?.downcast(&mut context.log, span)?)
+            Some(run_trailer(context, lower_bound)?.downcast(span)?)
         } else {
             None
         };
@@ -97,16 +85,13 @@ impl Range {
         let upper_bound = if let Some(upper_bound) = &range.upper_bound {
             let span = upper_bound.get_span();
 
-            Some(run_trailer(context, upper_bound)?.downcast(&mut context.log, span)?)
+            Some(run_trailer(context, upper_bound)?.downcast(span)?)
         } else {
             None
         };
 
         if upper_bound_is_inclusive && upper_bound.is_none() {
-            context
-                .log
-                .push(LogMessage::MissingUpperBound(range.get_span().clone()));
-            return Err(ControlFlow::Failure);
+            return Err(Failure::MissingUpperBound(range.get_span().clone()));
         }
 
         Ok(Self {

@@ -3,13 +3,13 @@ use std::{collections::HashMap, rc::Rc};
 use crate::script::{
     execution::{
         expressions::{run_expression, run_trailer},
-        ControlFlow, ExecutionContext, ExecutionResult,
+        ExecutionContext, Failure,
     },
     parsing::{self, StructInitialization, VariableType},
-    LogMessage, RuntimeLog, Span,
+    RuntimeLog, Span,
 };
 
-use super::{serializable::SerializableValue, NamedObject, Object, Value};
+use super::{serializable::SerializableValue, NamedObject, Object, OperatorResult, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Structure<'a, S: Span> {
@@ -28,25 +28,20 @@ impl<'a, S: Span> Object<'a, S> for Structure<'a, S> {
 
     fn attribute(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         _span: &S,
         name: &S,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         let key = name.as_str();
 
         if let Some(value) = self.members.get(key) {
             Ok(value.clone())
         } else {
-            log.push(LogMessage::UnknownAttribute(name.clone()));
-            Err(ControlFlow::Failure)
+            Err(Failure::UnknownAttribute(name.clone()))
         }
     }
 
-    fn export(
-        &self,
-        log: &mut RuntimeLog<S>,
-        span: &S,
-    ) -> ExecutionResult<'a, S, SerializableValue> {
+    fn export(&self, log: &mut RuntimeLog<S>, span: &S) -> OperatorResult<S, SerializableValue> {
         let mut members = HashMap::with_capacity(self.members.len());
 
         for (key, item) in self.members.iter() {
@@ -87,7 +82,7 @@ impl<'a, S: Span> Structure<'a, S> {
     pub fn initalization(
         context: &mut ExecutionContext<'a, S>,
         initalization: &StructInitialization<S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         enum Inheritance<'a, S: Span> {
             Structure(Structure<'a, S>),
             Default,
@@ -96,7 +91,8 @@ impl<'a, S: Span> Structure<'a, S> {
         let type_name = initalization.name.clone();
 
         // We're going to run through this whole struct and collect all the errors at once.
-        let mut was_error = false;
+        let mut failures = Vec::new();
+
         // Figure out our inheritance, if any.
         let inheritance = if let Some(trailer) = &initalization.inheritance {
             let trailer_result = run_trailer(context, trailer)?;
@@ -106,22 +102,20 @@ impl<'a, S: Span> Structure<'a, S> {
                     if structure.type_name.as_str() == type_name.as_str() {
                         Some(Inheritance::Structure(structure))
                     } else {
-                        context.log.push(LogMessage::StructWrongInheritanceType(
+                        return Err(Failure::StructWrongInheritanceType(
                             trailer.get_span().clone(),
                             type_name,
                             structure.type_name.clone(),
                         ));
-                        return Err(ControlFlow::Failure);
                     }
                 }
                 Value::Default(_span) => Some(Inheritance::Default),
                 _ => {
-                    context.log.push(LogMessage::ExpectedGot(
+                    return Err(Failure::ExpectedGot(
                         trailer.get_span().clone(),
                         "Struct or Default".into(),
                         trailer_result.type_name(),
                     ));
-                    return Err(ControlFlow::Failure);
                 }
             }
         } else {
@@ -130,8 +124,8 @@ impl<'a, S: Span> Structure<'a, S> {
 
         let struct_source = context
             .stack
-            .get_variable(&mut context.log, &initalization.name)?
-            .downcast_ref::<StructDefinition<S>>(&mut context.log, &initalization.name)?
+            .get_variable(&initalization.name)?
+            .downcast_ref::<StructDefinition<S>>(&initalization.name)?
             .definition;
 
         let mut members = HashMap::with_capacity(struct_source.members.len());
@@ -152,22 +146,23 @@ impl<'a, S: Span> Structure<'a, S> {
                     });
 
             let value = if let Some(expression) = assignment_expression {
-                if let Ok(value) = run_expression(context, expression) {
-                    if value.matches_type(&member.ty) {
-                        value
-                    } else {
-                        context.log.push(LogMessage::ExpectedGot(
-                            expression.get_span().clone(),
-                            member.ty.name(),
-                            value.type_name().into(),
-                        ));
-                        was_error = true;
+                match run_expression(context, expression) {
+                    Ok(value) => {
+                        if value.matches_type(&member.ty) {
+                            value
+                        } else {
+                            failures.push(Failure::ExpectedGot(
+                                expression.get_span().clone(),
+                                member.ty.name(),
+                                value.type_name().into(),
+                            ));
+                            continue;
+                        }
+                    }
+                    Err(failure) => {
+                        failures.push(failure);
                         continue;
                     }
-                } else {
-                    // Expression failed. It should log on its own.
-                    was_error = true;
-                    continue;
                 }
             } else if let Some(inheritance) = inheritance.as_ref() {
                 match inheritance {
@@ -175,40 +170,36 @@ impl<'a, S: Span> Structure<'a, S> {
                         if let Some(value) = inheritance.members.get(member.name.as_str()) {
                             value.clone()
                         } else {
-                            context.log.push(LogMessage::StructMissingAssignment(
+                            failures.push(Failure::StructMissingAssignment(
                                 initalization.get_span().clone(),
                                 member.name.clone(),
                             ));
-                            was_error = true;
                             continue;
                         }
                     }
                     Inheritance::Default => {
                         if let Some(default) = &member.default_value {
-                            let value = Value::from_litteral(context, default);
-                            if let Ok(value) = value {
-                                value
-                            } else {
-                                // The litteral failed to evaluate. It should have printed any error messages itself.
-                                was_error = true;
-                                continue;
+                            match Value::from_litteral(context, default) {
+                                Ok(value) => value,
+                                Err(failure) => {
+                                    failures.push(failure);
+                                    continue;
+                                }
                             }
                         } else {
-                            context.log.push(LogMessage::NoDefault(
+                            failures.push(Failure::NoDefault(
                                 initalization.get_span().clone(),
                                 member.name.clone(),
                             ));
-                            was_error = true;
                             continue;
                         }
                     }
                 }
             } else {
-                context.log.push(LogMessage::StructMissingAssignment(
+                failures.push(Failure::StructMissingAssignment(
                     initalization.get_span().clone(),
                     member.name.clone(),
                 ));
-                was_error = true;
                 continue;
             };
 
@@ -223,21 +214,21 @@ impl<'a, S: Span> Structure<'a, S> {
                 .find(|member| member.name.as_str() == name.as_str())
                 .is_none()
             {
-                context
-                    .log
-                    .push(LogMessage::StructExcessAssignment(name.clone()));
-                was_error = true;
+                failures.push(Failure::StructExcessAssignment(name.clone()));
             }
         }
 
-        if was_error {
-            Err(ControlFlow::Failure)
-        } else {
+        if failures.is_empty() {
             Ok(Structure {
                 type_name,
                 members: Rc::new(members),
             }
             .into())
+        } else {
+            Err(Failure::StructConstruction(
+                initalization.get_span().clone(),
+                failures,
+            ))
         }
     }
 }
@@ -285,7 +276,7 @@ mod test {
 
     #[test]
     fn struct_initalization() {
-        let mut log = RuntimeLog::default();
+        let mut log = Vec::new();
 
         let module = Module::load(
             &mut log,
@@ -296,12 +287,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(!log.containes_any_error());
+        assert!(log.is_empty());
 
         let module_scope = ModuleScope::new(&module);
         let mut context = ExecutionContext {
             stack: Stack::new(module_scope),
-            log,
+            log: Default::default(),
         };
 
         context.stack.new_variable(
@@ -421,7 +412,11 @@ mod test {
                     .unwrap()
                     .1
             ),
-            Err(ControlFlow::Failure)
+            Err(Failure::StructWrongInheritanceType(
+                "struct",
+                "TwoPartStruct",
+                "EmptyStruct"
+            ))
         );
         assert_eq!(
             run_expression(
@@ -430,7 +425,10 @@ mod test {
                     .unwrap()
                     .1
             ),
-            Err(ControlFlow::Failure)
+            Err(Failure::StructConstruction(
+                "struct",
+                vec![Failure::StructExcessAssignment("bogus")]
+            ))
         );
         assert_eq!(
             run_expression(
@@ -439,7 +437,14 @@ mod test {
                     .unwrap()
                     .1
             ),
-            Err(ControlFlow::Failure),
+            Err(Failure::StructConstruction(
+                "struct",
+                vec![Failure::ExpectedGot(
+                    "false",
+                    "Number".into(),
+                    "Boolean".into()
+                )]
+            )),
         );
     }
 }

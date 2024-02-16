@@ -7,14 +7,17 @@ use self::types::Object;
 use super::{
     module::Module,
     parsing::{self, Block, NamedBlock},
-    LogMessage, RuntimeLog, Span,
+    RuntimeLog, Span,
 };
 
 pub mod types;
 use types::{StructDefinition, UserFunction, Value};
 
 mod expressions;
-mod statements;
+mod failure_message;
+pub mod statements;
+
+pub use failure_message::Failure;
 
 #[derive(Debug)]
 enum ScopeType {
@@ -107,22 +110,13 @@ impl<'a, S: Span> Stack<'a, S> {
         self.active_scope -= 1;
     }
 
-    // TODO is there some way to get these variable getters all sharing code?
+    // TODO Recommending similar named variables would help users to notice typos.
 
-    pub fn get_variable(
-        &self,
-        log: &mut RuntimeLog<S>,
-        name: &S,
-    ) -> ExecutionResult<'a, S, &Value<'a, S>> {
-        self.get_variable_str(log, name, name.as_str())
+    pub fn get_variable(&self, name: &S) -> std::result::Result<&Value<'a, S>, Failure<S>> {
+        self.get_variable_str(name, name.as_str())
     }
 
-    pub fn get_variable_str(
-        &self,
-        log: &mut RuntimeLog<S>,
-        span: &S,
-        name: &str,
-    ) -> ExecutionResult<'a, S, &Value<'a, S>> {
+    pub fn get_variable_str(&self, span: &S, name: &str) -> Result<&Value<'a, S>, Failure<S>> {
         let mut scope_iterator = self.scopes[..=self.active_scope].iter().rev();
 
         for scope in &mut scope_iterator {
@@ -142,18 +136,14 @@ impl<'a, S: Span> Stack<'a, S> {
             }
         }
 
-        log.push(LogMessage::VariableNotInScope(
+        Err(Failure::VariableNotInScope(
             span.clone(),
             name.to_string().into(),
-        ));
-        Err(ControlFlow::Failure)
+        ))
     }
 
-    pub fn get_variable_mut(
-        &mut self,
-        log: &mut RuntimeLog<S>,
-        name: &S,
-    ) -> ExecutionResult<'a, S, &mut Value<'a, S>> {
+    pub fn get_variable_mut(&mut self, name: &S) -> Result<&mut Value<'a, S>, Failure<S>> {
+        // TODO we should refuse to provide module level scopes, since those need to be fully immutable.
         let mut scope_iterator = self.scopes[..=self.active_scope].iter_mut().rev();
 
         for scope in &mut scope_iterator {
@@ -173,11 +163,10 @@ impl<'a, S: Span> Stack<'a, S> {
             }
         }
 
-        log.push(LogMessage::VariableNotInScope(
+        Err(Failure::VariableNotInScope(
             name.clone(),
             name.to_string().into(),
-        ));
-        Err(ControlFlow::Failure)
+        ))
     }
 
     pub fn new_variable(&mut self, name: &S, value: Value<'a, S>) {
@@ -240,7 +229,7 @@ pub type ExecutionResult<'a, S, V> = std::result::Result<V, ControlFlow<'a, S>>;
 
 #[derive(Debug, PartialEq)]
 pub enum ControlFlow<'a, S: Span> {
-    Failure,
+    Failure(Failure<S>),
     Break {
         span: S,
         label: Option<S>,
@@ -253,6 +242,12 @@ pub enum ControlFlow<'a, S: Span> {
     Return {
         value: Value<'a, S>,
     },
+}
+
+impl<S: Span> From<Failure<S>> for ControlFlow<'_, S> {
+    fn from(value: Failure<S>) -> Self {
+        Self::Failure(value)
+    }
 }
 
 #[derive(Default)]
@@ -300,13 +295,12 @@ fn run_named_block<'a, S: Span>(
     arguments: Vec<Value<'a, S>>,
     spans: &[parsing::Expression<S>],
     default_span: &S,
-) -> Result<Value<'a, S>, ()> {
+) -> Result<Value<'a, S>, Failure<S>> {
     // We do not return a ControlFlow because control flow does not
     // pass through named blocks (we can't continue or break a for loop outside of this named block)
-
     match arguments.len().cmp(&block.parameters.len()) {
-        std::cmp::Ordering::Equal => context.new_scope(|context| {
-            let mut was_error = false;
+        std::cmp::Ordering::Equal => {
+            let mut failures = Vec::new();
 
             // Validate the arguments and put them into scope..
             for (span, (argument, variable)) in spans
@@ -318,70 +312,48 @@ fn run_named_block<'a, S: Span>(
                 if argument.matches_type(&variable.ty) {
                     context.stack.new_variable(&variable.name, argument);
                 } else {
-                    context.log.push(LogMessage::ExpectedGot(
+                    failures.push(Failure::ExpectedGot(
                         span.clone(),
                         variable.ty.name(),
                         argument.type_name(),
                     ));
-                    was_error = true;
                 }
             }
 
-            if was_error {
-                Err(())
-            } else {
+            if failures.is_empty() {
                 match run_block(context, &block.block) {
                     Ok(value) => Ok(value),
                     Err(control_flow) => match control_flow {
                         ControlFlow::Return { value } => Ok(value), // Oh that's normal behavior.
-                        ControlFlow::Failure => Err(()),
+                        ControlFlow::Failure(failure) => Err(failure),
                         ControlFlow::Break {
                             span,
                             label: None,
                             value: _,
-                        } => {
-                            context.log.push(LogMessage::BreakOutsideOfLoop(span));
-                            Err(())
-                        }
+                        } => Err(Failure::BreakOutsideOfLoop(span)),
                         ControlFlow::Break {
                             span,
                             label: Some(label),
                             value: _,
-                        } => {
-                            context
-                                .log
-                                .push(LogMessage::BreakLabelNotFound(span, label));
-                            Err(())
-                        }
+                        } => Err(Failure::BreakLabelNotFound(span, label)),
                         ControlFlow::Continue { span, label: None } => {
-                            context.log.push(LogMessage::ContinueOutsideOfLoop(span));
-                            Err(())
+                            Err(Failure::ContinueOutsideOfLoop(span))
                         }
                         ControlFlow::Continue {
                             span,
                             label: Some(label),
-                        } => {
-                            context
-                                .log
-                                .push(LogMessage::ContinueLabelNotFound(span, label));
-                            Err(())
-                        }
+                        } => Err(Failure::ContinueLabelNotFound(span, label)),
                     },
                 }
+            } else {
+                Err(Failure::BadArgumentTypes(
+                    block.parameter_span.clone(),
+                    failures,
+                ))
             }
-        }),
-        std::cmp::Ordering::Less => {
-            context
-                .log
-                .push(LogMessage::MissingArguments(block.parameter_span.clone()));
-            Err(())
         }
-        std::cmp::Ordering::Greater => {
-            context
-                .log
-                .push(LogMessage::MissingArguments(block.parameter_span.clone()));
-            Err(())
-        }
+        std::cmp::Ordering::Less => Err(Failure::MissingArguments(block.parameter_span.clone())),
+        std::cmp::Ordering::Greater => Err(Failure::MissingArguments(block.parameter_span.clone())),
     }
 }
 
@@ -396,12 +368,11 @@ mod test {
         },
         module::Module,
         parsing::Expression,
-        RuntimeLog,
     };
 
     #[test]
     fn functions() {
-        let mut log = RuntimeLog::default();
+        let mut log = Vec::new();
 
         let module = Module::load(
             &mut log,
@@ -410,12 +381,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(!log.containes_any_error());
+        assert!(log.is_empty());
 
         let module_scope = ModuleScope::new(&module);
 
         let mut context = ExecutionContext {
-            log,
+            log: Default::default(),
             stack: Stack::new(module_scope),
         };
 
@@ -428,7 +399,7 @@ mod test {
 
     #[test]
     fn function_scope() {
-        let mut log = RuntimeLog::default();
+        let mut log = Vec::new();
 
         let module = Module::load(
             &mut log,
@@ -437,12 +408,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(!log.containes_any_error());
+        assert!(log.is_empty());
 
         let module_scope = ModuleScope::new(&module);
 
         let mut context = ExecutionContext {
-            log,
+            log: Default::default(),
             stack: Stack::new(module_scope),
         };
 
@@ -454,12 +425,18 @@ mod test {
                     .1,
             )
         });
-        assert_eq!(result, Err(ControlFlow::Failure));
+        assert_eq!(
+            result,
+            Err(ControlFlow::Failure(Failure::VariableNotInScope(
+                "value",
+                "value".into()
+            )))
+        );
     }
 
     #[test]
     fn function_hygene() {
-        let mut log = RuntimeLog::default();
+        let mut log = Vec::new();
 
         let module = Module::load(
             &mut log,
@@ -468,12 +445,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(!log.containes_any_error());
+        assert!(log.is_empty());
 
         let module_scope = ModuleScope::new(&module);
 
         let mut context = ExecutionContext {
-            log,
+            log: Default::default(),
             stack: Stack::new(module_scope),
         };
         let result = context.new_scope(|context| {
@@ -483,11 +460,12 @@ mod test {
             )
         });
         assert_eq!(
-            result,
+            result.unwrap(),
             run_expression(
                 &mut context,
                 &Expression::parse("struct MyStruct {}").unwrap().1
             )
+            .unwrap()
         );
     }
 }

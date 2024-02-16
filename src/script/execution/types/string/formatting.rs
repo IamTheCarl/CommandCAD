@@ -13,10 +13,10 @@ use nom::{
 
 use crate::script::{
     execution::{
-        types::{unsupported_operation_message, Number, Object, Value},
-        ControlFlow, ExecutionResult,
+        types::{unsupported_operation_message, Number, Object, OperatorResult, Value},
+        Failure,
     },
-    LogMessage, RuntimeLog, Span,
+    RuntimeLog, Span,
 };
 
 pub type VResult<I, O> = IResult<I, O, nom::error::VerboseError<I>>;
@@ -49,49 +49,33 @@ impl UnsupportedMessage for Style {
     fn unsupported_message<'a, S: Span, O: Object<'a, S>>(
         &self,
         object: &O,
-        log: &mut RuntimeLog<S>,
         span: &S,
-    ) -> ExecutionResult<'a, S, ()> {
+    ) -> OperatorResult<S, ()> {
         match self {
-            Self::Default => unsupported_operation_message::<S, (), O>(
-                object,
-                log,
-                span,
-                "format with default style",
-            ),
-            Self::Debug => unsupported_operation_message::<S, (), O>(
-                object,
-                log,
-                span,
-                "format with debug style",
-            ),
-            Self::Octal => unsupported_operation_message::<S, (), O>(
-                object,
-                log,
-                span,
-                "format with octal style",
-            ),
-            Self::Hex => unsupported_operation_message::<S, (), O>(
-                object,
-                log,
-                span,
-                "format with hex style",
-            ),
+            Self::Default => {
+                unsupported_operation_message::<S, (), O>(object, span, "format with default style")
+            }
+            Self::Debug => {
+                unsupported_operation_message::<S, (), O>(object, span, "format with debug style")
+            }
+            Self::Octal => {
+                unsupported_operation_message::<S, (), O>(object, span, "format with octal style")
+            }
+            Self::Hex => {
+                unsupported_operation_message::<S, (), O>(object, span, "format with hex style")
+            }
             Self::CapitalizedHex => unsupported_operation_message::<S, (), O>(
                 object,
-                log,
                 span,
                 "format with capitalized hex style",
             ),
             Self::Exponent => unsupported_operation_message::<S, (), O>(
                 object,
-                log,
                 span,
                 "format with exponent style",
             ),
             Self::CapitalizedExponent => unsupported_operation_message::<S, (), O>(
                 object,
-                log,
                 span,
                 "format with capitalized exponent style",
             ),
@@ -124,22 +108,17 @@ impl UnsupportedMessage for Option<u8> {
     fn unsupported_message<'a, S: Span, O: Object<'a, S>>(
         &self,
         object: &O,
-        log: &mut RuntimeLog<S>,
         span: &S,
-    ) -> ExecutionResult<'a, S, ()> {
+    ) -> OperatorResult<S, ()> {
         match self {
             None => unsupported_operation_message::<S, (), O>(
                 object,
-                log,
                 span,
                 "format with default precision",
             ),
-            Some(_) => unsupported_operation_message::<S, (), O>(
-                object,
-                log,
-                span,
-                "format with precision",
-            ),
+            Some(_) => {
+                unsupported_operation_message::<S, (), O>(object, span, "format with precision")
+            }
         }
     }
 }
@@ -231,47 +210,38 @@ impl Format {
         )(input)
     }
 
-    pub fn format<'a, S: Span>(
+    pub fn format<S: Span>(
         &self,
         log: &mut RuntimeLog<S>,
         span: &S,
         f: &mut dyn Write,
-        arguments: &[Value<'a, S>],
-    ) -> ExecutionResult<'a, S, ()> {
+        arguments: &[Value<'_, S>],
+    ) -> OperatorResult<S, ()> {
         let mut next_argument_index = 0;
 
-        fn get_precision<'a, S: Span>(
-            log: &mut RuntimeLog<S>,
+        fn get_precision<S: Span>(
             span: &S,
 
             precision: &Precision,
-            arguments: &[Value<'a, S>],
-        ) -> ExecutionResult<'a, S, Option<u8>> {
+            arguments: &[Value<'_, S>],
+        ) -> OperatorResult<S, Option<u8>> {
             match precision {
                 Precision::Default => Ok(None),
                 Precision::Inline(precision) => Ok(Some(*precision)),
                 Precision::Referenced(index) => {
                     if let Some(argument) = arguments.get(*index as usize) {
-                        let precision = argument
-                            .downcast_ref::<Number>(log, span)?
-                            .into_inner()
-                            .trunc();
+                        let precision = argument.downcast_ref::<Number>(span)?.into_inner().trunc();
 
                         if precision > 0.0 {
                             Ok(Some(precision as u8))
                         } else {
-                            log.push(LogMessage::InvalidPrecision(
-                                span.clone(),
-                                precision as isize,
-                            ));
-                            Err(ControlFlow::Failure)
+                            Err(Failure::InvalidPrecision(span.clone(), precision as isize))
                         }
                     } else {
-                        log.push(LogMessage::FormatArgumentIndexOutOfRange(
+                        Err(Failure::FormatArgumentIndexOutOfRange(
                             span.clone(),
                             *index as isize,
-                        ));
-                        Err(ControlFlow::Failure)
+                        ))
                     }
                 }
             }
@@ -280,25 +250,24 @@ impl Format {
         for component in self.components.iter() {
             match component {
                 Component::Litteral(text) => {
-                    write!(f, "{}", text).unwrap_formatting_result(log, span)?
+                    write!(f, "{}", text).unwrap_formatting_result(span)?
                 }
                 Component::Parameter(Parameter {
                     index: None,
                     style,
                     precision,
                 }) => {
-                    let precision = get_precision(log, span, precision, arguments)?;
+                    let precision = get_precision(span, precision, arguments)?;
                     let argument_index = next_argument_index;
                     next_argument_index += 1;
 
                     if let Some(argument) = arguments.get(argument_index) {
                         argument.format(log, span, f, *style, precision)?;
                     } else {
-                        log.push(LogMessage::FormatArgumentIndexOutOfRange(
+                        return Err(Failure::FormatArgumentIndexOutOfRange(
                             span.clone(),
                             argument_index as isize,
                         ));
-                        return Err(ControlFlow::Failure);
                     }
                 }
                 Component::Parameter(Parameter {
@@ -306,17 +275,16 @@ impl Format {
                     style,
                     precision,
                 }) => {
-                    let precision = get_precision(log, span, precision, arguments)?;
+                    let precision = get_precision(span, precision, arguments)?;
                     let argument_index = *index as usize;
 
                     if let Some(argument) = arguments.get(argument_index) {
                         argument.format(log, span, f, *style, precision)?;
                     } else {
-                        log.push(LogMessage::FormatArgumentIndexOutOfRange(
+                        return Err(Failure::FormatArgumentIndexOutOfRange(
                             span.clone(),
                             argument_index as isize,
                         ));
-                        return Err(ControlFlow::Failure);
                     }
                 }
             }
@@ -333,25 +301,14 @@ fn number<S: Span>(input: S) -> VResult<S, u8> {
 }
 
 pub trait UnwrapFormattingResult<R> {
-    fn unwrap_formatting_result<'a, S: Span>(
-        self,
-        log: &mut RuntimeLog<S>,
-        span: &S,
-    ) -> ExecutionResult<'a, S, R>;
+    fn unwrap_formatting_result<S: Span>(self, span: &S) -> OperatorResult<S, R>;
 }
 
-impl<R> UnwrapFormattingResult<R> for Result<R, std::fmt::Error> {
-    fn unwrap_formatting_result<'a, S: Span>(
-        self,
-        log: &mut RuntimeLog<S>,
-        span: &S,
-    ) -> ExecutionResult<'a, S, R> {
+impl<R> UnwrapFormattingResult<R> for std::result::Result<R, std::fmt::Error> {
+    fn unwrap_formatting_result<S: Span>(self, span: &S) -> OperatorResult<S, R> {
         match self {
             Ok(result) => Ok(result),
-            Err(error) => {
-                log.push(LogMessage::Formatting(span.clone(), error));
-                Err(ControlFlow::Failure)
-            }
+            Err(error) => Err(Failure::Formatting(span.clone(), error)),
         }
     }
 }
@@ -360,9 +317,8 @@ pub trait UnsupportedMessage {
     fn unsupported_message<'a, S: Span, O: Object<'a, S>>(
         &self,
         object: &O,
-        log: &mut RuntimeLog<S>,
         span: &S,
-    ) -> ExecutionResult<'a, S, ()>;
+    ) -> OperatorResult<S, ()>;
 }
 
 #[cfg(test)]

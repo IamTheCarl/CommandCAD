@@ -5,11 +5,11 @@ use crate::script::{
     execution::{
         types::{
             number::{unwrap_float, UnwrapNotNan},
-            Number, Object, SString, Value,
+            Number, Object, OperatorResult, SString, Value,
         },
-        ControlFlow, ExecutionResult,
+        Failure,
     },
-    parsing, LogMessage, RuntimeLog, Span,
+    parsing, Span,
 };
 
 use super::Measurement;
@@ -86,66 +86,51 @@ macro_rules! build_lookup_tables {
 
 impl Measurement {
     pub fn from_parsed<'a, S: Span>(
-        log: &mut RuntimeLog<S>,
         measurement: &parsing::Measurement<S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         if let Some(converter) = CONVERT_FLOAT_TO_MEASUREMENT.get(measurement.ty.as_str()) {
-            let value = unwrap_float(
-                log,
-                measurement.number.get_span().clone(),
-                &measurement.number,
-            )?;
+            let value = unwrap_float(measurement.number.get_span().clone(), &measurement.number)?;
 
             Ok(converter(value.into_inner()).into())
         } else {
-            log.push(LogMessage::UnknownUnitType(
+            Err(Failure::UnknownUnitType(
                 measurement.ty.clone(),
                 measurement.ty.to_string().into(),
-            ));
-            Err(ControlFlow::Failure)
+            ))
         }
     }
 
     pub fn from_number<'a, S: Span>(
-        log: &mut RuntimeLog<S>,
         span: &S,
         value: Number,
         ty: SString,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         if let Some(converter) = CONVERT_FLOAT_TO_MEASUREMENT.get(ty.as_str()) {
             Ok(converter(value.into_inner()).into())
         } else {
-            log.push(LogMessage::UnknownUnitType(
+            Err(Failure::UnknownUnitType(
                 span.clone(),
                 ty.into_string().into(),
-            ));
-            Err(ControlFlow::Failure)
+            ))
         }
     }
 
-    pub fn to_number<'a, S: Span>(
-        &self,
-        log: &mut RuntimeLog<S>,
-        span: &S,
-        ty: &str,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
+    pub fn to_number<'a, S: Span>(&self, span: &S, ty: &str) -> OperatorResult<S, Value<'a, S>> {
         if let Some(converter) = CONVERT_MEASUREMENT_TO_FLOAT.get(ty) {
             if let Some(converted) = converter(self) {
-                Number::new(converted).unwrap_not_nan(log, span)
+                Number::new(converted).unwrap_not_nan(span)
             } else {
-                log.push(LogMessage::CannotConvertFromTo(
+                Err(Failure::CannotConvertFromTo(
                     span.clone(),
                     Object::<S>::type_name(self),
                     ty.to_string().into(),
-                ));
-                Err(ControlFlow::Failure)
+                ))
             }
         } else {
-            log.push(LogMessage::UnknownUnitType(
+            Err(Failure::UnknownUnitType(
                 span.clone(),
                 ty.to_string().into(),
-            ));
-            Err(ControlFlow::Failure)
+            ))
         }
     }
 }

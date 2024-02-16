@@ -1,9 +1,10 @@
 use crate::script::{
+    execution::Failure,
     parsing::{
         self, Assign, AssignableVariable, Break, Continue, For, If, Loop, Match, Return, Statement,
         While,
     },
-    LogMessage, RuntimeLog, Span,
+    Span,
 };
 
 use super::{
@@ -19,7 +20,7 @@ pub fn run_statement<'a, S: Span>(
     statement: &Statement<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     match statement {
-        Statement::Expression(expression) => expressions::run_expression(context, expression),
+        Statement::Expression(expression) => Ok(expressions::run_expression(context, expression)?),
         Statement::Assign(assignment) => run_assignment(context, assignment),
         Statement::Return(return_statement) => run_return(context, return_statement),
         Statement::If(if_statement) => run_if(context, if_statement),
@@ -33,54 +34,48 @@ pub fn run_statement<'a, S: Span>(
 }
 
 fn assign_values<'a, S: Span>(
-    log: &mut RuntimeLog<S>,
     to_assign: &parsing::Assignable<S>,
     assignment_span: &S,
     source_span: &S,
     value: Value<'a, S>,
-    mut assign: impl FnMut(&mut RuntimeLog<S>, &S, Value<'a, S>) -> ExecutionResult<'a, S, Value<'a, S>>,
+    mut assign: impl FnMut(&S, Value<'a, S>) -> ExecutionResult<'a, S, Value<'a, S>>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     fn assign_single_value<'a, S: Span>(
-        log: &mut RuntimeLog<S>,
         assignment_span: &S,
         value: Value<'a, S>,
         variable: &AssignableVariable<S>,
-        assign: impl FnOnce(
-            &mut RuntimeLog<S>,
-            &S,
-            Value<'a, S>,
-        ) -> ExecutionResult<'a, S, Value<'a, S>>,
+        assign: impl FnOnce(&S, Value<'a, S>) -> ExecutionResult<'a, S, Value<'a, S>>,
     ) -> ExecutionResult<'a, S, Value<'a, S>> {
         if let Some(ty) = &variable.ty {
             if value.matches_type(ty) {
-                assign(log, &variable.name, value)
+                assign(&variable.name, value)
             } else {
-                log.push(LogMessage::ExpectedGot(
+                Err(ControlFlow::Failure(Failure::ExpectedGot(
                     assignment_span.clone(),
                     ty.name(),
                     value.type_name(),
-                ));
-                Err(ControlFlow::Failure)
+                )))
             }
         } else {
-            assign(log, &variable.name, value)
+            assign(&variable.name, value)
         }
     }
 
     match to_assign {
         parsing::Assignable::Variable(variable) => {
-            assign_single_value(log, assignment_span, value, variable, &mut assign)
+            assign_single_value(assignment_span, value, variable, &mut assign)
         }
         parsing::Assignable::List(_span, variables) => {
-            let values = value.downcast::<List<S>>(log, source_span)?;
+            let values = value.downcast::<List<S>>(source_span)?;
 
             if values.len() != variables.len() {
-                log.push(LogMessage::ListLengthsDontMatch(source_span.clone()));
-                return Err(ControlFlow::Failure);
+                return Err(ControlFlow::Failure(Failure::ListLengthsDontMatch(
+                    source_span.clone(),
+                )));
             }
 
             for (variable, value) in variables.iter().zip(values.iter().cloned()) {
-                assign_single_value(log, assignment_span, value, variable, &mut assign)?;
+                assign_single_value(assignment_span, value, variable, &mut assign)?;
             }
 
             Ok(NoneType.into())
@@ -95,17 +90,13 @@ fn run_assignment<'a, S: Span>(
     let value = run_statement(context, &assignment.statement)?;
 
     if assignment.is_new {
-        let assign = |_log: &mut RuntimeLog<S>,
-                      name: &S,
-                      value: Value<'a, S>|
-         -> ExecutionResult<'a, S, Value<'a, S>> {
+        let assign = |name: &S, value: Value<'a, S>| -> ExecutionResult<'a, S, Value<'a, S>> {
             context.stack.new_variable(name, value);
 
             Ok(NoneType.into())
         };
 
         assign_values(
-            &mut context.log,
             &assignment.to_assign,
             assignment.get_span(),
             assignment.statement.get_span(),
@@ -115,18 +106,14 @@ fn run_assignment<'a, S: Span>(
     } else {
         let stack = &mut context.stack;
 
-        let assign = |log: &mut RuntimeLog<S>,
-                      name: &S,
-                      value: Value<'a, S>|
-         -> ExecutionResult<'a, S, Value<'a, S>> {
-            let variable = stack.get_variable_mut(log, name)?;
+        let assign = |name: &S, value: Value<'a, S>| -> ExecutionResult<'a, S, Value<'a, S>> {
+            let variable = stack.get_variable_mut(name)?;
             *variable = value;
 
             Ok(NoneType.into())
         };
 
         assign_values(
-            &mut context.log,
             &assignment.to_assign,
             assignment.get_span(),
             assignment.statement.get_span(),
@@ -155,7 +142,7 @@ fn run_if<'a, S: Span>(
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     let condition = expressions::run_expression(context, &if_statement.expression)?;
 
-    if condition.downcast::<bool>(&mut context.log, if_statement.expression.get_span())? {
+    if condition.downcast::<bool>(if_statement.expression.get_span())? {
         context.new_scope(|context| run_block(context, &if_statement.block))
     } else {
         match &if_statement.else_statement {
@@ -209,10 +196,9 @@ fn run_match<'a, S: Span>(
         }
     }
 
-    context.log.push(LogMessage::DidNotMatch(
+    Err(ControlFlow::Failure(Failure::DidNotMatch(
         match_statement.expression.get_span().clone(),
-    ));
-    Err(ControlFlow::Failure)
+    )))
 }
 
 fn loop_impl<'a, S, F>(
@@ -237,16 +223,15 @@ where
                             // If it returned something that's not None, then there must have been a final statement.
                             let final_statement = block.statements.last().unwrap();
 
-                            context.log.push(LogMessage::ExpectedGot(
+                            break Err(ControlFlow::Failure(Failure::ExpectedGot(
                                 final_statement.get_span().clone(),
                                 "None".into(),
                                 result.type_name(),
-                            ));
-                            break Err(ControlFlow::Failure);
+                            )));
                         }
                     }
                     Err(exit_reason) => match exit_reason {
-                        ControlFlow::Failure => break Err(ControlFlow::Failure),
+                        ControlFlow::Failure(failure) => break Err(ControlFlow::Failure(failure)),
                         ControlFlow::Return { value } => break Err(ControlFlow::Return { value }),
                         ControlFlow::Break { span, label, value } => match (label, name) {
                             (None, _) => break Ok(value),
@@ -324,16 +309,13 @@ fn run_for<'a, S: Span>(
     loop_impl(
         |context| {
             if let Some(next_value) = iterator.next() {
-                let assign = |_log: &mut RuntimeLog<S>,
-                              name: &S,
-                              value: Value<'a, S>|
-                 -> ExecutionResult<'a, S, Value<'a, S>> {
-                    context.stack.new_variable(name, value);
+                let assign =
+                    |name: &S, value: Value<'a, S>| -> ExecutionResult<'a, S, Value<'a, S>> {
+                        context.stack.new_variable(name, value);
 
-                    Ok(NoneType.into())
-                };
+                        Ok(NoneType.into())
+                    };
                 assign_values(
-                    &mut context.log,
                     &for_statement.variable_assignment,
                     for_statement.variable_assignment.get_span(),
                     for_statement.iterator_expression.get_span(),
@@ -358,8 +340,8 @@ fn run_while<'a, S: Span>(
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     loop_impl(
         |context| {
-            run_expression(context, &while_statement.expression)?
-                .downcast::<bool>(&mut context.log, while_statement.expression.get_span())
+            Ok(run_expression(context, &while_statement.expression)?
+                .downcast::<bool>(while_statement.expression.get_span())?)
         },
         context,
         while_statement.name.as_ref(),
@@ -408,7 +390,10 @@ fn run_continue<'a, S: Span>(
 
 #[cfg(test)]
 mod test {
-    use crate::script::execution::{types::Number, ControlFlow, Stack};
+    use crate::script::{
+        execution::{types::Number, ControlFlow, Failure, Stack},
+        RuntimeLog,
+    };
 
     use super::*;
 
@@ -422,24 +407,24 @@ mod test {
         let statement = parsing::Statement::parse("value = 1").unwrap().1;
         assert_eq!(
             run_statement(&mut context, &statement),
-            Err(ControlFlow::Failure)
+            Err(ControlFlow::Failure(Failure::VariableNotInScope(
+                "value",
+                "value".into(),
+            )))
         );
-        assert!(context
-            .stack
-            .get_variable(&mut context.log, &"value")
-            .is_err());
+        assert!(context.stack.get_variable(&"value").is_err());
 
         let statement = parsing::Statement::parse("let value = 1").unwrap().1;
         assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"value"),
+            context.stack.get_variable(&"value"),
             Ok(&Number::new(1.0).unwrap().into())
         );
 
         let statement = parsing::Statement::parse("value = 2").unwrap().1;
         assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"value"),
+            context.stack.get_variable(&"value"),
             Ok(&Number::new(2.0).unwrap().into())
         );
 
@@ -448,22 +433,22 @@ mod test {
             .1;
         assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"one"),
+            context.stack.get_variable(&"one"),
             Ok(&Number::new(1.0).unwrap().into())
         );
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"two"),
+            context.stack.get_variable(&"two"),
             Ok(&Number::new(2.0).unwrap().into())
         );
 
         let statement = parsing::Statement::parse("[one, two] = [3, 4]").unwrap().1;
         assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"one"),
+            context.stack.get_variable(&"one"),
             Ok(&Number::new(3.0).unwrap().into())
         );
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"two"),
+            context.stack.get_variable(&"two"),
             Ok(&Number::new(4.0).unwrap().into())
         );
 
@@ -472,17 +457,21 @@ mod test {
             .1;
         assert_eq!(
             run_statement(&mut context, &statement),
-            Err(ControlFlow::Failure)
+            Err(ControlFlow::Failure(Failure::ListLengthsDontMatch("[")))
         );
         let statement = parsing::Statement::parse("let [one, two] = [1]").unwrap().1;
         assert_eq!(
             run_statement(&mut context, &statement),
-            Err(ControlFlow::Failure)
+            Err(ControlFlow::Failure(Failure::ListLengthsDontMatch("[")))
         );
         let statement = parsing::Statement::parse("let [one, two] = 1").unwrap().1;
         assert_eq!(
             run_statement(&mut context, &statement),
-            Err(ControlFlow::Failure)
+            Err(ControlFlow::Failure(Failure::ExpectedGot(
+                "1",
+                "List".into(),
+                "Number".into()
+            )))
         );
     }
 
@@ -504,23 +493,23 @@ mod test {
             assert_eq!(run_statement(context, &statement), Ok(NoneType.into()));
 
             assert_eq!(
-                context.stack.get_variable(&mut context.log, &"value"),
+                context.stack.get_variable(&"value"),
                 Ok(&Number::new(1.0).unwrap().into())
             );
             let statement = parsing::Statement::parse("value = 2").unwrap().1;
             assert_eq!(run_statement(context, &statement), Ok(NoneType.into()));
             assert_eq!(
-                context.stack.get_variable(&mut context.log, &"value"),
+                context.stack.get_variable(&"value"),
                 Ok(&Number::new(2.0).unwrap().into())
             );
         });
 
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"value"),
+            context.stack.get_variable(&"value"),
             Ok(&Number::new(2.0).unwrap().into())
         );
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"one"),
+            context.stack.get_variable(&"one"),
             Ok(&Number::new(1.0).unwrap().into())
         );
     }
@@ -611,7 +600,7 @@ mod test {
         .1;
         assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"test_one"),
+            context.stack.get_variable(&"test_one"),
             Ok(&Number::new(1.0).unwrap().into())
         );
 
@@ -622,7 +611,7 @@ mod test {
         .1;
         assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"test_one"),
+            context.stack.get_variable(&"test_one"),
             Ok(&Number::new(5.0).unwrap().into())
         );
 
@@ -633,7 +622,7 @@ mod test {
         .1;
         assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"test_one"),
+            context.stack.get_variable(&"test_one"),
             Ok(&Number::new(0.0).unwrap().into())
         );
 
@@ -657,10 +646,7 @@ mod test {
         .unwrap()
         .1;
         assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
-        assert_eq!(
-            context.stack.get_variable(&mut context.log, &"b"),
-            Ok(&false.into())
-        );
+        assert_eq!(context.stack.get_variable(&"b"), Ok(&false.into()));
 
         let block = parsing::Block::parse(
             "{ let a = 0; let b = false; 'parent: loop { a = a + 1; if a >= 2 { break; } loop { continue 'parent; } b = true; } }",
@@ -668,10 +654,7 @@ mod test {
         .unwrap()
         .1;
         assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
-        assert_eq!(
-            context.stack.get_variable(&mut context.log, &"b"),
-            Ok(&false.into())
-        );
+        assert_eq!(context.stack.get_variable(&"b"), Ok(&false.into()));
     }
 
     #[test]
@@ -687,7 +670,7 @@ mod test {
                 .1;
         assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"count"),
+            context.stack.get_variable(&"count"),
             Ok(&Number::new(5.0).unwrap().into())
         );
     }
@@ -705,7 +688,7 @@ mod test {
                 .1;
         assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"count"),
+            context.stack.get_variable(&"count"),
             Ok(&Number::new(5.0).unwrap().into())
         );
 
@@ -715,7 +698,7 @@ mod test {
                 .1;
         assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"count"),
+            context.stack.get_variable(&"count"),
             Ok(&Number::new(10.0).unwrap().into())
         );
 
@@ -726,11 +709,11 @@ mod test {
         .1;
         assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"a"),
+            context.stack.get_variable(&"a"),
             Ok(&Number::new(4.0).unwrap().into())
         );
         assert_eq!(
-            context.stack.get_variable(&mut context.log, &"b"),
+            context.stack.get_variable(&"b"),
             Ok(&Number::new(6.0).unwrap().into())
         );
     }

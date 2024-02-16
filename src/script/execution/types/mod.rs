@@ -5,10 +5,10 @@ use enum_downcast::{AsVariant, EnumDowncast};
 
 use crate::script::{
     parsing::{Expression, Litteral, VariableType},
-    LogMessage, RuntimeLog, Span,
+    RuntimeLog, Span,
 };
 
-use super::{ControlFlow, ExecutionContext, ExecutionResult};
+use super::{ExecutionContext, Failure};
 
 mod none;
 pub use none::NoneType;
@@ -44,18 +44,18 @@ pub use range::Range;
 mod serializable;
 pub use serializable::SerializableValue;
 
+pub type OperatorResult<S, R> = std::result::Result<R, Failure<S>>;
+
 fn unsupported_operation_message<'a, S: Span, R, O: Object<'a, S>>(
     object: &O,
-    log: &mut RuntimeLog<S>,
     span: &S,
     operation_name: &'static str,
-) -> ExecutionResult<'a, S, R> {
-    log.push(LogMessage::UnsupportedOperation(
+) -> OperatorResult<S, R> {
+    Err(Failure::UnsupportedOperation(
         span.clone(),
         object.type_name(),
         operation_name,
-    ));
-    Err(ControlFlow::Failure)
+    ))
 }
 
 pub trait NamedObject {
@@ -68,13 +68,13 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
 
     fn format(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         _f: &mut dyn Write,
         _style: Style,
         _precision: Option<u8>,
-    ) -> ExecutionResult<'a, S, ()> {
-        unsupported_operation_message(self, log, span, "format")
+    ) -> OperatorResult<S, ()> {
+        unsupported_operation_message(self, span, "format")
     }
 
     fn type_name(&self) -> Cow<'static, str> {
@@ -83,140 +83,121 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
 
     fn and(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, log, span, "and")
+    ) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "and")
     }
     fn or(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, log, span, "or")
+    ) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "or")
     }
     fn cmp(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Ordering> {
-        unsupported_operation_message(self, log, span, "compare")
+    ) -> OperatorResult<S, Ordering> {
+        unsupported_operation_message(self, span, "compare")
     }
-    fn eq(
-        &self,
-        log: &mut RuntimeLog<S>,
-        span: &S,
-        rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, bool> {
+    fn eq(&self, log: &mut RuntimeLog<S>, span: &S, rhs: &Value<'a, S>) -> OperatorResult<S, bool> {
         Ok(matches!(self.cmp(log, span, rhs)?, Ordering::Equal))
     }
     fn addition(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, log, span, "addition")
+    ) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "addition")
     }
     fn subtraction(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, log, span, "subtraction")
+    ) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "subtraction")
     }
     fn multiply(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, log, span, "multiply")
+    ) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "multiply")
     }
     fn divide(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, log, span, "divide")
+    ) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "divide")
     }
     fn attribute(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         _span: &S,
         attribute: &S,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        log.push(LogMessage::UnknownAttribute(attribute.clone()));
-        Err(ControlFlow::Failure)
+    ) -> OperatorResult<S, Value<'a, S>> {
+        Err(Failure::UnknownAttribute(attribute.clone()))
     }
     fn call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        _context: &mut ExecutionContext<'a, S>,
         span: &S,
         _arguments: Vec<Value<'a, S>>,
         _spans: &[Expression<S>],
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, &mut context.log, span, "call")
+    ) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "call")
     }
     fn method_call(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         _span: &S,
         attribute: &S,
         _arguments: Vec<Value<'a, S>>,
         _spans: &[Expression<S>],
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        log.push(LogMessage::UnknownAttribute(attribute.clone()));
-        Err(ControlFlow::Failure)
+    ) -> OperatorResult<S, Value<'a, S>> {
+        Err(Failure::UnknownAttribute(attribute.clone()))
     }
     fn index(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
         _index: Value<'a, S>,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, log, span, "index")
+    ) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "index")
     }
     fn iterate(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
-    ) -> ExecutionResult<'a, S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
-        unsupported_operation_message(self, log, span, "iterate")
+    ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
+        unsupported_operation_message(self, span, "iterate")
     }
-    fn unary_plus(
-        &self,
-        log: &mut RuntimeLog<S>,
-        span: &S,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, log, span, "unary plus")
+    fn unary_plus(&self, _log: &mut RuntimeLog<S>, span: &S) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "unary plus")
     }
-    fn unary_minus(
-        &self,
-        log: &mut RuntimeLog<S>,
-        span: &S,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, log, span, "unary minus")
+    fn unary_minus(&self, _log: &mut RuntimeLog<S>, span: &S) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "unary minus")
     }
     fn unary_logical_not(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut RuntimeLog<S>,
         span: &S,
-    ) -> ExecutionResult<'a, S, Value<'a, S>> {
-        unsupported_operation_message(self, log, span, "unary logical not")
+    ) -> OperatorResult<S, Value<'a, S>> {
+        unsupported_operation_message(self, span, "unary logical not")
     }
 
-    fn export(
-        &self,
-        log: &mut RuntimeLog<S>,
-        span: &S,
-    ) -> ExecutionResult<'a, S, SerializableValue> {
-        unsupported_operation_message(self, log, span, "export")
+    fn export(&self, _log: &mut RuntimeLog<S>, span: &S) -> OperatorResult<S, SerializableValue> {
+        unsupported_operation_message(self, span, "export")
     }
 }
 
@@ -244,7 +225,7 @@ impl<'a, S: Span> NamedObject for Value<'a, S> {
 }
 
 impl<'a, S: Span> Value<'a, S> {
-    pub fn downcast_ref<T>(&self, log: &mut RuntimeLog<S>, span: &S) -> ExecutionResult<'a, S, &T>
+    pub fn downcast_ref<T>(&self, span: &S) -> OperatorResult<S, &T>
     where
         T: NamedObject,
         Self: AsVariant<T>,
@@ -252,16 +233,15 @@ impl<'a, S: Span> Value<'a, S> {
         if let Some(value) = self.enum_downcast_ref() {
             Ok(value)
         } else {
-            log.push(LogMessage::ExpectedGot(
+            Err(Failure::ExpectedGot(
                 span.clone(),
                 T::static_type_name().into(),
                 self.type_name(),
-            ));
-            Err(ControlFlow::Failure)
+            ))
         }
     }
 
-    pub fn downcast<T>(self, log: &mut RuntimeLog<S>, span: &S) -> ExecutionResult<'a, S, T>
+    pub fn downcast<T>(self, span: &S) -> OperatorResult<S, T>
     where
         T: NamedObject,
         Self: TryInto<T>,
@@ -270,26 +250,21 @@ impl<'a, S: Span> Value<'a, S> {
 
         match self.try_into() {
             Ok(value) => Ok(value),
-            Err(_original) => {
-                log.push(LogMessage::ExpectedGot(
-                    span.clone(),
-                    T::static_type_name().into(),
-                    type_name,
-                ));
-                Err(ControlFlow::Failure)
-            }
+            Err(_original) => Err(Failure::ExpectedGot(
+                span.clone(),
+                T::static_type_name().into(),
+                type_name,
+            )),
         }
     }
 
     pub fn from_litteral(
         context: &mut ExecutionContext<'a, S>,
         value: &Litteral<S>,
-    ) -> ExecutionResult<'a, S, Self> {
+    ) -> OperatorResult<S, Self> {
         match value {
-            Litteral::Measurement(measurement) => {
-                Measurement::from_parsed(&mut context.log, measurement)
-            }
-            Litteral::Number(number) => number::from_parsed(&mut context.log, number),
+            Litteral::Measurement(measurement) => Measurement::from_parsed(measurement),
+            Litteral::Number(number) => number::from_parsed(number),
             Litteral::String(string) => SString::from_parsed(string),
             Litteral::List(list) => List::from_parsed(context, list),
             Litteral::Boolean(_span, value) => Ok(Self::Boolean(*value)),

@@ -1,20 +1,22 @@
 use std::cmp::Ordering;
 
 use crate::script::{
-    execution::ControlFlow,
     parsing::{ArithmeticExpression, Comparison, Expression, Factor, Term, Trailer},
     Span,
 };
 
 use super::{
     types::{Object, Range, Structure, Value},
-    ExecutionContext, ExecutionResult,
+    ExecutionContext, Failure,
 };
 
+type Result<S, R> = std::result::Result<R, Failure<S>>;
+
+// TODO this should not be returning a control flow.
 pub fn run_expression<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
     expression: &Expression<S>,
-) -> ExecutionResult<'a, S, Value<'a, S>> {
+) -> Result<S, Value<'a, S>> {
     match expression {
         Expression::And(a, b) => {
             let a_value = run_expression(context, a)?;
@@ -35,12 +37,12 @@ pub fn run_expression<'a, S: Span>(
 pub fn run_comparison<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
     comparison: &Comparison<S>,
-) -> ExecutionResult<'a, S, Value<'a, S>> {
+) -> Result<S, Value<'a, S>> {
     fn cmp<'a, S: Span>(
         context: &mut ExecutionContext<'a, S>,
         a: &Comparison<S>,
         b: &ArithmeticExpression<S>,
-    ) -> ExecutionResult<'a, S, Ordering> {
+    ) -> Result<S, Ordering> {
         let value_a = run_comparison(context, a)?;
         let value_b = run_arithmetic_expression(context, b)?;
 
@@ -50,11 +52,9 @@ pub fn run_comparison<'a, S: Span>(
     match comparison {
         // TODO it would be valuable to test if both sides are equivalent statements and print a warning if so.
         Comparison::LessThan(a, b) => Ok(matches!(cmp(context, a, b)?, Ordering::Less).into()),
-        Comparison::LessThanEqual(a, b) => Ok(matches!(
-            cmp(context, a, b).map_err(|_| ControlFlow::Failure)?,
-            Ordering::Less | Ordering::Equal
-        )
-        .into()),
+        Comparison::LessThanEqual(a, b) => {
+            Ok(matches!(cmp(context, a, b)?, Ordering::Less | Ordering::Equal).into())
+        }
         Comparison::Equal(a, b) => Ok(matches!(cmp(context, a, b)?, Ordering::Equal).into()),
         Comparison::GreaterThanEqual(a, b) => {
             Ok(matches!(cmp(context, a, b)?, Ordering::Greater | Ordering::Equal).into())
@@ -69,7 +69,7 @@ pub fn run_comparison<'a, S: Span>(
 pub fn run_arithmetic_expression<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
     expression: &ArithmeticExpression<S>,
-) -> ExecutionResult<'a, S, Value<'a, S>> {
+) -> Result<S, Value<'a, S>> {
     match expression {
         ArithmeticExpression::Addition(a, b) => {
             let value_a = run_arithmetic_expression(context, a)?;
@@ -90,7 +90,7 @@ pub fn run_arithmetic_expression<'a, S: Span>(
 pub fn run_term<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
     term: &Term<S>,
-) -> ExecutionResult<'a, S, Value<'a, S>> {
+) -> Result<S, Value<'a, S>> {
     match term {
         Term::Multiply(a, b) => {
             let a_value = run_term(context, a)?;
@@ -112,7 +112,7 @@ pub fn run_term<'a, S: Span>(
 pub fn run_trailer<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
     trailer: &Trailer<S>,
-) -> ExecutionResult<'a, S, Value<'a, S>> {
+) -> Result<S, Value<'a, S>> {
     match trailer {
         Trailer::None(factor) => run_factor(context, factor),
         Trailer::Attribute(trailer, attribute) => {
@@ -162,13 +162,10 @@ pub fn run_trailer<'a, S: Span>(
 pub fn run_factor<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
     factor: &Factor<S>,
-) -> ExecutionResult<'a, S, Value<'a, S>> {
+) -> Result<S, Value<'a, S>> {
     match factor {
         Factor::Litteral(litteral) => Value::from_litteral(context, litteral),
-        Factor::Variable(variable) => context
-            .stack
-            .get_variable(&mut context.log, variable)
-            .cloned(),
+        Factor::Variable(variable) => context.stack.get_variable(variable).cloned(),
         Factor::Parenthesis(expression) => run_expression(context, expression),
         Factor::UnaryPlus(factor) => {
             run_factor(context, factor)?.unary_plus(&mut context.log, factor.get_span())
@@ -194,7 +191,7 @@ mod test {
     use crate::script::{
         execution::{
             types::{function::IntoBuiltinFunction, List, Measurement, Number, SString},
-            ExecutionResult, ModuleScope, Stack,
+            ModuleScope, Stack,
         },
         module::Module,
         parsing::Litteral,
@@ -360,7 +357,10 @@ mod test {
 
             assert_eq!(
                 run_expression(context, &Expression::parse("non_existant_scope").unwrap().1),
-                Err(ControlFlow::Failure)
+                Err(Failure::VariableNotInScope(
+                    "non_existant_scope",
+                    "non_existant_scope".into()
+                ))
             );
         });
     }
@@ -398,7 +398,7 @@ mod test {
 
     #[test]
     fn attribute_access() {
-        let mut log = RuntimeLog::default();
+        let mut log = Vec::new();
 
         let module = Module::load(
             &mut log,
@@ -407,12 +407,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(!log.containes_any_error());
+        assert!(log.is_empty());
 
         let module_scope = ModuleScope::new(&module);
 
         let mut context = ExecutionContext {
-            log,
+            log: RuntimeLog::new(),
             stack: Stack::new(module_scope),
         };
 
@@ -450,7 +450,7 @@ mod test {
         fn my_function<'a, S: Span>(
             _log: &mut RuntimeLog<S>,
             _span: &S,
-        ) -> ExecutionResult<'a, S, Value<'a, S>> {
+        ) -> Result<S, Value<'a, S>> {
             Ok(Number::new(42.0).unwrap().into())
         }
 
@@ -522,7 +522,7 @@ mod test {
         );
         assert_eq!(
             run_expression(&mut context, &Expression::parse("..=").unwrap().1),
-            Err(ControlFlow::Failure)
+            Err(Failure::MissingUpperBound("..="))
         );
         assert_eq!(
             run_expression(&mut context, &Expression::parse("5..").unwrap().1),

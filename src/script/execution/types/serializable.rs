@@ -3,16 +3,17 @@ use std::{borrow::Cow, collections::HashMap};
 use serde::{Deserialize, Serialize};
 
 use crate::script::{
-    execution::{types::StructDefinition, ExecutionContext},
+    execution::{types::StructDefinition, ExecutionContext, Failure},
     parsing::VariableType,
-    LogMessage, Span,
+    Span,
 };
 
 use super::{
     number::{RawNumber, UnwrapNotNan},
-    List, Number, SString, Structure, Value,
+    List, Number, OperatorResult, SString, Structure, Value,
 };
 
+// TODO add the ability to deserialize Default and Measurements. You should not be able to serialize these values.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case", untagged)]
 pub enum SerializableValue {
@@ -25,6 +26,11 @@ pub enum SerializableValue {
     },
     List(Vec<SerializableValue>),
     String(String),
+    // #[serde(skip_serializing)]
+    // Measurement(Measurement),
+
+    // #[serde(skip_serializing)]
+    // Default,
 }
 
 impl SerializableValue {
@@ -32,25 +38,21 @@ impl SerializableValue {
         self,
         context: &mut ExecutionContext<'a, S>,
         span: &S,
-    ) -> std::result::Result<Value<'a, S>, ()> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         match self {
             Self::Boolean(value) => Ok((value).into()),
-            Self::Number(value) => Number::new(value)
-                .unwrap_not_nan(&mut context.log, span)
-                .map_err(|_| ()),
+            Self::Number(value) => Number::new(value).unwrap_not_nan(span),
             Self::Struct {
                 ty,
                 members: mut values,
             } => {
                 let initalizer = context
                     .stack
-                    .get_variable_str(&mut context.log, span, ty.as_ref())
-                    .map_err(|_| ())?
-                    .downcast_ref::<StructDefinition<'a, S>>(&mut context.log, span)
-                    .map_err(|_| ())?
+                    .get_variable_str(span, ty.as_ref())?
+                    .downcast_ref::<StructDefinition<'a, S>>(span)?
                     .definition;
 
-                let mut failed = false;
+                let mut failures = Vec::new();
                 let mut table = HashMap::with_capacity(initalizer.members.len());
 
                 for member in initalizer.members.iter() {
@@ -59,24 +61,22 @@ impl SerializableValue {
                             Ok(value) => {
                                 table.insert(member.name.to_string(), value);
                             }
-                            Err(_) => {
-                                // They should have already logged their failure.
-                                failed = true;
+                            Err(failure) => {
+                                failures.push(failure);
                             }
                         }
                     } else {
-                        context.log.push(LogMessage::StructMissingAssignment(
+                        failures.push(Failure::StructMissingAssignment(
                             span.clone(),
                             member.name.clone(),
                         ));
-                        failed = true;
                     }
                 }
 
-                if failed {
-                    Err(())
-                } else {
+                if failures.is_empty() {
                     Ok(Structure::new(initalizer.name.clone(), table).into())
+                } else {
+                    Err(Failure::StructConstruction(span.clone(), failures))
                 }
             }
             Self::List(values) => {
@@ -98,16 +98,15 @@ impl SerializableValue {
         context: &mut ExecutionContext<'a, S>,
         span: &S,
         ty: &VariableType<S>,
-    ) -> std::result::Result<Value<'a, S>, ()> {
+    ) -> OperatorResult<S, Value<'a, S>> {
         if self.matches_type(ty) {
             self.into_value_without_type_check(context, span)
         } else {
-            context.log.push(LogMessage::CannotConvertFromTo(
+            Err(Failure::CannotConvertFromTo(
                 span.clone(),
                 self.type_name(),
                 ty.name(),
-            ));
-            Err(())
+            ))
         }
     }
 
@@ -220,7 +219,7 @@ mod test {
 
     #[test]
     fn deserialize_struct() {
-        let mut log = RuntimeLog::default();
+        let mut log = Vec::new();
 
         let module = Module::load(
             &mut log,
@@ -229,12 +228,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(!log.containes_any_error());
+        assert!(log.is_empty());
 
         let module_scope = ModuleScope::new(&module);
         let mut context = ExecutionContext {
             stack: Stack::new(module_scope),
-            log,
+            log: RuntimeLog::default(),
         };
 
         let struct_def = r#"
@@ -283,7 +282,7 @@ mod test {
 
     #[test]
     fn serialize_struct() {
-        let mut log = RuntimeLog::default();
+        let mut log = Vec::new();
 
         let module = Module::load(
             &mut log,
@@ -292,12 +291,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(!log.containes_any_error());
+        assert!(log.is_empty());
 
         let module_scope = ModuleScope::new(&module);
         let mut context = ExecutionContext {
             stack: Stack::new(module_scope),
-            log,
+            log: RuntimeLog::default(),
         };
 
         let value: Value<&'static str> = run_expression(
