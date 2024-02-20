@@ -15,6 +15,8 @@ use crate::script::{
 use super::Measurement;
 
 fn replace_symbols(input: &str) -> String {
+    // Experiments to do this at compile time were done, and while they worked, they added an entire six minutes
+    // to even an iterative build, so I decided to scrapt it.
     let to_replace = [
         ("¹", "^1"),
         ("²", "^2"),
@@ -85,6 +87,10 @@ macro_rules! build_lookup_tables {
 }
 
 impl Measurement {
+    pub fn get_measurement_to_float_converter(ty: &str) -> Option<fn(&Measurement) -> Option<f64>> {
+        CONVERT_MEASUREMENT_TO_FLOAT.get(ty).copied()
+    }
+
     pub fn from_parsed_raw<S: Span>(
         measurement: &parsing::Measurement<S>,
     ) -> OperatorResult<S, Self> {

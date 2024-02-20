@@ -114,10 +114,7 @@ mod test {
 
     #[test]
     fn iterate() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert!(
             Range::from_parsed(&mut context, &parsing::Range::parse("..").unwrap().1)

@@ -5,7 +5,7 @@ use fortuples::fortuples;
 use crate::script::{
     execution::{run_named_block, ExecutionContext, Failure},
     parsing::{Expression, NamedBlock, VariableType},
-    LogMessage, RuntimeLog, Span,
+    Span,
 };
 
 use super::{NamedObject, Object, OperatorResult, Value};
@@ -53,7 +53,12 @@ impl<'a, S: Span> NamedObject for UserFunction<'a, S> {
 }
 
 pub trait BuiltinFunctionPointer<'a, S: Span + 'a>:
-    Fn(&mut RuntimeLog<S>, &S, Vec<Value<'a, S>>, &[Expression<S>]) -> OperatorResult<S, Value<'a, S>>
+    Fn(
+    &mut ExecutionContext<'a, S>,
+    &S,
+    Vec<Value<'a, S>>,
+    &[Expression<S>],
+) -> OperatorResult<S, Value<'a, S>>
 {
 }
 
@@ -61,7 +66,7 @@ impl<'a, S, F> BuiltinFunctionPointer<'a, S> for F
 where
     S: Span + 'a,
     F: Fn(
-        &mut RuntimeLog<S>,
+        &mut ExecutionContext<'a, S>,
         &S,
         Vec<Value<'a, S>>,
         &[Expression<S>],
@@ -84,7 +89,7 @@ impl<'a, S: Span> Object<'a, S> for BuiltinFunction<'a, S> {
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
     ) -> OperatorResult<S, Value<'a, S>> {
-        self.0(&mut context.log, span, arguments, expressions)
+        self.0(context, span, arguments, expressions)
     }
 }
 
@@ -108,7 +113,6 @@ impl<S: Span> NamedObject for BuiltinFunction<'_, S> {
 
 pub trait UnpackArguments<'a, S: Span, Tuple> {
     fn unpack_arguments(
-        log: &mut RuntimeLog<S>,
         span: &S,
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
@@ -124,27 +128,26 @@ fortuples! {
 	#(Value<'a, S>: TryInto<#Member>),*
     {
 	fn unpack_arguments(
-            log: &mut RuntimeLog<S>,
             _span: &S,
             mut arguments: Vec<Value<'a, S>>,
             expressions: &[Expression<S>],
 	) -> OperatorResult<S, #Tuple> {
 	    arguments.reverse();
-	    let mut _expression_iter = expressions.iter();
+	    let mut expression_iter = expressions.iter();
 	    
 	    #(let casey::lower!(#Member) = {
 		if let Some(value) = arguments.pop() {
-		    value.downcast(_expression_iter.next().unwrap().get_span())?
+		    value.downcast(expression_iter.next().unwrap().get_span())?
 		} else {
 		    return Err(Failure::MissingArguments(_span.clone()));
 		}
 	    };)*
 
-	    for expression in _expression_iter {
-		log.push(LogMessage::TooManyArguments(expression.get_span().clone()));
+	    if let Some(extra_expression) = expression_iter.next() {
+		Err(Failure::TooManyArguments(extra_expression.get_span().clone()))
+	    } else {
+		Ok((#(casey::lower!(#Member)),*))
 	    }
-	    
-            Ok((#(casey::lower!(#Member)),*))
 	}
     }
 }
@@ -157,7 +160,7 @@ where
 
     fn auto_call(
         &self,
-        log: &mut RuntimeLog<S>,
+        context: &mut ExecutionContext<'a, S>,
         span: &S,
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
@@ -171,20 +174,20 @@ fortuples! {
 	S: Span + 'a,
 	#(#Member: NamedObject),*
         #(Value<'a, S>: TryInto<#Member>),*
-	F: Fn(&mut RuntimeLog<S>, &S, #(#Member),*) -> OperatorResult<S, Value<'a, S>>,
+	F: Fn(&mut ExecutionContext<'a, S>, &S, #(#Member),*) -> OperatorResult<S, Value<'a, S>>,
     {
 	type Unpacker = #Tuple;
 
 	fn auto_call(
             &self,
-            log: &mut RuntimeLog<S>,
+            context: &mut ExecutionContext<'a, S>,
             span: &S,
             arguments: Vec<Value<'a, S>>,
             expressions: &[Expression<S>],
 	) -> OperatorResult<S, Value<'a, S>> {
-            let (#(casey::lower!(#Member)),*) = Self::Unpacker::unpack_arguments(log, span, arguments, expressions)?;
+            let (#(casey::lower!(#Member)),*) = Self::Unpacker::unpack_arguments(span, arguments, expressions)?;
 
-            (self)(log, span, #(casey::lower!(#Member)),*)
+            (self)(context, span, #(casey::lower!(#Member)),*)
 	}
     }
 }
@@ -198,13 +201,13 @@ pub trait IntoBuiltinFunction<'a, S: Span, T>: AutoCall<'a, S, T> {
      impl<'a, S, F> IntoBuiltinFunction<'a, S, #Tuple> for F
      where
  	S: Span +'a,
- 	F: Fn(&mut RuntimeLog<S>, &S, #(#Member),*) -> OperatorResult<S, Value<'a, S>> + 'static,
+ 	F: Fn(&mut ExecutionContext<'a, S>, &S, #(#Member),*) -> OperatorResult<S, Value<'a, S>> + 'static,
  	#(#Member: NamedObject),*
          #(Value<'a, S>: TryInto<#Member>),*
      {
  	fn into_builtin_function(self) -> BuiltinFunction<'a, S> {
- 	    BuiltinFunction(Rc::new(move |log: &mut RuntimeLog<S>, span: &S, arguments: Vec<Value<'a, S>>, expressions: &[Expression<S>]| -> OperatorResult<S, Value<'a, S>> {
- 		self.auto_call(log, span, arguments, expressions)
+ 	    BuiltinFunction(Rc::new(move |context: &mut ExecutionContext<'a, S>, span: &S, arguments: Vec<Value<'a, S>>, expressions: &[Expression<S>]| -> OperatorResult<S, Value<'a, S>> {
+ 		self.auto_call(context, span, arguments, expressions)
  	    }))
  	}
      }

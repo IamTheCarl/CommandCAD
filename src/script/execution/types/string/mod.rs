@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, fmt::Write, rc::Rc};
 
 use crate::script::{
-    execution::{types::Number, Failure},
+    execution::{types::Number, ExecutionContext, Failure},
     parsing::{self, Expression, VariableType},
     RuntimeLog, Span,
 };
@@ -161,14 +161,14 @@ impl<'a, S: Span> Object<'a, S> for SString {
 
     fn method_call(
         &self,
-        log: &mut RuntimeLog<S>,
+        context: &mut ExecutionContext<'a, S>,
         span: &S,
         attribute: &S,
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
     ) -> OperatorResult<S, Value<'a, S>> {
         match attribute.as_str() {
-            "insert" => |_log: &mut RuntimeLog<S>,
+            "insert" => |_context: &mut ExecutionContext<'a, S>,
                          span: &S,
                          index: Number,
                          text: SString|
@@ -180,20 +180,24 @@ impl<'a, S: Span> Object<'a, S> for SString {
                 string.insert_str(index, text.as_str());
                 Ok(Self::from(string).into())
             }
-            .auto_call(log, span, arguments, expressions), // insert_str
-            "is_empty" => |_log: &mut RuntimeLog<S>, _span: &S| -> OperatorResult<S, Value<S>> {
-                Ok(self.string.is_empty().into())
+            .auto_call(context, span, arguments, expressions), // insert_str
+            "is_empty" => {
+                |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(self.string.is_empty().into())
+                }
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(log, span, arguments, expressions),
-            "len" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<S>> {
-                Number::new(self.string.len() as f64).unwrap_not_nan(span)
+            "len" => {
+                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Number::new(self.string.len() as f64).unwrap_not_nan(span)
+                }
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(log, span, arguments, expressions),
             "format" => {
                 match formatting::Format::parse((*self.string).as_ref()) {
                     Ok((_, format)) => {
                         let mut output = String::new();
-                        format.format(log, span, &mut output, &arguments)?;
+                        format.format(&mut context.log, span, &mut output, &arguments)?;
 
                         Ok(Self::from(output).into())
                     }
@@ -296,10 +300,7 @@ mod test {
 
     #[test]
     fn string_concat() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(

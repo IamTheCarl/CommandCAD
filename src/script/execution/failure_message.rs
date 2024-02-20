@@ -6,6 +6,7 @@ use ordered_float::ParseNotNanError;
 use crate::script::Span;
 
 // TODO We need stack traces.
+// TODO we should separate out the failure span and failure type.
 #[derive(Debug, Eq, PartialEq)]
 pub enum Failure<S> {
     UnclosedStatement(S),
@@ -41,6 +42,11 @@ pub enum Failure<S> {
     BadArgumentTypes(S, Vec<Failure<S>>),
     StructConstruction(S, Vec<Failure<S>>),
     SliceOutOfRange(S, Option<isize>, &'static str, Option<isize>),
+
+    TooManyArguments(S),
+    ListWrongLength(S, usize, usize),
+
+    ListElementFailure(S, usize, Box<Failure<S>>),
 }
 
 impl<S: Span + FormatSpan> std::fmt::Display for Failure<S> {
@@ -298,6 +304,29 @@ impl<S: Span + FormatSpan> std::fmt::Display for Failure<S> {
                     upper
                 ),
             },
+            Self::TooManyArguments(span) => {
+                write!(
+                    f,
+                    "{}: Too many arguemnts for function call",
+                    span.format_span()
+                )
+            }
+            Self::ListWrongLength(span, expected_length, actual_length) => write!(
+                f,
+                "{}: Expected list of length {}; got a length of {}",
+                span.format_span(),
+                expected_length,
+                actual_length
+            ),
+            Self::ListElementFailure(span, index, failure) => {
+                write!(
+                    f,
+                    "{}: Error with element {} of list: {}",
+                    span.format_span(),
+                    index,
+                    failure
+                )
+            }
         }
     }
 }

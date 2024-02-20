@@ -390,19 +390,13 @@ fn run_continue<'a, S: Span>(
 
 #[cfg(test)]
 mod test {
-    use crate::script::{
-        execution::{types::Number, ControlFlow, Failure, Stack},
-        RuntimeLog,
-    };
+    use crate::script::execution::{types::Number, ControlFlow, Failure};
 
     use super::*;
 
     #[test]
     fn assignment() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let statement = parsing::Statement::parse("value = 1").unwrap().1;
         assert_eq!(
@@ -477,10 +471,7 @@ mod test {
 
     #[test]
     fn assign_scopes() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
         context
             .stack
             .new_variable(&"one", Number::new(1.0).unwrap().into());
@@ -516,10 +507,7 @@ mod test {
 
     #[test]
     fn loop_statement() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let statement = parsing::Statement::parse("loop { break; }").unwrap().1;
         assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
@@ -527,10 +515,7 @@ mod test {
 
     #[test]
     fn if_statement() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let statement = parsing::Statement::parse("if true { 1.0 }").unwrap().1;
         assert_eq!(
@@ -585,10 +570,7 @@ mod test {
 
     #[test]
     fn break_statement() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let statement = parsing::Statement::parse("loop { break; }").unwrap().1;
         assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
@@ -635,10 +617,7 @@ mod test {
 
     #[test]
     fn continue_statement() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let block = parsing::Block::parse(
             "{ let a = 0; let b = false; loop { a = a + 1; if a >= 2 { break; } continue; b = true; } }",
@@ -659,10 +638,7 @@ mod test {
 
     #[test]
     fn while_statement() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let block =
             parsing::Block::parse("{ let count = 0; while count < 5 { count = count + 1; } }")
@@ -677,10 +653,7 @@ mod test {
 
     #[test]
     fn for_statement() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let block =
             parsing::Block::parse("{ let count = 0; for i in 0..5 { count = count + 1; } }")
@@ -720,10 +693,7 @@ mod test {
 
     #[test]
     fn match_statement() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let block = parsing::Block::parse("{ match 1 { 1 => true, default => false } }")
             .unwrap()

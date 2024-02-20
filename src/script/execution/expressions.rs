@@ -143,7 +143,7 @@ pub fn run_trailer<'a, S: Span>(
             }
 
             value.method_call(
-                &mut context.log,
+                context,
                 trailer.get_span(),
                 attribute,
                 evaluated_arguments,
@@ -191,19 +191,15 @@ mod test {
     use crate::script::{
         execution::{
             types::{function::IntoBuiltinFunction, List, Measurement, Number, SString},
-            ModuleScope, Stack,
+            ModuleScope,
         },
         module::Module,
         parsing::Litteral,
-        RuntimeLog,
     };
 
     #[test]
     fn expression_straight_number() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("24").unwrap().1),
@@ -213,10 +209,7 @@ mod test {
 
     #[test]
     fn expression_logical_operators() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("true").unwrap().1),
@@ -282,10 +275,7 @@ mod test {
 
     #[test]
     fn value_from_litteral() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         // Measurement
         assert_eq!(
@@ -336,10 +326,7 @@ mod test {
 
     #[test]
     fn variable_access() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
         context.stack.new_variable(&"global_scope", true.into());
 
         context.new_scope(|context| {
@@ -367,10 +354,7 @@ mod test {
 
     #[test]
     fn unary_operators() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("+15").unwrap().1),
@@ -385,10 +369,7 @@ mod test {
 
     #[test]
     fn parenthasis() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("(1 + 2) * 3").unwrap().1),
@@ -411,10 +392,7 @@ mod test {
 
         let module_scope = ModuleScope::new(&module);
 
-        let mut context = ExecutionContext {
-            log: RuntimeLog::new(),
-            stack: Stack::new(module_scope),
-        };
+        let mut context = ExecutionContext::new(module_scope);
 
         assert_eq!(
             run_expression(
@@ -429,10 +407,7 @@ mod test {
 
     #[test]
     fn method_call() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("24.25.floor()").unwrap().1),
@@ -442,13 +417,10 @@ mod test {
 
     #[test]
     fn call() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         fn my_function<'a, S: Span>(
-            _log: &mut RuntimeLog<S>,
+            _context: &mut ExecutionContext<'a, S>,
             _span: &S,
         ) -> Result<S, Value<'a, S>> {
             Ok(Number::new(42.0).unwrap().into())
@@ -467,10 +439,7 @@ mod test {
 
     #[test]
     fn index() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("[1, 2, 3][0]").unwrap().1),
@@ -480,10 +449,7 @@ mod test {
 
     #[test]
     fn multiply() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("1 + 2 * 3").unwrap().1),
@@ -493,10 +459,7 @@ mod test {
 
     #[test]
     fn divide() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("9 / 3").unwrap().1),
@@ -506,10 +469,7 @@ mod test {
 
     #[test]
     fn range() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("..").unwrap().1),
@@ -555,10 +515,7 @@ mod test {
 
     #[test]
     fn addition() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("1 + 2").unwrap().1),
@@ -568,10 +525,7 @@ mod test {
 
     #[test]
     fn subtraction() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(&mut context, &Expression::parse("1 + 2").unwrap().1),
@@ -581,10 +535,7 @@ mod test {
 
     #[test]
     fn comparisions() {
-        let mut context = ExecutionContext {
-            log: RuntimeLog::default(),
-            stack: Stack::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         // LessThan(_, _)
         assert_eq!(

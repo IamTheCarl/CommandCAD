@@ -2,15 +2,17 @@ use std::collections::HashMap;
 
 use crate::script::execution::types::NoneType;
 
-use self::types::validate_assignment_type;
+use self::types::{validate_assignment_type, Measurement};
 
 use super::{
     module::Module,
-    parsing::{self, Block, NamedBlock},
+    parsing::{self, Block, NamedBlock, VariableType},
     RuntimeLog, Span,
 };
 
 pub mod types;
+use compact_str::CompactString;
+use fj::core::services::Services;
 use types::{StructDefinition, UserFunction, Value};
 
 mod expressions;
@@ -85,6 +87,28 @@ impl<'a, S: Span> Stack<'a, S> {
                 UserFunction {
                     block: &function.named_block,
                     return_type: &function.return_type,
+                }
+                .into(),
+            );
+        }
+
+        for (name, function) in module_scope.sketches {
+            root_scope.variables.insert(
+                name.into(),
+                UserFunction {
+                    block: &function.named_block,
+                    return_type: &VariableType::Sketch,
+                }
+                .into(),
+            );
+        }
+
+        for (name, function) in module_scope.solids {
+            root_scope.variables.insert(
+                name.into(),
+                UserFunction {
+                    block: &function.named_block,
+                    return_type: &VariableType::Solid,
                 }
                 .into(),
             );
@@ -170,9 +194,13 @@ impl<'a, S: Span> Stack<'a, S> {
     }
 
     pub fn new_variable(&mut self, name: &S, value: Value<'a, S>) {
+        self.new_variable_str(name.as_str(), value)
+    }
+
+    pub fn new_variable_str(&mut self, name: impl Into<CompactString>, value: Value<'a, S>) {
         let current_scope = &mut self.scopes[self.active_scope];
 
-        current_scope.variables.insert(name.as_str().into(), value);
+        current_scope.variables.insert(name.into(), value);
     }
 }
 
@@ -181,7 +209,7 @@ pub struct ModuleScope<'a, S: Span> {
     structs: HashMap<String, &'a parsing::Struct<S>>,
     functions: HashMap<String, &'a parsing::Function<S>>,
     sketches: HashMap<String, &'a parsing::Sketch<S>>,
-    widgets: HashMap<String, &'a parsing::Widget<S>>,
+    solids: HashMap<String, &'a parsing::Solid<S>>,
 }
 
 impl<'a, S: Span> ModuleScope<'a, S> {
@@ -209,18 +237,18 @@ impl<'a, S: Span> ModuleScope<'a, S> {
             .map(|sketch| (sketch.named_block.name.to_string(), sketch))
             .collect();
 
-        let widgets = module
+        let solids = module
             .root_elements
-            .widgets
+            .solids
             .iter()
-            .map(|widget| (widget.named_block.name.to_string(), widget))
+            .map(|wolid| (wolid.named_block.name.to_string(), wolid))
             .collect();
 
         Self {
             structs,
             functions,
             sketches,
-            widgets,
+            solids,
         }
     }
 }
@@ -250,13 +278,62 @@ impl<S: Span> From<Failure<S>> for ControlFlow<'_, S> {
     }
 }
 
-#[derive(Default)]
+pub struct GlobalResources {
+    pub convert_to_fornjot_units: fn(&Measurement) -> Option<f64>,
+
+    // FIXME we need to unwind the validation messages, otherwise this panics on drop.
+    pub fornjot_services: Services,
+}
+
+impl Default for GlobalResources {
+    fn default() -> Self {
+        Self {
+            convert_to_fornjot_units: Measurement::get_measurement_to_float_converter("mm")
+                .unwrap(),
+            fornjot_services: Default::default(),
+        }
+    }
+}
+
 pub struct ExecutionContext<'a, S: Span> {
+    pub global_resources: GlobalResources,
     pub log: RuntimeLog<S>,
     pub stack: Stack<'a, S>,
 }
 
+impl<'a, S: Span> Default for ExecutionContext<'a, S> {
+    fn default() -> Self {
+        let mut context = Self {
+            global_resources: Default::default(),
+            log: RuntimeLog::new(),
+            stack: Default::default(),
+        };
+
+        // FIXME this registers the global functions as part of the module,
+        // which is not actually global. This is a bad way to do this because
+        // other modules won't have access to the global functions.
+        types::register_globals(&mut context);
+
+        context
+    }
+}
+
 impl<'a, S: Span> ExecutionContext<'a, S> {
+    pub fn new(module_scope: ModuleScope<'a, S>) -> Self {
+        let mut context = Self {
+            global_resources: GlobalResources::default(),
+            log: RuntimeLog::new(),
+            stack: Stack::new(module_scope),
+        };
+
+        // FIXME this registers the global functions as part of the module,
+        // which is not actually global. This is a bad way to do this because
+        // other modules won't have access to the global functions.
+        types::register_globals(&mut context);
+
+        context
+    }
+
     pub fn new_scope<R>(&mut self, scope: impl FnOnce(&mut Self) -> R) -> R {
         self.stack.push_scope(ScopeType::Inherited);
         let result = scope(self);
@@ -361,7 +438,6 @@ mod test {
     use crate::script::{
         execution::{
             expressions::run_expression, run_block, types::Number, ExecutionContext, ModuleScope,
-            Stack,
         },
         module::Module,
         parsing::Expression,
@@ -382,10 +458,7 @@ mod test {
 
         let module_scope = ModuleScope::new(&module);
 
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::new(module_scope),
-        };
+        let mut context = ExecutionContext::new(module_scope);
 
         let result = run_block(
             &mut context,
@@ -409,10 +482,7 @@ mod test {
 
         let module_scope = ModuleScope::new(&module);
 
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::new(module_scope),
-        };
+        let mut context = ExecutionContext::new(module_scope);
 
         let result = run_block(
             &mut context,
@@ -436,10 +506,7 @@ mod test {
 
         let module_scope = ModuleScope::new(&module);
 
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::new(module_scope),
-        };
+        let mut context = ExecutionContext::new(module_scope);
 
         let result = context.new_scope(|context| {
             run_block(
@@ -473,10 +540,7 @@ mod test {
 
         let module_scope = ModuleScope::new(&module);
 
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Stack::new(module_scope),
-        };
+        let mut context = ExecutionContext::new(module_scope);
         let result = context.new_scope(|context| {
             run_block(
                 context,

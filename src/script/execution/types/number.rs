@@ -3,7 +3,7 @@ use std::{cmp::Ordering, fmt::Write};
 use ordered_float::{FloatIsNan, NotNan};
 
 use crate::script::{
-    execution::Failure,
+    execution::{ExecutionContext, Failure},
     parsing::{self, Expression, VariableType},
     LogMessage, RuntimeLog, Span,
 };
@@ -150,239 +150,300 @@ impl<'a, S: Span> Object<'a, S> for Number {
     }
     fn method_call(
         &self,
-        log: &mut RuntimeLog<S>,
+        context: &mut ExecutionContext<'a, S>,
         span: &S,
         attribute: &S,
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
     ) -> OperatorResult<S, Value<'a, S>> {
         match attribute.as_str() {
-            "abs" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            "abs" => |_context: &mut ExecutionContext<'a, S>,
+                      span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 Self::new(self.abs()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "acos" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "acos" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.acos()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "acosh" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "acosh" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.acosh()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "asin" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "asin" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.asin()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "asinh" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "asinh" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.asinh()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "atan" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "atan" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.atan()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "atanh" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "atanh" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.atanh()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "cbrt" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "cbrt" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.cbrt()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "ceil" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "ceil" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.ceil()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "clamp" => |_log: &mut RuntimeLog<S>,
+            .auto_call(context, span, arguments, expressions),
+            "clamp" => |_context: &mut ExecutionContext<'a, S>,
                         _span: &S,
                         min: Number,
                         max: Number|
              -> OperatorResult<S, Value<'a, S>> {
                 Ok((*self).clamp(min, max).into())
             }
-            .auto_call(log, span, arguments, expressions),
-            "copysign" => |_log: &mut RuntimeLog<S>,
+            .auto_call(context, span, arguments, expressions),
+            "copysign" => |_context: &mut ExecutionContext<'a, S>,
                            span: &S,
                            sign: Number|
              -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.copysign(*sign)).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "cos" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "cos" => |_context: &mut ExecutionContext<'a, S>,
+                      span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.cos()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "cosh" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "cosh" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.cosh()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "div_euclid" => |_log: &mut RuntimeLog<S>,
+            .auto_call(context, span, arguments, expressions),
+            "div_euclid" => |_context: &mut ExecutionContext<'a, S>,
                              span: &S,
                              rhs: Number|
              -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.div_euclid(*rhs)).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "exp" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "exp" => |_context: &mut ExecutionContext<'a, S>,
+                      span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.exp()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "exp2" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "exp2" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.exp2()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "exp_m1" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "exp_m1" => |_context: &mut ExecutionContext<'a, S>,
+                         span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.exp_m1()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "floor" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "floor" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.floor()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "fract" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "fract" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.fract()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "hypot" => |_log: &mut RuntimeLog<S>,
+            .auto_call(context, span, arguments, expressions),
+            "hypot" => |_context: &mut ExecutionContext<'a, S>,
                         span: &S,
                         other: Number|
              -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.hypot(*other)).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
+            .auto_call(context, span, arguments, expressions),
             "is_finite" => {
-                |_log: &mut RuntimeLog<S>, _span: &S| -> OperatorResult<S, Value<'a, S>> {
-                    Ok(self.is_finite().into())
-                }
-                .auto_call(log, span, arguments, expressions)
+                |_context: &mut ExecutionContext<'a, S>,
+                 _span: &S|
+                 -> OperatorResult<S, Value<'a, S>> { Ok(self.is_finite().into()) }
+                .auto_call(context, span, arguments, expressions)
             }
-            "is_infinite" => {
-                |_log: &mut RuntimeLog<S>, _span: &S| -> OperatorResult<S, Value<'a, S>> {
-                    Ok(self.is_infinite().into())
-                }
-                .auto_call(log, span, arguments, expressions)
+            "is_infinite" => |_context: &mut ExecutionContext<'a, S>,
+                              _span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                Ok(self.is_infinite().into())
             }
-            "is_sign_negative" => {
-                |_log: &mut RuntimeLog<S>, _span: &S| -> OperatorResult<S, Value<'a, S>> {
-                    Ok(self.is_sign_negative().into())
-                }
-                .auto_call(log, span, arguments, expressions)
+            .auto_call(context, span, arguments, expressions),
+            "is_sign_negative" => |_context: &mut ExecutionContext<'a, S>,
+                                   _span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                Ok(self.is_sign_negative().into())
             }
-            "is_sign_posative" => {
-                |_log: &mut RuntimeLog<S>, _span: &S| -> OperatorResult<S, Value<'a, S>> {
-                    Ok(self.is_sign_positive().into())
-                }
-                .auto_call(log, span, arguments, expressions)
+            .auto_call(context, span, arguments, expressions),
+            "is_sign_posative" => |_context: &mut ExecutionContext<'a, S>,
+                                   _span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                Ok(self.is_sign_positive().into())
             }
-            "ln" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "ln" => |_context: &mut ExecutionContext<'a, S>,
+                     span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.ln()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "ln_1p" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "ln_1p" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.ln_1p()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "log" => |_log: &mut RuntimeLog<S>,
-                      span: &S,
-                      base: Number|
+            .auto_call(context, span, arguments, expressions),
+            "context" => |_context: &mut ExecutionContext<'a, S>,
+                          span: &S,
+                          base: Number|
              -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.log(*base)).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "log2" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "context2" => |_context: &mut ExecutionContext<'a, S>,
+                           span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.log2()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "log10" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "context10" => |_context: &mut ExecutionContext<'a, S>,
+                            span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.log10()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "max" => |_log: &mut RuntimeLog<S>,
+            .auto_call(context, span, arguments, expressions),
+            "max" => |_context: &mut ExecutionContext<'a, S>,
                       _span: &S,
                       other: Number|
              -> OperatorResult<S, Value<'a, S>> {
                 Ok((*self).max(other).into())
             }
-            .auto_call(log, span, arguments, expressions),
-            "min" => |_log: &mut RuntimeLog<S>,
+            .auto_call(context, span, arguments, expressions),
+            "min" => |_context: &mut ExecutionContext<'a, S>,
                       _span: &S,
                       other: Number|
              -> OperatorResult<S, Value<'a, S>> {
                 Ok((*self).min(other).into())
             }
-            .auto_call(log, span, arguments, expressions),
-            "mul_add" => |_log: &mut RuntimeLog<S>,
+            .auto_call(context, span, arguments, expressions),
+            "mul_add" => |_context: &mut ExecutionContext<'a, S>,
                           span: &S,
                           a: Number,
                           b: Number|
              -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.mul_add(*a, *b)).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "powf" => {
-                |_log: &mut RuntimeLog<S>, span: &S, n: Number| -> OperatorResult<S, Value<'a, S>> {
-                    NotNan::new(self.powf(*n)).unwrap_not_nan(span)
-                }
-                .auto_call(log, span, arguments, expressions)
+            .auto_call(context, span, arguments, expressions),
+            "powf" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S,
+                       n: Number|
+             -> OperatorResult<S, Value<'a, S>> {
+                NotNan::new(self.powf(*n)).unwrap_not_nan(span)
             }
-            "recip" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "recip" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.recip()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "rem_euclid" => |_log: &mut RuntimeLog<S>,
+            .auto_call(context, span, arguments, expressions),
+            "rem_euclid" => |_context: &mut ExecutionContext<'a, S>,
                              span: &S,
                              rhs: Number|
              -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.rem_euclid(*rhs)).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "round" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "round" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.round()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "signum" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "signum" => |_context: &mut ExecutionContext<'a, S>,
+                         span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.signum()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "sin" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "sin" => |_context: &mut ExecutionContext<'a, S>,
+                      span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.sin()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "sin_cos" => |_log: &mut RuntimeLog<S>, _span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "sin_cos" => |_context: &mut ExecutionContext<'a, S>,
+                          _span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 let (sin, cos) = self.sin_cos();
                 let sin = NotNan::new(sin).unwrap_not_nan(span)?;
                 let cos = NotNan::new(cos).unwrap_not_nan(span)?;
 
                 Ok(List::from([sin, cos]).into())
             }
-            .auto_call(log, span, arguments, expressions),
-            "sinh" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "sinh" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.sinh()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "sqrt" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "sqrt" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.sqrt()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "tan" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "tan" => |_context: &mut ExecutionContext<'a, S>,
+                      span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.tan()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "tanh" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "tanh" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.tanh()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "trunc" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<'a, S>> {
+            .auto_call(context, span, arguments, expressions),
+            "trunc" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
                 NotNan::new(self.trunc()).unwrap_not_nan(span)
             }
-            .auto_call(log, span, arguments, expressions),
-            "to_measurement" => |_log: &mut RuntimeLog<S>,
+            .auto_call(context, span, arguments, expressions),
+            "to_measurement" => |_context: &mut ExecutionContext<'a, S>,
                                  span: &S,
                                  ty: SString|
              -> OperatorResult<S, Value<'a, S>> {
                 Measurement::from_number(span, *self, ty)
             }
-            .auto_call(log, span, arguments, expressions),
+            .auto_call(context, span, arguments, expressions),
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
     }

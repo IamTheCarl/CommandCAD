@@ -14,7 +14,13 @@ use super::{serializable::SerializableValue, NamedObject, Object, OperatorResult
 #[derive(Debug, Clone, PartialEq)]
 pub struct Structure<'a, S: Span> {
     type_name: S,
-    members: Rc<HashMap<String, Value<'a, S>>>,
+    pub members: Rc<HashMap<String, Value<'a, S>>>,
+}
+
+impl<'a, S: Span> Structure<'a, S> {
+    pub fn name(&self) -> &str {
+        self.type_name.as_str()
+    }
 }
 
 impl<'a, S: Span> Object<'a, S> for Structure<'a, S> {
@@ -297,9 +303,7 @@ impl<'a, S: Span> NamedObject for StructDefinition<'a, S> {
 #[cfg(test)]
 mod test {
     use crate::script::{
-        execution::{
-            expressions::run_expression, types::Number, ExecutionContext, ModuleScope, Stack,
-        },
+        execution::{expressions::run_expression, types::Number, ExecutionContext, ModuleScope},
         module::Module,
         parsing::Expression,
     };
@@ -322,10 +326,7 @@ mod test {
         assert!(log.is_empty());
 
         let module_scope = ModuleScope::new(&module);
-        let mut context = ExecutionContext {
-            stack: Stack::new(module_scope),
-            log: Default::default(),
-        };
+        let mut context = ExecutionContext::new(module_scope);
 
         context.stack.new_variable(
             &"two_part_struct",

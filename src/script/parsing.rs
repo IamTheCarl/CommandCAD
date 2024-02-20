@@ -40,6 +40,7 @@ pub trait Span:
     + std::hash::Hash
     + ToString
     + AsStr
+    + FromStr
 {
     fn chars(&self) -> impl Iterator<Item = char>;
 }
@@ -47,24 +48,56 @@ pub trait Span:
 pub trait AsStr {
     fn as_str(&self) -> &str;
 }
+
+pub trait FromStr {
+    fn from_str(string: &'static str) -> Self;
+}
+
 impl<'a> AsStr for &'a str {
     fn as_str(&self) -> &str {
         self
     }
 }
+
+impl<'a> FromStr for &'a str {
+    fn from_str(string: &'static str) -> Self {
+        string
+    }
+}
+
 impl<'a> AsStr for LocatedSpan<&'a str> {
     fn as_str(&self) -> &str {
         self.fragment()
     }
 }
+
+impl<'a> FromStr for LocatedSpan<&'a str> {
+    fn from_str(string: &'static str) -> Self {
+        LocatedSpan::new(string)
+    }
+}
+
 impl AsStr for imstr::ImString {
     fn as_str(&self) -> &str {
         self.as_str()
     }
 }
+
+impl FromStr for imstr::ImString {
+    fn from_str(string: &'static str) -> Self {
+        imstr::ImString::from(string)
+    }
+}
+
 impl AsStr for LocatedSpan<imstr::ImString> {
     fn as_str(&self) -> &str {
         self.fragment().as_str()
+    }
+}
+
+impl FromStr for LocatedSpan<imstr::ImString> {
+    fn from_str(string: &'static str) -> Self {
+        LocatedSpan::new(imstr::ImString::from(string))
     }
 }
 
@@ -108,7 +141,7 @@ pub enum RootElement<S: Span> {
     Import(Import<S>),
     Struct(Struct<S>),
     Sketch(Sketch<S>),
-    Widget(Widget<S>),
+    Solid(Solid<S>),
     Function(Function<S>),
 }
 
@@ -118,7 +151,7 @@ impl<S: Span> RootElement<S> {
             map(Import::parse, Self::Import),
             map(Struct::parse, Self::Struct),
             map(Sketch::parse, Self::Sketch),
-            map(Widget::parse, Self::Widget),
+            map(Solid::parse, Self::Solid),
             map(Function::parse, Self::Function),
         ))(input)
     }
@@ -154,7 +187,6 @@ impl<S: Span> Import<S> {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Struct<S: Span> {
-    pub starting_span: S,
     pub name: S,
     pub members: Vec<MemberVariable<S>>,
 }
@@ -162,7 +194,7 @@ pub struct Struct<S: Span> {
 impl<S: Span> Struct<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
-            pair(
+            preceded(
                 take_keyword("struct"),
                 pair(
                     delimited(space0, parse_name, space0),
@@ -173,8 +205,7 @@ impl<S: Span> Struct<S> {
                     ),
                 ),
             ),
-            |(starting_span, (name, assignments))| Self {
-                starting_span,
+            |(name, assignments)| Self {
                 name,
                 members: assignments,
             },
@@ -204,16 +235,16 @@ impl<S: Span> Sketch<S> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Widget<S: Span> {
+pub struct Solid<S: Span> {
     pub starting_span: S,
     pub named_block: NamedBlock<S>,
 }
 
-impl<S: Span> Widget<S> {
+impl<S: Span> Solid<S> {
     fn parse(input: S) -> VResult<S, Self> {
         map(
             pair(
-                terminated(take_keyword("widget"), space1),
+                terminated(take_keyword("solid"), space1),
                 cut(NamedBlock::parse),
             ),
             |(starting_span, named_block)| Self {
@@ -253,6 +284,7 @@ pub enum MemberVariableConstraint<S: Span> {
     Max(Litteral<S>),
     Enum(Vec<Litteral<S>>),
     Integer,
+    // TODO add the ability to constrain lists to a certain type, or set of types.
 }
 
 impl<S: Span> MemberVariableConstraint<S> {
@@ -985,6 +1017,11 @@ pub enum VariableType<S: Span> {
     Range,
     Struct(S),
     Measurement(S),
+    Cycle,
+    Region,
+    Sketch,
+    Surface,
+    Solid,
 }
 
 impl<S: Span> VariableType<S> {
@@ -997,6 +1034,11 @@ impl<S: Span> VariableType<S> {
                 value(Self::List, tag("List")),
                 value(Self::Boolean, tag("Boolean")),
                 value(Self::Range, tag("Range")),
+                value(Self::Cycle, tag("Cycle")),
+                value(Self::Region, tag("Region")),
+                value(Self::Sketch, tag("Sketch")),
+                value(Self::Surface, tag("Surface")),
+                value(Self::Solid, tag("Solid")),
                 map(
                     preceded(pair(take_keyword("struct"), space0), parse_name),
                     Self::Struct,
@@ -1015,6 +1057,11 @@ impl<S: Span> VariableType<S> {
             VariableType::Range => "Range".into(),
             VariableType::Struct(name) => format!("struct {}", name.as_str()).into(),
             VariableType::Measurement(name) => name.to_string().into(),
+            VariableType::Cycle => "Cycle".into(),
+            VariableType::Region => "Region".into(),
+            VariableType::Sketch => "Sketch".into(),
+            VariableType::Surface => "Surface".into(),
+            VariableType::Solid => "Solid".into(),
         }
     }
 }
@@ -3638,7 +3685,6 @@ mod test {
             Ok((
                 "",
                 Struct {
-                    starting_span: "struct",
                     name: "MyStruct",
                     members: vec![]
                 }
@@ -3650,7 +3696,6 @@ mod test {
             Ok((
                 "",
                 Struct {
-                    starting_span: "struct",
                     name: "MyStruct",
                     members: vec![MemberVariable {
                         name: "a",
@@ -3667,7 +3712,6 @@ mod test {
             Ok((
                 "",
                 Struct {
-                    starting_span: "struct",
                     name: "MyStruct",
                     members: vec![
                         MemberVariable {
@@ -3732,16 +3776,16 @@ mod test {
     }
 
     #[test]
-    fn widget() {
-        assert!(Widget::parse("widget my_widget() -> Length {}").is_err());
+    fn solid() {
+        assert!(Solid::parse("solid my_solid() -> Length {}").is_err());
         assert_eq!(
-            Widget::parse("widget my_widget() {}"),
+            Solid::parse("solid my_solid() {}"),
             Ok((
                 "",
-                Widget {
-                    starting_span: "widget",
+                Solid {
+                    starting_span: "solid",
                     named_block: NamedBlock {
-                        name: "my_widget",
+                        name: "my_solid",
                         parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
@@ -3830,7 +3874,6 @@ mod test {
             Ok((
                 "",
                 RootElement::Struct(Struct {
-                    starting_span: "struct",
                     name: "MyStruct",
                     members: vec![]
                 })
@@ -3854,15 +3897,15 @@ mod test {
             ))
         );
 
-        // Widget(Widget<S>),
+        // Solid(Solid<S>),
         assert_eq!(
-            RootElement::parse("widget my_widget() {}"),
+            RootElement::parse("solid my_solid() {}"),
             Ok((
                 "",
-                RootElement::Widget(Widget {
-                    starting_span: "widget",
+                RootElement::Solid(Solid {
+                    starting_span: "solid",
                     named_block: NamedBlock {
-                        name: "my_widget",
+                        name: "my_solid",
                         parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
@@ -3900,7 +3943,7 @@ mod test {
     
             /* My Sketch */
             sketch my_sketch() {}
-            widget my_widget() {}
+            solid my_solid() {}
             function my_function() -> Length {}
 "#
             ),
@@ -3909,7 +3952,6 @@ mod test {
                 FileAST {
                     root_elements: vec![
                         RootElement::Struct(Struct {
-                            starting_span: "struct",
                             name: "MyStruct",
                             members: vec![]
                         }),
@@ -3922,10 +3964,10 @@ mod test {
                                 block: Block { statements: vec![] }
                             },
                         }),
-                        RootElement::Widget(Widget {
-                            starting_span: "widget",
+                        RootElement::Solid(Solid {
+                            starting_span: "solid",
                             named_block: NamedBlock {
-                                name: "my_widget",
+                                name: "my_solid",
                                 parameter_span: "(",
                                 parameters: vec![],
                                 block: Block { statements: vec![] }

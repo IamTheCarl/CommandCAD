@@ -1,0 +1,16 @@
+
+solid cuboid(x: Length, y: Length, z: Length) {
+  let base_sketch = new_sketch(struct Polygon { points = [
+    [-x / 2., -y / 2.],
+    [x / 2., -y / 2.],
+    [x / 2., y / 2.],
+    [-x / 2., y / 2.]
+  ]});
+
+  base_sketch.sweep(global_xy_plane(), [0cm, 0cm, z])
+}
+
+// Further demos are not yet possible with the current limitations of the language.
+// The script has no concept of lifetime, meaning that the `update_shell` method used to modify the shells
+// of solids cannot be used. Something like a closure that isn't allowed to manipulate its outer environment
+// could fix this issue, but the parser rework I want to do will be necessary first.

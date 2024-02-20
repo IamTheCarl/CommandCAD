@@ -44,6 +44,13 @@ pub use range::Range;
 mod serializable;
 pub use serializable::SerializableValue;
 
+mod fornjot;
+pub use fornjot::{cycle::Cycle, region::Region, sketch::Sketch, solid::Solid, surface::Surface};
+
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
+    fornjot::register_globals(context)
+}
+
 pub type OperatorResult<S, R> = std::result::Result<R, Failure<S>>;
 
 fn unsupported_operation_message<'a, S: Span, R, O: Object<'a, S>>(
@@ -159,7 +166,7 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
     }
     fn method_call(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _context: &mut ExecutionContext<'a, S>,
         _span: &S,
         attribute: &S,
         _arguments: Vec<Value<'a, S>>,
@@ -216,6 +223,11 @@ pub enum Value<'a, S: Span> {
     String(SString),
     Range(Range),
     Measurement(Measurement),
+    Cycle,
+    Region,
+    Sketch,
+    Surface,
+    Solid,
 }
 
 impl<'a, S: Span> NamedObject for Value<'a, S> {

@@ -6,7 +6,7 @@ use uom::{
 };
 
 use crate::script::{
-    execution::Failure,
+    execution::{ExecutionContext, Failure},
     parsing::{self, Expression, VariableType},
     RuntimeLog, Span,
 };
@@ -376,19 +376,20 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
     }
     fn method_call(
         &self,
-        log: &mut RuntimeLog<S>,
+        context: &mut ExecutionContext<'a, S>,
         span: &S,
         attribute: &S,
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
     ) -> OperatorResult<S, Value<'a, S>> {
         match attribute.as_str() {
-            "to_number" => {
-                |_log: &mut RuntimeLog<S>, span: &S, ty: SString| -> OperatorResult<S, Value<S>> {
-                    self.to_number(span, ty.as_str())
-                }
-                .auto_call(log, span, arguments, expressions)
+            "to_number" => |_context: &mut ExecutionContext<'a, S>,
+                            span: &S,
+                            ty: SString|
+             -> OperatorResult<S, Value<S>> {
+                self.to_number(span, ty.as_str())
             }
+            .auto_call(context, span, arguments, expressions),
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
     }
@@ -635,10 +636,7 @@ mod test {
 
     #[test]
     fn conversions() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             run_expression(

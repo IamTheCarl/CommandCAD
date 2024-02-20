@@ -77,9 +77,9 @@ impl<S: Span> Module<S> {
             log,
             &root_elements,
             &mut callables,
-            || root_elements.widgets.iter(),
+            || root_elements.solids.iter(),
             |widget| widget.named_block.name.clone(),
-            |index| root_elements.widgets[index].named_block.name.clone(),
+            |index| root_elements.solids[index].named_block.name.clone(),
             CallableReference::Widget,
         );
 
@@ -108,7 +108,7 @@ impl<S: Span> Module<S> {
                 parsing::RootElement::Import(import) => imports.push(import),
                 parsing::RootElement::Struct(sstruct) => structs.push(sstruct),
                 parsing::RootElement::Sketch(sketch) => sketches.push(sketch),
-                parsing::RootElement::Widget(widget) => widgets.push(widget),
+                parsing::RootElement::Solid(widget) => widgets.push(widget),
                 parsing::RootElement::Function(function) => functions.push(function),
             }
         }
@@ -118,7 +118,7 @@ impl<S: Span> Module<S> {
             structs,
             functions,
             sketches,
-            widgets,
+            solids: widgets,
         })
     }
 
@@ -149,7 +149,7 @@ impl<S: Span> Module<S> {
                         root_elements.sketches[index].named_block.name.clone()
                     }
                     CallableReference::Widget(index) => {
-                        root_elements.widgets[index].named_block.name.clone()
+                        root_elements.solids[index].named_block.name.clone()
                     }
                 };
                 let new_span = get_span(index);
@@ -171,7 +171,7 @@ pub(super) struct RootElements<S: Span> {
     pub(super) structs: Vec<parsing::Struct<S>>,
     pub(super) functions: Vec<parsing::Function<S>>,
     pub(super) sketches: Vec<parsing::Sketch<S>>,
-    pub(super) widgets: Vec<parsing::Widget<S>>,
+    pub(super) solids: Vec<parsing::Solid<S>>,
 }
 
 impl<S: Span> RootElements<S> {
@@ -188,8 +188,8 @@ impl<S: Span> RootElements<S> {
         for sketch in self.sketches.iter() {
             Self::validate_named_block(log, &sketch.named_block);
         }
-        for widget in self.widgets.iter() {
-            Self::validate_named_block(log, &widget.named_block);
+        for solid in self.solids.iter() {
+            Self::validate_named_block(log, &solid.named_block);
         }
     }
 
@@ -270,7 +270,7 @@ mod test {
             import path::to::module;
             struct MyStruct {}
             sketch my_sketch() {}
-            widget my_widget() {}
+            solid my_solid() {}
             function my_function() -> Length {}
 "#;
 
@@ -295,7 +295,6 @@ mod test {
         assert_eq!(
             root.structs,
             [parsing::Struct {
-                starting_span: "struct",
                 name: "MyStruct",
                 members: vec![]
             }]
@@ -313,11 +312,11 @@ mod test {
             }]
         );
         assert_eq!(
-            root.widgets,
-            [parsing::Widget {
-                starting_span: "widget",
+            root.solids,
+            [parsing::Solid {
+                starting_span: "solid",
                 named_block: parsing::NamedBlock {
-                    name: "my_widget",
+                    name: "my_solid",
                     parameter_span: "(",
                     parameters: vec![],
                     block: parsing::Block { statements: vec![] }
@@ -348,16 +347,16 @@ mod test {
 
     #[test]
     fn validate_block_empty() {
-        assert_eq!(validate("widget MyWidget() {}"), []);
+        assert_eq!(validate("solid MySolid() {}"), []);
     }
 
     #[test]
     fn validate_block_tail_expressions() {
-        assert_eq!(validate("widget MyWidget() { let a = b; }"), []);
-        assert_eq!(validate("widget MyWidget() { let a = b }"), []);
-        assert_eq!(validate("widget MyWidget() { let a = b; let c = d }"), []);
+        assert_eq!(validate("solid MySolid() { let a = b; }"), []);
+        assert_eq!(validate("solid MySolid() { let a = b }"), []);
+        assert_eq!(validate("solid MySolid() { let a = b; let c = d }"), []);
         assert_eq!(
-            validate("widget MyWidget() { let a = b let c = d }"),
+            validate("solid MySolid() { let a = b let c = d }"),
             [Failure::UnclosedStatement("let"),]
         );
     }
@@ -365,29 +364,29 @@ mod test {
     #[test]
     fn validate_assignment_keyword_resurvation() {
         assert_eq!(
-            validate("widget MyWidget() { let break = b; }"),
+            validate("solid MySolid() { let break = b; }"),
             [Failure::ReservedKeyword("break", "break")]
         );
 
-        assert_eq!(validate("widget MyWidget() { let break_beat = b; }"), []);
+        assert_eq!(validate("solid MySolid() { let break_beat = b; }"), []);
     }
 
     #[test]
     fn validate_named_block_keyword_resurvation() {
         assert_eq!(
-            validate("widget break() { }"),
+            validate("solid break() { }"),
             [Failure::ReservedKeyword("break", "break")]
         );
     }
 
     #[test]
     fn validate_parameter_names_are_not_keywords() {
-        assert_eq!(validate("widget MyWidget() { }"), []);
+        assert_eq!(validate("solid MySolid() { }"), []);
 
-        assert_eq!(validate("widget MyWidget(okay: Length) { }"), []);
+        assert_eq!(validate("solid MySolid(okay: Length) { }"), []);
 
         assert_eq!(
-            validate("widget MyWidget(break: Length) { }"),
+            validate("solid MySolid(break: Length) { }"),
             [Failure::ReservedKeyword("break", "break")]
         );
     }
@@ -413,8 +412,8 @@ mod test {
 
     #[test]
     fn validate_no_duplicate_global_names() {
-        assert_eq!(validate("struct MyThing1 {} function MyThing2() -> Length {} sketch MyThing3() {} widget MyThing4() {}"), []);
-        assert_eq!(validate("struct MyThing {} function MyThing() -> Length {} sketch MyThing() {} widget MyThing() {}"), [ 
+        assert_eq!(validate("struct MyThing1 {} function MyThing2() -> Length {} sketch MyThing3() {} solid MyThing4() {}"), []);
+        assert_eq!(validate("struct MyThing {} function MyThing() -> Length {} sketch MyThing() {} solid MyThing() {}"), [ 
 	    Failure::DuplicateGlobal("MyThing", "MyThing"),
 	    Failure::DuplicateGlobal("MyThing", "MyThing"),
 	    Failure::DuplicateGlobal("MyThing", "MyThing"),

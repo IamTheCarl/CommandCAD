@@ -1,0 +1,238 @@
+use fj::core::{
+    objects::{Region as FornjotRegion, Sketch as FornjotSketch},
+    operations::{build::BuildRegion, insert::Insert, sweep::SweepSketch},
+    storage::Handle,
+};
+
+use crate::script::{
+    execution::{
+        types::{
+            fornjot::vector_from_list,
+            function::{AutoCall, IntoBuiltinFunction},
+            List, NamedObject, Object, OperatorResult, Value,
+        },
+        ExecutionContext, Failure,
+    },
+    parsing::{self, VariableType},
+    Span,
+};
+
+use super::{
+    circle::unwrap_circle, polygon::unwrap_polygon, region::Region, solid::Solid, surface::Surface,
+    unpack_dynamic_length_list,
+};
+
+pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
+    context.stack.new_variable_str(
+        "new_sketch",
+        (|context: &mut ExecutionContext<'a, S>,
+          span: &S,
+          argument: Value<'a, S>|
+         -> OperatorResult<S, Value<'a, S>> {
+            match argument {
+                Value::List(regions) => {
+                    let regions = unpack_dynamic_length_list::<S, Region>(span, regions)?
+                        .map(|region| region.handle);
+                    let handle = FornjotSketch::new(regions)
+                        .insert(&mut context.global_resources.fornjot_services);
+
+                    Ok(Sketch { handle }.into())
+                }
+                Value::Structure(configuration) => match configuration.name() {
+                    "Circle" => {
+                        let (center, radius) = unwrap_circle(context, span, configuration)?;
+                        let region = FornjotRegion::circle(
+                            center,
+                            radius,
+                            &mut context.global_resources.fornjot_services,
+                        )
+                        .insert(&mut context.global_resources.fornjot_services);
+
+                        let handle = FornjotSketch::new([region])
+                            .insert(&mut context.global_resources.fornjot_services);
+
+                        Ok(Sketch { handle }.into())
+                    }
+                    "Polygon" => {
+                        let points = unwrap_polygon(context, span, configuration)?;
+
+                        let polygon = FornjotRegion::polygon(
+                            points,
+                            &mut context.global_resources.fornjot_services,
+                        );
+                        let polygon = polygon;
+                        let region = polygon.insert(&mut context.global_resources.fornjot_services);
+
+                        let handle = FornjotSketch::new([region])
+                            .insert(&mut context.global_resources.fornjot_services);
+
+                        Ok(Sketch { handle }.into())
+                    }
+                    // TODO sketch from an SVG file.
+                    _ => Err(Failure::ExpectedGot(
+                        span.clone(),
+                        "Empty, Circle, or Polygon".into(),
+                        configuration.name().to_string().into(),
+                    )),
+                },
+                value => Err(Failure::ExpectedGot(
+                    span.clone(),
+                    "Circle, Polygon, or a List of regions".into(),
+                    value.type_name(),
+                )),
+            }
+        })
+        .into_builtin_function()
+        .into(),
+    )
+}
+
+#[derive(Clone)]
+pub struct Sketch {
+    pub handle: Handle<FornjotSketch>,
+}
+
+impl<'a, S: Span> Object<'a, S> for Sketch {
+    fn matches_type(&self, ty: &VariableType<S>) -> bool {
+        matches!(ty, VariableType::Sketch)
+    }
+
+    fn method_call(
+        &self,
+        context: &mut ExecutionContext<'a, S>,
+        span: &S,
+        attribute: &S,
+        arguments: Vec<Value<'a, S>>,
+        spans: &[parsing::Expression<S>],
+    ) -> OperatorResult<S, Value<'a, S>> {
+        match attribute.as_str() {
+            "sweep" => |context: &mut ExecutionContext<'a, S>,
+                        span: &S,
+                        surface: Surface,
+                        path: List<'a, S>|
+             -> OperatorResult<S, Value<S>> {
+                let surface = surface.handle;
+                let path = vector_from_list::<S, 3>(
+                    span,
+                    context.global_resources.convert_to_fornjot_units,
+                    path,
+                )?;
+
+                let solid = self
+                    .handle
+                    .sweep_sketch(
+                        surface,
+                        path,
+                        &mut context.global_resources.fornjot_services,
+                    )
+                    .insert(&mut context.global_resources.fornjot_services);
+
+                Ok(Solid::from(solid).into())
+            }
+            .auto_call(context, span, arguments, spans),
+            _ => Err(Failure::UnknownAttribute(attribute.clone())),
+        }
+    }
+}
+
+impl NamedObject for Sketch {
+    fn static_type_name() -> &'static str {
+        "Sketch"
+    }
+}
+
+impl From<Handle<FornjotSketch>> for Sketch {
+    fn from(handle: Handle<FornjotSketch>) -> Self {
+        Self { handle }
+    }
+}
+
+impl PartialEq for Sketch {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
+
+impl std::fmt::Debug for Sketch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sketch").finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::script::{execution::expressions::run_expression, parsing::Expression};
+
+    use super::*;
+
+    #[test]
+    fn construct_circle() {
+        let mut context = ExecutionContext::<&'static str>::default();
+
+        assert!(matches!(
+            run_expression(
+                &mut context,
+                &Expression::parse(
+                    "new_sketch(struct Circle { center = [1mm, 2mm], radius = 3mm })"
+                )
+                .unwrap()
+                .1,
+            ),
+            Ok(Value::Sketch(_))
+        ));
+    }
+
+    #[test]
+    fn construct_polygon() {
+        let mut context = ExecutionContext::<&'static str>::default();
+
+        assert!(matches!(
+            run_expression(
+                &mut context,
+                &Expression::parse(
+                    "new_sketch(struct Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
+                )
+                .unwrap()
+                .1,
+            ),
+            Ok(Value::Sketch(_))
+        ));
+    }
+
+    #[test]
+    fn construct_from_regions() {
+        let mut context = ExecutionContext::<&'static str>::default();
+
+        assert!(matches!(
+            run_expression(
+                &mut context,
+                &Expression::parse(
+                    "new_sketch([new_region(struct Circle { center = [1mm, 2mm], radius = 3mm }),
+new_region(struct Circle { center = [4mm, 2mm], radius = 3mm })])"
+                )
+                .unwrap()
+                .1,
+            ),
+            Ok(Value::Sketch(_))
+        ));
+    }
+
+    #[test]
+    fn sweep() {
+        let mut context = ExecutionContext::<&'static str>::default();
+
+        assert!(matches!(
+            run_expression(
+                &mut context,
+                &Expression::parse(
+                    "new_sketch(struct Circle { center = [1mm, 2mm], radius = 3mm }).sweep(global_xz_plane(), [0cm, 1cm, 0cm])"
+                )
+                .unwrap()
+                .1,
+            ),
+            Ok(Value::Solid(_))
+        ));
+    }
+
+    // TODO validation failure test (Fornjot failure validation should result in a Failure type when constructing an invalid region)
+}

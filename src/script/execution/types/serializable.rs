@@ -172,21 +172,17 @@ mod test {
         execution::{
             expressions::run_expression,
             types::{Measurement, Object, SString},
-            ModuleScope, Stack,
+            ModuleScope,
         },
         module::Module,
         parsing::Expression,
-        RuntimeLog,
     };
 
     use super::*;
 
     #[test]
     fn deserialize_boolean() {
-        let mut context = ExecutionContext::<&str> {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             serde_yaml::from_str::<SerializableValue>("true")
@@ -204,10 +200,7 @@ mod test {
 
     #[test]
     fn serialize_boolean() {
-        let mut context = ExecutionContext::<&str> {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let boolean: Value<&'static str> = true.into();
         assert_eq!(
@@ -224,10 +217,7 @@ mod test {
 
     #[test]
     fn deserialize_number() {
-        let mut context = ExecutionContext::<&str> {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             serde_yaml::from_str::<SerializableValue>("42")
@@ -239,10 +229,7 @@ mod test {
 
     #[test]
     fn serialize_number() {
-        let mut context = ExecutionContext::<&str> {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let value: Value<&'static str> = Number::new(42.0).unwrap().into();
         assert_eq!(
@@ -265,10 +252,7 @@ mod test {
         assert!(log.is_empty());
 
         let module_scope = ModuleScope::new(&module);
-        let mut context = ExecutionContext {
-            stack: Stack::new(module_scope),
-            log: RuntimeLog::default(),
-        };
+        let mut context = ExecutionContext::new(module_scope);
 
         let struct_def = r#"
                    type: MyStruct
@@ -348,10 +332,7 @@ mod test {
         assert!(log.is_empty());
 
         let module_scope = ModuleScope::new(&module);
-        let mut context = ExecutionContext {
-            stack: Stack::new(module_scope),
-            log: RuntimeLog::default(),
-        };
+        let mut context = ExecutionContext::new(module_scope);
 
         let value: Value<&'static str> = run_expression(
             &mut context,
@@ -374,10 +355,7 @@ mod test {
     fn deserialize_list() {
         let list_def = r#"[1, true, "some text"]"#;
 
-        let mut context = ExecutionContext::<&str> {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let list = serde_yaml::from_str::<SerializableValue>(list_def).unwrap();
 
@@ -395,10 +373,7 @@ mod test {
 
     #[test]
     fn serialize_list() {
-        let mut context = ExecutionContext::<&str> {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let value: Value<&'static str> = List::from([
             Number::new(1.0).unwrap().into(),
@@ -418,10 +393,7 @@ mod test {
 
     #[test]
     fn deserialize_string() {
-        let mut context = ExecutionContext::<&str> {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             serde_yaml::from_str::<SerializableValue>("text")
@@ -433,10 +405,7 @@ mod test {
 
     #[test]
     fn serialize_string() {
-        let mut context = ExecutionContext::<&str> {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         let value: Value<&'static str> = SString::from("This is a test".to_string()).into();
         assert_eq!(
@@ -447,10 +416,7 @@ mod test {
 
     #[test]
     fn deserialize_measurement() {
-        let mut context = ExecutionContext::<&str> {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             serde_yaml::from_str::<SerializableValue>("42mm")
@@ -474,10 +440,7 @@ mod test {
 
     #[test]
     fn deserialize_default() {
-        let mut context = ExecutionContext::<&str> {
-            log: Default::default(),
-            stack: Default::default(),
-        };
+        let mut context = ExecutionContext::default();
 
         assert_eq!(
             serde_yaml::from_str::<SerializableValue>("default")

@@ -1,0 +1,16 @@
+
+sketch circle(diameter: Length) {
+  new_sketch(struct Circle { center = [0mm, 0mm], radius = diameter / 2 })
+}
+
+sketch square(width: Length) {
+  new_sketch(struct Polygon { points = [[0m, 0m], [0m, width], [width, width], [width, 0m]] })
+}
+
+sketch square_with_circle(square_width: Length, hole_diameter: Length) {
+  new_sketch([
+    new_region(struct Circle { center = [0m, 0m], radius = hole_diameter / 2 }),
+    new_region(struct Polygon { points = [[hole_diameter, 0m], [0m, width], [width, width], [width, 0m]] })
+  ])
+}
+

@@ -75,8 +75,12 @@ impl<'a, S: Span> List<'a, S> {
         self.vector.len()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Value<'a, S>> {
+    pub fn iter(&self) -> impl Iterator<Item = &Value<'a, S>> + Clone {
         self.vector.iter()
+    }
+
+    pub fn consume(self) -> impl Iterator<Item = Value<'a, S>> + Clone {
+        Rc::unwrap_or_clone(self.vector).into_iter()
     }
 }
 
@@ -189,7 +193,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
 
     fn method_call(
         &self,
-        log: &mut RuntimeLog<S>,
+        context: &mut ExecutionContext<'a, S>,
         span: &S,
         attribute: &S,
         arguments: Vec<Value<'a, S>>,
@@ -197,7 +201,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
     ) -> OperatorResult<S, Value<'a, S>> {
         match attribute.as_str() {
             "append" => {
-                |_log: &mut RuntimeLog<S>,
+                |_context: &mut ExecutionContext<'a, S>,
                  _span: &S,
                  other: List<'a, S>|
                  -> OperatorResult<S, Value<S>> {
@@ -211,19 +215,21 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
                     }
                     .into())
                 }
-                .auto_call(log, span, arguments, expressions)
+                .auto_call(context, span, arguments, expressions)
             }
-            "dedup" => |_log: &mut RuntimeLog<S>, _span: &S| -> OperatorResult<S, Value<S>> {
-                let mut vector = self.unwrap_or_clone();
-                vector.dedup();
+            "dedup" => {
+                |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    let mut vector = self.unwrap_or_clone();
+                    vector.dedup();
 
-                Ok(Self {
-                    vector: Rc::new(vector),
+                    Ok(Self {
+                        vector: Rc::new(vector),
+                    }
+                    .into())
                 }
-                .into())
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(log, span, arguments, expressions),
-            "insert" => |_log: &mut RuntimeLog<S>,
+            "insert" => |_context: &mut ExecutionContext<'a, S>,
                          span: &S,
                          index: Number,
                          value: Value<'a, S>|
@@ -237,16 +243,20 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
                 }
                 .into())
             }
-            .auto_call(log, span, arguments, expressions),
-            "is_empty" => |_log: &mut RuntimeLog<S>, _span: &S| -> OperatorResult<S, Value<S>> {
-                Ok(self.vector.is_empty().into())
+            .auto_call(context, span, arguments, expressions),
+            "is_empty" => {
+                |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(self.vector.is_empty().into())
+                }
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(log, span, arguments, expressions),
-            "len" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<S>> {
-                Number::new(self.vector.len() as f64).unwrap_not_nan(span)
+            "len" => {
+                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Number::new(self.vector.len() as f64).unwrap_not_nan(span)
+                }
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(log, span, arguments, expressions),
-            "push" => |_log: &mut RuntimeLog<S>,
+            "push" => |_context: &mut ExecutionContext<'a, S>,
                        _span: &S,
                        other: Value<'a, S>|
              -> OperatorResult<S, Value<S>> {
@@ -258,84 +268,93 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
                 }
                 .into())
             }
-            .auto_call(log, span, arguments, expressions),
-            "remove" => {
-                |_log: &mut RuntimeLog<S>, span: &S, index: Number| -> OperatorResult<S, Value<S>> {
-                    let index = self.internalize_index(span, index)?;
-
-                    let mut vector = self.unwrap_or_clone();
-                    vector.remove(index);
-
-                    Ok(Self {
-                        vector: Rc::new(vector),
-                    }
-                    .into())
-                }
-                .auto_call(log, span, arguments, expressions)
-            }
-            "contains" => |_log: &mut RuntimeLog<S>,
-                           _span: &S,
-                           search: Value<'a, S>|
+            .auto_call(context, span, arguments, expressions),
+            "remove" => |_context: &mut ExecutionContext<'a, S>,
+                         span: &S,
+                         index: Number|
              -> OperatorResult<S, Value<S>> {
-                Ok(self.vector.contains(&search).into())
-            }
-            .auto_call(log, span, arguments, expressions),
-            "last" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<S>> {
-                let last = self.vector.last();
+                let index = self.internalize_index(span, index)?;
 
-                if let Some(last) = last {
-                    Ok(last.clone())
-                } else {
-                    Err(Failure::ListIsEmpty(span.clone()))
-                }
-            }
-            .auto_call(log, span, arguments, expressions),
-            "first" => |_log: &mut RuntimeLog<S>, span: &S| -> OperatorResult<S, Value<S>> {
-                let first = self.vector.first();
-
-                if let Some(first) = first {
-                    Ok(first.clone())
-                } else {
-                    Err(Failure::ListIsEmpty(span.clone()))
-                }
-            }
-            .auto_call(log, span, arguments, expressions),
-            "reverse" => |_log: &mut RuntimeLog<S>, _span: &S| -> OperatorResult<S, Value<S>> {
                 let mut vector = self.unwrap_or_clone();
-                vector.reverse();
+                vector.remove(index);
 
                 Ok(Self {
                     vector: Rc::new(vector),
                 }
                 .into())
             }
-            .auto_call(log, span, arguments, expressions),
-            "rotate_left" => {
-                |_log: &mut RuntimeLog<S>, _span: &S, mid: Number| -> OperatorResult<S, Value<S>> {
-                    let mid = mid.trunc() as usize % self.vector.len();
+            .auto_call(context, span, arguments, expressions),
+            "contains" => |_context: &mut ExecutionContext<'a, S>,
+                           _span: &S,
+                           search: Value<'a, S>|
+             -> OperatorResult<S, Value<S>> {
+                Ok(self.vector.contains(&search).into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "last" => {
+                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    let last = self.vector.last();
+
+                    if let Some(last) = last {
+                        Ok(last.clone())
+                    } else {
+                        Err(Failure::ListIsEmpty(span.clone()))
+                    }
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "first" => {
+                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    let first = self.vector.first();
+
+                    if let Some(first) = first {
+                        Ok(first.clone())
+                    } else {
+                        Err(Failure::ListIsEmpty(span.clone()))
+                    }
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "reverse" => {
+                |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
                     let mut vector = self.unwrap_or_clone();
-                    vector.rotate_left(mid);
+                    vector.reverse();
 
                     Ok(Self {
                         vector: Rc::new(vector),
                     }
                     .into())
                 }
-                .auto_call(log, span, arguments, expressions)
+                .auto_call(context, span, arguments, expressions)
             }
-            "rotate_right" => {
-                |_log: &mut RuntimeLog<S>, _span: &S, mid: Number| -> OperatorResult<S, Value<S>> {
-                    let mid = mid.trunc() as usize % self.vector.len();
-                    let mut vector = self.unwrap_or_clone();
-                    vector.rotate_right(mid);
+            "rotate_left" => |_context: &mut ExecutionContext<'a, S>,
+                              _span: &S,
+                              mid: Number|
+             -> OperatorResult<S, Value<S>> {
+                let mid = mid.trunc() as usize % self.vector.len();
+                let mut vector = self.unwrap_or_clone();
+                vector.rotate_left(mid);
 
-                    Ok(Self {
-                        vector: Rc::new(vector),
-                    }
-                    .into())
+                Ok(Self {
+                    vector: Rc::new(vector),
                 }
-                .auto_call(log, span, arguments, expressions)
+                .into())
             }
+            .auto_call(context, span, arguments, expressions),
+            "rotate_right" => |_context: &mut ExecutionContext<'a, S>,
+                               _span: &S,
+                               mid: Number|
+             -> OperatorResult<S, Value<S>> {
+                let mid = mid.trunc() as usize % self.vector.len();
+                let mut vector = self.unwrap_or_clone();
+                vector.rotate_right(mid);
+
+                Ok(Self {
+                    vector: Rc::new(vector),
+                }
+                .into())
+            }
+            .auto_call(context, span, arguments, expressions),
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
     }
@@ -369,11 +388,7 @@ mod test {
 
     #[test]
     fn index() {
-        let mut context = ExecutionContext {
-            log: Default::default(),
-            stack: Default::default(),
-        };
-
+        let mut context = ExecutionContext::default();
         assert_eq!(
             run_expression(&mut context, &Expression::parse("[1, 2, 3][0]").unwrap().1),
             Ok(Number::new(1.0).unwrap().into())
