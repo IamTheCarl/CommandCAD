@@ -23,8 +23,7 @@ use crate::script::execution::types::NoneType;
 use self::types::{validate_assignment_type, Measurement};
 
 use super::{
-    module::Module,
-    parsing::{self, Block, NamedBlock, VariableType},
+    parsing::{self, Block, NamedBlock},
     RuntimeLog, Span,
 };
 
@@ -35,7 +34,9 @@ use types::{StructDefinition, UserFunction, Value};
 
 mod expressions;
 mod failure_message;
+mod module;
 pub mod statements;
+pub use module::Module;
 
 pub use failure_message::Failure;
 
@@ -104,29 +105,40 @@ impl<'a, S: Span> Stack<'a, S> {
                 name.into(),
                 UserFunction {
                     block: &function.named_block,
-                    return_type: &function.return_type,
+                    signature: function.signature.clone(),
                 }
                 .into(),
             );
         }
 
-        for (name, function) in module_scope.sketches {
+        for (name, task) in module_scope.tasks {
             root_scope.variables.insert(
                 name.into(),
                 UserFunction {
-                    block: &function.named_block,
-                    return_type: &VariableType::Sketch,
+                    block: &task.named_block,
+                    signature: task.signature.clone(),
                 }
                 .into(),
             );
         }
 
-        for (name, function) in module_scope.solids {
+        for (name, sketch) in module_scope.sketches {
             root_scope.variables.insert(
                 name.into(),
                 UserFunction {
-                    block: &function.named_block,
-                    return_type: &VariableType::Solid,
+                    block: &sketch.named_block,
+                    signature: sketch.signature.clone(),
+                }
+                .into(),
+            );
+        }
+
+        for (name, solid) in module_scope.solids {
+            root_scope.variables.insert(
+                name.into(),
+                UserFunction {
+                    block: &solid.named_block,
+                    signature: solid.signature.clone(),
                 }
                 .into(),
             );
@@ -153,7 +165,6 @@ impl<'a, S: Span> Stack<'a, S> {
     }
 
     // TODO Recommending similar named variables would help users to notice typos.
-
     pub fn get_variable(&self, name: &S) -> std::result::Result<&Value<'a, S>, Failure<S>> {
         self.get_variable_str(name, name.as_str())
     }
@@ -226,6 +237,7 @@ impl<'a, S: Span> Stack<'a, S> {
 pub struct ModuleScope<'a, S: Span> {
     structs: HashMap<String, &'a parsing::Struct<S>>,
     functions: HashMap<String, &'a parsing::Function<S>>,
+    tasks: HashMap<String, &'a parsing::Task<S>>,
     sketches: HashMap<String, &'a parsing::Sketch<S>>,
     solids: HashMap<String, &'a parsing::Solid<S>>,
 }
@@ -248,6 +260,13 @@ impl<'a, S: Span> ModuleScope<'a, S> {
             .map(|function| (function.named_block.name.to_string(), function))
             .collect();
 
+        let tasks = module
+            .root_elements
+            .tasks
+            .iter()
+            .map(|task| (task.named_block.name.to_string(), task))
+            .collect();
+
         let sketches = module
             .root_elements
             .sketches
@@ -265,6 +284,7 @@ impl<'a, S: Span> ModuleScope<'a, S> {
         Self {
             structs,
             functions,
+            tasks,
             sketches,
             solids,
         }
@@ -457,7 +477,6 @@ mod test {
         execution::{
             expressions::run_expression, run_block, types::Number, ExecutionContext, ModuleScope,
         },
-        module::Module,
         parsing::Expression,
     };
 

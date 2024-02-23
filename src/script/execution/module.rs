@@ -20,7 +20,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 
-use super::{execution::Failure, parsing};
+use super::{parsing, Failure};
 use parsing::Span;
 
 const RESERVED_KEYWORDS: &[&str] = &[
@@ -118,6 +118,7 @@ impl<S: Span> Module<S> {
         let mut imports = Vec::new();
         let mut structs = Vec::new();
         let mut functions = Vec::new();
+        let mut tasks = Vec::new();
         let mut sketches = Vec::new();
         let mut widgets = Vec::new();
 
@@ -127,6 +128,7 @@ impl<S: Span> Module<S> {
                 parsing::RootElement::Struct(sstruct) => structs.push(sstruct),
                 parsing::RootElement::Sketch(sketch) => sketches.push(sketch),
                 parsing::RootElement::Solid(widget) => widgets.push(widget),
+                parsing::RootElement::Task(task) => tasks.push(task),
                 parsing::RootElement::Function(function) => functions.push(function),
             }
         }
@@ -135,6 +137,7 @@ impl<S: Span> Module<S> {
             imports,
             structs,
             functions,
+            tasks,
             sketches,
             solids: widgets,
         })
@@ -188,6 +191,7 @@ pub(super) struct RootElements<S: Span> {
     pub(super) imports: Vec<parsing::Import<S>>,
     pub(super) structs: Vec<parsing::Struct<S>>,
     pub(super) functions: Vec<parsing::Function<S>>,
+    pub(super) tasks: Vec<parsing::Task<S>>,
     pub(super) sketches: Vec<parsing::Sketch<S>>,
     pub(super) solids: Vec<parsing::Solid<S>>,
 }
@@ -202,6 +206,9 @@ impl<S: Span> RootElements<S> {
         }
         for function in self.functions.iter() {
             Self::validate_named_block(log, &function.named_block);
+        }
+        for task in self.tasks.iter() {
+            Self::validate_named_block(log, &task.named_block);
         }
         for sketch in self.sketches.iter() {
             Self::validate_named_block(log, &sketch.named_block);
@@ -282,6 +289,10 @@ impl<S: Span> RootElements<S> {
 
 #[cfg(test)]
 mod test {
+    use std::rc::Rc;
+
+    use crate::script::parsing::{FunctionSignature, VariableType};
+
     use super::*;
 
     const TEST_AST_CODE: &str = r#"
@@ -327,6 +338,7 @@ mod test {
                     parameters: vec![],
                     block: parsing::Block { statements: vec![] }
                 },
+                signature: Rc::new(FunctionSignature::Sketch { arguments: vec![] }),
             }]
         );
         assert_eq!(
@@ -339,8 +351,12 @@ mod test {
                     parameters: vec![],
                     block: parsing::Block { statements: vec![] }
                 },
+                signature: Rc::new(FunctionSignature::Solid { arguments: vec![] }),
             }]
         );
+
+        // TODO test tasks.
+
         assert_eq!(
             root.functions,
             [parsing::Function {
@@ -351,7 +367,10 @@ mod test {
                     parameters: vec![],
                     block: parsing::Block { statements: vec![] }
                 },
-                return_type: parsing::VariableType::Measurement("Length")
+                signature: Rc::new(FunctionSignature::Function {
+                    return_type: Box::new(VariableType::Measurement("Length")),
+                    arguments: vec![]
+                }),
             }]
         );
     }

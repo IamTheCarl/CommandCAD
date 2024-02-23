@@ -26,7 +26,7 @@ use crate::script::{
         types::{List, OperatorResult, StructDefinition, Structure},
         ExecutionContext, Failure,
     },
-    parsing::{self, MemberVariable, VariableType},
+    parsing::{self, MemberVariable, MemberVariableType, VariableType},
 };
 
 use super::{point_from_list, unpack_dynamic_length_list};
@@ -39,9 +39,11 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
                 name: S::from_str("Polygon"),
                 members: vec![MemberVariable {
                     name: S::from_str("points"),
-                    ty: VariableType::List,
-                    constraints: None,
-                    default_value: None,
+                    ty: MemberVariableType {
+                        ty: VariableType::List,
+                        constraints: None,
+                        default_value: None,
+                    },
                 }],
             })),
         }

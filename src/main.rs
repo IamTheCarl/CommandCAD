@@ -46,7 +46,7 @@ fn run(run_args: arguments::RunArgs) {
     if let Err(error) = trampoline(
         run_args.script,
         run_args.arguments,
-        |runtime, arguments| runtime.run_function(&run_args.task_name, arguments),
+        |runtime, arguments| runtime.run_task(&run_args.task_name, arguments),
         |value, mut output| {
             match run_args.output_format {
                 arguments::TaskOutputFormat::Yaml => serde_yaml::to_writer(&mut output, &value)

@@ -56,7 +56,7 @@ impl<S: Span> Struct<S> {
 #[cfg(test)]
 mod test {
     use crate::script::parsing::member_variable::{
-        MemberVariableConstraint, MemberVariableConstraintList,
+        MemberVariableConstraint, MemberVariableConstraintList, MemberVariableType,
     };
     use crate::script::parsing::{Litteral, VariableType};
 
@@ -83,9 +83,11 @@ mod test {
                     name: "MyStruct",
                     members: vec![MemberVariable {
                         name: "a",
-                        ty: VariableType::Measurement("Length"),
-                        constraints: None,
-                        default_value: None
+                        ty: MemberVariableType {
+                            ty: VariableType::Measurement("Length"),
+                            constraints: None,
+                            default_value: None
+                        }
                     }]
                 }
             ))
@@ -100,17 +102,21 @@ mod test {
                     members: vec![
                         MemberVariable {
                             name: "a",
-                            ty: VariableType::Measurement("Length"),
-                            constraints: None,
-                            default_value: None
+                            ty: MemberVariableType {
+                                ty: VariableType::Measurement("Length"),
+                                constraints: None,
+                                default_value: None
+                            }
                         },
                         MemberVariable {
                             name: "b",
-                            ty: VariableType::Measurement("Angle"),
-                            constraints: Some(MemberVariableConstraintList {
-                                constraints: vec![MemberVariableConstraint::Integer]
-                            }),
-                            default_value: Some(Litteral::Boolean("true", true))
+                            ty: MemberVariableType {
+                                ty: VariableType::Measurement("Angle"),
+                                constraints: Some(MemberVariableConstraintList {
+                                    constraints: vec![MemberVariableConstraint::Integer]
+                                }),
+                                default_value: Some(Litteral::Boolean("true", true))
+                            }
                         }
                     ]
                 }

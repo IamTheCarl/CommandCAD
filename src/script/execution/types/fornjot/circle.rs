@@ -26,7 +26,7 @@ use crate::script::{
         types::{List, Measurement, OperatorResult, StructDefinition, Structure},
         ExecutionContext,
     },
-    parsing::{self, MemberVariable, VariableType},
+    parsing::{self, MemberVariable, MemberVariableType, VariableType},
 };
 
 use super::{point_from_list, scalar_from_measurement};
@@ -40,15 +40,19 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
                 members: vec![
                     MemberVariable {
                         name: S::from_str("center"),
-                        ty: VariableType::List,
-                        constraints: None,
-                        default_value: None,
+                        ty: MemberVariableType {
+                            ty: VariableType::List,
+                            constraints: None,
+                            default_value: None,
+                        },
                     },
                     MemberVariable {
                         name: S::from_str("radius"),
-                        ty: VariableType::Measurement(S::from_str("Length")),
-                        constraints: None,
-                        default_value: None,
+                        ty: MemberVariableType {
+                            ty: VariableType::Measurement(S::from_str("Length")),
+                            constraints: None,
+                            default_value: None,
+                        },
                     },
                 ],
             })),

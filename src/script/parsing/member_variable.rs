@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 /*
  * Copyright 2024 James Carl
  * AGPL-3.0-only or AGPL-3.0-or-later
@@ -25,7 +27,9 @@ use nom::{
     sequence::{delimited, pair, preceded, terminated, tuple},
 };
 
-use super::{parse_name, space0, take_keyword, Litteral, Span, VResult, VariableType};
+use super::{
+    parse_name, space0, take_keyword, IteratorFormatter, Litteral, Span, VResult, VariableType,
+};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum MemberVariableConstraint<S: Span> {
@@ -70,6 +74,39 @@ impl<S: Span> MemberVariableConstraint<S> {
     }
 }
 
+/// Display a litteral, but is limited and can only display litterals that do not require runtime evaluation.
+struct DisplayLitteral<'a, S: Span>(&'a Litteral<S>);
+
+impl<S: Span> Display for DisplayLitteral<'_, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Litteral::Measurement(_measurement) => write!(f, "Measurement"),
+            Litteral::Number(number) => write!(f, "{}", number),
+            Litteral::String(string) => write!(f, "\"{}\"", string.value.as_str()),
+            Litteral::List(_list) => write!(f, "[...]"),
+            Litteral::Boolean(_span, value) => write!(f, "{}", value),
+            Litteral::Default(_span) => write!(f, "default"),
+        }
+    }
+}
+
+impl<S: Span> Display for MemberVariableConstraint<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MemberVariableConstraint::Min(min) => write!(f, "min({})", DisplayLitteral(min)),
+            MemberVariableConstraint::Max(max) => write!(f, "max({})", DisplayLitteral(max)),
+            MemberVariableConstraint::Enum(enumeration) => {
+                write!(
+                    f,
+                    "enum({})",
+                    IteratorFormatter(enumeration.iter().map(|l| DisplayLitteral(l)))
+                )
+            }
+            MemberVariableConstraint::Integer => write!(f, "Integer"),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MemberVariableConstraintList<S: Span> {
     pub constraints: Vec<MemberVariableConstraint<S>>,
@@ -95,11 +132,59 @@ impl<S: Span> MemberVariableConstraintList<S> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct MemberVariable<S: Span> {
-    pub name: S,
+pub struct MemberVariableType<S: Span> {
     pub ty: VariableType<S>,
     pub constraints: Option<MemberVariableConstraintList<S>>,
     pub default_value: Option<Litteral<S>>,
+}
+
+impl<S: Span> MemberVariableType<S> {
+    pub fn parse(input: S) -> VResult<S, Self> {
+        map(
+            tuple((
+                opt(terminated(MemberVariableConstraintList::parse, space0)),
+                VariableType::parse,
+                opt(preceded(
+                    delimited(space0, nom_char('='), space0),
+                    Litteral::parse,
+                )),
+            )),
+            |(constraints, ty, default_value)| Self {
+                constraints,
+                ty,
+                default_value,
+            },
+        )(input)
+    }
+}
+
+impl<S: Span> Display for MemberVariableType<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (self.constraints.as_ref(), self.default_value.is_some()) {
+            (None, false) => write!(f, "{}", self.ty),
+            (Some(constraints), false) => {
+                write!(
+                    f,
+                    "#[{}] {}",
+                    IteratorFormatter(constraints.constraints.iter()),
+                    self.ty
+                )
+            }
+            (None, true) => write!(f, "{} = default", self.ty),
+            (Some(constraints), true) => write!(
+                f,
+                "#[{}] {} = default",
+                IteratorFormatter(constraints.constraints.iter(),),
+                self.ty
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct MemberVariable<S: Span> {
+    pub name: S,
+    pub ty: MemberVariableType<S>,
 }
 
 impl<S: Span> MemberVariable<S> {
@@ -115,12 +200,42 @@ impl<S: Span> MemberVariable<S> {
                 )),
             )),
             |(constraints, name, ty, default_value)| Self {
-                constraints,
+                ty: MemberVariableType {
+                    constraints,
+                    ty,
+                    default_value,
+                },
                 name,
-                ty,
-                default_value,
             },
         )(input)
+    }
+}
+
+impl<S: Span> Display for MemberVariable<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (
+            self.ty.constraints.as_ref(),
+            self.ty.default_value.is_some(),
+        ) {
+            (None, false) => write!(f, "{}: {}", self.name.as_str(), self.ty.ty),
+            (Some(constraints), false) => {
+                write!(
+                    f,
+                    "#[{}] {}: {}",
+                    IteratorFormatter(constraints.constraints.iter()),
+                    self.name.as_str(),
+                    self.ty.ty
+                )
+            }
+            (None, true) => write!(f, "{}: {} = default", self.name.as_str(), self.ty.ty),
+            (Some(constraints), true) => write!(
+                f,
+                "#[{}] {}: {} = default",
+                IteratorFormatter(constraints.constraints.iter(),),
+                self.name.as_str(),
+                self.ty.ty
+            ),
+        }
     }
 }
 
@@ -242,9 +357,11 @@ mod test {
                 "",
                 MemberVariable {
                     name: "variable",
-                    ty: VariableType::Number,
-                    constraints: None,
-                    default_value: None,
+                    ty: MemberVariableType {
+                        ty: VariableType::Number,
+                        constraints: None,
+                        default_value: None
+                    },
                 }
             ))
         );
@@ -255,13 +372,15 @@ mod test {
                 "",
                 MemberVariable {
                     name: "variable",
-                    ty: VariableType::Number,
-                    constraints: None,
-                    default_value: Some(Litteral::Number(Number {
-                        integer: Some("2"),
-                        dot: None,
-                        fractional: None
-                    })),
+                    ty: MemberVariableType {
+                        ty: VariableType::Number,
+                        constraints: None,
+                        default_value: Some(Litteral::Number(Number {
+                            integer: Some("2"),
+                            dot: None,
+                            fractional: None
+                        }))
+                    },
                 }
             ))
         );
@@ -272,6 +391,57 @@ mod test {
                 "",
                 MemberVariable {
                     name: "variable",
+                    ty: MemberVariableType {
+                        ty: VariableType::Number,
+                        constraints: Some(MemberVariableConstraintList {
+                            constraints: vec![MemberVariableConstraint::Integer]
+                        }),
+                        default_value: Some(Litteral::Number(Number {
+                            integer: Some("2"),
+                            dot: None,
+                            fractional: None
+                        }))
+                    },
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn member_variable_type() {
+        assert_eq!(
+            MemberVariableType::parse("Number"),
+            Ok((
+                "",
+                MemberVariableType {
+                    ty: VariableType::Number,
+                    constraints: None,
+                    default_value: None
+                },
+            ))
+        );
+
+        assert_eq!(
+            MemberVariableType::parse("Number = 2"),
+            Ok((
+                "",
+                MemberVariableType {
+                    ty: VariableType::Number,
+                    constraints: None,
+                    default_value: Some(Litteral::Number(Number {
+                        integer: Some("2"),
+                        dot: None,
+                        fractional: None
+                    }))
+                },
+            ))
+        );
+
+        assert_eq!(
+            MemberVariableType::parse("#[integer] Number = 2"),
+            Ok((
+                "",
+                MemberVariableType {
                     ty: VariableType::Number,
                     constraints: Some(MemberVariableConstraintList {
                         constraints: vec![MemberVariableConstraint::Integer]
@@ -280,8 +450,8 @@ mod test {
                         integer: Some("2"),
                         dot: None,
                         fractional: None
-                    })),
-                }
+                    }))
+                },
             ))
         );
     }

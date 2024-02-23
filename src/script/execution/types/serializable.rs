@@ -95,7 +95,7 @@ impl SerializableValue {
 
                 for member in initalizer.members.iter() {
                     if let Some(value) = values.remove(member.name.as_str()) {
-                        match value.into_value(context, span, &member.ty) {
+                        match value.into_value(context, span, &member.ty.ty) {
                             Ok(value) => {
                                 match validate_assignment_type(context, member, span, value) {
                                     Ok(value) => {
@@ -190,9 +190,8 @@ mod test {
         execution::{
             expressions::run_expression,
             types::{Measurement, Object, SString},
-            ModuleScope,
+            Module, ModuleScope,
         },
-        module::Module,
         parsing::Expression,
     };
 

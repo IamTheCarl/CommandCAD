@@ -104,7 +104,7 @@ pub fn validate_assignment_type<'a, S: Span>(
     match value {
         Value::Default(_) => {
             // They want to use a default value.
-            if let Some(default) = member.default_value.as_ref() {
+            if let Some(default) = member.ty.default_value.as_ref() {
                 Value::from_litteral(context, default)
             } else {
                 Err(Failure::NoDefault(
@@ -115,12 +115,12 @@ pub fn validate_assignment_type<'a, S: Span>(
         }
         // No request for default. Check the type.
         value => {
-            if value.matches_type(&member.ty) {
+            if value.matches_type(&member.ty.ty) {
                 Ok(value)
             } else {
                 Err(Failure::ExpectedGot(
                     variable_assignment.clone(),
-                    member.ty.name(),
+                    member.ty.ty.name(),
                     value.type_name(),
                 ))
             }
@@ -235,7 +235,7 @@ impl<'a, S: Span> Structure<'a, S> {
                         }
                     }
                     Inheritance::Default => {
-                        if let Some(default) = &member.default_value {
+                        if let Some(default) = &member.ty.default_value {
                             match Value::from_litteral(context, default) {
                                 Ok(value) => value,
                                 Err(failure) => {
@@ -321,8 +321,9 @@ impl<'a, S: Span> NamedObject for StructDefinition<'a, S> {
 #[cfg(test)]
 mod test {
     use crate::script::{
-        execution::{expressions::run_expression, types::Number, ExecutionContext, ModuleScope},
-        module::Module,
+        execution::{
+            expressions::run_expression, types::Number, ExecutionContext, Module, ModuleScope,
+        },
         parsing::Expression,
     };
 

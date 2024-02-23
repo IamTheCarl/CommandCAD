@@ -22,7 +22,7 @@ use fortuples::fortuples;
 
 use crate::script::{
     execution::{run_named_block, ExecutionContext, Failure},
-    parsing::{Expression, NamedBlock, VariableType},
+    parsing::{Expression, FunctionSignature, NamedBlock, VariableType},
     Span,
 };
 
@@ -31,7 +31,7 @@ use super::{NamedObject, Object, OperatorResult, Value};
 #[derive(Clone)]
 pub struct UserFunction<'a, S: Span> {
     pub block: &'a NamedBlock<S>,
-    pub return_type: &'a VariableType<S>,
+    pub signature: Rc<FunctionSignature<S>>,
 }
 
 impl<'a, S: Span> Object<'a, S> for UserFunction<'a, S> {
@@ -113,7 +113,7 @@ impl<'a, S: Span> Object<'a, S> for BuiltinFunction<'a, S> {
 
 impl<S: Span> Debug for BuiltinFunction<'_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BuiltinFunction").finish()
+        f.debug_struct("Function").finish()
     }
 }
 

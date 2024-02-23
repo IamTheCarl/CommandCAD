@@ -23,25 +23,28 @@ use nom::{
     sequence::{pair, terminated},
 };
 
-use super::{space1, take_keyword, FunctionSignature, NamedBlock, Span, VResult};
+use crate::script::{
+    parsing::{space1, take_keyword, FunctionSignature, NamedBlock, VResult},
+    Span,
+};
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Function<S: Span> {
+pub struct Task<S: Span> {
     pub starting_span: S,
     pub named_block: NamedBlock<S>,
     pub signature: Rc<FunctionSignature<S>>,
 }
 
-impl<S: Span> Function<S> {
+impl<S: Span> Task<S> {
     pub fn parse(input: S) -> VResult<S, Self> {
         map(
             pair(
-                terminated(take_keyword("function"), space1),
+                terminated(take_keyword("task"), space1),
                 cut(NamedBlock::parse_with_return_type),
             ),
             |(starting_span, (named_block, return_type))| Self {
                 starting_span,
-                signature: Rc::new(FunctionSignature::Function {
+                signature: Rc::new(FunctionSignature::Task {
                     return_type: Box::new(return_type),
                     arguments: named_block
                         .parameters
@@ -62,21 +65,21 @@ mod test {
     use super::*;
 
     #[test]
-    fn function() {
-        assert!(Function::parse("function my_function() {}").is_err());
+    fn task() {
+        assert!(Task::parse("task my_task() {}").is_err());
         assert_eq!(
-            Function::parse("function my_function() -> Length {}"),
+            Task::parse("task my_task() -> Length {}"),
             Ok((
                 "",
-                Function {
-                    starting_span: "function",
+                Task {
+                    starting_span: "task",
                     named_block: NamedBlock {
-                        name: "my_function",
+                        name: "my_task",
                         parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
-                    signature: Rc::new(FunctionSignature::Function {
+                    signature: Rc::new(FunctionSignature::Task {
                         return_type: Box::new(VariableType::Measurement("Length")),
                         arguments: vec![],
                     })

@@ -16,13 +16,15 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::rc::Rc;
+
 use nom::{
     combinator::{cut, map},
     sequence::{pair, terminated},
 };
 
 use crate::script::{
-    parsing::{space1, take_keyword, NamedBlock, VResult},
+    parsing::{space1, take_keyword, FunctionSignature, NamedBlock, VResult},
     Span,
 };
 
@@ -30,6 +32,7 @@ use crate::script::{
 pub struct Sketch<S: Span> {
     pub starting_span: S,
     pub named_block: NamedBlock<S>,
+    pub signature: Rc<FunctionSignature<S>>,
 }
 
 impl<S: Span> Sketch<S> {
@@ -41,6 +44,13 @@ impl<S: Span> Sketch<S> {
             ),
             |(starting_span, named_block)| Self {
                 starting_span,
+                signature: Rc::new(FunctionSignature::Sketch {
+                    arguments: named_block
+                        .parameters
+                        .iter()
+                        .map(|p| p.ty.clone())
+                        .collect(),
+                }),
                 named_block,
             },
         )(input)
@@ -68,6 +78,7 @@ mod test {
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
+                    signature: Rc::new(FunctionSignature::Sketch { arguments: vec![] })
                 }
             ))
         );

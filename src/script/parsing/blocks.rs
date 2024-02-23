@@ -146,7 +146,9 @@ impl<S: Span> Block<S> {
 #[cfg(test)]
 mod test {
     use crate::script::parsing::{
-        member_variable::{MemberVariableConstraint, MemberVariableConstraintList},
+        member_variable::{
+            MemberVariableConstraint, MemberVariableConstraintList, MemberVariableType,
+        },
         Assign, Assignable, AssignableVariable, Break, Litteral, Loop, Number, Return,
     };
 
@@ -295,9 +297,11 @@ mod test {
                     parameter_span: "(",
                     parameters: vec![MemberVariable {
                         name: "one",
-                        ty: VariableType::Measurement("Length"),
-                        constraints: None,
-                        default_value: None
+                        ty: MemberVariableType {
+                            ty: VariableType::Measurement("Length"),
+                            constraints: None,
+                            default_value: None
+                        }
                     }],
                     block: Block { statements: vec![] }
                 }
@@ -314,19 +318,23 @@ mod test {
                     parameters: vec![
                         MemberVariable {
                             name: "one",
-                            ty: VariableType::Measurement("Length"),
-                            constraints: None,
-                            default_value: None
+                            ty: MemberVariableType {
+                                ty: VariableType::Measurement("Length"),
+                                constraints: None,
+                                default_value: None
+                            }
                         },
                         MemberVariable {
                             name: "two",
-                            ty: VariableType::Measurement("Angle"),
-                            constraints: None,
-                            default_value: Some(Litteral::Number(Number {
-                                integer: Some("2"),
-                                dot: None,
-                                fractional: None
-                            }))
+                            ty: MemberVariableType {
+                                ty: VariableType::Measurement("Angle"),
+                                constraints: None,
+                                default_value: Some(Litteral::Number(Number {
+                                    integer: Some("2"),
+                                    dot: None,
+                                    fractional: None
+                                }))
+                            }
                         }
                     ],
                     block: Block { statements: vec![] }
@@ -344,27 +352,33 @@ mod test {
                     parameters: vec![
                         MemberVariable {
                             name: "one",
-                            ty: VariableType::Measurement("Length"),
-                            constraints: None,
-                            default_value: None
+                            ty: MemberVariableType {
+                                ty: VariableType::Measurement("Length"),
+                                constraints: None,
+                                default_value: None
+                            }
                         },
                         MemberVariable {
                             name: "two",
-                            ty: VariableType::Measurement("Angle"),
-                            constraints: None,
-                            default_value: Some(Litteral::Number(Number {
-                                integer: Some("2"),
-                                dot: None,
-                                fractional: None
-                            }))
+                            ty: MemberVariableType {
+                                ty: VariableType::Measurement("Angle"),
+                                constraints: None,
+                                default_value: Some(Litteral::Number(Number {
+                                    integer: Some("2"),
+                                    dot: None,
+                                    fractional: None
+                                }))
+                            }
                         },
                         MemberVariable {
                             name: "three",
-                            ty: VariableType::Number,
-                            constraints: Some(MemberVariableConstraintList {
-                                constraints: vec![MemberVariableConstraint::Integer]
-                            }),
-                            default_value: None,
+                            ty: MemberVariableType {
+                                ty: VariableType::Number,
+                                constraints: Some(MemberVariableConstraintList {
+                                    constraints: vec![MemberVariableConstraint::Integer]
+                                }),
+                                default_value: None,
+                            }
                         }
                     ],
                     block: Block { statements: vec![] }

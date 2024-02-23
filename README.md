@@ -104,9 +104,6 @@ Other code based CAD programs exist, and with how experimental Command CAD curre
 
 # Planned breaking changes
 
-* It will not be possible to call global functions from the CLI
-* A new global type called Tasks will be provided
-  * Tasks are global functions that can be called by the CLI
 * Functions will be definable from all scopes, but only be access from their current scope or child scopes
 * Structs can be definable from all scopes, but only be accessed from their current scope or child scopes
 * Struct construction will not require the keyword `struct` in front

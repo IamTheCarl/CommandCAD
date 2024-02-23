@@ -16,6 +16,8 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::fmt::Display;
+
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_until, take_while, take_while1},
@@ -37,7 +39,7 @@ mod span;
 pub use span::Span;
 
 mod root;
-pub use root::{FileAST, Import, RootElement, Sketch, Solid};
+pub use root::{FileAST, Import, RootElement, Sketch, Solid, Task};
 
 mod pstruct;
 pub use pstruct::Struct;
@@ -46,7 +48,7 @@ mod function;
 pub use function::Function;
 
 mod member_variable;
-pub use member_variable::MemberVariable;
+pub use member_variable::{MemberVariable, MemberVariableType};
 
 mod blocks;
 pub use blocks::{Block, BlockStatement, NamedBlock};
@@ -58,7 +60,7 @@ pub use statements::{
 };
 
 mod variable_type;
-pub use variable_type::VariableType;
+pub use variable_type::{FunctionSignature, VariableType};
 
 mod range;
 pub use range::Range;
@@ -131,6 +133,30 @@ fn space0<S: Span>(input: S) -> VResult<S, ()> {
 
 fn space1<S: Span>(input: S) -> VResult<S, ()> {
     value((), fold_many1(consume_space_token, || (), |_, _| {}))(input)
+}
+
+/// Presents iterators in a comma separated format.
+struct IteratorFormatter<I, D>(pub I)
+where
+    I: Iterator<Item = D> + Clone,
+    D: Display;
+
+impl<I, D> Display for IteratorFormatter<I, D>
+where
+    I: Iterator<Item = D> + Clone,
+    D: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut iter = self.0.clone().peekable();
+
+        loop {
+            match (iter.next(), iter.peek().is_some()) {
+                (Some(next), true) => write!(f, "{}, ", next)?,
+                (Some(next), false) => write!(f, "{}", next)?,
+                (None, _) => break Ok(()),
+            }
+        }
+    }
 }
 
 #[cfg(test)]

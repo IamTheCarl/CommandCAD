@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 /*
  * Copyright 2024 James Carl
  * AGPL-3.0-only or AGPL-3.0-or-later
@@ -92,6 +94,20 @@ impl<S: Span> Number<S> {
                 integer.to_string(),
                 fractional.to_string()
             )),
+        }
+    }
+}
+
+impl<S: Span> Display for Number<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (
+            self.integer.as_ref().map(|s| s.as_str()),
+            self.fractional.as_ref().map(|s| s.as_str()),
+        ) {
+            (None, None) => write!(f, "."),
+            (Some(integer), None) => write!(f, "{}", integer),
+            (None, Some(fractional)) => write!(f, ".{}", fractional),
+            (Some(integer), Some(fractional)) => write!(f, "{}.{}", integer, fractional),
         }
     }
 }

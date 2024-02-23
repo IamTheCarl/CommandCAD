@@ -60,10 +60,8 @@ pub enum Failure<S> {
     BadArgumentTypes(S, Vec<Failure<S>>),
     StructConstruction(S, Vec<Failure<S>>),
     SliceOutOfRange(S, Option<isize>, &'static str, Option<isize>),
-
     TooManyArguments(S),
     ListWrongLength(S, usize, usize),
-
     ListElementFailure(S, usize, Box<Failure<S>>),
 }
 

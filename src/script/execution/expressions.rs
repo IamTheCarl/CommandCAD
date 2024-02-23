@@ -209,9 +209,8 @@ mod test {
     use crate::script::{
         execution::{
             types::{function::IntoBuiltinFunction, List, Measurement, Number, SString},
-            ModuleScope,
+            Module, ModuleScope,
         },
-        module::Module,
         parsing::Litteral,
     };
 

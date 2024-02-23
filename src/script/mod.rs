@@ -24,10 +24,13 @@ use nom_locate::LocatedSpan;
 use ouroboros::self_referencing;
 pub use parsing::Span;
 
-mod module;
-use module::Module;
-
-use crate::script::execution::types::{Solid, UserFunction};
+use crate::script::{
+    execution::{
+        types::{Solid, UserFunction},
+        Module,
+    },
+    parsing::FunctionSignature,
+};
 
 pub use crate::script::execution::types::SerializableValue;
 use execution::{types::Object, ExecutionContext, ModuleScope};
@@ -72,14 +75,11 @@ impl Runtime {
         .build())
     }
 
-    // TODO this needs unit testing, specifically: Feed it proper values, feed it default values
     pub fn run_sketch(
         &mut self,
         name: &str,
         arguments: Vec<SerializableValue>,
     ) -> std::result::Result<(), Failure> {
-        // FIXME this will run functions that return sketches without complaint.
-
         self.with_mut(|runtime| {
             let mut argument_values = Vec::with_capacity(arguments.len());
             for argument in arguments {
@@ -94,25 +94,35 @@ impl Runtime {
                 .downcast_ref::<UserFunction<RuntimeSpan>>(runtime.code)?
                 .clone();
 
-            // TODO attaching a span to a user function would be useful for debug purposes.
-            let result = sketch.call(runtime.context, runtime.code, argument_values, &[])?;
+            if matches!(
+                *sketch.signature,
+                FunctionSignature::Sketch { arguments: _ }
+            ) {
+                // TODO attaching a span to a user function would be useful for debug purposes.
+                let result = sketch.call(runtime.context, runtime.code, argument_values, &[])?;
 
-            result.downcast::<Sketch>(runtime.code)?;
+                result.downcast::<Sketch>(runtime.code)?;
 
-            log::warn!("Sketches currently cannot be serialized, so no output will be provied.");
+                log::warn!(
+                    "Sketches currently cannot be serialized, so no output will be provied."
+                );
 
-            Ok(())
+                Ok(())
+            } else {
+                Err(Failure::ExpectedGot(
+                    runtime.code.clone(),
+                    "sketch".into(),
+                    sketch.signature.to_string().into(),
+                ))
+            }
         })
     }
 
-    // TODO this needs unit testing, specifically: Feed it proper values, feed it default values
     pub fn run_solid(
         &mut self,
         name: &str,
         arguments: Vec<SerializableValue>,
     ) -> std::result::Result<Solid, Failure> {
-        // FIXME this will run functions that return solids without complaint.
-
         self.with_mut(|runtime| {
             let mut argument_values = Vec::with_capacity(arguments.len());
             for argument in arguments {
@@ -127,17 +137,24 @@ impl Runtime {
                 .downcast_ref::<UserFunction<RuntimeSpan>>(runtime.code)?
                 .clone();
 
-            // TODO attaching a span to a user function would be useful for debug purposes.
-            let result = solid.call(runtime.context, runtime.code, argument_values, &[])?;
+            if matches!(*solid.signature, FunctionSignature::Solid { arguments: _ }) {
+                // TODO attaching a span to a user function would be useful for debug purposes.
+                let result = solid.call(runtime.context, runtime.code, argument_values, &[])?;
 
-            let solid = result.downcast::<Solid>(runtime.code)?;
+                let solid = result.downcast::<Solid>(runtime.code)?;
 
-            Ok(solid)
+                Ok(solid)
+            } else {
+                Err(Failure::ExpectedGot(
+                    runtime.code.clone(),
+                    "solid".into(),
+                    solid.signature.to_string().into(),
+                ))
+            }
         })
     }
 
-    // TODO this needs unit testing, specifically: Feed it proper values, feed it default values
-    pub fn run_function(
+    pub fn run_task(
         &mut self,
         name: &str,
         arguments: Vec<SerializableValue>,
@@ -150,18 +167,32 @@ impl Runtime {
                 argument_values.push(value);
             }
 
-            let function = runtime.context.stack.get_variable_str(runtime.code, name)?;
+            let task = runtime.context.stack.get_variable_str(runtime.code, name)?;
 
-            let function = function
+            let task = task
                 .downcast_ref::<UserFunction<RuntimeSpan>>(runtime.code)?
                 .clone();
 
-            // TODO attaching a span to a user function would be useful for debug purposes.
-            let result = function.call(runtime.context, runtime.code, argument_values, &[])?;
+            if matches!(
+                *task.signature,
+                FunctionSignature::Task {
+                    return_type: _,
+                    arguments: _
+                }
+            ) {
+                // TODO attaching a span to a user function would be useful for debug purposes.
+                let result = task.call(runtime.context, runtime.code, argument_values, &[])?;
 
-            let result = result.export(&mut runtime.context.log, runtime.code)?;
+                let result = result.export(&mut runtime.context.log, runtime.code)?;
 
-            Ok(result)
+                Ok(result)
+            } else {
+                Err(Failure::ExpectedGot(
+                    runtime.code.clone(),
+                    "task".into(),
+                    task.signature.to_string().into(),
+                ))
+            }
         })
     }
 
@@ -241,4 +272,132 @@ impl FormatSpan for LocatedSpan<imstr::ImString> {
 
 pub enum LogLevel {
     Warning,
+}
+
+#[cfg(test)]
+mod test {
+    use std::borrow::Cow;
+
+    use uom::si::{
+        f64::Length,
+        length::{meter, millimeter},
+    };
+
+    use crate::script::execution::types::Measurement;
+
+    use super::*;
+
+    #[test]
+    fn run_sketch() {
+        let mut runtime = Runtime::load((
+            "root_module",
+            "sketch my_sketch(input: Length = 50m) { new_sketch([]) }",
+        ))
+        .unwrap();
+
+        assert!(matches!(
+            runtime.run_sketch("my_sketch", vec![]),
+            Err(Failure::MissingArguments(_))
+        ));
+
+        runtime
+            .run_sketch("my_sketch", vec![SerializableValue::Default])
+            .unwrap();
+
+        runtime
+            .run_sketch(
+                "my_sketch",
+                vec![SerializableValue::Measurement(
+                    Measurement::try_from(Length::new::<meter>(10.0)).unwrap(),
+                )],
+            )
+            .unwrap();
+
+        let mut runtime =
+            Runtime::load(("root_module", "function my_sketch() -> Number { 2 }")).unwrap();
+
+        assert!(matches!(
+            dbg!(runtime.run_sketch("my_sketch", vec![])),
+            Err(Failure::ExpectedGot(
+                _,
+                Cow::Borrowed("sketch"),
+                _, // Cow::Borrowed("function() -> Number")
+            ))
+        ));
+    }
+
+    #[test]
+    fn run_solid() {
+        let mut runtime = Runtime::load((
+            "root_module",
+            "solid my_solid(input: Length = 1cm) { new_sketch(struct Circle { center = [0m, 0m], radius = input }).sweep(global_xy_plane(), [0cm, 0cm, 1cm]) }",
+        ))
+        .unwrap();
+
+        assert!(matches!(
+            runtime.run_solid("my_solid", vec![]),
+            Err(Failure::MissingArguments(_))
+        ));
+
+        runtime
+            .run_solid("my_solid", vec![SerializableValue::Default])
+            .unwrap();
+
+        runtime
+            .run_solid(
+                "my_solid",
+                vec![SerializableValue::Measurement(
+                    Measurement::try_from(Length::new::<millimeter>(10.0)).unwrap(),
+                )],
+            )
+            .unwrap();
+
+        let mut runtime =
+            Runtime::load(("root_module", "function my_solid() -> Number { 2 }")).unwrap();
+
+        assert!(matches!(
+            runtime.run_solid("my_solid", vec![]),
+            Err(Failure::ExpectedGot(
+                _,
+                Cow::Borrowed("solid"),
+                _, // Cow::Borrowed("function() -> Number")
+            ))
+        ));
+    }
+
+    #[test]
+    fn run_task() {
+        let mut runtime = Runtime::load((
+            "root_module",
+            "task my_task(input: Number = 50) -> Number { input }",
+        ))
+        .unwrap();
+
+        assert!(matches!(
+            dbg!(runtime.run_task("my_task", vec![])),
+            Err(Failure::MissingArguments(_))
+        ));
+
+        assert_eq!(
+            runtime.run_task("my_task", vec![SerializableValue::Default]),
+            Ok(SerializableValue::Number(50.0))
+        );
+
+        assert_eq!(
+            runtime.run_task("my_task", vec![SerializableValue::Number(22.0)]),
+            Ok(SerializableValue::Number(22.0))
+        );
+
+        let mut runtime =
+            Runtime::load(("root_module", "sketch my_sketch() { new_sketch([]) }")).unwrap();
+
+        assert!(matches!(
+            runtime.run_task("my_sketch", vec![]),
+            Err(Failure::ExpectedGot(
+                _,
+                Cow::Borrowed("task"),
+                _, // Cow::Borrowed("sketch()")
+            ))
+        ));
+    }
 }

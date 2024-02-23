@@ -33,7 +33,7 @@ use crate::script::{
         },
         ExecutionContext, Failure,
     },
-    parsing::{self, MemberVariable, VariableType},
+    parsing::{self, MemberVariable, MemberVariableType, VariableType},
     Span,
 };
 
@@ -48,15 +48,19 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                 members: vec![
                     MemberVariable {
                         name: S::from_str("exterior"),
-                        ty: VariableType::Cycle,
-                        constraints: None,
-                        default_value: None,
+                        ty: MemberVariableType {
+                            ty: VariableType::Cycle,
+                            constraints: None,
+                            default_value: None,
+                        },
                     },
                     MemberVariable {
                         name: S::from_str("interior"),
-                        ty: VariableType::List,
-                        constraints: None,
-                        default_value: None,
+                        ty: MemberVariableType {
+                            ty: VariableType::List,
+                            constraints: None,
+                            default_value: None,
+                        },
                     },
                 ],
             })),

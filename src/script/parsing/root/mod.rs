@@ -23,13 +23,14 @@ use nom::{
     sequence::delimited,
 };
 
-pub use self::{import::Import, sketch::Sketch, solid::Solid};
+pub use self::{import::Import, sketch::Sketch, solid::Solid, task::Task};
 
 use super::{space0, Function, Span, Struct, VResult};
 
 mod import;
 mod sketch;
 mod solid;
+mod task;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct FileAST<S: Span> {
@@ -51,6 +52,7 @@ pub enum RootElement<S: Span> {
     Struct(Struct<S>),
     Sketch(Sketch<S>),
     Solid(Solid<S>),
+    Task(Task<S>),
     Function(Function<S>),
 }
 
@@ -61,6 +63,7 @@ impl<S: Span> RootElement<S> {
             map(Struct::parse, Self::Struct),
             map(Sketch::parse, Self::Sketch),
             map(Solid::parse, Self::Solid),
+            map(Task::parse, Self::Task),
             map(Function::parse, Self::Function),
         ))(input)
     }
@@ -69,7 +72,9 @@ impl<S: Span> RootElement<S> {
 #[cfg(test)]
 mod test {
 
-    use crate::script::parsing::{Block, NamedBlock, VariableType};
+    use std::rc::Rc;
+
+    use crate::script::parsing::{Block, FunctionSignature, NamedBlock, VariableType};
 
     use super::*;
 
@@ -112,6 +117,7 @@ mod test {
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
+                    signature: Rc::new(FunctionSignature::Sketch { arguments: vec![] }),
                 })
             ))
         );
@@ -129,6 +135,7 @@ mod test {
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
+                    signature: Rc::new(FunctionSignature::Solid { arguments: vec![] }),
                 })
             ))
         );
@@ -146,7 +153,10 @@ mod test {
                         parameters: vec![],
                         block: Block { statements: vec![] }
                     },
-                    return_type: VariableType::Measurement("Length")
+                    signature: Rc::new(FunctionSignature::Function {
+                        return_type: Box::new(VariableType::Measurement("Length")),
+                        arguments: vec![]
+                    }),
                 })
             ))
         );
@@ -188,6 +198,7 @@ mod test {
             sketch my_sketch() {}
             solid my_solid() {}
             function my_function() -> Length {}
+            task my_task() -> Length {}
 "#
             ),
             Ok((
@@ -206,6 +217,7 @@ mod test {
                                 parameters: vec![],
                                 block: Block { statements: vec![] }
                             },
+                            signature: Rc::new(FunctionSignature::Sketch { arguments: vec![] }),
                         }),
                         RootElement::Solid(Solid {
                             starting_span: "solid",
@@ -215,6 +227,7 @@ mod test {
                                 parameters: vec![],
                                 block: Block { statements: vec![] }
                             },
+                            signature: Rc::new(FunctionSignature::Solid { arguments: vec![] }),
                         }),
                         RootElement::Function(Function {
                             starting_span: "function",
@@ -224,7 +237,23 @@ mod test {
                                 parameters: vec![],
                                 block: Block { statements: vec![] }
                             },
-                            return_type: VariableType::Measurement("Length")
+                            signature: Rc::new(FunctionSignature::Function {
+                                return_type: Box::new(VariableType::Measurement("Length")),
+                                arguments: vec![]
+                            }),
+                        }),
+                        RootElement::Task(Task {
+                            starting_span: "task",
+                            named_block: NamedBlock {
+                                name: "my_task",
+                                parameter_span: "(",
+                                parameters: vec![],
+                                block: Block { statements: vec![] }
+                            },
+                            signature: Rc::new(FunctionSignature::Task {
+                                return_type: Box::new(VariableType::Measurement("Length")),
+                                arguments: vec![]
+                            }),
                         }),
                     ]
                 }

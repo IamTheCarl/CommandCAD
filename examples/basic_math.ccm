@@ -1,9 +1,9 @@
 
-function addition(a: Number, b: Number) -> Number {
+task addition(a: Number, b: Number) -> Number {
   a + b
 }
 
-function recursive_addition(number_of_cycles: Number) -> Number {
+task recursive_addition(number_of_cycles: Number) -> Number {
   if number_of_cycles > 0 {
     number_of_cycles + recursive_addition(number_of_cycles - 1)
   } else {
@@ -11,12 +11,12 @@ function recursive_addition(number_of_cycles: Number) -> Number {
   }
 }
 
-function convert_to_meters(input: Length) -> Number {
+task convert_to_meters(input: Length) -> Number {
   // We can't return measurements to the CLI.
   // External programs won't know how to interpret those, so we have to convert it to a number.
   input.to_number("m")
 }
 
-function default_value(input: Length = 42m) -> Number {
+task default_value(input: Length = 42m) -> Number {
   input.to_number("m")
 }
