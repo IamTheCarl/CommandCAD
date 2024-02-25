@@ -132,7 +132,7 @@ impl<S: Span> Assignable<S> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Assign<S: Span> {
     pub starting_span: S,
     pub is_new: bool,

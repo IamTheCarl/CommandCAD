@@ -25,7 +25,7 @@ use nom::{
 
 pub use self::{import::Import, sketch::Sketch, solid::Solid, task::Task};
 
-use super::{space0, Function, Span, Struct, VResult};
+use super::{space0, Function, Span, StructDefinition, VResult};
 
 mod import;
 mod sketch;
@@ -49,7 +49,7 @@ impl<S: Span> FileAST<S> {
 #[derive(Debug, Eq, PartialEq)]
 pub enum RootElement<S: Span> {
     Import(Import<S>),
-    Struct(Struct<S>),
+    Struct(StructDefinition<S>),
     Sketch(Sketch<S>),
     Solid(Solid<S>),
     Task(Task<S>),
@@ -60,7 +60,7 @@ impl<S: Span> RootElement<S> {
     fn parse(input: S) -> VResult<S, Self> {
         alt((
             map(Import::parse, Self::Import),
-            map(Struct::parse, Self::Struct),
+            map(StructDefinition::parse, Self::Struct),
             map(Sketch::parse, Self::Sketch),
             map(Solid::parse, Self::Solid),
             map(Task::parse, Self::Task),
@@ -97,7 +97,7 @@ mod test {
             RootElement::parse("struct MyStruct {}"),
             Ok((
                 "",
-                RootElement::Struct(Struct {
+                RootElement::Struct(StructDefinition {
                     name: "MyStruct",
                     members: vec![]
                 })
@@ -205,7 +205,7 @@ mod test {
                 "",
                 FileAST {
                     root_elements: vec![
-                        RootElement::Struct(Struct {
+                        RootElement::Struct(StructDefinition {
                             name: "MyStruct",
                             members: vec![]
                         }),

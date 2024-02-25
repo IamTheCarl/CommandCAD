@@ -30,7 +30,7 @@ pub use self::{
     s_while::While,
 };
 
-use super::{Span, VResult};
+use super::{Function, Span, StructDefinition, VResult};
 
 mod assign;
 mod expression;
@@ -43,7 +43,7 @@ mod s_match;
 mod s_return;
 mod s_while;
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Statement<S: Span> {
     Expression(Expression<S>),
     Assign(Assign<S>),
@@ -55,6 +55,8 @@ pub enum Statement<S: Span> {
     Loop(Loop<S>),
     Break(Break<S>),
     Continue(Continue<S>),
+    DefineFunction(Function<S>),
+    DefineStruct(StructDefinition<S>),
 }
 
 impl<S: Span> Statement<S> {
@@ -71,6 +73,8 @@ impl<S: Span> Statement<S> {
                 map(Loop::parse, Self::Loop),
                 map(Break::parse, Self::Break),
                 map(Continue::parse, Self::Continue),
+                map(Function::parse, Self::DefineFunction),
+                map(StructDefinition::parse, Self::DefineStruct),
                 map(Expression::parse, Self::Expression),
             )),
         )(input)
@@ -88,15 +92,19 @@ impl<S: Span> Statement<S> {
             Statement::Loop(spanable) => spanable.get_span(),
             Statement::Break(spanable) => spanable.get_span(),
             Statement::Continue(spanable) => spanable.get_span(),
+            Statement::DefineFunction(spanable) => spanable.get_span(),
+            Statement::DefineStruct(spanable) => &spanable.name,
         }
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::rc::Rc;
+
     use crate::script::parsing::{
         statements::assign::{Assignable, AssignableVariable},
-        Block,
+        Block, FunctionSignature, NamedBlock, VariableType,
     };
 
     use super::*;
@@ -201,6 +209,37 @@ mod test {
                     starting_span: "continue",
 
                     loop_name: None
+                })
+            ))
+        );
+
+        assert_eq!(
+            Statement::parse("function my_function() -> Number {}"),
+            Ok((
+                "",
+                Statement::DefineFunction(Function {
+                    starting_span: "function",
+                    named_block: NamedBlock {
+                        name: "my_function",
+                        parameter_span: "(",
+                        parameters: vec![],
+                        block: Block { statements: vec![] }
+                    },
+                    signature: Rc::new(FunctionSignature::Function {
+                        return_type: Box::new(VariableType::Number),
+                        arguments: vec![]
+                    })
+                })
+            ))
+        );
+
+        assert_eq!(
+            Statement::parse("struct MyStruct {}"),
+            Ok((
+                "",
+                Statement::DefineStruct(StructDefinition {
+                    name: "MyStruct",
+                    members: vec![]
                 })
             ))
         );

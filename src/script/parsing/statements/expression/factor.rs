@@ -23,7 +23,7 @@ use nom::{
 };
 
 use crate::script::{
-    parsing::{parse_name, space0, Litteral, StructInitialization, VResult},
+    parsing::{parse_name, space0, Litteral, VResult},
     Span,
 };
 
@@ -37,7 +37,6 @@ pub enum Factor<S: Span> {
     UnaryPlus(Box<Factor<S>>),
     UnaryMinus(Box<Factor<S>>),
     UnaryLogicalNot(Box<Factor<S>>),
-    StructInitalization(StructInitialization<S>),
 }
 
 impl<S: Span> Factor<S> {
@@ -60,7 +59,6 @@ impl<S: Span> Factor<S> {
                 delimited(nom_char('('), Expression::parse, nom_char(')')),
                 |expression| Self::Parenthesis(Box::new(expression)),
             ),
-            map(StructInitialization::parse, Self::StructInitalization),
             map(parse_name, Self::Variable),
         ))(input)
     }
@@ -73,7 +71,6 @@ impl<S: Span> Factor<S> {
             Factor::UnaryPlus(spanable) => spanable.get_span(),
             Factor::UnaryMinus(spanable) => spanable.get_span(),
             Factor::UnaryLogicalNot(spanable) => spanable.get_span(),
-            Factor::StructInitalization(spanable) => spanable.get_span(),
         }
     }
 }
@@ -142,65 +139,6 @@ mod test {
             Ok((
                 "",
                 Factor::UnaryLogicalNot(Box::new(Factor::Variable("my_variable")))
-            ))
-        );
-        // StructInitalization(StructInitalization<S>),
-        assert_eq!(
-            Factor::parse("struct MyStruct {}"),
-            Ok((
-                "",
-                Factor::StructInitalization(StructInitialization {
-                    starting_span: "struct",
-                    name: "MyStruct",
-                    assignments: vec![],
-                    inheritance: None
-                })
-            ))
-        );
-        assert_eq!(
-            Factor::parse("struct MyStruct { a = b, c = d }"),
-            Ok((
-                "",
-                Factor::StructInitalization(StructInitialization {
-                    starting_span: "struct",
-                    name: "MyStruct",
-                    assignments: vec![
-                        ("a", Expression::parse("b").unwrap().1),
-                        ("c", Expression::parse("d").unwrap().1)
-                    ],
-                    inheritance: None
-                })
-            ))
-        );
-        assert_eq!(
-            Factor::parse("struct MyStruct { a = b, c = d, ..default }"),
-            Ok((
-                "",
-                Factor::StructInitalization(StructInitialization {
-                    starting_span: "struct",
-                    name: "MyStruct",
-                    assignments: vec![
-                        ("a", Expression::parse("b").unwrap().1),
-                        ("c", Expression::parse("d").unwrap().1)
-                    ],
-                    inheritance: Some(Box::new(Trailer::None(Factor::Litteral(
-                        Litteral::Default("default")
-                    ))))
-                })
-            ))
-        );
-        assert_eq!(
-            Factor::parse("struct MyStruct { ..default }"),
-            Ok((
-                "",
-                Factor::StructInitalization(StructInitialization {
-                    starting_span: "struct",
-                    name: "MyStruct",
-                    assignments: vec![],
-                    inheritance: Some(Box::new(Trailer::None(Factor::Litteral(
-                        Litteral::Default("default")
-                    ))))
-                })
             ))
         );
     }

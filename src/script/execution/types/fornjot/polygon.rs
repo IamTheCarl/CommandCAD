@@ -35,7 +35,8 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     context.stack.new_variable_str(
         "Polygon",
         StructDefinition {
-            definition: Box::leak(Box::new(parsing::Struct {
+            // TODO replace box leak with lazy static.
+            definition: Box::leak(Box::new(parsing::StructDefinition {
                 name: S::from_str("Polygon"),
                 members: vec![MemberVariable {
                     name: S::from_str("points"),

@@ -28,7 +28,7 @@ use crate::script::{
     Span,
 };
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct If<S: Span> {
     pub starting_span: S,
     pub expression: Expression<S>,
@@ -36,7 +36,7 @@ pub struct If<S: Span> {
     pub else_statement: Option<Else<S>>,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Else<S: Span> {
     Else(Block<S>),
     IfElse(Box<If<S>>),
@@ -50,7 +50,7 @@ impl<S: Span> If<S> {
                 tuple((
                     context(
                         "An expression is required for the if condition",
-                        Expression::parse,
+                        Expression::parse_no_struct_initalization,
                     ),
                     delimited(
                         space0,

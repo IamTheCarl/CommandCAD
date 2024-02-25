@@ -22,7 +22,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_until, take_while, take_while1},
     character::complete::char as nom_char,
-    combinator::{recognize, value, verify},
+    combinator::{recognize, rest, value, verify},
     error::context,
     multi::{fold_many0, fold_many1},
     sequence::{delimited, preceded},
@@ -42,7 +42,7 @@ mod root;
 pub use root::{FileAST, Import, RootElement, Sketch, Solid, Task};
 
 mod pstruct;
-pub use pstruct::Struct;
+pub use pstruct::StructDefinition;
 
 mod function;
 pub use function::Function;
@@ -123,6 +123,7 @@ fn consume_space_token<S: Span>(input: S) -> VResult<S, ()> {
             take_while1(is_space),
             delimited(tag("//"), take_while(|c| c != '\n'), nom_char('\n')),
             delimited(tag("/*"), take_until("*/"), tag("*/")),
+            preceded(tag("//"), rest),
         )),
     )(input)
 }
@@ -201,6 +202,7 @@ mod test {
             space1(" // A line comment. \n after_the_line"),
             Ok(("after_the_line", ()))
         );
+        assert_eq!(space1(" // A line comment with no newline"), Ok(("", ())));
         assert_eq!(
             space1(" /* a block comment. */ after_the_comment"),
             Ok(("after_the_comment", ()))

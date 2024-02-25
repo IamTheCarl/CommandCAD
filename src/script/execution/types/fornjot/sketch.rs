@@ -190,11 +190,9 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse(
-                    "new_sketch(struct Circle { center = [1mm, 2mm], radius = 3mm })"
-                )
-                .unwrap()
-                .1,
+                &Expression::parse("new_sketch(Circle { center = [1mm, 2mm], radius = 3mm })")
+                    .unwrap()
+                    .1,
             ),
             Ok(Value::Sketch(_))
         ));
@@ -208,7 +206,7 @@ mod test {
             run_expression(
                 &mut context,
                 &Expression::parse(
-                    "new_sketch(struct Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
+                    "new_sketch(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
                 )
                 .unwrap()
                 .1,
@@ -225,8 +223,8 @@ mod test {
             run_expression(
                 &mut context,
                 &Expression::parse(
-                    "new_sketch([new_region(struct Circle { center = [1mm, 2mm], radius = 3mm }),
-new_region(struct Circle { center = [4mm, 2mm], radius = 3mm })])"
+                    "new_sketch([new_region(Circle { center = [1mm, 2mm], radius = 3mm }),
+new_region(Circle { center = [4mm, 2mm], radius = 3mm })])"
                 )
                 .unwrap()
                 .1,
@@ -243,7 +241,7 @@ new_region(struct Circle { center = [4mm, 2mm], radius = 3mm })])"
             run_expression(
                 &mut context,
                 &Expression::parse(
-                    "new_sketch(struct Circle { center = [1mm, 2mm], radius = 3mm }).sweep(global_xz_plane(), [0cm, 1cm, 0cm])"
+                    "new_sketch(Circle { center = [1mm, 2mm], radius = 3mm }).sweep(global_xz_plane(), [0cm, 1cm, 0cm])"
                 )
                 .unwrap()
                 .1,

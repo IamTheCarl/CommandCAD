@@ -19,8 +19,8 @@
 use crate::script::{
     execution::Failure,
     parsing::{
-        self, Assign, AssignableVariable, Break, Continue, For, If, Loop, Match, Return, Statement,
-        While,
+        self, Assign, AssignableVariable, Break, Continue, For, Function, If, Loop, Match, Return,
+        Statement, While,
     },
     Span,
 };
@@ -28,14 +28,14 @@ use crate::script::{
 use super::{
     expressions::{self, run_expression},
     run_block,
-    types::List,
+    types::{List, StructDefinition, UserFunction},
     types::{NoneType, Object, Value},
     ControlFlow, ExecutionContext, ExecutionResult,
 };
 
 pub fn run_statement<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    statement: &Statement<S>,
+    statement: &'a Statement<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     match statement {
         Statement::Expression(expression) => Ok(expressions::run_expression(context, expression)?),
@@ -48,6 +48,8 @@ pub fn run_statement<'a, S: Span>(
         Statement::Loop(loop_statement) => run_loop(context, loop_statement),
         Statement::Break(break_statement) => run_break(context, break_statement),
         Statement::Continue(continue_statement) => run_continue(context, continue_statement),
+        Statement::DefineFunction(function) => run_define_function(context, function),
+        Statement::DefineStruct(structure) => run_define_structure(context, structure),
     }
 }
 
@@ -103,7 +105,7 @@ fn assign_values<'a, S: Span>(
 
 fn run_assignment<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    assignment: &Assign<S>,
+    assignment: &'a Assign<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     let value = run_statement(context, &assignment.statement)?;
 
@@ -156,7 +158,7 @@ fn run_return<'a, S: Span>(
 
 fn run_if<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    if_statement: &If<S>,
+    if_statement: &'a If<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     let condition = expressions::run_expression(context, &if_statement.expression)?;
 
@@ -175,7 +177,7 @@ fn run_if<'a, S: Span>(
 
 fn run_match<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    match_statement: &Match<S>,
+    match_statement: &'a Match<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     fn check_branch_matches<'a, S: Span>(
         value: &Value<'a, S>,
@@ -223,7 +225,7 @@ fn loop_impl<'a, S, F>(
     mut loop_control: F,
     context: &mut ExecutionContext<'a, S>,
     name: Option<&S>,
-    block: &parsing::Block<S>,
+    block: &'a parsing::Block<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>>
 where
     S: Span,
@@ -316,7 +318,7 @@ where
 
 fn run_for<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    for_statement: &For<S>,
+    for_statement: &'a For<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     let iter_expression = run_expression(context, &for_statement.iterator_expression)?;
     let mut iterator = iter_expression.iterate(
@@ -354,7 +356,7 @@ fn run_for<'a, S: Span>(
 
 fn run_while<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    while_statement: &While<S>,
+    while_statement: &'a While<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     loop_impl(
         |context| {
@@ -369,7 +371,7 @@ fn run_while<'a, S: Span>(
 
 fn run_loop<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    loop_statement: &Loop<S>,
+    loop_statement: &'a Loop<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     loop_impl(
         |_context| Ok(true),
@@ -381,7 +383,7 @@ fn run_loop<'a, S: Span>(
 
 fn run_break<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    break_statement: &Break<S>,
+    break_statement: &'a Break<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     let value = if let Some(expression) = &break_statement.expression {
         run_expression(context, expression)?
@@ -398,12 +400,43 @@ fn run_break<'a, S: Span>(
 
 fn run_continue<'a, S: Span>(
     _context: &mut ExecutionContext<S>,
-    continue_statement: &Continue<S>,
+    continue_statement: &'a Continue<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     Err(ControlFlow::Continue {
         span: continue_statement.get_span().clone(),
         label: continue_statement.loop_name.clone(),
     })
+}
+
+fn run_define_function<'a, S: Span>(
+    context: &mut ExecutionContext<'a, S>,
+    function: &'a Function<S>,
+) -> ExecutionResult<'a, S, Value<'a, S>> {
+    context.stack.new_variable(
+        &function.named_block.name,
+        UserFunction {
+            block: &function.named_block,
+            signature: function.signature.clone(),
+        }
+        .into(),
+    );
+
+    Ok(NoneType.into())
+}
+
+fn run_define_structure<'a, S: Span>(
+    context: &mut ExecutionContext<'a, S>,
+    structure: &'a parsing::StructDefinition<S>,
+) -> ExecutionResult<'a, S, Value<'a, S>> {
+    context.stack.new_variable(
+        &structure.name,
+        StructDefinition {
+            definition: structure.into(),
+        }
+        .into(),
+    );
+
+    Ok(NoneType.into())
 }
 
 #[cfg(test)]
@@ -418,7 +451,7 @@ mod test {
 
         let statement = parsing::Statement::parse("value = 1").unwrap().1;
         assert_eq!(
-            run_statement(&mut context, &statement),
+            run_statement(&mut context, Box::leak(Box::new(statement))),
             Err(ControlFlow::Failure(Failure::VariableNotInScope(
                 "value",
                 "value".into(),
@@ -427,14 +460,20 @@ mod test {
         assert!(context.stack.get_variable(&"value").is_err());
 
         let statement = parsing::Statement::parse("let value = 1").unwrap().1;
-        assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
+        assert_eq!(
+            run_statement(&mut context, Box::leak(Box::new(statement))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"value"),
             Ok(&Number::new(1.0).unwrap().into())
         );
 
         let statement = parsing::Statement::parse("value = 2").unwrap().1;
-        assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
+        assert_eq!(
+            run_statement(&mut context, Box::leak(Box::new(statement))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"value"),
             Ok(&Number::new(2.0).unwrap().into())
@@ -443,7 +482,10 @@ mod test {
         let statement = parsing::Statement::parse("let [one, two] = [1, 2]")
             .unwrap()
             .1;
-        assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
+        assert_eq!(
+            run_statement(&mut context, Box::leak(Box::new(statement))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"one"),
             Ok(&Number::new(1.0).unwrap().into())
@@ -454,7 +496,10 @@ mod test {
         );
 
         let statement = parsing::Statement::parse("[one, two] = [3, 4]").unwrap().1;
-        assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
+        assert_eq!(
+            run_statement(&mut context, Box::leak(Box::new(statement))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"one"),
             Ok(&Number::new(3.0).unwrap().into())
@@ -468,17 +513,17 @@ mod test {
             .unwrap()
             .1;
         assert_eq!(
-            run_statement(&mut context, &statement),
+            run_statement(&mut context, Box::leak(Box::new(statement))),
             Err(ControlFlow::Failure(Failure::ListLengthsDontMatch("[")))
         );
         let statement = parsing::Statement::parse("let [one, two] = [1]").unwrap().1;
         assert_eq!(
-            run_statement(&mut context, &statement),
+            run_statement(&mut context, Box::leak(Box::new(statement))),
             Err(ControlFlow::Failure(Failure::ListLengthsDontMatch("[")))
         );
         let statement = parsing::Statement::parse("let [one, two] = 1").unwrap().1;
         assert_eq!(
-            run_statement(&mut context, &statement),
+            run_statement(&mut context, Box::leak(Box::new(statement))),
             Err(ControlFlow::Failure(Failure::ExpectedGot(
                 "1",
                 "List".into(),
@@ -499,14 +544,20 @@ mod test {
 
         context.new_scope(|context| {
             let statement = parsing::Statement::parse("let one = 2").unwrap().1;
-            assert_eq!(run_statement(context, &statement), Ok(NoneType.into()));
+            assert_eq!(
+                run_statement(context, Box::leak(Box::new(statement))),
+                Ok(NoneType.into())
+            );
 
             assert_eq!(
                 context.stack.get_variable(&"value"),
                 Ok(&Number::new(1.0).unwrap().into())
             );
             let statement = parsing::Statement::parse("value = 2").unwrap().1;
-            assert_eq!(run_statement(context, &statement), Ok(NoneType.into()));
+            assert_eq!(
+                run_statement(context, Box::leak(Box::new(statement))),
+                Ok(NoneType.into())
+            );
             assert_eq!(
                 context.stack.get_variable(&"value"),
                 Ok(&Number::new(2.0).unwrap().into())
@@ -528,7 +579,10 @@ mod test {
         let mut context = ExecutionContext::default();
 
         let statement = parsing::Statement::parse("loop { break; }").unwrap().1;
-        assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
+        assert_eq!(
+            run_statement(&mut context, Box::leak(Box::new(statement))),
+            Ok(NoneType.into())
+        );
     }
 
     #[test]
@@ -537,18 +591,21 @@ mod test {
 
         let statement = parsing::Statement::parse("if true { 1.0 }").unwrap().1;
         assert_eq!(
-            run_statement(&mut context, &statement),
+            run_statement(&mut context, Box::leak(Box::new(statement))),
             Ok(Number::new(1.0).unwrap().into())
         );
 
         let statement = parsing::Statement::parse("if false { 1.0 }").unwrap().1;
-        assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
+        assert_eq!(
+            run_statement(&mut context, Box::leak(Box::new(statement))),
+            Ok(NoneType.into())
+        );
 
         let statement = parsing::Statement::parse("if true { 1.0 } else { 2.0 }")
             .unwrap()
             .1;
         assert_eq!(
-            run_statement(&mut context, &statement),
+            run_statement(&mut context, Box::leak(Box::new(statement))),
             Ok(Number::new(1.0).unwrap().into())
         );
 
@@ -556,7 +613,7 @@ mod test {
             .unwrap()
             .1;
         assert_eq!(
-            run_statement(&mut context, &statement),
+            run_statement(&mut context, Box::leak(Box::new(statement))),
             Ok(Number::new(2.0).unwrap().into())
         );
 
@@ -564,7 +621,7 @@ mod test {
             .unwrap()
             .1;
         assert_eq!(
-            run_statement(&mut context, &statement),
+            run_statement(&mut context, Box::leak(Box::new(statement))),
             Ok(Number::new(2.0).unwrap().into())
         );
 
@@ -572,7 +629,7 @@ mod test {
             .unwrap()
             .1;
         assert_eq!(
-            run_statement(&mut context, &statement),
+            run_statement(&mut context, Box::leak(Box::new(statement))),
             Ok(Number::new(1.0).unwrap().into())
         );
 
@@ -581,7 +638,7 @@ mod test {
                 .unwrap()
                 .1;
         assert_eq!(
-            run_statement(&mut context, &statement),
+            run_statement(&mut context, Box::leak(Box::new(statement))),
             Ok(Number::new(3.0).unwrap().into())
         );
     }
@@ -591,14 +648,20 @@ mod test {
         let mut context = ExecutionContext::default();
 
         let statement = parsing::Statement::parse("loop { break; }").unwrap().1;
-        assert_eq!(run_statement(&mut context, &statement), Ok(NoneType.into()));
+        assert_eq!(
+            run_statement(&mut context, Box::leak(Box::new(statement))),
+            Ok(NoneType.into())
+        );
 
         let block = parsing::Block::parse(
             "{ let test_one = 0; loop { test_one = 1; break; test_one = 2 } }",
         )
         .unwrap()
         .1;
-        assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"test_one"),
             Ok(&Number::new(1.0).unwrap().into())
@@ -609,7 +672,10 @@ mod test {
         )
         .unwrap()
         .1;
-        assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"test_one"),
             Ok(&Number::new(5.0).unwrap().into())
@@ -620,7 +686,10 @@ mod test {
         )
         .unwrap()
         .1;
-        assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"test_one"),
             Ok(&Number::new(0.0).unwrap().into())
@@ -628,7 +697,7 @@ mod test {
 
         let block = parsing::Block::parse("{ loop { break 1.0; } }").unwrap().1;
         assert_eq!(
-            run_block(&mut context, &block),
+            run_block(&mut context, Box::leak(Box::new(block))),
             Ok(Number::new(1.0).unwrap().into())
         );
     }
@@ -642,7 +711,10 @@ mod test {
         )
         .unwrap()
         .1;
-        assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(NoneType.into())
+        );
         assert_eq!(context.stack.get_variable(&"b"), Ok(&false.into()));
 
         let block = parsing::Block::parse(
@@ -650,7 +722,10 @@ mod test {
         )
         .unwrap()
         .1;
-        assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(NoneType.into())
+        );
         assert_eq!(context.stack.get_variable(&"b"), Ok(&false.into()));
     }
 
@@ -662,7 +737,10 @@ mod test {
             parsing::Block::parse("{ let count = 0; while count < 5 { count = count + 1; } }")
                 .unwrap()
                 .1;
-        assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"count"),
             Ok(&Number::new(5.0).unwrap().into())
@@ -677,7 +755,10 @@ mod test {
             parsing::Block::parse("{ let count = 0; for i in 0..5 { count = count + 1; } }")
                 .unwrap()
                 .1;
-        assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"count"),
             Ok(&Number::new(5.0).unwrap().into())
@@ -687,7 +768,10 @@ mod test {
             parsing::Block::parse("{ let count = 0; for i in 0..5 { count = count + i; } }")
                 .unwrap()
                 .1;
-        assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"count"),
             Ok(&Number::new(10.0).unwrap().into())
@@ -698,7 +782,10 @@ mod test {
         )
         .unwrap()
         .1;
-        assert_eq!(run_block(&mut context, &block), Ok(NoneType.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(NoneType.into())
+        );
         assert_eq!(
             context.stack.get_variable(&"a"),
             Ok(&Number::new(4.0).unwrap().into())
@@ -716,19 +803,25 @@ mod test {
         let block = parsing::Block::parse("{ match 1 { 1 => true, default => false } }")
             .unwrap()
             .1;
-        assert_eq!(run_block(&mut context, &block), Ok(true.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(true.into())
+        );
 
         let block = parsing::Block::parse("{ match 2 { 1 => true, default => false } }")
             .unwrap()
             .1;
-        assert_eq!(run_block(&mut context, &block), Ok(false.into()));
+        assert_eq!(
+            run_block(&mut context, Box::leak(Box::new(block))),
+            Ok(false.into())
+        );
 
         let block =
             parsing::Block::parse("{ match [1, 2] { [1, 1] => 2, [1, 2] => 1, default => 0 } }")
                 .unwrap()
                 .1;
         assert_eq!(
-            run_block(&mut context, &block),
+            run_block(&mut context, Box::leak(Box::new(block))),
             Ok(Number::new(1.0).unwrap().into())
         );
 
@@ -737,7 +830,7 @@ mod test {
                 .unwrap()
                 .1;
         assert_eq!(
-            run_block(&mut context, &block),
+            run_block(&mut context, Box::leak(Box::new(block))),
             Ok(Number::new(2.0).unwrap().into())
         );
 
@@ -745,7 +838,7 @@ mod test {
             .unwrap()
             .1;
         assert_eq!(
-            run_block(&mut context, &block),
+            run_block(&mut context, Box::leak(Box::new(block))),
             Ok(Number::new(1.0).unwrap().into())
         );
 
@@ -753,8 +846,42 @@ mod test {
             .unwrap()
             .1;
         assert_eq!(
-            run_block(&mut context, &block),
+            run_block(&mut context, Box::leak(Box::new(block))),
             Ok(Number::new(1.0).unwrap().into())
         );
+    }
+
+    #[test]
+    fn define_function() {
+        let mut context = ExecutionContext::default();
+
+        let statement = parsing::Statement::parse("function my_function() -> Number { 0 }")
+            .unwrap()
+            .1;
+        assert_eq!(
+            run_statement(&mut context, Box::leak(Box::new(statement))),
+            Ok(NoneType.into())
+        );
+
+        assert!(matches!(
+            context.stack.get_variable(&"my_function"),
+            Ok(Value::UserFunction(_))
+        ));
+    }
+
+    #[test]
+    fn define_structure() {
+        let mut context = ExecutionContext::default();
+
+        let statement = parsing::Statement::parse("struct MyStruct {}").unwrap().1;
+        assert_eq!(
+            run_statement(&mut context, Box::leak(Box::new(statement))),
+            Ok(NoneType.into())
+        );
+
+        assert!(matches!(
+            context.stack.get_variable(&"MyStruct"),
+            Ok(Value::StructDefinition(_))
+        ));
     }
 }

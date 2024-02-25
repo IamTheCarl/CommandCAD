@@ -23,7 +23,7 @@ use crate::script::{
         expressions::{run_expression, run_trailer},
         ExecutionContext, Failure,
     },
-    parsing::{self, MemberVariable, StructInitialization, VariableType},
+    parsing::{self, MemberVariable, StructInitialization, Trailer, VariableType},
     RuntimeLog, Span,
 };
 
@@ -31,20 +31,20 @@ use super::{serializable::SerializableValue, NamedObject, Object, OperatorResult
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Structure<'a, S: Span> {
-    type_name: S,
+    ty: &'a parsing::StructDefinition<S>,
     pub members: Rc<HashMap<String, Value<'a, S>>>,
 }
 
 impl<'a, S: Span> Structure<'a, S> {
     pub fn name(&self) -> &str {
-        self.type_name.as_str()
+        self.ty.name.as_str()
     }
 }
 
 impl<'a, S: Span> Object<'a, S> for Structure<'a, S> {
     fn matches_type(&self, ty: &VariableType<S>) -> bool {
         if let VariableType::Struct(type_name) = ty {
-            type_name.as_str() == self.type_name.as_str()
+            type_name.as_str() == self.ty.name.as_str()
         } else {
             false
         }
@@ -74,7 +74,7 @@ impl<'a, S: Span> Object<'a, S> for Structure<'a, S> {
         }
 
         Ok(SerializableValue::Struct {
-            ty: self.type_name.to_string(),
+            ty: self.ty.name.to_string(),
             members,
         })
     }
@@ -83,15 +83,6 @@ impl<'a, S: Span> Object<'a, S> for Structure<'a, S> {
 impl<'a, S: Span> NamedObject for Structure<'a, S> {
     fn static_type_name() -> &'static str {
         "struct"
-    }
-}
-
-impl<'a, S: Span, const N: usize> From<(S, [(String, Value<'a, S>); N])> for Structure<'a, S> {
-    fn from((type_name, value): (S, [(String, Value<'a, S>); N])) -> Self {
-        Self {
-            type_name,
-            members: Rc::new(HashMap::from(value)),
-        }
     }
 }
 
@@ -129,15 +120,27 @@ pub fn validate_assignment_type<'a, S: Span>(
 }
 
 impl<'a, S: Span> Structure<'a, S> {
-    pub fn new(type_name: S, table: HashMap<String, Value<'a, S>>) -> Self {
+    pub fn new(ty: &'a parsing::StructDefinition<S>, table: HashMap<String, Value<'a, S>>) -> Self {
         Self {
-            type_name,
+            ty,
             members: Rc::new(table),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn from_array<const N: usize>(
+        ty: &'a parsing::StructDefinition<S>,
+        values: [(String, Value<'a, S>); N],
+    ) -> Self {
+        Self {
+            ty,
+            members: Rc::new(HashMap::from(values)),
         }
     }
 
     pub fn initalization(
         context: &mut ExecutionContext<'a, S>,
+        struct_source: &Trailer<S>,
         initalization: &StructInitialization<S>,
     ) -> OperatorResult<S, Value<'a, S>> {
         enum Inheritance<'a, S: Span> {
@@ -145,7 +148,9 @@ impl<'a, S: Span> Structure<'a, S> {
             Default,
         }
 
-        let type_name = initalization.name.clone();
+        let struct_source = run_trailer(context, struct_source)?
+            .downcast::<StructDefinition<S>>(struct_source.get_span())?
+            .definition;
 
         // We're going to run through this whole struct and collect all the errors at once.
         let mut failures = Vec::new();
@@ -156,13 +161,13 @@ impl<'a, S: Span> Structure<'a, S> {
 
             match trailer_result {
                 Value::Structure(structure) => {
-                    if structure.type_name.as_str() == type_name.as_str() {
+                    if structure.ty == struct_source {
                         Some(Inheritance::Structure(structure))
                     } else {
                         return Err(Failure::StructWrongInheritanceType(
                             trailer.get_span().clone(),
-                            type_name,
-                            structure.type_name.clone(),
+                            struct_source.name.clone(),
+                            structure.ty.name.clone(),
                         ));
                     }
                 }
@@ -178,12 +183,6 @@ impl<'a, S: Span> Structure<'a, S> {
         } else {
             None
         };
-
-        let struct_source = context
-            .stack
-            .get_variable(&initalization.name)?
-            .downcast_ref::<StructDefinition<S>>(&initalization.name)?
-            .definition;
 
         let mut members = HashMap::with_capacity(struct_source.members.len());
 
@@ -276,7 +275,7 @@ impl<'a, S: Span> Structure<'a, S> {
 
         if failures.is_empty() {
             Ok(Structure {
-                type_name,
+                ty: struct_source,
                 members: Rc::new(members),
             }
             .into())
@@ -291,7 +290,7 @@ impl<'a, S: Span> Structure<'a, S> {
 
 #[derive(Clone)]
 pub struct StructDefinition<'a, S: Span> {
-    pub definition: &'a parsing::Struct<S>,
+    pub definition: &'a parsing::StructDefinition<S>,
 }
 
 impl<'a, S: Span> Object<'a, S> for StructDefinition<'a, S> {
@@ -347,138 +346,154 @@ mod test {
         let module_scope = ModuleScope::new(&module);
         let mut context = ExecutionContext::new(module_scope);
 
+        let two_part_struct = context
+            .stack
+            .get_variable(&"TwoPartStruct")
+            .unwrap()
+            .downcast_ref::<StructDefinition<&'static str>>(&"")
+            .unwrap()
+            .definition;
+        let empty_struct = context
+            .stack
+            .get_variable(&"EmptyStruct")
+            .unwrap()
+            .downcast_ref::<StructDefinition<&'static str>>(&"")
+            .unwrap()
+            .definition;
+        let default_struct = context
+            .stack
+            .get_variable(&"DefaultStruct")
+            .unwrap()
+            .downcast_ref::<StructDefinition<&'static str>>(&"")
+            .unwrap()
+            .definition;
+
         context.stack.new_variable(
             &"two_part_struct",
-            Structure::from((
-                "TwoPartStruct",
+            Structure::from_array(
+                two_part_struct,
                 [
                     ("value".into(), Number::new(3.0).unwrap().into()),
                     ("other".into(), Number::new(4.0).unwrap().into()),
                 ],
-            ))
+            )
             .into(),
         );
 
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct EmptyStruct {}").unwrap().1
+                &Expression::parse("EmptyStruct {}").unwrap().1
             ),
-            Ok(Structure::from(("EmptyStruct", [])).into())
+            Ok(Structure::from_array(empty_struct, []).into())
         );
 
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct DefaultStruct { value = 24 }")
-                    .unwrap()
-                    .1
+                &Expression::parse("DefaultStruct { value = 24 }").unwrap().1
             ),
-            Ok(Structure::from((
-                "DefaultStruct",
+            Ok(Structure::from_array(
+                default_struct,
                 [("value".into(), Number::new(24.0).unwrap().into())]
-            ))
+            )
             .into())
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct DefaultStruct { ..default }")
-                    .unwrap()
-                    .1
+                &Expression::parse("DefaultStruct { ..default }").unwrap().1
             ),
-            Ok(Structure::from((
-                "DefaultStruct",
+            Ok(Structure::from_array(
+                default_struct,
                 [("value".into(), Number::new(42.0).unwrap().into())]
-            ))
+            )
             .into())
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct DefaultStruct { value = default }")
+                &Expression::parse("DefaultStruct { value = default }")
                     .unwrap()
                     .1
             ),
-            Ok(Structure::from((
-                "DefaultStruct",
+            Ok(Structure::from_array(
+                default_struct,
                 [("value".into(), Number::new(42.0).unwrap().into())]
-            ))
+            )
             .into())
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct TwoPartStruct { ..default }")
-                    .unwrap()
-                    .1
+                &Expression::parse("TwoPartStruct { ..default }").unwrap().1
             ),
-            Ok(Structure::from((
-                "TwoPartStruct",
+            Ok(Structure::from_array(
+                two_part_struct,
                 [
                     ("value".into(), Number::new(1.0).unwrap().into()),
                     ("other".into(), Number::new(2.0).unwrap().into())
                 ]
-            ))
+            )
             .into())
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct TwoPartStruct { value = 3, ..default }")
+                &Expression::parse("TwoPartStruct { value = 3, ..default }")
                     .unwrap()
                     .1
             ),
-            Ok(Structure::from((
-                "TwoPartStruct",
+            Ok(Structure::from_array(
+                two_part_struct,
                 [
                     ("value".into(), Number::new(3.0).unwrap().into()),
                     ("other".into(), Number::new(2.0).unwrap().into())
                 ]
-            ))
+            )
             .into())
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct TwoPartStruct { ..two_part_struct }")
+                &Expression::parse("TwoPartStruct { ..two_part_struct }")
                     .unwrap()
                     .1
             ),
-            Ok(Structure::from((
-                "TwoPartStruct",
+            Ok(Structure::from_array(
+                two_part_struct,
                 [
                     ("value".into(), Number::new(3.0).unwrap().into()),
                     ("other".into(), Number::new(4.0).unwrap().into())
                 ]
-            ))
+            )
             .into())
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct TwoPartStruct { value = 5, ..two_part_struct }")
+                &Expression::parse("TwoPartStruct { value = 5, ..two_part_struct }")
                     .unwrap()
                     .1
             ),
-            Ok(Structure::from((
-                "TwoPartStruct",
+            Ok(Structure::from_array(
+                two_part_struct,
                 [
                     ("value".into(), Number::new(5.0).unwrap().into()),
                     ("other".into(), Number::new(4.0).unwrap().into())
                 ]
-            ))
+            )
             .into())
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct TwoPartStruct { ..struct EmptyStruct {} }")
+                &Expression::parse("TwoPartStruct { ..EmptyStruct {} }")
                     .unwrap()
                     .1
             ),
             Err(Failure::StructWrongInheritanceType(
-                "struct",
+                "EmptyStruct",
                 "TwoPartStruct",
                 "EmptyStruct"
             ))
@@ -486,24 +501,22 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct EmptyStruct { bogus = 24 }")
-                    .unwrap()
-                    .1
+                &Expression::parse("EmptyStruct { bogus = 24 }").unwrap().1
             ),
             Err(Failure::StructConstruction(
-                "struct",
+                "{",
                 vec![Failure::StructExcessAssignment("bogus")]
             ))
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct DefaultStruct { value = false }")
+                &Expression::parse("DefaultStruct { value = false }")
                     .unwrap()
                     .1
             ),
             Err(Failure::StructConstruction(
-                "struct",
+                "{",
                 vec![Failure::ExpectedGot(
                     "false",
                     "Number".into(),

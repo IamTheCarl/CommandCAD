@@ -29,7 +29,7 @@ use crate::script::{
     Span,
 };
 
-use super::term::Term;
+use super::{term::Term, Trailer};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ArithmeticExpression<S: Span> {
@@ -39,7 +39,9 @@ pub enum ArithmeticExpression<S: Span> {
 }
 
 impl<S: Span> ArithmeticExpression<S> {
-    pub fn parse(input: S) -> VResult<S, Self> {
+    pub fn parser(
+        trailer_parser: fn(S) -> VResult<S, Trailer<S>>,
+    ) -> impl FnMut(S) -> VResult<S, Self> {
         #[derive(Clone)]
         enum Operator {
             Addition,
@@ -47,28 +49,36 @@ impl<S: Span> ArithmeticExpression<S> {
         }
 
         alt((
-            flat_map(Term::parse, |first_term| {
-                fold_many0(
-                    pair(
-                        delimited(
-                            space0,
-                            alt((
-                                value(Operator::Addition, nom_char('+')),
-                                value(Operator::Subtraction, nom_char('-')),
-                            )),
-                            space0,
+            flat_map(
+                move |input| Term::parser(trailer_parser, input),
+                move |first_term| {
+                    fold_many0(
+                        pair(
+                            delimited(
+                                space0,
+                                alt((
+                                    value(Operator::Addition, nom_char('+')),
+                                    value(Operator::Subtraction, nom_char('-')),
+                                )),
+                                space0,
+                            ),
+                            context(
+                                "Expected right side term",
+                                cut(move |input| Term::parser(trailer_parser, input)),
+                            ),
                         ),
-                        context("Expected right side term", cut(Term::parse)),
-                    ),
-                    move || ArithmeticExpression::Term(first_term.clone()),
-                    |expression, (operator, factor)| match operator {
-                        Operator::Addition => Self::Addition(Box::new(expression), factor),
-                        Operator::Subtraction => Self::Subtraction(Box::new(expression), factor),
-                    },
-                )
-            }),
-            map(Term::parse, Self::Term),
-        ))(input)
+                        move || ArithmeticExpression::Term(first_term.clone()),
+                        |expression, (operator, factor)| match operator {
+                            Operator::Addition => Self::Addition(Box::new(expression), factor),
+                            Operator::Subtraction => {
+                                Self::Subtraction(Box::new(expression), factor)
+                            }
+                        },
+                    )
+                },
+            ),
+            map(move |input| Term::parser(trailer_parser, input), Self::Term),
+        ))
     }
 
     pub fn get_span(&self) -> &S {
@@ -90,7 +100,7 @@ mod test {
     fn arithmetic_expression() {
         // Addition(Box<Self>, Term<S>),
         assert_eq!(
-            ArithmeticExpression::parse("a + b"),
+            ArithmeticExpression::parser(Trailer::parse)("a + b"),
             Ok((
                 "",
                 ArithmeticExpression::Addition(
@@ -103,7 +113,7 @@ mod test {
         );
         // Subtraction(Box<Self>, Term<S>),
         assert_eq!(
-            ArithmeticExpression::parse("a - b"),
+            ArithmeticExpression::parser(Trailer::parse)("a - b"),
             Ok((
                 "",
                 ArithmeticExpression::Subtraction(
@@ -116,7 +126,7 @@ mod test {
         );
         // Term(Term<S>),
         assert_eq!(
-            ArithmeticExpression::parse("a"),
+            ArithmeticExpression::parser(Trailer::parse)("a"),
             Ok((
                 "",
                 ArithmeticExpression::Term(Term::Trailer(Trailer::None(Factor::Variable("a"))))
@@ -125,7 +135,7 @@ mod test {
 
         // Order of operation tests.
         assert_eq!(
-            ArithmeticExpression::parse("+a + b"),
+            ArithmeticExpression::parser(Trailer::parse)("+a + b"),
             Ok((
                 "",
                 ArithmeticExpression::Addition(

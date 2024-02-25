@@ -29,7 +29,7 @@ use crate::script::{
 
 use super::assign::Assignable;
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct For<S: Span> {
     pub starting_span: S,
     pub name: Option<S>,
@@ -58,7 +58,10 @@ impl<S: Span> For<S> {
                         context("Missing `in` keyword", take_keyword("in")),
                         delimited(
                             space0,
-                            context("Missing iterator expression", Expression::parse),
+                            context(
+                                "Missing iterator expression",
+                                Expression::parse_no_struct_initalization,
+                            ),
                             space0,
                         ),
                         Block::parse,

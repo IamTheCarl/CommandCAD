@@ -26,12 +26,12 @@ use nom::{
 use super::{parse_name, space0, take_keyword, MemberVariable, Span, VResult};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Struct<S: Span> {
+pub struct StructDefinition<S: Span> {
     pub name: S,
     pub members: Vec<MemberVariable<S>>,
 }
 
-impl<S: Span> Struct<S> {
+impl<S: Span> StructDefinition<S> {
     pub fn parse(input: S) -> VResult<S, Self> {
         map(
             preceded(
@@ -65,10 +65,10 @@ mod test {
     #[test]
     fn parse_struct() {
         assert_eq!(
-            Struct::parse("struct MyStruct {}"),
+            StructDefinition::parse("struct MyStruct {}"),
             Ok((
                 "",
-                Struct {
+                StructDefinition {
                     name: "MyStruct",
                     members: vec![]
                 }
@@ -76,10 +76,10 @@ mod test {
         );
 
         assert_eq!(
-            Struct::parse("struct MyStruct { a: Length }"),
+            StructDefinition::parse("struct MyStruct { a: Length }"),
             Ok((
                 "",
-                Struct {
+                StructDefinition {
                     name: "MyStruct",
                     members: vec![MemberVariable {
                         name: "a",
@@ -94,10 +94,10 @@ mod test {
         );
 
         assert_eq!(
-            Struct::parse("struct MyStruct { a: Length, #[integer] b: Angle = true }"),
+            StructDefinition::parse("struct MyStruct { a: Length, #[integer] b: Angle = true }"),
             Ok((
                 "",
-                Struct {
+                StructDefinition {
                     name: "MyStruct",
                     members: vec![
                         MemberVariable {

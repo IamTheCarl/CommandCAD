@@ -121,11 +121,9 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse(
-                    "new_cycle(struct Circle { center = [1mm, 2mm], radius = 3mm })"
-                )
-                .unwrap()
-                .1,
+                &Expression::parse("new_cycle(Circle { center = [1mm, 2mm], radius = 3mm })")
+                    .unwrap()
+                    .1,
             ),
             Ok(Value::Cycle(_))
         ));
@@ -139,7 +137,7 @@ mod test {
             run_expression(
                 &mut context,
                 &Expression::parse(
-                    "new_cycle(struct Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
+                    "new_cycle(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
                 )
                 .unwrap()
                 .1,

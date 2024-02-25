@@ -330,7 +330,7 @@ mod test {
     fn run_solid() {
         let mut runtime = Runtime::load((
             "root_module",
-            "solid my_solid(input: Length = 1cm) { new_sketch(struct Circle { center = [0m, 0m], radius = input }).sweep(global_xy_plane(), [0cm, 0cm, 1cm]) }",
+            "solid my_solid(input: Length = 1cm) { new_sketch(Circle { center = [0m, 0m], radius = input }).sweep(global_xy_plane(), [0cm, 0cm, 1cm]) }",
         ))
         .unwrap();
 

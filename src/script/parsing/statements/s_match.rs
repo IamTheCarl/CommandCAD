@@ -32,7 +32,7 @@ use crate::script::{
 
 use super::Statement;
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Match<S: Span> {
     pub starting_span: S,
     pub expression: Expression<S>,
@@ -45,7 +45,7 @@ impl<S: Span> Match<S> {
             pair(
                 terminated(take_keyword("match"), space1),
                 pair(
-                    Expression::parse,
+                    Expression::parse_no_struct_initalization,
                     delimited(
                         pair(space0, nom_char('{')),
                         separated_list0(
@@ -69,7 +69,7 @@ impl<S: Span> Match<S> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct MatchBranch<S: Span> {
     pub litteral: Litteral<S>,
     pub block: Block<S>,

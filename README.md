@@ -101,10 +101,3 @@ Other code based CAD programs exist, and with how experimental Command CAD curre
    * Does not provide structs
  * Lack of package management
  * Does not provide measurement type safety
-
-# Planned breaking changes
-
-* Functions will be definable from all scopes, but only be access from their current scope or child scopes
-* Structs can be definable from all scopes, but only be accessed from their current scope or child scopes
-* Struct construction will not require the keyword `struct` in front
-  * Struct construction will instead be a trailer operator type

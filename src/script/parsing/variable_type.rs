@@ -119,36 +119,6 @@ impl<S: Span> FunctionSignature<S> {
     fn parse_return_type(input: S) -> VResult<S, VariableType<S>> {
         preceded(pair(tag("->"), space0), VariableType::parse)(input)
     }
-
-    pub fn return_type(&self) -> &VariableType<S> {
-        match self {
-            FunctionSignature::Function {
-                return_type,
-                arguments: _,
-            } => return_type,
-            FunctionSignature::Task {
-                return_type,
-                arguments: _,
-            } => return_type,
-            FunctionSignature::Sketch { arguments: _ } => &VariableType::Sketch,
-            FunctionSignature::Solid { arguments: _ } => &VariableType::Solid,
-        }
-    }
-
-    pub fn arguments(&self) -> &[MemberVariableType<S>] {
-        match self {
-            FunctionSignature::Function {
-                return_type: _,
-                arguments,
-            } => arguments,
-            FunctionSignature::Task {
-                return_type: _,
-                arguments,
-            } => arguments,
-            FunctionSignature::Sketch { arguments } => arguments,
-            FunctionSignature::Solid { arguments } => arguments,
-        }
-    }
 }
 
 impl<S: Span> Display for FunctionSignature<S> {

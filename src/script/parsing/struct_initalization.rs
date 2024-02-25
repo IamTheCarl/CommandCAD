@@ -19,18 +19,17 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::char as nom_char,
-    combinator::{cut, map, opt, success},
+    combinator::{map, opt, success},
     error::context,
     multi::separated_list0,
     sequence::{delimited, pair, preceded, separated_pair, terminated},
 };
 
-use super::{parse_name, space0, take_keyword, Expression, Span, Trailer, VResult};
+use super::{parse_name, space0, Expression, Span, Trailer, VResult};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct StructInitialization<S: Span> {
     pub starting_span: S,
-    pub name: S,
     pub assignments: Vec<(S, Expression<S>)>,
     pub inheritance: Option<Box<Trailer<S>>>,
 }
@@ -38,52 +37,47 @@ pub struct StructInitialization<S: Span> {
 impl<S: Span> StructInitialization<S> {
     pub fn parse(input: S) -> VResult<S, Self> {
         map(
-            pair(
-                take_keyword("struct"),
-                cut(pair(
-                    delimited(space0, parse_name, space0),
-                    delimited(
-                        pair(context("Missing opening bracket", nom_char('{')), space0),
-                        alt((
-                            pair(
-                                success(vec![]),
-                                map(
-                                    preceded(
-                                        terminated(tag(".."), space0),
-                                        map(Trailer::parse, Box::new),
-                                    ),
-                                    Some,
-                                ),
-                            ),
-                            pair(
-                                separated_list0(
-                                    nom_char(','),
-                                    delimited(
-                                        space0,
-                                        separated_pair(
-                                            parse_name,
-                                            delimited(space0, nom_char('='), space0),
-                                            Expression::parse,
-                                        ),
-                                        space0,
-                                    ),
-                                ),
-                                opt(preceded(
-                                    pair(
-                                        pair(space0, nom_char(',')),
-                                        delimited(space0, tag(".."), space0),
-                                    ),
+            terminated(
+                pair(
+                    terminated(context("Missing opening bracket", tag("{")), space0),
+                    alt((
+                        pair(
+                            success(vec![]),
+                            map(
+                                preceded(
+                                    terminated(tag(".."), space0),
                                     map(Trailer::parse, Box::new),
-                                )),
+                                ),
+                                Some,
                             ),
-                        )),
-                        pair(space0, context("Missing closing bracket", nom_char('}'))),
-                    ),
-                )),
+                        ),
+                        pair(
+                            separated_list0(
+                                nom_char(','),
+                                delimited(
+                                    space0,
+                                    separated_pair(
+                                        parse_name,
+                                        delimited(space0, nom_char('='), space0),
+                                        Expression::parse,
+                                    ),
+                                    space0,
+                                ),
+                            ),
+                            opt(preceded(
+                                pair(
+                                    pair(space0, nom_char(',')),
+                                    delimited(space0, tag(".."), space0),
+                                ),
+                                map(Trailer::parse, Box::new),
+                            )),
+                        ),
+                    )),
+                ),
+                pair(space0, context("Missing closing bracket", nom_char('}'))),
             ),
-            |(starting_span, (name, (assignments, inheritance)))| Self {
+            |(starting_span, (assignments, inheritance))| Self {
                 starting_span,
-                name,
                 assignments,
                 inheritance,
             },

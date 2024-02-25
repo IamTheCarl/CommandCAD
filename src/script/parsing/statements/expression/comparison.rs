@@ -30,7 +30,7 @@ use crate::script::{
     Span,
 };
 
-use super::arithmetic::ArithmeticExpression;
+use super::{arithmetic::ArithmeticExpression, Trailer};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Comparison<S: Span> {
@@ -43,7 +43,10 @@ pub enum Comparison<S: Span> {
 }
 
 impl<S: Span> Comparison<S> {
-    pub(super) fn parse(input: S) -> VResult<S, Self> {
+    pub(super) fn parser(
+        trailer_parser: fn(S) -> VResult<S, Trailer<S>>,
+        input: S,
+    ) -> VResult<S, Self> {
         #[derive(Clone)]
         enum Operator {
             LessThan,
@@ -54,42 +57,45 @@ impl<S: Span> Comparison<S> {
         }
 
         alt((
-            flat_map(ArithmeticExpression::parse, |first_expression| {
-                fold_many0(
-                    pair(
-                        delimited(
-                            space0,
-                            alt((
-                                value(Operator::LessThanEqual, tag("<=")),
-                                value(Operator::Equal, tag("==")),
-                                value(Operator::GreaterThanEqual, tag(">=")),
-                                value(Operator::LessThan, nom_char('<')),
-                                value(Operator::GreaterThan, nom_char('>')),
-                            )),
-                            space0,
+            flat_map(
+                ArithmeticExpression::parser(trailer_parser),
+                move |first_expression| {
+                    fold_many0(
+                        pair(
+                            delimited(
+                                space0,
+                                alt((
+                                    value(Operator::LessThanEqual, tag("<=")),
+                                    value(Operator::Equal, tag("==")),
+                                    value(Operator::GreaterThanEqual, tag(">=")),
+                                    value(Operator::LessThan, nom_char('<')),
+                                    value(Operator::GreaterThan, nom_char('>')),
+                                )),
+                                space0,
+                            ),
+                            context(
+                                "Expected right side arithmetic expression.",
+                                cut(ArithmeticExpression::parser(trailer_parser)),
+                            ),
                         ),
-                        context(
-                            "Expected right side arithmetic expression.",
-                            cut(ArithmeticExpression::parse),
-                        ),
-                    ),
-                    move || Comparison::None(first_expression.clone()),
-                    |comparison, (operator, expression)| match operator {
-                        Operator::LessThan => Self::LessThan(Box::new(comparison), expression),
-                        Operator::LessThanEqual => {
-                            Self::LessThanEqual(Box::new(comparison), expression)
-                        }
-                        Operator::Equal => Self::Equal(Box::new(comparison), expression),
-                        Operator::GreaterThanEqual => {
-                            Self::GreaterThanEqual(Box::new(comparison), expression)
-                        }
-                        Operator::GreaterThan => {
-                            Self::GreaterThan(Box::new(comparison), expression)
-                        }
-                    },
-                )
-            }),
-            map(ArithmeticExpression::parse, Self::None),
+                        move || Comparison::None(first_expression.clone()),
+                        |comparison, (operator, expression)| match operator {
+                            Operator::LessThan => Self::LessThan(Box::new(comparison), expression),
+                            Operator::LessThanEqual => {
+                                Self::LessThanEqual(Box::new(comparison), expression)
+                            }
+                            Operator::Equal => Self::Equal(Box::new(comparison), expression),
+                            Operator::GreaterThanEqual => {
+                                Self::GreaterThanEqual(Box::new(comparison), expression)
+                            }
+                            Operator::GreaterThan => {
+                                Self::GreaterThan(Box::new(comparison), expression)
+                            }
+                        },
+                    )
+                },
+            ),
+            map(ArithmeticExpression::parser(trailer_parser), Self::None),
         ))(input)
     }
 
@@ -116,7 +122,7 @@ mod test {
     #[test]
     fn comparison() {
         assert_eq!(
-            Comparison::parse("a"),
+            Comparison::parser(Trailer::parse, "a"),
             Ok((
                 "",
                 Comparison::None(ArithmeticExpression::Term(Term::Trailer(Trailer::None(
@@ -126,7 +132,7 @@ mod test {
         );
 
         assert_eq!(
-            Comparison::parse("a < b"),
+            Comparison::parser(Trailer::parse, "a < b"),
             Ok((
                 "",
                 Comparison::LessThan(
@@ -139,7 +145,7 @@ mod test {
         );
 
         assert_eq!(
-            Comparison::parse("a <= b"),
+            Comparison::parser(Trailer::parse, "a <= b"),
             Ok((
                 "",
                 Comparison::LessThanEqual(
@@ -152,7 +158,7 @@ mod test {
         );
 
         assert_eq!(
-            Comparison::parse("a == b"),
+            Comparison::parser(Trailer::parse, "a == b"),
             Ok((
                 "",
                 Comparison::Equal(
@@ -165,7 +171,7 @@ mod test {
         );
 
         assert_eq!(
-            Comparison::parse("a >= b"),
+            Comparison::parser(Trailer::parse, "a >= b"),
             Ok((
                 "",
                 Comparison::GreaterThanEqual(
@@ -178,7 +184,7 @@ mod test {
         );
 
         assert_eq!(
-            Comparison::parse("a > b"),
+            Comparison::parser(Trailer::parse, "a > b"),
             Ok((
                 "",
                 Comparison::GreaterThan(

@@ -53,6 +53,10 @@ impl<S: Span> Function<S> {
             },
         )(input)
     }
+
+    pub fn get_span(&self) -> &S {
+        &self.starting_span
+    }
 }
 
 #[cfg(test)]

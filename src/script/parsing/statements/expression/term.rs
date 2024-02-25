@@ -40,7 +40,7 @@ pub enum Term<S: Span> {
 }
 
 impl<S: Span> Term<S> {
-    pub fn parse(input: S) -> VResult<S, Self> {
+    pub fn parser(trailer_parser: fn(S) -> VResult<S, Trailer<S>>, input: S) -> VResult<S, Self> {
         #[derive(Clone)]
         enum Operator {
             Multiplication,
@@ -49,7 +49,7 @@ impl<S: Span> Term<S> {
 
         alt((
             map(Range::parse, Self::Range),
-            flat_map(Trailer::parse, |first_trailer| {
+            flat_map(trailer_parser, move |first_trailer| {
                 fold_many0(
                     pair(
                         delimited(
@@ -60,7 +60,7 @@ impl<S: Span> Term<S> {
                             )),
                             space0,
                         ),
-                        context("Expected right side term.", cut(Trailer::parse)),
+                        context("Expected right side term.", cut(trailer_parser)),
                     ),
                     move || Self::Trailer(first_trailer.clone()),
                     |term, (operator, accessor)| match operator {
@@ -69,7 +69,7 @@ impl<S: Span> Term<S> {
                     },
                 )
             }),
-            map(Trailer::parse, Self::Trailer),
+            map(trailer_parser, Self::Trailer),
         ))(input)
     }
 
@@ -93,7 +93,7 @@ mod test {
     fn term() {
         // Multiply(Box<Self>, Factor<S>),
         assert_eq!(
-            Term::parse("x * y"),
+            Term::parser(Trailer::parse, "x * y"),
             Ok((
                 "",
                 Term::Multiply(
@@ -104,7 +104,7 @@ mod test {
         );
         // Divide(Box<Self>, Factor<S>),
         assert_eq!(
-            Term::parse("x / y"),
+            Term::parser(Trailer::parse, "x / y"),
             Ok((
                 "",
                 Term::Divide(
@@ -115,13 +115,13 @@ mod test {
         );
         // Factor(Factor<S>),
         assert_eq!(
-            Term::parse("x"),
+            Term::parser(Trailer::parse, "x"),
             Ok(("", Term::Trailer(Trailer::None(Factor::Variable("x")))))
         );
 
         // Range(Range<S>),
         assert_eq!(
-            Term::parse("a..b"),
+            Term::parser(Trailer::parse, "a..b"),
             Ok((
                 "",
                 Term::Range(Range {
@@ -133,7 +133,7 @@ mod test {
             ))
         );
         assert_eq!(
-            Term::parse(".."),
+            Term::parser(Trailer::parse, ".."),
             Ok((
                 "",
                 Term::Range(Range {

@@ -43,7 +43,8 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
     context.stack.new_variable_str(
         "RawRegion",
         StructDefinition {
-            definition: Box::leak(Box::new(parsing::Struct {
+            // TODO replace box leak with lazy static.
+            definition: Box::leak(Box::new(parsing::StructDefinition {
                 name: S::from_str("RawRegion"),
                 members: vec![
                     MemberVariable {
@@ -195,11 +196,9 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse(
-                    "new_region(struct Circle { center = [1mm, 2mm], radius = 3mm })"
-                )
-                .unwrap()
-                .1,
+                &Expression::parse("new_region(Circle { center = [1mm, 2mm], radius = 3mm })")
+                    .unwrap()
+                    .1,
             ),
             Ok(Value::Region(_))
         ));
@@ -213,7 +212,7 @@ mod test {
             run_expression(
                 &mut context,
                 &Expression::parse(
-                    "new_region(struct Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
+                    "new_region(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
                 )
                 .unwrap()
                 .1,
@@ -230,8 +229,8 @@ mod test {
             run_expression(
                 &mut context,
                 &Expression::parse(
-                    "new_region(struct RawRegion { exterior = new_cycle(struct Circle { center = [1mm, 2mm], radius = 3mm }),
-interior = [new_cycle(struct Circle { center = [1mm, 2mm], radius = 3mm / 2 })] })"
+                    "new_region(RawRegion { exterior = new_cycle(Circle { center = [1mm, 2mm], radius = 3mm }),
+interior = [new_cycle(Circle { center = [1mm, 2mm], radius = 3mm / 2 })] })"
                 )
                 .unwrap()
                 .1,

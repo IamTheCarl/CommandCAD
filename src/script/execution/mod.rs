@@ -235,7 +235,7 @@ impl<'a, S: Span> Stack<'a, S> {
 
 #[derive(Debug, Default)]
 pub struct ModuleScope<'a, S: Span> {
-    structs: HashMap<String, &'a parsing::Struct<S>>,
+    structs: HashMap<String, &'a parsing::StructDefinition<S>>,
     functions: HashMap<String, &'a parsing::Function<S>>,
     tasks: HashMap<String, &'a parsing::Task<S>>,
     sketches: HashMap<String, &'a parsing::Sketch<S>>,
@@ -391,7 +391,7 @@ impl<'a, S: Span> ExecutionContext<'a, S> {
 
 fn run_block<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    block: &Block<S>,
+    block: &'a Block<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     let mut result = NoneType.into();
 
@@ -406,7 +406,7 @@ fn run_block<'a, S: Span>(
 
 fn run_named_block<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    block: &NamedBlock<S>,
+    block: &'a NamedBlock<S>,
     arguments: Vec<Value<'a, S>>,
     spans: &[parsing::Expression<S>],
     default_span: &S,
@@ -496,11 +496,9 @@ mod test {
         let module_scope = ModuleScope::new(&module);
 
         let mut context = ExecutionContext::new(module_scope);
+        let block = parsing::Block::parse("{ my_function(5) }").unwrap().1;
 
-        let result = run_block(
-            &mut context,
-            &parsing::Block::parse("{ my_function(5) }").unwrap().1,
-        );
+        let result = run_block(&mut context, Box::leak(Box::new(block)));
         assert_eq!(result, Ok(Number::new(5.0).unwrap().into()));
     }
 
@@ -520,11 +518,9 @@ mod test {
         let module_scope = ModuleScope::new(&module);
 
         let mut context = ExecutionContext::new(module_scope);
+        let block = parsing::Block::parse("{ my_function(default) }").unwrap().1;
 
-        let result = run_block(
-            &mut context,
-            &parsing::Block::parse("{ my_function(default) }").unwrap().1,
-        );
+        let result = run_block(&mut context, Box::leak(Box::new(block)));
         assert_eq!(result, Ok(Number::new(5.0).unwrap().into()));
     }
 
@@ -544,15 +540,11 @@ mod test {
         let module_scope = ModuleScope::new(&module);
 
         let mut context = ExecutionContext::new(module_scope);
+        let block = parsing::Block::parse("{ let value = 0; my_function(5); value }")
+            .unwrap()
+            .1;
 
-        let result = context.new_scope(|context| {
-            run_block(
-                context,
-                &parsing::Block::parse("{ let value = 0; my_function(5); value }")
-                    .unwrap()
-                    .1,
-            )
-        });
+        let result = context.new_scope(|context| run_block(context, Box::leak(Box::new(block))));
         assert_eq!(
             result,
             Err(ControlFlow::Failure(Failure::VariableNotInScope(
@@ -569,7 +561,7 @@ mod test {
         let module = Module::load(
             &mut log,
             "test_module.ccm",
-            "struct MyStruct {} function my_function() -> struct MyStruct { struct MyStruct {} }",
+            "struct MyStruct {} function my_function() -> struct MyStruct { MyStruct {} }",
         )
         .unwrap();
 
@@ -578,19 +570,12 @@ mod test {
         let module_scope = ModuleScope::new(&module);
 
         let mut context = ExecutionContext::new(module_scope);
-        let result = context.new_scope(|context| {
-            run_block(
-                context,
-                &parsing::Block::parse("{ my_function() }").unwrap().1,
-            )
-        });
+        let block = parsing::Block::parse("{ my_function() }").unwrap().1;
+
+        let result = context.new_scope(|context| run_block(context, Box::leak(Box::new(block))));
         assert_eq!(
             result.unwrap(),
-            run_expression(
-                &mut context,
-                &Expression::parse("struct MyStruct {}").unwrap().1
-            )
-            .unwrap()
+            run_expression(&mut context, &Expression::parse("MyStruct {}").unwrap().1).unwrap()
         );
     }
 }

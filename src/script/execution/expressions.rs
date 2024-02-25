@@ -168,6 +168,9 @@ pub fn run_trailer<'a, S: Span>(
                 arguments,
             )
         }
+        Trailer::StructInitalization(definition, initalization) => {
+            Structure::initalization(context, definition, initalization)
+        }
         Trailer::Index(trailer, index) => {
             let value = run_trailer(context, trailer)?;
             let index = run_expression(context, index)?;
@@ -193,9 +196,6 @@ pub fn run_factor<'a, S: Span>(
         }
         Factor::UnaryLogicalNot(factor) => {
             run_factor(context, factor)?.unary_logical_not(&mut context.log, factor.get_span())
-        }
-        Factor::StructInitalization(initalization) => {
-            Structure::initalization(context, initalization)
         }
     }
 }
@@ -414,7 +414,7 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("struct DefaultStruct { ..default }.value")
+                &Expression::parse("DefaultStruct { ..default }.value")
                     .unwrap()
                     .1
             ),

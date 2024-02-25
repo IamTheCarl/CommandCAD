@@ -117,7 +117,7 @@ impl SerializableValue {
                 }
 
                 if failures.is_empty() {
-                    Ok(Structure::new(initalizer.name.clone(), table).into())
+                    Ok(Structure::new(initalizer, table).into())
                 } else {
                     Err(Failure::StructConstruction(span.clone(), failures))
                 }
@@ -284,9 +284,7 @@ mod test {
             structure.unwrap(),
             run_expression(
                 &mut context,
-                &Expression::parse("struct MyStruct { value = 42 }")
-                    .unwrap()
-                    .1
+                &Expression::parse("MyStruct { value = 42 }").unwrap().1
             )
             .unwrap()
         );
@@ -304,9 +302,7 @@ mod test {
             structure.unwrap(),
             run_expression(
                 &mut context,
-                &Expression::parse("struct MyStruct { ..default }")
-                    .unwrap()
-                    .1
+                &Expression::parse("MyStruct { ..default }").unwrap().1
             )
             .unwrap()
         );
@@ -353,9 +349,7 @@ mod test {
 
         let value: Value<&'static str> = run_expression(
             &mut context,
-            &Expression::parse("struct MyStruct { value = 42 }")
-                .unwrap()
-                .1,
+            &Expression::parse("MyStruct { value = 42 }").unwrap().1,
         )
         .unwrap();
 

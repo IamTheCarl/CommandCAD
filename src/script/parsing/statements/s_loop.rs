@@ -27,7 +27,7 @@ use crate::script::{
     Span,
 };
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Loop<S: Span> {
     pub starting_span: S,
     pub name: Option<S>,

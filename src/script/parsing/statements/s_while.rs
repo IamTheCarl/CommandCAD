@@ -27,7 +27,7 @@ use crate::script::{
     Span,
 };
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct While<S: Span> {
     pub starting_span: S,
     pub name: Option<S>,
@@ -49,7 +49,10 @@ impl<S: Span> While<S> {
                     cut(pair(
                         delimited(
                             space0,
-                            context("Missing while loop condition expression", Expression::parse),
+                            context(
+                                "Missing while loop condition expression",
+                                Expression::parse_no_struct_initalization,
+                            ),
                             space0,
                         ),
                         context("While loop is missing block", Block::parse),

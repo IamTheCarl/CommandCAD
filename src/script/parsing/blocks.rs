@@ -27,7 +27,7 @@ use nom::{
 
 use super::{parse_name, space0, MemberVariable, Span, Statement, VResult, VariableType};
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct NamedBlock<S: Span> {
     pub name: S,
     pub parameter_span: S,
@@ -87,7 +87,7 @@ impl<S: Span> NamedBlock<S> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum BlockStatement<S: Span> {
     Closed(Statement<S>),
     Open(Statement<S>),
@@ -122,7 +122,7 @@ impl<S: Span> BlockStatement<S> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Block<S: Span> {
     pub statements: Vec<BlockStatement<S>>,
 }

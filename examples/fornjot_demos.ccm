@@ -1,6 +1,6 @@
 
 solid cuboid(x: Length, y: Length, z: Length) {
-  let base_sketch = new_sketch(struct Polygon { points = [
+  let base_sketch = new_sketch(Polygon { points = [
     [-x / 2., -y / 2.],
     [x / 2., -y / 2.],
     [x / 2., y / 2.],

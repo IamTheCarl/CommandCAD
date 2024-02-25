@@ -189,7 +189,7 @@ impl<S: Span> Module<S> {
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct RootElements<S: Span> {
     pub(super) imports: Vec<parsing::Import<S>>,
-    pub(super) structs: Vec<parsing::Struct<S>>,
+    pub(super) structs: Vec<parsing::StructDefinition<S>>,
     pub(super) functions: Vec<parsing::Function<S>>,
     pub(super) tasks: Vec<parsing::Task<S>>,
     pub(super) sketches: Vec<parsing::Sketch<S>>,
@@ -218,7 +218,7 @@ impl<S: Span> RootElements<S> {
         }
     }
 
-    fn validate_struct(log: &mut Vec<Failure<S>>, structure: &parsing::Struct<S>) {
+    fn validate_struct(log: &mut Vec<Failure<S>>, structure: &parsing::StructDefinition<S>) {
         // Name should not be a reserved keyword.
         if let Some(keyword) = is_reserved_keyword(&structure.name) {
             log.push(Failure::ReservedKeyword(structure.name.clone(), keyword));
@@ -323,7 +323,7 @@ mod test {
 
         assert_eq!(
             root.structs,
-            [parsing::Struct {
+            [parsing::StructDefinition {
                 name: "MyStruct",
                 members: vec![]
             }]

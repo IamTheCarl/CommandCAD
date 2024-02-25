@@ -49,6 +49,14 @@ pub enum Expression<S: Span> {
 
 impl<S: Span> Expression<S> {
     pub fn parse(input: S) -> VResult<S, Self> {
+        Self::parse_impl(Trailer::parse, input)
+    }
+
+    pub fn parse_no_struct_initalization(input: S) -> VResult<S, Self> {
+        Self::parse_impl(Trailer::parse_no_struct_initalization, input)
+    }
+
+    fn parse_impl(trailer_parser: fn(S) -> VResult<S, Trailer<S>>, input: S) -> VResult<S, Self> {
         #[derive(Clone)]
         enum Operator {
             And,
@@ -56,30 +64,36 @@ impl<S: Span> Expression<S> {
         }
 
         alt((
-            flat_map(Comparison::parse, |first_comp| {
-                fold_many0(
-                    pair(
-                        delimited(
-                            space0,
-                            alt((
-                                value(Operator::And, tag("&&")),
-                                value(Operator::Or, tag("||")),
-                            )),
-                            space0,
+            flat_map(
+                |input| Comparison::parser(trailer_parser, input),
+                move |first_comp| {
+                    fold_many0(
+                        pair(
+                            delimited(
+                                space0,
+                                alt((
+                                    value(Operator::And, tag("&&")),
+                                    value(Operator::Or, tag("||")),
+                                )),
+                                space0,
+                            ),
+                            context(
+                                "Expected right side comparison or arithmetic expression",
+                                cut(move |input| Comparison::parser(trailer_parser, input)),
+                            ),
                         ),
-                        context(
-                            "Expected right side comparison or arithmetic expression",
-                            cut(Comparison::parse),
-                        ),
-                    ),
-                    move || Self::Buffer(first_comp.clone()),
-                    |expression, (operator, comparison)| match operator {
-                        Operator::And => Self::And(Box::new(expression), comparison),
-                        Operator::Or => Self::Or(Box::new(expression), comparison),
-                    },
-                )
-            }),
-            map(Comparison::parse, Self::Buffer),
+                        move || Self::Buffer(first_comp.clone()),
+                        |expression, (operator, comparison)| match operator {
+                            Operator::And => Self::And(Box::new(expression), comparison),
+                            Operator::Or => Self::Or(Box::new(expression), comparison),
+                        },
+                    )
+                },
+            ),
+            map(
+                |input| Comparison::parser(trailer_parser, input),
+                Self::Buffer,
+            ),
         ))(input)
     }
 

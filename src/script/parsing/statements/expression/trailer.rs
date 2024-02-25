@@ -24,11 +24,20 @@ use nom::{
 };
 
 use crate::script::{
-    parsing::{parse_name, space0, VResult},
+    parsing::{parse_name, space0, StructInitialization, VResult},
     Span,
 };
 
 use super::{factor::Factor, Expression};
+
+#[derive(Clone)]
+enum Operation<S: Span> {
+    Attribute(S),
+    Call(Vec<Expression<S>>),
+    MethodCall(S, Vec<Expression<S>>),
+    StructInitalization(StructInitialization<S>),
+    Index(Expression<S>),
+}
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Trailer<S: Span> {
@@ -36,83 +45,117 @@ pub enum Trailer<S: Span> {
     Attribute(Box<Trailer<S>>, S),
     Call(Box<Trailer<S>>, Vec<Expression<S>>),
     MethodCall(Box<Trailer<S>>, S, Vec<Expression<S>>),
+    StructInitalization(Box<Trailer<S>>, StructInitialization<S>),
     Index(Box<Trailer<S>>, Box<Expression<S>>),
 }
 
 impl<S: Span> Trailer<S> {
-    pub fn parse(input: S) -> VResult<S, Self> {
-        #[derive(Clone)]
-        enum Operation<S: Span> {
-            Attribute(S),
-            Call(Vec<Expression<S>>),
-            MethodCall(S, Vec<Expression<S>>),
-            Index(Expression<S>),
-        }
+    fn parse_method_call(input: S) -> VResult<S, Operation<S>> {
+        map(
+            pair(
+                preceded(pair(nom_char('.'), space0), parse_name),
+                preceded(
+                    space0,
+                    delimited(
+                        nom_char('('),
+                        separated_list0(
+                            nom_char(','),
+                            delimited(space0, Expression::parse, space0),
+                        ),
+                        nom_char(')'),
+                    ),
+                ),
+            ),
+            |(attribute, arguments)| Operation::MethodCall(attribute, arguments),
+        )(input)
+    }
 
+    fn parse_attribute_access(input: S) -> VResult<S, Operation<S>> {
+        map(
+            preceded(pair(nom_char('.'), space0), parse_name),
+            Operation::Attribute,
+        )(input)
+    }
+
+    fn parse_struct_initalization(input: S) -> VResult<S, Operation<S>> {
+        map(StructInitialization::parse, Operation::StructInitalization)(input)
+    }
+
+    fn parse_call(input: S) -> VResult<S, Operation<S>> {
+        map(
+            delimited(
+                nom_char('('),
+                separated_list0(nom_char(','), delimited(space0, Expression::parse, space0)),
+                nom_char(')'),
+            ),
+            Operation::Call,
+        )(input)
+    }
+
+    fn parse_index(input: S) -> VResult<S, Operation<S>> {
+        map(
+            delimited(
+                nom_char('['),
+                delimited(space0, Expression::parse, space0),
+                nom_char(']'),
+            ),
+            Operation::Index,
+        )(input)
+    }
+
+    fn unpack_operation(trailer: Trailer<S>, operation: Operation<S>) -> Self {
+        match operation {
+            Operation::Attribute(member_name) => Self::Attribute(Box::new(trailer), member_name),
+            Operation::Call(arguments) => Self::Call(Box::new(trailer), arguments),
+            Operation::MethodCall(member_name, arguments) => {
+                Self::MethodCall(Box::new(trailer), member_name, arguments)
+            }
+            Operation::StructInitalization(initalization) => {
+                Self::StructInitalization(Box::new(trailer), initalization)
+            }
+            Operation::Index(indexer) => Self::Index(Box::new(trailer), Box::new(indexer)),
+        }
+    }
+
+    pub fn parse(input: S) -> VResult<S, Self> {
         alt((
             flat_map(Factor::parse, |first_factor| {
                 fold_many0(
                     delimited(
                         space0,
                         alt((
-                            map(
-                                pair(
-                                    preceded(pair(nom_char('.'), space0), parse_name),
-                                    preceded(
-                                        space0,
-                                        delimited(
-                                            nom_char('('),
-                                            separated_list0(
-                                                nom_char(','),
-                                                delimited(space0, Expression::parse, space0),
-                                            ),
-                                            nom_char(')'),
-                                        ),
-                                    ),
-                                ),
-                                |(attribute, arguments)| {
-                                    Operation::MethodCall(attribute, arguments)
-                                },
-                            ),
-                            map(
-                                preceded(pair(nom_char('.'), space0), parse_name),
-                                Operation::Attribute,
-                            ),
-                            map(
-                                delimited(
-                                    nom_char('('),
-                                    separated_list0(
-                                        nom_char(','),
-                                        delimited(space0, Expression::parse, space0),
-                                    ),
-                                    nom_char(')'),
-                                ),
-                                Operation::Call,
-                            ),
-                            map(
-                                delimited(
-                                    nom_char('['),
-                                    delimited(space0, Expression::parse, space0),
-                                    nom_char(']'),
-                                ),
-                                Operation::Index,
-                            ),
+                            Self::parse_method_call,
+                            Self::parse_attribute_access,
+                            Self::parse_struct_initalization,
+                            Self::parse_call,
+                            Self::parse_index,
                         )),
                         space0,
                     ),
                     move || Self::None(first_factor.clone()),
-                    |trailer, operation| match operation {
-                        Operation::Attribute(member_name) => {
-                            Self::Attribute(Box::new(trailer), member_name)
-                        }
-                        Operation::Call(arguments) => Self::Call(Box::new(trailer), arguments),
-                        Operation::MethodCall(member_name, arguments) => {
-                            Self::MethodCall(Box::new(trailer), member_name, arguments)
-                        }
-                        Operation::Index(indexer) => {
-                            Self::Index(Box::new(trailer), Box::new(indexer))
-                        }
-                    },
+                    Self::unpack_operation,
+                )
+            }),
+            map(Factor::parse, Self::None),
+        ))(input)
+    }
+
+    pub fn parse_no_struct_initalization(input: S) -> VResult<S, Self> {
+        alt((
+            flat_map(Factor::parse, |first_factor| {
+                fold_many0(
+                    delimited(
+                        space0,
+                        alt((
+                            Self::parse_method_call,
+                            Self::parse_attribute_access,
+                            Self::parse_call,
+                            Self::parse_index,
+                        )),
+                        space0,
+                    ),
+                    move || Self::None(first_factor.clone()),
+                    Self::unpack_operation,
                 )
             }),
             map(Factor::parse, Self::None),
@@ -124,14 +167,17 @@ impl<S: Span> Trailer<S> {
             Trailer::None(spanable) => spanable.get_span(),
             Trailer::Attribute(spanable, _) => spanable.get_span(),
             Trailer::Call(spanable, _) => spanable.get_span(),
-            Trailer::MethodCall(spanable, _, _) => spanable.get_span(),
             Trailer::Index(spanable, _) => spanable.get_span(),
+            Trailer::StructInitalization(spanable, _) => spanable.get_span(),
+            Trailer::MethodCall(spanable, _, _) => spanable.get_span(),
         }
     }
 }
 
 #[cfg(test)]
 mod test {
+    use crate::script::parsing::Litteral;
+
     use super::*;
 
     #[test]
@@ -275,6 +321,77 @@ mod test {
                     )),
                     "returned",
                     vec![]
+                )
+            ))
+        );
+    }
+
+    #[test]
+    fn trailer_struct_initalization() {
+        assert_eq!(
+            Trailer::parse("MyStruct { ..default }"),
+            Ok((
+                "",
+                Trailer::StructInitalization(
+                    Box::new(Trailer::None(Factor::Variable("MyStruct"))),
+                    StructInitialization {
+                        starting_span: "{",
+                        assignments: vec![],
+                        inheritance: Some(Box::new(Trailer::None(Factor::Litteral(
+                            Litteral::Default("default")
+                        ))))
+                    }
+                )
+            ))
+        );
+        // StructInitalization(StructInitalization<S>),
+        assert_eq!(
+            Trailer::parse("MyStruct {}"),
+            Ok((
+                "",
+                Trailer::StructInitalization(
+                    Box::new(Trailer::None(Factor::Variable("MyStruct"))),
+                    StructInitialization {
+                        starting_span: "{",
+                        assignments: vec![],
+                        inheritance: None
+                    }
+                )
+            ))
+        );
+        assert_eq!(
+            Trailer::parse("MyStruct { a = b, c = d }"),
+            Ok((
+                "",
+                Trailer::StructInitalization(
+                    Box::new(Trailer::None(Factor::Variable("MyStruct"))),
+                    StructInitialization {
+                        starting_span: "{",
+                        assignments: vec![
+                            ("a", Expression::parse("b").unwrap().1),
+                            ("c", Expression::parse("d").unwrap().1)
+                        ],
+                        inheritance: None
+                    }
+                )
+            ))
+        );
+        assert_eq!(
+            Trailer::parse("MyStruct { a = b, c = d, ..default }"),
+            Ok((
+                "",
+                Trailer::StructInitalization(
+                    Box::new(Trailer::None(Factor::Variable("MyStruct"))),
+                    StructInitialization {
+                        starting_span: "{",
+                        assignments: vec![
+                            ("a", Expression::parse("b").unwrap().1),
+                            ("c", Expression::parse("d").unwrap().1)
+                        ],
+                        inheritance: Some(Box::new(Trailer::None(Factor::Litteral(
+                            Litteral::Default("default")
+                        ))))
+                    }
                 )
             ))
         );
