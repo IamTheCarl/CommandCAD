@@ -32,10 +32,10 @@ use crate::script::{
     parsing::FunctionSignature,
 };
 
-pub use crate::script::execution::types::SerializableValue;
+pub use crate::script::execution::types::{Measurement, SerializableValue};
 use execution::{types::Object, ExecutionContext, ModuleScope};
 
-use self::execution::types::Sketch;
+use self::execution::{types::Sketch, GlobalResources};
 mod execution;
 
 type RuntimeSpan = LocatedSpan<ImString>;
@@ -51,6 +51,10 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    pub fn global_resources_mut<R>(&mut self, f: impl FnOnce(&mut GlobalResources) -> R) -> R {
+        self.with_context_mut(|context| f(&mut context.global_resources))
+    }
+
     pub fn load(module: (impl Into<String>, impl Into<ImString>)) -> Result<Self> {
         let mut log = Vec::new();
 

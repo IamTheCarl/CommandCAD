@@ -12,7 +12,7 @@ Examples of mathmatical operations, and some control flow demos. Really demonstr
 Performs addition of two numbers.
 
 ```
-cargo run -- run basic_math.ccm addition -- 2 3
+cargo run -- run examples/basic_math.ccm addition -- 2 3
 5.0
 ```
 
@@ -22,7 +22,7 @@ A recursive function that will count down from the specified number of cycles, a
 For example, if I were to input 3, the output would be the sum of 3 + 2 + 1, resulting in 6.
 
 ```
-cargo run -- run basic_math.ccm recursive_addition -- 3
+cargo run -- run examples/basic_math.ccm recursive_addition -- 3
 6.0
 ```
 
@@ -31,7 +31,7 @@ cargo run -- run basic_math.ccm recursive_addition -- 3
 Converts lengths to meters.
 
 ```
-cargo run -- run basic_math.ccm convert_to_meters -- 3yd
+cargo run -- run examples/basic_math.ccm convert_to_meters -- 3yd
 2.7432
 ```
 
@@ -40,12 +40,12 @@ cargo run -- run basic_math.ccm convert_to_meters -- 3yd
 Functions can have default values provided, but you can also override the default value from the CLI.
 
 ```
-cargo run -- run basic_math.ccm default_value -- default
+cargo run -- run examples/basic_math.ccm default_value -- default
 42.0
 ```
 
 ```
-cargo run -- run basic_math.ccm default_value -- 3yd
+cargo run -- run examples/basic_math.ccm default_value -- 3yd
 2.7432
 ```
 
@@ -62,7 +62,7 @@ Currently only one of the demos are implemented.
 
 Create a box structure by providing its measurements.
 ```
-cargo run -- form examples/fornjot_demos.ccm cuboid ~/cuboid.stl -- 1cm 1cm 1cm
+cargo run -- form examples/fornjot_demos.ccm cuboid --output ~/cuboid.stl -- 1cm 1cm 1cm
 ```
 
 ## Sketches

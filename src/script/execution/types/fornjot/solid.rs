@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj::core::{objects::Solid as FornjotSolid, storage::Handle};
+use fj_core::{objects::Solid as FornjotSolid, storage::Handle};
 
 use crate::script::{
     execution::{

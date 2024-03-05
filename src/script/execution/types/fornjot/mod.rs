@@ -17,7 +17,7 @@
  */
 
 use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
-use fj::math::{Point, Scalar, Vector};
+use fj_math::{Point, Scalar, Vector};
 
 use crate::script::{
     execution::{

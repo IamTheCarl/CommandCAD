@@ -18,7 +18,7 @@
 
 use std::rc::Rc;
 
-use fj::core::{
+use fj_core::{
     objects::Region as FornjotRegion,
     operations::{build::BuildRegion, insert::Insert},
     storage::Handle,
@@ -80,9 +80,9 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                         FornjotRegion::circle(
                             center,
                             radius,
-                            &mut context.global_resources.fornjot_services,
+                            &mut context.global_resources.fornjot_core,
                         )
-                        .insert(&mut context.global_resources.fornjot_services),
+                        .insert(&mut context.global_resources.fornjot_core),
                     )
                     .into())
                 }
@@ -90,11 +90,8 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                     let points = unwrap_polygon(context, span, configuration)?;
 
                     Ok(Region::from(
-                        FornjotRegion::polygon(
-                            points,
-                            &mut context.global_resources.fornjot_services,
-                        )
-                        .insert(&mut context.global_resources.fornjot_services),
+                        FornjotRegion::polygon(points, &mut context.global_resources.fornjot_core)
+                            .insert(&mut context.global_resources.fornjot_core),
                     )
                     .into())
                 }
@@ -144,8 +141,8 @@ impl Region {
             .map(|cycle| cycle.handle);
 
         Ok(Self::from(
-            FornjotRegion::new(exterior_cycle, interior_cycles, None)
-                .insert(&mut context.global_resources.fornjot_services),
+            FornjotRegion::new(exterior_cycle, interior_cycles)
+                .insert(&mut context.global_resources.fornjot_core),
         ))
     }
 }

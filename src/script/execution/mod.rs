@@ -29,7 +29,7 @@ use super::{
 
 pub mod types;
 use compact_str::CompactString;
-use fj::core::services::Services;
+use fj_core::Core;
 use types::{StructDefinition, UserFunction, Value};
 
 mod expressions;
@@ -320,7 +320,7 @@ pub struct GlobalResources {
     pub convert_to_fornjot_units: fn(&Measurement) -> Option<f64>,
 
     // FIXME we need to unwind the validation messages, otherwise this panics on drop.
-    pub fornjot_services: Services,
+    pub fornjot_core: Core,
 }
 
 impl Default for GlobalResources {
@@ -328,7 +328,7 @@ impl Default for GlobalResources {
         Self {
             convert_to_fornjot_units: Measurement::get_measurement_to_float_converter("mm")
                 .unwrap(),
-            fornjot_services: Default::default(),
+            fornjot_core: Default::default(),
         }
     }
 }

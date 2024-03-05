@@ -16,10 +16,43 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use clap::builder::{PossibleValuesParser, TypedValueParser};
+use clap::builder::{NonEmptyStringValueParser, PossibleValuesParser, TypedValueParser};
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 use clap::Parser;
+
+#[derive(Clone, Debug)]
+pub enum OutputTarget {
+    Stdout,
+    File(PathBuf),
+}
+
+impl Display for OutputTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stdout => write!(f, "[stdout]"),
+            Self::File(path) => write!(f, "{:?}", path),
+        }
+    }
+}
+
+impl Default for OutputTarget {
+    fn default() -> Self {
+        Self::Stdout
+    }
+}
+
+impl FromStr for OutputTarget {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "-" => Ok(Self::Stdout),
+            "[stdout]" => Ok(Self::Stdout),
+            _ => Ok(Self::File(PathBuf::from(s))),
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "ccad")]
@@ -31,7 +64,7 @@ pub enum Command {
     Form(FormArgs),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TaskOutputFormat {
     Yaml,
     Json,
@@ -68,14 +101,24 @@ impl FromStr for TaskOutputFormat {
 #[command(version, about)]
 /// Run a task and write the output to a file, or stdout.
 pub struct RunArgs {
+    /// Path to script to run
     pub script: PathBuf,
+
+    /// Name of the task within the script to be ran
     pub task_name: String,
 
-    #[arg(long, default_value_t = TaskOutputFormat::default(),
+    /// The format to output the result in (is automatically derived if outputting to a file, or defaults to json if outputting to stdout)
+    #[arg(long, default_value = Option::None,
           value_parser = PossibleValuesParser::new(["json", "yaml"])
 	  .map(|s| s.parse::<TaskOutputFormat>().unwrap()),)]
-    pub output_format: TaskOutputFormat,
+    pub output_format: Option<TaskOutputFormat>,
 
+    /// Path to target output file. Set to - or leave blank to output to stdout
+    #[arg(long, default_value_t = OutputTarget::default(),
+	  value_parser = NonEmptyStringValueParser::new().map(|s| s.parse::<OutputTarget>().unwrap()))]
+    pub output: OutputTarget,
+
+    /// Arguments to be passed to the task function
     #[arg(last = true)]
     pub arguments: Vec<String>,
 }
@@ -91,7 +134,7 @@ pub struct SketchArgs {
     pub arguments: Vec<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SolidOutputFormat {
     ThreeMF,
     Stl,
@@ -134,9 +177,18 @@ pub struct FormArgs {
     pub script: PathBuf,
     pub solid_name: String,
 
-    // FIXME Fornjot needs modification to output to stdout, so we're just taking a file path for now.
     /// File to write solid to (3MF, STL, or STL)
-    pub output_file: PathBuf,
+    #[arg(long, default_value = Option::None,
+          value_parser = PossibleValuesParser::new(["3mf", "stl", "obj"])
+	  .map(|s| s.parse::<SolidOutputFormat>().unwrap()),)]
+    pub output_format: Option<SolidOutputFormat>,
+
+    pub tolerance: Option<String>,
+
+    /// Path to target output file. Set to - or leave blank to output to stdout
+    #[arg(long, default_value_t = OutputTarget::default(),
+	  value_parser = NonEmptyStringValueParser::new().map(|s| s.parse::<OutputTarget>().unwrap()))]
+    pub output: OutputTarget,
 
     #[arg(last = true)]
     pub arguments: Vec<String>,

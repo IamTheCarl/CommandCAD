@@ -25,7 +25,7 @@ use crate::script::{
     Span,
 };
 
-use fj::core::{
+use fj_core::{
     objects::Cycle as FornjotCycle,
     operations::{build::BuildCycle, insert::Insert},
     storage::Handle,
@@ -44,20 +44,18 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                     let circle = FornjotCycle::circle(
                         center,
                         radius,
-                        &mut context.global_resources.fornjot_services,
+                        &mut context.global_resources.fornjot_core,
                     );
-                    let circle = circle.insert(&mut context.global_resources.fornjot_services);
+                    let circle = circle.insert(&mut context.global_resources.fornjot_core);
 
                     Ok(Cycle { handle: circle }.into())
                 }
                 "Polygon" => {
                     let points = unwrap_polygon(context, span, configuration)?;
 
-                    let polygone = FornjotCycle::polygon(
-                        points,
-                        &mut context.global_resources.fornjot_services,
-                    );
-                    let polygon = polygone.insert(&mut context.global_resources.fornjot_services);
+                    let polygone =
+                        FornjotCycle::polygon(points, &mut context.global_resources.fornjot_core);
+                    let polygon = polygone.insert(&mut context.global_resources.fornjot_core);
 
                     Ok(Cycle { handle: polygon }.into())
                 }

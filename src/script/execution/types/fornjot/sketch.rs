@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj::core::{
+use fj_core::{
     objects::{Region as FornjotRegion, Sketch as FornjotSketch},
     operations::{build::BuildRegion, insert::Insert, sweep::SweepSketch},
     storage::Handle,
@@ -52,7 +52,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                     let regions = unpack_dynamic_length_list::<S, Region>(span, regions)?
                         .map(|region| region.handle);
                     let handle = FornjotSketch::new(regions)
-                        .insert(&mut context.global_resources.fornjot_services);
+                        .insert(&mut context.global_resources.fornjot_core);
 
                     Ok(Sketch { handle }.into())
                 }
@@ -62,12 +62,12 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                         let region = FornjotRegion::circle(
                             center,
                             radius,
-                            &mut context.global_resources.fornjot_services,
+                            &mut context.global_resources.fornjot_core,
                         )
-                        .insert(&mut context.global_resources.fornjot_services);
+                        .insert(&mut context.global_resources.fornjot_core);
 
                         let handle = FornjotSketch::new([region])
-                            .insert(&mut context.global_resources.fornjot_services);
+                            .insert(&mut context.global_resources.fornjot_core);
 
                         Ok(Sketch { handle }.into())
                     }
@@ -76,13 +76,13 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
 
                         let polygon = FornjotRegion::polygon(
                             points,
-                            &mut context.global_resources.fornjot_services,
+                            &mut context.global_resources.fornjot_core,
                         );
                         let polygon = polygon;
-                        let region = polygon.insert(&mut context.global_resources.fornjot_services);
+                        let region = polygon.insert(&mut context.global_resources.fornjot_core);
 
                         let handle = FornjotSketch::new([region])
-                            .insert(&mut context.global_resources.fornjot_services);
+                            .insert(&mut context.global_resources.fornjot_core);
 
                         Ok(Sketch { handle }.into())
                     }
@@ -138,12 +138,8 @@ impl<'a, S: Span> Object<'a, S> for Sketch {
 
                 let solid = self
                     .handle
-                    .sweep_sketch(
-                        surface,
-                        path,
-                        &mut context.global_resources.fornjot_services,
-                    )
-                    .insert(&mut context.global_resources.fornjot_services);
+                    .sweep_sketch(surface, path, &mut context.global_resources.fornjot_core)
+                    .insert(&mut context.global_resources.fornjot_core);
 
                 Ok(Solid::from(solid).into())
             }

@@ -18,7 +18,7 @@
 
 use std::rc::Rc;
 
-use fj::math::{Point, Scalar};
+use fj_math::{Point, Scalar};
 use parsing::Span;
 
 use crate::script::{

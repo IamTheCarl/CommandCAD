@@ -16,20 +16,33 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs, io::Write, ops::Deref, path::PathBuf};
+use std::{
+    fs::{self, File},
+    io::{Seek, Write},
+    ops::Deref,
+    path::PathBuf,
+    str::FromStr,
+};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
+use arguments::{OutputTarget, SolidOutputFormat, TaskOutputFormat};
+use atty::Stream;
 use clap::Parser;
 
 mod arguments;
 // mod package;
 mod script;
 
-use fj::{
-    core::algorithms::{approx::Tolerance, triangulate::Triangulate},
-    export::export,
+use fj_core::algorithms::{
+    approx::Tolerance, bounding_volume::BoundingVolume, triangulate::Triangulate,
 };
+use fj_export::{export_3mf, export_obj, export_stl};
+use fj_math::{Aabb, Point, Scalar};
 use script::{Failure, Runtime, SerializableValue};
+use tempfile::SpooledTempFile;
+use uom::si::{f64::Length, length::millimeter};
+
+use crate::script::Measurement;
 
 fn main() {
     stderrlog::new().init().unwrap();
@@ -47,11 +60,31 @@ fn run(run_args: arguments::RunArgs) {
         run_args.script,
         run_args.arguments,
         |runtime, arguments| runtime.run_task(&run_args.task_name, arguments),
-        |value, mut output| {
-            match run_args.output_format {
-                arguments::TaskOutputFormat::Yaml => serde_yaml::to_writer(&mut output, &value)
+        |value, _runtime| {
+            let (mut output, format): (Box<dyn Write>, TaskOutputFormat) = match run_args.output {
+                OutputTarget::Stdout => {
+                    let format = run_args.output_format.unwrap_or_default();
+
+                    (Box::new(std::io::stdout()), format)
+                }
+                OutputTarget::File(path) => {
+                    let format = if let Some(output_format) = run_args.output_format {
+                        output_format
+                    } else {
+                        path.extension()
+                            .and_then(|ext| ext.to_str())
+                            .and_then(|s| TaskOutputFormat::from_str(s).ok())
+                            .ok_or(anyhow!("Could not infer output format from file name"))?
+                    };
+
+                    (Box::new(File::create(path)?), format)
+                }
+            };
+
+            match format {
+                TaskOutputFormat::Yaml => serde_yaml::to_writer(&mut output, &value)
                     .context("Failed to serialize results")?,
-                arguments::TaskOutputFormat::Json => serde_json::to_writer(&mut output, &value)
+                TaskOutputFormat::Json => serde_json::to_writer(&mut output, &value)
                     .context("Failed to serialize results")?,
             };
 
@@ -69,7 +102,7 @@ fn sketch(sketch_args: arguments::SketchArgs) {
         sketch_args.script,
         sketch_args.arguments,
         |runtime, arguments| runtime.run_sketch(&sketch_args.sketch_name, arguments),
-        |_value, _output| Ok(()), // Sketches are not yet serializable.
+        |_value, _runtime| Ok(()), // Sketches are not yet serializable.
     ) {
         log::error!("Failed to build sketch: {:?}", error);
     }
@@ -80,19 +113,94 @@ fn form(form_args: arguments::FormArgs) {
         form_args.script,
         form_args.arguments,
         |runtime, arguments| runtime.run_solid(&form_args.solid_name, arguments),
-        |solid, _output| {
-            // TODO load tolerance from arguments. It should be a measurement type.
-            // TODO we can automatically derive this value from the bounding box of the model.
-            let tolerance = Tolerance::from_scalar(0.1).unwrap();
+        |solid, runtime| {
+            let tolerance = match form_args.tolerance {
+                Some(tolerance) => {
+                    let tolerance = Measurement::from_str(&tolerance)?;
+                    let tolerance: Length = tolerance
+                        .try_into()
+                        .map_err(|_| anyhow!("Failed to parse tolerance as a length"))?;
 
-            let mesh = (solid.handle.deref(), tolerance).triangulate();
+                    Tolerance::from_scalar(tolerance.get::<millimeter>())?
+                }
+                None => {
+                    // Compute a default tolerance derived from the bounding box.
+                    let aabb = solid.handle.deref().aabb().unwrap_or(Aabb {
+                        min: Point::origin(),
+                        max: Point::origin(),
+                    });
 
-            export(&mesh, &form_args.output_file)?;
+                    // Find the smallest face.
+                    let mut min_extent = Scalar::MAX;
+                    for extent in aabb.size().components {
+                        if extent > Scalar::ZERO && extent < min_extent {
+                            min_extent = extent;
+                        }
+                    }
+
+                    // Our smallest face will be divided into 1000 parts.
+                    let tolerance = min_extent / Scalar::from_f64(1000.0);
+                    Tolerance::from_scalar(tolerance)?
+                }
+            };
+
+            let mesh = runtime.global_resources_mut(|global_resources| {
+                (solid.handle.deref(), tolerance).triangulate(&mut global_resources.fornjot_core)
+            });
+
+            match form_args.output {
+                OutputTarget::Stdout => {
+                    let format = form_args.output_format.unwrap_or_default();
+                    let mut output = std::io::stdout();
+
+                    let is_binary_format = match format {
+                        SolidOutputFormat::ThreeMF => true,
+                        SolidOutputFormat::Stl => true,
+                        SolidOutputFormat::Obj => false,
+                    };
+
+                    if is_binary_format && atty::is(Stream::Stdout) {
+                        bail!("Refusing to output binary data to terminal.");
+                    }
+
+                    match format {
+                        SolidOutputFormat::ThreeMF => {
+                            // We'll use a bout a megabyte of memory before buffering to the filesystem.
+                            let mut tempfile = SpooledTempFile::new(1024 * 1024);
+
+                            export_3mf(&mesh, &mut tempfile)?;
+                            tempfile.seek(std::io::SeekFrom::Start(0))?;
+
+                            std::io::copy(&mut tempfile, &mut output)?;
+                        }
+                        SolidOutputFormat::Stl => export_stl(&mesh, &mut output)?,
+                        SolidOutputFormat::Obj => export_obj(&mesh, &mut output)?,
+                    }
+                }
+                OutputTarget::File(path) => {
+                    let format = if let Some(output_format) = form_args.output_format {
+                        output_format
+                    } else {
+                        path.extension()
+                            .and_then(|ext| ext.to_str())
+                            .and_then(|s| SolidOutputFormat::from_str(s).ok())
+                            .ok_or(anyhow!("Could not infer output format from file name"))?
+                    };
+
+                    let mut output = File::create(path)?;
+
+                    match format {
+                        SolidOutputFormat::ThreeMF => export_3mf(&mesh, &mut output)?,
+                        SolidOutputFormat::Stl => export_stl(&mesh, &mut output)?,
+                        SolidOutputFormat::Obj => export_obj(&mesh, &mut output)?,
+                    }
+                }
+            };
 
             Ok(())
         },
     ) {
-        log::error!("Failed to build sketch: {:?}", error);
+        log::error!("Failed to build solid: {:?}", error);
     }
 }
 
@@ -104,7 +212,7 @@ fn trampoline<A, S, R>(
 ) -> Result<()>
 where
     A: FnOnce(&mut Runtime, Vec<SerializableValue>) -> std::result::Result<R, Failure>,
-    S: FnOnce(R, &mut dyn Write) -> Result<()>,
+    S: FnOnce(R, &mut Runtime) -> Result<()>,
 {
     fn parse_argument(argument: &str) -> Result<SerializableValue> {
         match serde_json::from_str(argument) {
@@ -148,12 +256,9 @@ where
         }
     }
 
-    // TODO support writing to file.
-    let mut output_stream = std::io::stdout();
-
     match result {
         Ok(result) => {
-            serialize_action(result, &mut output_stream)?;
+            serialize_action(result, &mut runtime)?;
         }
         Err(failure) => {
             log::error!("{}", failure);
