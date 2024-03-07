@@ -44,6 +44,7 @@ impl<S: Span> Function<S> {
                 signature: Rc::new(FunctionSignature::Function {
                     return_type: Box::new(return_type),
                     arguments: named_block
+                        .callable
                         .parameters
                         .iter()
                         .map(|p| p.ty.clone())
@@ -61,7 +62,7 @@ impl<S: Span> Function<S> {
 
 #[cfg(test)]
 mod test {
-    use crate::script::parsing::{Block, VariableType};
+    use crate::script::parsing::{blocks::CallableBlock, Block, VariableType};
 
     use super::*;
 
@@ -76,9 +77,11 @@ mod test {
                     starting_span: "function",
                     named_block: NamedBlock {
                         name: "my_function",
-                        parameter_span: "(",
-                        parameters: vec![],
-                        block: Block { statements: vec![] }
+                        callable: CallableBlock {
+                            parameter_span: "(",
+                            parameters: vec![],
+                            block: Block { statements: vec![] }
+                        }
                     },
                     signature: Rc::new(FunctionSignature::Function {
                         return_type: Box::new(VariableType::Measurement("Length")),

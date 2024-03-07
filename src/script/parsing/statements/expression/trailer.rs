@@ -360,6 +360,20 @@ mod test {
             ))
         );
         assert_eq!(
+            Trailer::parse("MyStruct { a = b, }"),
+            Ok((
+                "",
+                Trailer::StructInitalization(
+                    Box::new(Trailer::None(Factor::Variable("MyStruct"))),
+                    StructInitialization {
+                        starting_span: "{",
+                        assignments: vec![("a", Expression::parse("b").unwrap().1),],
+                        inheritance: None
+                    }
+                )
+            ))
+        );
+        assert_eq!(
             Trailer::parse("MyStruct { a = b, c = d }"),
             Ok((
                 "",

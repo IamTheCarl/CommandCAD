@@ -56,13 +56,26 @@ The file `bearing.ccm` is actually pseudo code that was used to drive the design
 ## Fornjot Demos
 
 Copies the demos from the Fornjot repository (Fornjot being the CAD kernel this project is built on)
-Currently only one of the demos are implemented.
 
 ### Cuboid
 
 Create a box structure by providing its measurements.
 ```
 cargo run -- form examples/fornjot_demos.ccm cuboid --output ~/cuboid.stl -- 1cm 1cm 1cm
+```
+
+### Holes
+
+Craete a box and show off some holes!
+```
+cargo run -- form examples/fornjot_demos.ccm holes --output ~/output.stl -- 5mm
+```
+
+### Spacer
+
+Create a simple ring spacer.
+```
+cargo run -- form examples/fornjot_demos.ccm spacer --output ~/output.stl -- 10mm 5mm 5mm
 ```
 
 ## Sketches

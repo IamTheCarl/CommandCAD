@@ -10,7 +10,39 @@ solid cuboid(x: Length, y: Length, z: Length) {
   base_sketch.sweep(global_xy_plane(), [0cm, 0cm, z])
 }
 
+solid holes(hole_radius: Length) {
+  let size = hole_radius * 4;
+  let cube = cuboid(size * 2, size, size);
+
+  let cube = cube.update_shell(cube.shells[0], [hole_radius, size](shell: Shell) -> Shell {
+    let offset = size / 2;
+    let depth = size / 2;
+
+    let bottom_face = shell.faces[0];
+    let shell = shell.add_blind_hole(bottom_face, [-offset, 0mm], hole_radius, [0mm, 0mm, depth]);
+
+    let bottom_face = shell.faces[0];
+    let top_face = shell.faces[5];
+    let shell = shell.add_through_hole(bottom_face, [offset, 0mm], top_face, [offset, 0mm], hole_radius);
+
+    [shell]
+  });
+
+  cube
+}
+
+solid spacer(outer_radius: Length, inner_radius: Length, height: Length) {
+    let bottom_surface = global_xy_plane();
+    let sweep_path = [0mm, 0mm, height];
+
+    let base_sketch = new_sketch([
+      new_region(RawRegion {
+          exterior = new_cycle(Circle { center = [0mm, 0mm], radius = outer_radius }),
+	  interiors = [new_cycle(Circle { center = [0mm, 0mm], radius = inner_radius }).reverse()],
+      })
+    ]);
+
+    base_sketch.sweep(bottom_surface, sweep_path)
+}
+
 // Further demos are not yet possible with the current limitations of the language.
-// The script has no concept of lifetime, meaning that the `update_shell` method used to modify the shells
-// of solids cannot be used. Something like a closure that isn't allowed to manipulate its outer environment
-// could fix this issue, but the parser rework I want to do will be necessary first.

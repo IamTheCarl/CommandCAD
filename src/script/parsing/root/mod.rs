@@ -74,7 +74,9 @@ mod test {
 
     use std::rc::Rc;
 
-    use crate::script::parsing::{Block, FunctionSignature, NamedBlock, VariableType};
+    use crate::script::parsing::{
+        blocks::CallableBlock, Block, FunctionSignature, NamedBlock, VariableType,
+    };
 
     use super::*;
 
@@ -113,9 +115,11 @@ mod test {
                     starting_span: "sketch",
                     named_block: NamedBlock {
                         name: "my_sketch",
-                        parameter_span: "(",
-                        parameters: vec![],
-                        block: Block { statements: vec![] }
+                        callable: CallableBlock {
+                            parameter_span: "(",
+                            parameters: vec![],
+                            block: Block { statements: vec![] }
+                        }
                     },
                     signature: Rc::new(FunctionSignature::Sketch { arguments: vec![] }),
                 })
@@ -131,9 +135,11 @@ mod test {
                     starting_span: "solid",
                     named_block: NamedBlock {
                         name: "my_solid",
-                        parameter_span: "(",
-                        parameters: vec![],
-                        block: Block { statements: vec![] }
+                        callable: CallableBlock {
+                            parameter_span: "(",
+                            parameters: vec![],
+                            block: Block { statements: vec![] }
+                        }
                     },
                     signature: Rc::new(FunctionSignature::Solid { arguments: vec![] }),
                 })
@@ -149,9 +155,11 @@ mod test {
                     starting_span: "function",
                     named_block: NamedBlock {
                         name: "my_function",
-                        parameter_span: "(",
-                        parameters: vec![],
-                        block: Block { statements: vec![] }
+                        callable: CallableBlock {
+                            parameter_span: "(",
+                            parameters: vec![],
+                            block: Block { statements: vec![] }
+                        }
                     },
                     signature: Rc::new(FunctionSignature::Function {
                         return_type: Box::new(VariableType::Measurement("Length")),
@@ -213,9 +221,11 @@ mod test {
                             starting_span: "sketch",
                             named_block: NamedBlock {
                                 name: "my_sketch",
-                                parameter_span: "(",
-                                parameters: vec![],
-                                block: Block { statements: vec![] }
+                                callable: CallableBlock {
+                                    parameter_span: "(",
+                                    parameters: vec![],
+                                    block: Block { statements: vec![] }
+                                }
                             },
                             signature: Rc::new(FunctionSignature::Sketch { arguments: vec![] }),
                         }),
@@ -223,9 +233,11 @@ mod test {
                             starting_span: "solid",
                             named_block: NamedBlock {
                                 name: "my_solid",
-                                parameter_span: "(",
-                                parameters: vec![],
-                                block: Block { statements: vec![] }
+                                callable: CallableBlock {
+                                    parameter_span: "(",
+                                    parameters: vec![],
+                                    block: Block { statements: vec![] }
+                                }
                             },
                             signature: Rc::new(FunctionSignature::Solid { arguments: vec![] }),
                         }),
@@ -233,9 +245,11 @@ mod test {
                             starting_span: "function",
                             named_block: NamedBlock {
                                 name: "my_function",
-                                parameter_span: "(",
-                                parameters: vec![],
-                                block: Block { statements: vec![] }
+                                callable: CallableBlock {
+                                    parameter_span: "(",
+                                    parameters: vec![],
+                                    block: Block { statements: vec![] }
+                                }
                             },
                             signature: Rc::new(FunctionSignature::Function {
                                 return_type: Box::new(VariableType::Measurement("Length")),
@@ -246,9 +260,11 @@ mod test {
                             starting_span: "task",
                             named_block: NamedBlock {
                                 name: "my_task",
-                                parameter_span: "(",
-                                parameters: vec![],
-                                block: Block { statements: vec![] }
+                                callable: CallableBlock {
+                                    parameter_span: "(",
+                                    parameters: vec![],
+                                    block: Block { statements: vec![] }
+                                }
                             },
                             signature: Rc::new(FunctionSignature::Task {
                                 return_type: Box::new(VariableType::Measurement("Length")),

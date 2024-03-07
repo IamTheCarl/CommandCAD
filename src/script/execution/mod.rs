@@ -16,14 +16,14 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::script::execution::types::NoneType;
 
-use self::types::{validate_assignment_type, Measurement};
+use self::types::{validate_assignment_type, Measurement, OperatorResult};
 
 use super::{
-    parsing::{self, Block, NamedBlock},
+    parsing::{self, Block, CallableBlock},
     RuntimeLog, Span,
 };
 
@@ -45,6 +45,9 @@ enum ScopeType {
     Inherited,
     Isolated,
     Module,
+    Closure {
+        references: HashSet<compact_str::CompactString>,
+    },
 }
 
 impl Default for ScopeType {
@@ -66,6 +69,72 @@ impl<'a, S: Span> Default for Scope<'a, S> {
             variables: Default::default(),
         }
     }
+}
+
+macro_rules! optionally_mut_ref {
+    (mutable $l:lifetime $ty:ty) => {
+        & $l mut $ty
+    };
+    (immutable $l:lifetime $ty:ty) => {
+        & $l $ty
+    };
+}
+
+macro_rules! generate_variable_getter {
+    ($self:ident, $span:ident, $name:ident, $iter:ident, $get:ident, $mutable:ident) => {
+	{
+            fn check_module_scope<'a, 'b, S: Span>(
+                mut scope_iterator: impl Iterator<Item = optionally_mut_ref!($mutable 'b Scope<'a, S>)>,
+                name: &str,
+            ) -> Option<optionally_mut_ref!($mutable 'b Value<'a, S>)> {
+                if let Some(value) = scope_iterator
+                    .find(|scope| matches!(&scope.ty, ScopeType::Module))
+                    .and_then(|scope| scope.variables.$get(name))
+                {
+                    Some(value)
+                } else {
+                    None
+                }
+            }
+
+            // TODO we should refuse to provide module level scopes when doing an immutable access, since those need to be fully immutable.
+            let mut scope_iterator = $self.scopes[..=$self.active_scope].$iter().rev();
+
+            for scope in &mut scope_iterator {
+                if let Some(value) = scope.variables.$get($name) {
+                    return Ok(value);
+                }
+
+                match &scope.ty {
+                    // This is the scope of a closure. If the variable we are looking for is referenced, keep searching up the stack for it.
+                    ScopeType::Closure { references } => {
+                        if references.contains($name) {
+                            continue;
+                        } else {
+                            // Oh, well then let's skip to the module scope.
+                            if let Some(value) = check_module_scope(scope_iterator, $name) {
+                                return Ok(value);
+                            }
+                        }
+                        break;
+                    }
+                    // If this scope is isolated, then we should skip to the module scope.
+                    ScopeType::Isolated => {
+                        if let Some(value) = check_module_scope(scope_iterator, $name) {
+                            return Ok(value);
+                        }
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            Err(Failure::VariableNotInScope(
+                $span.clone(),
+                $name.to_string().into(),
+            ))
+	}
+    };
 }
 
 // TODO do we want to implement a stack limit?
@@ -150,13 +219,28 @@ impl<'a, S: Span> Stack<'a, S> {
         }
     }
 
-    fn push_scope(&mut self, mode: ScopeType) {
-        self.active_scope += 1;
-        if self.active_scope >= self.scopes.len() {
+    fn push_scope(
+        &mut self,
+        variables_to_copy: impl Iterator<Item = &'a S>,
+        mode: ScopeType,
+    ) -> OperatorResult<S, ()> {
+        let next_scope_index = self.active_scope + 1;
+        if next_scope_index >= self.scopes.len() {
             self.scopes.push(Scope::default());
         }
 
-        self.scopes[self.active_scope].ty = mode;
+        self.scopes[next_scope_index].ty = mode;
+
+        for variable in variables_to_copy {
+            let value = self.get_variable(variable)?.clone();
+            self.scopes[next_scope_index]
+                .variables
+                .insert(variable.as_str().into(), value);
+        }
+
+        self.active_scope = next_scope_index;
+
+        Ok(())
     }
 
     fn pop_scope(&mut self) {
@@ -169,57 +253,19 @@ impl<'a, S: Span> Stack<'a, S> {
         self.get_variable_str(name, name.as_str())
     }
 
-    pub fn get_variable_str(&self, span: &S, name: &str) -> Result<&Value<'a, S>, Failure<S>> {
-        let mut scope_iterator = self.scopes[..=self.active_scope].iter().rev();
-
-        for scope in &mut scope_iterator {
-            if let Some(value) = scope.variables.get(name) {
-                return Ok(value);
-            }
-
-            // If this scope is isolated, then we should skip to the module scope.
-            if matches!(scope.ty, ScopeType::Isolated) {
-                if let Some(value) = scope_iterator
-                    .find(|scope| matches!(&scope.ty, ScopeType::Module))
-                    .and_then(|scope| scope.variables.get(name))
-                {
-                    return Ok(value);
-                }
-                break;
-            }
-        }
-
-        Err(Failure::VariableNotInScope(
-            span.clone(),
-            name.to_string().into(),
-        ))
+    pub fn get_variable_mut(&mut self, name: &S) -> Result<&mut Value<'a, S>, Failure<S>> {
+        self.get_variable_str_mut(name, name.as_str())
     }
 
-    pub fn get_variable_mut(&mut self, name: &S) -> Result<&mut Value<'a, S>, Failure<S>> {
-        // TODO we should refuse to provide module level scopes, since those need to be fully immutable.
-        let mut scope_iterator = self.scopes[..=self.active_scope].iter_mut().rev();
-
-        for scope in &mut scope_iterator {
-            if let Some(value) = scope.variables.get_mut(name.as_str()) {
-                return Ok(value);
-            }
-
-            // If this scope is isolated, then we should skip to the module scope.
-            if matches!(scope.ty, ScopeType::Isolated) {
-                if let Some(value) = scope_iterator
-                    .find(|scope| matches!(scope.ty, ScopeType::Module))
-                    .and_then(|scope| scope.variables.get_mut(name.as_str()))
-                {
-                    return Ok(value);
-                }
-                break;
-            }
-        }
-
-        Err(Failure::VariableNotInScope(
-            name.clone(),
-            name.to_string().into(),
-        ))
+    pub fn get_variable_str(&self, span: &S, name: &str) -> Result<&Value<'a, S>, Failure<S>> {
+        generate_variable_getter!(self, span, name, iter, get, immutable)
+    }
+    pub fn get_variable_str_mut(
+        &mut self,
+        span: &S,
+        name: &str,
+    ) -> Result<&mut Value<'a, S>, Failure<S>> {
+        generate_variable_getter!(self, span, name, iter_mut, get_mut, mutable)
     }
 
     pub fn new_variable(&mut self, name: &S, value: Value<'a, S>) {
@@ -373,7 +419,10 @@ impl<'a, S: Span> ExecutionContext<'a, S> {
     }
 
     pub fn new_scope<R>(&mut self, scope: impl FnOnce(&mut Self) -> R) -> R {
-        self.stack.push_scope(ScopeType::Inherited);
+        // This doesn't copy any variables, so it can't fail.
+        self.stack
+            .push_scope(std::iter::empty(), ScopeType::Inherited)
+            .unwrap();
         let result = scope(self);
         self.stack.pop_scope();
 
@@ -381,11 +430,32 @@ impl<'a, S: Span> ExecutionContext<'a, S> {
     }
 
     pub fn new_isolated_scope<R>(&mut self, scope: impl FnOnce(&mut Self) -> R) -> R {
-        self.stack.push_scope(ScopeType::Isolated);
+        // This doesn't copy any variables, so it can't fail.
+        self.stack
+            .push_scope(std::iter::empty(), ScopeType::Isolated)
+            .unwrap();
         let result = scope(self);
         self.stack.pop_scope();
 
         result
+    }
+
+    pub fn new_closure_scope<R>(
+        &mut self,
+        references: impl Iterator<Item = impl Into<compact_str::CompactString>>,
+        copies: impl Iterator<Item = &'a S>,
+        scope: impl FnOnce(&mut Self) -> R,
+    ) -> OperatorResult<S, R> {
+        self.stack.push_scope(
+            copies,
+            ScopeType::Closure {
+                references: references.map(|s| s.into()).collect(),
+            },
+        )?;
+        let result = scope(self);
+        self.stack.pop_scope();
+
+        Ok(result)
     }
 }
 
@@ -404,9 +474,9 @@ fn run_block<'a, S: Span>(
     Ok(result)
 }
 
-fn run_named_block<'a, S: Span>(
+fn run_callable_block<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    block: &'a NamedBlock<S>,
+    block: &'a CallableBlock<S>,
     arguments: Vec<Value<'a, S>>,
     spans: &[parsing::Expression<S>],
     default_span: &S,
@@ -575,7 +645,11 @@ mod test {
         let result = context.new_scope(|context| run_block(context, Box::leak(Box::new(block))));
         assert_eq!(
             result.unwrap(),
-            run_expression(&mut context, &Expression::parse("MyStruct {}").unwrap().1).unwrap()
+            run_expression(
+                &mut context,
+                Box::leak(Box::new(Expression::parse("MyStruct {}").unwrap().1))
+            )
+            .unwrap()
         );
     }
 }

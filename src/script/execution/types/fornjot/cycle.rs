@@ -16,9 +16,14 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::ops::Deref;
+
 use crate::script::{
     execution::{
-        types::{function::IntoBuiltinFunction, NamedObject, Object, Structure},
+        types::{
+            function::{AutoCall, IntoBuiltinFunction},
+            Object, OperatorResult, Structure, Value,
+        },
         ExecutionContext, Failure,
     },
     parsing::VariableType,
@@ -27,11 +32,11 @@ use crate::script::{
 
 use fj_core::{
     objects::Cycle as FornjotCycle,
-    operations::{build::BuildCycle, insert::Insert},
+    operations::{build::BuildCycle, insert::Insert, reverse::Reverse},
     storage::Handle,
 };
 
-use super::{circle::unwrap_circle, polygon::unwrap_polygon};
+use super::{circle::unwrap_circle, handle_wrapper, polygon::unwrap_polygon};
 
 pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
     context.stack.new_variable_str(
@@ -83,25 +88,35 @@ impl<'a, S: Span> Object<'a, S> for Cycle {
     fn matches_type(&self, ty: &VariableType<S>) -> bool {
         matches!(ty, VariableType::Cycle)
     }
-}
 
-impl NamedObject for Cycle {
-    fn static_type_name() -> &'static str {
-        "Cycle"
+    fn method_call(
+        &self,
+        context: &mut ExecutionContext<'a, S>,
+        span: &S,
+        attribute: &S,
+        arguments: Vec<Value<'a, S>>,
+        spans: &[crate::script::parsing::Expression<S>],
+    ) -> OperatorResult<S, Value<'a, S>> {
+        match attribute.as_str() {
+            "reverse" => {
+                |context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    let reversed = self
+                        .handle
+                        .deref()
+                        .reverse(&mut context.global_resources.fornjot_core);
+
+                    let reversed = reversed.insert(&mut context.global_resources.fornjot_core);
+
+                    Ok(Self::from(reversed).into())
+                }
+                .auto_call(context, span, arguments, spans)
+            }
+            _ => Err(Failure::UnknownAttribute(attribute.clone())),
+        }
     }
 }
 
-impl PartialEq for Cycle {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
-
-impl std::fmt::Debug for Cycle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Cycle").finish()
-    }
-}
+handle_wrapper!(Cycle, FornjotCycle);
 
 #[cfg(test)]
 mod test {
@@ -119,9 +134,11 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse("new_cycle(Circle { center = [1mm, 2mm], radius = 3mm })")
-                    .unwrap()
-                    .1,
+                Box::leak(Box::new(
+                    Expression::parse("new_cycle(Circle { center = [1mm, 2mm], radius = 3mm })")
+                        .unwrap()
+                        .1
+                )),
             ),
             Ok(Value::Cycle(_))
         ));
@@ -134,11 +151,13 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse(
-                    "new_cycle(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
-                )
-                .unwrap()
-                .1,
+                Box::leak(Box::new(
+                    Expression::parse(
+                        "new_cycle(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
+                    )
+                    .unwrap()
+                    .1
+                ))
             ),
             Ok(Value::Cycle(_))
         ));

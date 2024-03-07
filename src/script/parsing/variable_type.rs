@@ -166,6 +166,8 @@ pub enum VariableType<S: Span> {
     Sketch,
     Surface,
     Solid,
+    Shell,
+    Face,
     Function(FunctionSignature<S>),
 }
 
@@ -184,6 +186,8 @@ impl<S: Span> VariableType<S> {
                 map(tag("Sketch"), |_| Self::Sketch),
                 map(tag("Surface"), |_| Self::Surface),
                 map(tag("Solid"), |_| Self::Solid),
+                map(tag("Shell"), |_| Self::Shell),
+                map(tag("Face"), |_| Self::Face),
                 map(
                     preceded(pair(take_keyword("struct"), space0), parse_name),
                     Self::Struct,
@@ -208,6 +212,8 @@ impl<S: Span> VariableType<S> {
             VariableType::Sketch => "Sketch".into(),
             VariableType::Surface => "Surface".into(),
             VariableType::Solid => "Solid".into(),
+            VariableType::Shell => "Shell".into(),
+            VariableType::Face => "Face".into(),
             VariableType::Function(function) => format!("{}", function).into(),
         }
     }
@@ -228,6 +234,8 @@ impl<S: Span> Display for VariableType<S> {
             VariableType::Sketch => write!(f, "Sketch"),
             VariableType::Surface => write!(f, "Surface"),
             VariableType::Solid => write!(f, "Solid"),
+            VariableType::Shell => write!(f, "Shell"),
+            VariableType::Face => write!(f, "Face"),
             VariableType::Function(function) => write!(f, "{}", function),
         }
     }

@@ -27,7 +27,7 @@ use crate::script::{
         types::{
             fornjot::vector_from_list,
             function::{AutoCall, IntoBuiltinFunction},
-            List, NamedObject, Object, OperatorResult, Value,
+            List, Object, OperatorResult, Value,
         },
         ExecutionContext, Failure,
     },
@@ -36,8 +36,8 @@ use crate::script::{
 };
 
 use super::{
-    circle::unwrap_circle, polygon::unwrap_polygon, region::Region, solid::Solid, surface::Surface,
-    unpack_dynamic_length_list,
+    circle::unwrap_circle, handle_wrapper, polygon::unwrap_polygon, region::Region, solid::Solid,
+    surface::Surface, unpack_dynamic_length_list,
 };
 
 pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
@@ -149,29 +149,7 @@ impl<'a, S: Span> Object<'a, S> for Sketch {
     }
 }
 
-impl NamedObject for Sketch {
-    fn static_type_name() -> &'static str {
-        "Sketch"
-    }
-}
-
-impl From<Handle<FornjotSketch>> for Sketch {
-    fn from(handle: Handle<FornjotSketch>) -> Self {
-        Self { handle }
-    }
-}
-
-impl PartialEq for Sketch {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
-
-impl std::fmt::Debug for Sketch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Sketch").finish()
-    }
-}
+handle_wrapper!(Sketch, FornjotSketch);
 
 #[cfg(test)]
 mod test {
@@ -186,9 +164,11 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse("new_sketch(Circle { center = [1mm, 2mm], radius = 3mm })")
-                    .unwrap()
-                    .1,
+                Box::leak(Box::new(
+                    Expression::parse("new_sketch(Circle { center = [1mm, 2mm], radius = 3mm })")
+                        .unwrap()
+                        .1
+                )),
             ),
             Ok(Value::Sketch(_))
         ));
@@ -201,11 +181,13 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse(
-                    "new_sketch(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
-                )
-                .unwrap()
-                .1,
+                Box::leak(Box::new(
+                    Expression::parse(
+                        "new_sketch(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
+                    )
+                    .unwrap()
+                    .1
+                )),
             ),
             Ok(Value::Sketch(_))
         ));
@@ -218,12 +200,14 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse(
-                    "new_sketch([new_region(Circle { center = [1mm, 2mm], radius = 3mm }),
+                Box::leak(Box::new(
+                    Expression::parse(
+                        "new_sketch([new_region(Circle { center = [1mm, 2mm], radius = 3mm }),
 new_region(Circle { center = [4mm, 2mm], radius = 3mm })])"
-                )
-                .unwrap()
-                .1,
+                    )
+                    .unwrap()
+                    .1
+                )),
             ),
             Ok(Value::Sketch(_))
         ));
@@ -236,11 +220,11 @@ new_region(Circle { center = [4mm, 2mm], radius = 3mm })])"
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse(
+                Box::leak(Box::new(Expression::parse(
                     "new_sketch(Circle { center = [1mm, 2mm], radius = 3mm }).sweep(global_xz_plane(), [0cm, 1cm, 0cm])"
                 )
                 .unwrap()
-                .1,
+                .1)),
             ),
             Ok(Value::Solid(_))
         ));

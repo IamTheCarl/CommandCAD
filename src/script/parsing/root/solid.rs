@@ -46,6 +46,7 @@ impl<S: Span> Solid<S> {
                 starting_span,
                 signature: Rc::new(FunctionSignature::Solid {
                     arguments: named_block
+                        .callable
                         .parameters
                         .iter()
                         .map(|p| p.ty.clone())
@@ -59,7 +60,7 @@ impl<S: Span> Solid<S> {
 
 #[cfg(test)]
 mod test {
-    use crate::script::parsing::Block;
+    use crate::script::parsing::{blocks::CallableBlock, Block};
 
     use super::*;
 
@@ -74,9 +75,11 @@ mod test {
                     starting_span: "solid",
                     named_block: NamedBlock {
                         name: "my_solid",
-                        parameter_span: "(",
-                        parameters: vec![],
-                        block: Block { statements: vec![] }
+                        callable: CallableBlock {
+                            parameter_span: "(",
+                            parameters: vec![],
+                            block: Block { statements: vec![] }
+                        }
                     },
                     signature: Rc::new(FunctionSignature::Solid { arguments: vec![] })
                 }

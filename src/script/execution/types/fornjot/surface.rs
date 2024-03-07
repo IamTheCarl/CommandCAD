@@ -20,12 +20,14 @@ use fj_core::{objects::Surface as FornjotSurface, storage::Handle};
 
 use crate::script::{
     execution::{
-        types::{function::IntoBuiltinFunction, NamedObject, Object, OperatorResult, Value},
+        types::{function::IntoBuiltinFunction, Object, OperatorResult, Value},
         ExecutionContext,
     },
     parsing::VariableType,
     Span,
 };
+
+use super::handle_wrapper;
 
 pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
     context.stack.new_variable_str(
@@ -96,26 +98,4 @@ impl<'a, S: Span> Object<'a, S> for Surface {
     }
 }
 
-impl NamedObject for Surface {
-    fn static_type_name() -> &'static str {
-        "Solid"
-    }
-}
-
-impl From<Handle<FornjotSurface>> for Surface {
-    fn from(handle: Handle<FornjotSurface>) -> Self {
-        Self { handle }
-    }
-}
-
-impl PartialEq for Surface {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
-
-impl std::fmt::Debug for Surface {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Surface").finish()
-    }
-}
+handle_wrapper!(Surface, FornjotSurface);

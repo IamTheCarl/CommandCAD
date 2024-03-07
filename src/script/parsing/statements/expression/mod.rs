@@ -108,8 +108,11 @@ impl<S: Span> Expression<S> {
 
 #[cfg(test)]
 mod test {
-    use crate::script::parsing::statements::expression::{
-        arithmetic::ArithmeticExpression, factor::Factor, term::Term, trailer::Trailer,
+    use crate::script::parsing::{
+        statements::expression::{
+            arithmetic::ArithmeticExpression, factor::Factor, term::Term, trailer::Trailer,
+        },
+        List, Litteral,
     };
 
     use super::*;

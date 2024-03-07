@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 /*
  * Copyright 2024 James Carl
  * AGPL-3.0-only or AGPL-3.0-or-later
@@ -26,6 +24,7 @@ use nom::{
     multi::separated_list0,
     sequence::{delimited, pair, preceded, terminated, tuple},
 };
+use std::fmt::Display;
 
 use super::{
     parse_name, space0, take_keyword, IteratorFormatter, Litteral, Span, VResult, VariableType,
@@ -86,6 +85,7 @@ impl<S: Span> Display for DisplayLitteral<'_, S> {
             Litteral::List(_list) => write!(f, "[...]"),
             Litteral::Boolean(_span, value) => write!(f, "{}", value),
             Litteral::Default(_span) => write!(f, "default"),
+            Litteral::Closure(_closure) => write!(f, "[...](...) -> ? {{...}}"), // TODO we should probably display closures correctly.
         }
     }
 }

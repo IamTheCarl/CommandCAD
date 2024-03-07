@@ -19,7 +19,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::char as nom_char,
-    combinator::{map, opt, success},
+    combinator::{map, opt, success, value},
     error::context,
     multi::separated_list0,
     sequence::{delimited, pair, preceded, separated_pair, terminated},
@@ -64,12 +64,19 @@ impl<S: Span> StructInitialization<S> {
                                     space0,
                                 ),
                             ),
-                            opt(preceded(
-                                pair(
-                                    pair(space0, nom_char(',')),
-                                    delimited(space0, tag(".."), space0),
+                            alt((
+                                map(
+                                    preceded(
+                                        pair(
+                                            pair(space0, nom_char(',')),
+                                            delimited(space0, tag(".."), space0),
+                                        ),
+                                        map(Trailer::parse, Box::new),
+                                    ),
+                                    Some,
                                 ),
-                                map(Trailer::parse, Box::new),
+                                value(None, delimited(space0, nom_char(','), space0)),
+                                success(None),
                             )),
                         ),
                     )),

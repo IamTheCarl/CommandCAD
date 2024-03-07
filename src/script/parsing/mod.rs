@@ -51,7 +51,7 @@ mod member_variable;
 pub use member_variable::{MemberVariable, MemberVariableType};
 
 mod blocks;
-pub use blocks::{Block, BlockStatement, NamedBlock};
+pub use blocks::{Block, BlockStatement, CallableBlock, NamedBlock};
 
 mod statements;
 pub use statements::{
@@ -82,6 +82,9 @@ pub use number::Number;
 
 mod measurement;
 pub use measurement::Measurement;
+
+mod closure;
+pub use closure::{CapturedVariable, Closure};
 
 fn is_digit(c: char) -> bool {
     "0123456789".contains(c)

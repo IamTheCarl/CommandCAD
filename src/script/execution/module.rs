@@ -239,13 +239,13 @@ impl<S: Span> RootElements<S> {
         }
 
         // Parameter names should not be reserved keywords.
-        for parameter in block.parameters.iter() {
+        for parameter in block.callable.parameters.iter() {
             if let Some(keyword) = is_reserved_keyword(&parameter.name) {
                 log.push(Failure::ReservedKeyword(parameter.name.clone(), keyword));
             }
         }
 
-        Self::validate_block(log, &block.block);
+        Self::validate_block(log, &block.callable.block);
     }
 
     fn validate_block(log: &mut Vec<Failure<S>>, block: &parsing::Block<S>) {
@@ -291,7 +291,7 @@ impl<S: Span> RootElements<S> {
 mod test {
     use std::rc::Rc;
 
-    use crate::script::parsing::{FunctionSignature, VariableType};
+    use crate::script::parsing::{CallableBlock, FunctionSignature, VariableType};
 
     use super::*;
 
@@ -334,9 +334,11 @@ mod test {
                 starting_span: "sketch",
                 named_block: parsing::NamedBlock {
                     name: "my_sketch",
-                    parameter_span: "(",
-                    parameters: vec![],
-                    block: parsing::Block { statements: vec![] }
+                    callable: CallableBlock {
+                        parameter_span: "(",
+                        parameters: vec![],
+                        block: parsing::Block { statements: vec![] }
+                    }
                 },
                 signature: Rc::new(FunctionSignature::Sketch { arguments: vec![] }),
             }]
@@ -347,9 +349,11 @@ mod test {
                 starting_span: "solid",
                 named_block: parsing::NamedBlock {
                     name: "my_solid",
-                    parameter_span: "(",
-                    parameters: vec![],
-                    block: parsing::Block { statements: vec![] }
+                    callable: CallableBlock {
+                        parameter_span: "(",
+                        parameters: vec![],
+                        block: parsing::Block { statements: vec![] }
+                    }
                 },
                 signature: Rc::new(FunctionSignature::Solid { arguments: vec![] }),
             }]
@@ -363,9 +367,11 @@ mod test {
                 starting_span: "function",
                 named_block: parsing::NamedBlock {
                     name: "my_function",
-                    parameter_span: "(",
-                    parameters: vec![],
-                    block: parsing::Block { statements: vec![] }
+                    callable: CallableBlock {
+                        parameter_span: "(",
+                        parameters: vec![],
+                        block: parsing::Block { statements: vec![] }
+                    }
                 },
                 signature: Rc::new(FunctionSignature::Function {
                     return_type: Box::new(VariableType::Measurement("Length")),

@@ -55,7 +55,7 @@ impl<'a, S: Span> List<'a, S> {
 
     pub(crate) fn from_parsed(
         context: &mut ExecutionContext<'a, S>,
-        list: &parsing::List<S>,
+        list: &'a parsing::List<S>,
     ) -> OperatorResult<S, Value<'a, S>> {
         let mut values = Vec::with_capacity(list.expressions.len());
 
@@ -173,7 +173,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
                     (_, None, true) => unreachable!(), // Inclusive ranges without an upper bound are illegal to construct.
                 };
 
-                // TOOD String has an identical error handling. We should probably move this to a common library.
+                // TODO String has an identical error handling. We should probably move this to a common library.
                 let range_type = if range.upper_bound_is_inclusive {
                     "..="
                 } else {
@@ -408,21 +408,33 @@ mod test {
     fn index() {
         let mut context = ExecutionContext::default();
         assert_eq!(
-            run_expression(&mut context, &Expression::parse("[1, 2, 3][0]").unwrap().1),
+            run_expression(
+                &mut context,
+                Box::leak(Box::new(Expression::parse("[1, 2, 3][0]").unwrap().1))
+            ),
             Ok(Number::new(1.0).unwrap().into())
         );
 
         assert_eq!(
-            run_expression(&mut context, &Expression::parse("[1, 2, 3][-1]").unwrap().1),
+            run_expression(
+                &mut context,
+                Box::leak(Box::new(Expression::parse("[1, 2, 3][-1]").unwrap().1))
+            ),
             Ok(Number::new(3.0).unwrap().into())
         );
 
         assert_eq!(
-            run_expression(&mut context, &Expression::parse("[1, 2, 3][3]").unwrap().1),
+            run_expression(
+                &mut context,
+                Box::leak(Box::new(Expression::parse("[1, 2, 3][3]").unwrap().1))
+            ),
             Err(Failure::IndexOutOfRange("[", 3))
         );
         assert_eq!(
-            run_expression(&mut context, &Expression::parse("[1, 2, 3][-4]").unwrap().1),
+            run_expression(
+                &mut context,
+                Box::leak(Box::new(Expression::parse("[1, 2, 3][-4]").unwrap().1))
+            ),
             Err(Failure::IndexOutOfRange("[", -4))
         );
     }

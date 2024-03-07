@@ -59,11 +59,17 @@ use self::string::formatting::Style;
 mod range;
 pub use range::Range;
 
+mod closure;
+pub use closure::Closure;
+
 mod serializable;
 pub use serializable::SerializableValue;
 
 mod fornjot;
-pub use fornjot::{cycle::Cycle, region::Region, sketch::Sketch, solid::Solid, surface::Surface};
+pub use fornjot::{
+    cycle::Cycle, face::Face, region::Region, shell::Shell, sketch::Sketch, solid::Solid,
+    surface::Surface,
+};
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     fornjot::register_globals(context)
@@ -240,12 +246,15 @@ pub enum Value<'a, S: Span> {
     List(List<'a, S>),
     String(SString),
     Range(Range),
+    Closure(Closure<'a, S>),
     Measurement(Measurement),
     Cycle,
     Region,
     Sketch,
     Surface,
     Solid,
+    Shell,
+    Face,
 }
 
 impl<'a, S: Span> NamedObject for Value<'a, S> {
@@ -290,7 +299,7 @@ impl<'a, S: Span> Value<'a, S> {
 
     pub fn from_litteral(
         context: &mut ExecutionContext<'a, S>,
-        value: &Litteral<S>,
+        value: &'a Litteral<S>,
     ) -> OperatorResult<S, Self> {
         match value {
             Litteral::Measurement(measurement) => Measurement::from_parsed(measurement),
@@ -299,6 +308,7 @@ impl<'a, S: Span> Value<'a, S> {
             Litteral::List(list) => List::from_parsed(context, list),
             Litteral::Boolean(_span, value) => Ok(Self::Boolean(*value)),
             Litteral::Default(_span) => Ok(DefaultValue.into()),
+            Litteral::Closure(closure) => Ok(Closure::from(closure).into()),
         }
     }
 }

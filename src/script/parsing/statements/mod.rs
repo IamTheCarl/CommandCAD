@@ -103,6 +103,7 @@ mod test {
     use std::rc::Rc;
 
     use crate::script::parsing::{
+        blocks::CallableBlock,
         statements::assign::{Assignable, AssignableVariable},
         Block, FunctionSignature, NamedBlock, VariableType,
     };
@@ -221,9 +222,11 @@ mod test {
                     starting_span: "function",
                     named_block: NamedBlock {
                         name: "my_function",
-                        parameter_span: "(",
-                        parameters: vec![],
-                        block: Block { statements: vec![] }
+                        callable: CallableBlock {
+                            parameter_span: "(",
+                            parameters: vec![],
+                            block: Block { statements: vec![] }
+                        }
                     },
                     signature: Rc::new(FunctionSignature::Function {
                         return_type: Box::new(VariableType::Number),

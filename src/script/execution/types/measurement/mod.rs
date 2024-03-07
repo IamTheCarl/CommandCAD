@@ -659,32 +659,36 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("1m + 100cm == 2m").unwrap().1
+                Box::leak(Box::new(Expression::parse("1m + 100cm == 2m").unwrap().1))
             ),
             Ok(true.into())
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("2m * 2m == 4m^2").unwrap().1
+                Box::leak(Box::new(Expression::parse("2m * 2m == 4m^2").unwrap().1))
             ),
             Ok(true.into())
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("(2m).to_number(\"cm\") == 200")
-                    .unwrap()
-                    .1
+                Box::leak(Box::new(
+                    Expression::parse("(2m).to_number(\"cm\") == 200")
+                        .unwrap()
+                        .1
+                ))
             ),
             { Ok(true.into()) }
         );
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("(200).to_measurement(\"mm\") == 200mm")
-                    .unwrap()
-                    .1
+                Box::leak(Box::new(
+                    Expression::parse("(200).to_measurement(\"mm\") == 200mm")
+                        .unwrap()
+                        .1
+                ))
             ),
             { Ok(true.into()) }
         );

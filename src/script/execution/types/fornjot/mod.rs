@@ -32,8 +32,11 @@ use super::{List, NamedObject, OperatorResult, Value};
 // TODO I want a box type that can be a square or a rectangle.
 mod circle;
 pub mod cycle;
+pub mod face;
+pub mod object_set;
 mod polygon;
 pub mod region;
+pub mod shell;
 pub mod sketch;
 pub mod solid;
 pub mod surface;
@@ -43,10 +46,12 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     polygon::register_globals(context);
 
     cycle::register_globals(context);
+    face::register_globals(context);
     region::register_globals(context);
+    shell::register_globals(context);
     sketch::register_globals(context);
-    surface::register_globals(context);
     solid::register_globals(context);
+    surface::register_globals(context);
 }
 
 fn unpack_dynamic_length_list<'a, S, T>(
@@ -78,6 +83,66 @@ where
     let iter = list.consume().map(|v| v.enum_downcast::<T>().unwrap());
     Ok(iter)
 }
+
+macro_rules! handle_wrapper {
+    ($name:ident, $handle:ident) => {
+        impl<'a, S: Span> From<Handle<$handle>> for crate::script::execution::types::Value<'a, S> {
+            fn from(handle: Handle<$handle>) -> Self {
+                $name::from(handle).into()
+            }
+        }
+
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                use std::ops::Deref;
+                f.debug_struct(stringify!($name))
+                    .field("id", &self.handle.id())
+                    .field("content", &self.handle.deref())
+                    .finish()
+            }
+        }
+
+        impl<'a, S: Span> TryFrom<crate::script::execution::types::Value<'a, S>>
+            for Handle<$handle>
+        {
+            type Error = crate::script::execution::types::Value<'a, S>;
+
+            fn try_from(
+                value: crate::script::execution::types::Value<'a, S>,
+            ) -> Result<Self, Self::Error> {
+                use enum_downcast::EnumDowncast;
+                let value = value.enum_downcast::<$name>()?;
+                Ok(value.handle)
+            }
+        }
+
+        impl From<Handle<$handle>> for $name {
+            fn from(handle: Handle<$handle>) -> Self {
+                Self { handle }
+            }
+        }
+
+        impl From<$name> for Handle<$handle> {
+            fn from(val: $name) -> Self {
+                val.handle
+            }
+        }
+
+        impl crate::script::execution::types::NamedObject for $name {
+            fn static_type_name() -> &'static str {
+                stringify!($name)
+            }
+        }
+
+        impl PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                self.handle == other.handle
+            }
+        }
+    };
+}
+
+pub(crate) use handle_wrapper;
 
 fn unpack_fixed_length_list<'a, S, T, const D: usize>(
     span: &S,

@@ -284,7 +284,9 @@ mod test {
             structure.unwrap(),
             run_expression(
                 &mut context,
-                &Expression::parse("MyStruct { value = 42 }").unwrap().1
+                Box::leak(Box::new(
+                    Expression::parse("MyStruct { value = 42 }").unwrap().1
+                ))
             )
             .unwrap()
         );
@@ -302,7 +304,9 @@ mod test {
             structure.unwrap(),
             run_expression(
                 &mut context,
-                &Expression::parse("MyStruct { ..default }").unwrap().1
+                Box::leak(Box::new(
+                    Expression::parse("MyStruct { ..default }").unwrap().1
+                ))
             )
             .unwrap()
         );
@@ -349,7 +353,9 @@ mod test {
 
         let value: Value<&'static str> = run_expression(
             &mut context,
-            &Expression::parse("MyStruct { value = 42 }").unwrap().1,
+            Box::leak(Box::new(
+                Expression::parse("MyStruct { value = 42 }").unwrap().1,
+            )),
         )
         .unwrap();
 
@@ -376,7 +382,9 @@ mod test {
             list.unwrap(),
             run_expression(
                 &mut context,
-                &Expression::parse("[1, true, \"some text\"]").unwrap().1
+                Box::leak(Box::new(
+                    Expression::parse("[1, true, \"some text\"]").unwrap().1
+                ))
             )
             .unwrap()
         );

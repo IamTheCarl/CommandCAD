@@ -323,9 +323,11 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("\"test\" + \"test\" == \"testtest\"")
-                    .unwrap()
-                    .1
+                Box::leak(Box::new(
+                    Expression::parse("\"test\" + \"test\" == \"testtest\"")
+                        .unwrap()
+                        .1
+                ))
             ),
             Ok(true.into())
         );
@@ -333,7 +335,9 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("\"test\" + 5 == \"test5\"").unwrap().1
+                Box::leak(Box::new(
+                    Expression::parse("\"test\" + 5 == \"test5\"").unwrap().1
+                ))
             ),
             Ok(true.into())
         );

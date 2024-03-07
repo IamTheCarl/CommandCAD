@@ -16,16 +16,24 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{objects::Solid as FornjotSolid, storage::Handle};
+use std::ops::Deref;
+
+use fj_core::{
+    objects::Solid as FornjotSolid,
+    operations::{insert::Insert, update::UpdateSolid},
+    storage::{Handle, HandleWrapper},
+};
 
 use crate::script::{
     execution::{
-        types::{NamedObject, Object},
-        ExecutionContext,
+        types::{fornjot::shell::Shell, function::AutoCall, List, Object, OperatorResult, Value},
+        ExecutionContext, Failure,
     },
     parsing::VariableType,
     Span,
 };
+
+use super::{handle_wrapper, object_set::check_for_duplicates, unpack_dynamic_length_list};
 
 pub fn register_globals<S: Span>(_context: &mut ExecutionContext<'_, S>) {}
 
@@ -39,29 +47,87 @@ impl<'a, S: Span> Object<'a, S> for Solid {
         matches!(ty, VariableType::Sketch)
     }
 
-    // TODO we need a way to get the faces of the solid, and from the faces, get the surfaces.
-}
+    fn attribute(
+        &self,
+        _log: &mut crate::script::RuntimeLog<S>,
+        _span: &S,
+        attribute: &S,
+    ) -> OperatorResult<S, Value<'a, S>> {
+        match attribute.as_str() {
+            "shells" => Ok(self.handle.shells().into()),
+            _ => Err(Failure::UnknownAttribute(attribute.clone())),
+        }
+    }
 
-impl NamedObject for Solid {
-    fn static_type_name() -> &'static str {
-        "Solid"
+    fn method_call(
+        &self,
+        context: &mut ExecutionContext<'a, S>,
+        span: &S,
+        attribute: &S,
+        arguments: Vec<Value<'a, S>>,
+        spans: &[crate::script::parsing::Expression<S>],
+    ) -> OperatorResult<S, Value<'a, S>> {
+        match attribute.as_str() {
+            "update_shell" => |context: &mut ExecutionContext<'a, S>,
+                               span: &S,
+                               shell: Shell,
+                               update: Value<'a, S>|
+             -> OperatorResult<S, Value<S>> {
+                // Update shell will panic if the shell isn't found in the solid, so check that it's in there.
+                if !self.handle.deref().shells().contains(&shell.handle) {
+                    return Err(Failure::ShellNotInSolid(span.clone()));
+                }
+
+                // Due to borrowing issues, we have to run the update call before we go into
+                // the update function.
+                let new_shells = update.call(context, span, vec![shell.clone().into()], &[])?;
+                let new_shells = new_shells.downcast::<List<S>>(span)?;
+                let num_shells = new_shells.len();
+                let new_shells = unpack_dynamic_length_list::<S, Shell>(span, new_shells)?
+                    .map(|shell| HandleWrapper::from(shell.handle));
+
+                // Update shell will panic if we insert a duplicate, so deduplicate it.
+                let new_shells = check_for_duplicates(span, num_shells, new_shells)?;
+
+                let new_solid = self.handle.deref().update_shell(
+                    &shell.handle,
+                    |_shell, _core| new_shells.into_iter().map(|h| h.0),
+                    &mut context.global_resources.fornjot_core,
+                );
+
+                Ok(Self::from(new_solid.insert(&mut context.global_resources.fornjot_core)).into())
+            }
+            .auto_call(context, span, arguments, spans),
+            "add_shells" => {
+                |context: &mut ExecutionContext<'a, S>,
+                 span: &S,
+                 new_shells: List<'a, S>|
+                 -> OperatorResult<S, Value<S>> {
+                    let num_shells = new_shells.len();
+                    let new_shells = unpack_dynamic_length_list::<S, Shell>(span, new_shells)?
+                        .map(|shell| HandleWrapper::from(shell.handle));
+
+                    // Update shell will panic if we insert a duplicate, so deduplicate it.
+                    let new_shells = check_for_duplicates(span, num_shells, new_shells)?;
+
+                    let new_solid = self.handle.deref().add_shells(
+                        new_shells.into_iter().map(|h| h.0),
+                        &mut context.global_resources.fornjot_core,
+                    );
+
+                    Ok(
+                        Self::from(new_solid.insert(&mut context.global_resources.fornjot_core))
+                            .into(),
+                    )
+                }
+                .auto_call(context, span, arguments, spans)
+            }
+            _ => Err(Failure::UnknownAttribute(attribute.clone())),
+        }
     }
 }
 
-impl From<Handle<FornjotSolid>> for Solid {
-    fn from(handle: Handle<FornjotSolid>) -> Self {
-        Self { handle }
-    }
-}
+handle_wrapper!(Solid, FornjotSolid);
 
-impl PartialEq for Solid {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
-
-impl std::fmt::Debug for Solid {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Solid").finish()
-    }
-}
+// TODO test adding duplicate shells to the solid (through update and add_shells)
+// TODO test updating a shell that did not exist in the solid

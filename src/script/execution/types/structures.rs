@@ -88,7 +88,7 @@ impl<'a, S: Span> NamedObject for Structure<'a, S> {
 
 pub fn validate_assignment_type<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    member: &MemberVariable<S>,
+    member: &'a MemberVariable<S>,
     variable_assignment: &S,
     value: Value<'a, S>,
 ) -> OperatorResult<S, Value<'a, S>> {
@@ -140,8 +140,8 @@ impl<'a, S: Span> Structure<'a, S> {
 
     pub fn initalization(
         context: &mut ExecutionContext<'a, S>,
-        struct_source: &Trailer<S>,
-        initalization: &StructInitialization<S>,
+        struct_source: &'a Trailer<S>,
+        initalization: &'a StructInitialization<S>,
     ) -> OperatorResult<S, Value<'a, S>> {
         enum Inheritance<'a, S: Span> {
             Structure(Structure<'a, S>),
@@ -383,7 +383,7 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("EmptyStruct {}").unwrap().1
+                Box::leak(Box::new(Expression::parse("EmptyStruct {}").unwrap().1))
             ),
             Ok(Structure::from_array(empty_struct, []).into())
         );
@@ -391,7 +391,9 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("DefaultStruct { value = 24 }").unwrap().1
+                Box::leak(Box::new(
+                    Expression::parse("DefaultStruct { value = 24 }").unwrap().1
+                ))
             ),
             Ok(Structure::from_array(
                 default_struct,
@@ -402,7 +404,9 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("DefaultStruct { ..default }").unwrap().1
+                Box::leak(Box::new(
+                    Expression::parse("DefaultStruct { ..default }").unwrap().1
+                ))
             ),
             Ok(Structure::from_array(
                 default_struct,
@@ -413,9 +417,11 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("DefaultStruct { value = default }")
-                    .unwrap()
-                    .1
+                Box::leak(Box::new(
+                    Expression::parse("DefaultStruct { value = default }")
+                        .unwrap()
+                        .1
+                ))
             ),
             Ok(Structure::from_array(
                 default_struct,
@@ -426,7 +432,9 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("TwoPartStruct { ..default }").unwrap().1
+                Box::leak(Box::new(
+                    Expression::parse("TwoPartStruct { ..default }").unwrap().1
+                ))
             ),
             Ok(Structure::from_array(
                 two_part_struct,
@@ -440,9 +448,11 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("TwoPartStruct { value = 3, ..default }")
-                    .unwrap()
-                    .1
+                Box::leak(Box::new(
+                    Expression::parse("TwoPartStruct { value = 3, ..default }")
+                        .unwrap()
+                        .1
+                ))
             ),
             Ok(Structure::from_array(
                 two_part_struct,
@@ -456,9 +466,11 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("TwoPartStruct { ..two_part_struct }")
-                    .unwrap()
-                    .1
+                Box::leak(Box::new(
+                    Expression::parse("TwoPartStruct { ..two_part_struct }")
+                        .unwrap()
+                        .1
+                ))
             ),
             Ok(Structure::from_array(
                 two_part_struct,
@@ -472,9 +484,11 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("TwoPartStruct { value = 5, ..two_part_struct }")
-                    .unwrap()
-                    .1
+                Box::leak(Box::new(
+                    Expression::parse("TwoPartStruct { value = 5, ..two_part_struct }")
+                        .unwrap()
+                        .1
+                ))
             ),
             Ok(Structure::from_array(
                 two_part_struct,
@@ -488,9 +502,11 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("TwoPartStruct { ..EmptyStruct {} }")
-                    .unwrap()
-                    .1
+                Box::leak(Box::new(
+                    Expression::parse("TwoPartStruct { ..EmptyStruct {} }")
+                        .unwrap()
+                        .1
+                ))
             ),
             Err(Failure::StructWrongInheritanceType(
                 "EmptyStruct",
@@ -501,7 +517,9 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("EmptyStruct { bogus = 24 }").unwrap().1
+                Box::leak(Box::new(
+                    Expression::parse("EmptyStruct { bogus = 24 }").unwrap().1
+                ))
             ),
             Err(Failure::StructConstruction(
                 "{",
@@ -511,9 +529,11 @@ mod test {
         assert_eq!(
             run_expression(
                 &mut context,
-                &Expression::parse("DefaultStruct { value = false }")
-                    .unwrap()
-                    .1
+                Box::leak(Box::new(
+                    Expression::parse("DefaultStruct { value = false }")
+                        .unwrap()
+                        .1
+                ))
             ),
             Err(Failure::StructConstruction(
                 "{",

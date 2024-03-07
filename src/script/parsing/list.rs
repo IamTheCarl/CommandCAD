@@ -18,6 +18,7 @@
 use nom::{
     bytes::complete::tag,
     character::complete::char as nom_char,
+    combinator::opt,
     multi::separated_list0,
     sequence::{delimited, pair, terminated},
 };
@@ -34,10 +35,10 @@ impl<S: Span> List<S> {
     pub fn parse(input: S) -> VResult<S, Self> {
         let (input, (starting_span, expressions)) = terminated(
             pair(
-                tag("["),
+                terminated(tag("["), space0),
                 separated_list0(nom_char(','), delimited(space0, Expression::parse, space0)),
             ),
-            nom_char(']'),
+            pair(opt(pair(nom_char(','), space0)), nom_char(']')),
         )(input)?;
 
         Ok((
@@ -64,6 +65,16 @@ mod test {
     fn list() {
         assert_eq!(
             List::parse("[]"),
+            Ok((
+                "",
+                List {
+                    starting_span: "[",
+                    expressions: vec![]
+                }
+            ))
+        );
+        assert_eq!(
+            List::parse("[\n]"),
             Ok((
                 "",
                 List {
@@ -123,7 +134,28 @@ mod test {
                 }
             ))
         );
-        assert!(List::parse("[one, two, three, ]").is_err());
+
+        assert_eq!(
+            List::parse("[one, two, three, ]"),
+            Ok((
+                "",
+                List {
+                    starting_span: "[",
+                    expressions: vec![
+                        Expression::Buffer(Comparison::None(ArithmeticExpression::Term(
+                            Term::Trailer(Trailer::None(Factor::Variable("one"),))
+                        ))),
+                        Expression::Buffer(Comparison::None(ArithmeticExpression::Term(
+                            Term::Trailer(Trailer::None(Factor::Variable("two"),))
+                        ))),
+                        Expression::Buffer(Comparison::None(ArithmeticExpression::Term(
+                            Term::Trailer(Trailer::None(Factor::Variable("three"),))
+                        )))
+                    ]
+                }
+            ))
+        );
+
         assert!(List::parse("[one two]").is_err());
     }
 }

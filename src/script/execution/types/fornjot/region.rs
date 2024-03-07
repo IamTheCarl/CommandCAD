@@ -29,7 +29,7 @@ use crate::script::{
         types::{
             fornjot::{cycle::Cycle, unpack_dynamic_length_list},
             function::IntoBuiltinFunction,
-            List, NamedObject, Object, OperatorResult, StructDefinition, Structure,
+            List, Object, OperatorResult, StructDefinition, Structure,
         },
         ExecutionContext, Failure,
     },
@@ -37,7 +37,7 @@ use crate::script::{
     Span,
 };
 
-use super::{circle::unwrap_circle, polygon::unwrap_polygon};
+use super::{circle::unwrap_circle, handle_wrapper, polygon::unwrap_polygon};
 
 pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
     context.stack.new_variable_str(
@@ -56,7 +56,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                         },
                     },
                     MemberVariable {
-                        name: S::from_str("interior"),
+                        name: S::from_str("interiors"),
                         ty: MemberVariableType {
                             ty: VariableType::List,
                             constraints: None,
@@ -133,7 +133,7 @@ impl Region {
         let exterior_cycle = exterior_cycle.handle;
 
         let interior_cylce_list = members
-            .remove("interior")
+            .remove("interiors")
             .unwrap()
             .downcast::<List<S>>(span)?;
 
@@ -153,29 +153,7 @@ impl<'a, S: Span> Object<'a, S> for Region {
     }
 }
 
-impl NamedObject for Region {
-    fn static_type_name() -> &'static str {
-        "Region"
-    }
-}
-
-impl From<Handle<FornjotRegion>> for Region {
-    fn from(handle: Handle<FornjotRegion>) -> Self {
-        Self { handle }
-    }
-}
-
-impl PartialEq for Region {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
-
-impl std::fmt::Debug for Region {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Region").finish()
-    }
-}
+handle_wrapper!(Region, FornjotRegion);
 
 #[cfg(test)]
 mod test {
@@ -193,9 +171,11 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse("new_region(Circle { center = [1mm, 2mm], radius = 3mm })")
-                    .unwrap()
-                    .1,
+                Box::leak(Box::new(
+                    Expression::parse("new_region(Circle { center = [1mm, 2mm], radius = 3mm })")
+                        .unwrap()
+                        .1
+                ))
             ),
             Ok(Value::Region(_))
         ));
@@ -208,11 +188,13 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse(
-                    "new_region(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
-                )
-                .unwrap()
-                .1,
+                Box::leak(Box::new(
+                    Expression::parse(
+                        "new_region(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
+                    )
+                    .unwrap()
+                    .1
+                )),
             ),
             Ok(Value::Region(_))
         ));
@@ -225,12 +207,12 @@ mod test {
         assert!(matches!(
             run_expression(
                 &mut context,
-                &Expression::parse(
+                Box::leak(Box::new(Expression::parse(
                     "new_region(RawRegion { exterior = new_cycle(Circle { center = [1mm, 2mm], radius = 3mm }),
-interior = [new_cycle(Circle { center = [1mm, 2mm], radius = 3mm / 2 })] })"
+                     interiors = [new_cycle(Circle { center = [1mm, 2mm], radius = 3mm / 2 })] })"
                 )
                 .unwrap()
-                .1,
+                .1)),
             ),
             Ok(Value::Region(_))
         ));

@@ -17,7 +17,7 @@
  */
 use nom::{branch::alt, combinator::map};
 
-use super::{take_keyword, List, Measurement, Number, PString, Span, VResult};
+use super::{closure::Closure, take_keyword, List, Measurement, Number, PString, Span, VResult};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Litteral<S: Span> {
@@ -27,6 +27,7 @@ pub enum Litteral<S: Span> {
     List(List<S>),
     Boolean(S, bool),
     Default(S),
+    Closure(Closure<S>),
 }
 
 impl<S: Span> Litteral<S> {
@@ -35,6 +36,7 @@ impl<S: Span> Litteral<S> {
             map(Measurement::parse, Self::Measurement),
             map(Number::parse, Self::Number),
             map(PString::parse, Self::String),
+            map(Closure::parse, Self::Closure),
             map(List::parse, Self::List),
             map(take_keyword("true"), |span| Self::Boolean(span, true)),
             map(take_keyword("false"), |span| Self::Boolean(span, false)),
@@ -50,12 +52,17 @@ impl<S: Span> Litteral<S> {
             Litteral::List(spanable) => spanable.get_span(),
             Litteral::Boolean(spanable, _) => spanable,
             Litteral::Default(spanable) => spanable,
+            Litteral::Closure(spanable) => spanable.get_span(),
         }
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::rc::Rc;
+
+    use crate::script::parsing::{Block, CallableBlock, FunctionSignature, VariableType};
+
     use super::*;
 
     #[test]
@@ -122,5 +129,26 @@ mod test {
             Litteral::parse("default"),
             Ok(("", Litteral::Default("default")))
         );
+
+        // Closure
+        assert_eq!(
+            Litteral::parse("[]() -> Number {}"),
+            Ok((
+                "",
+                Litteral::Closure(Closure {
+                    starting_span: "[",
+                    captured_variables: vec![],
+                    callable: Rc::new(CallableBlock {
+                        parameter_span: "(",
+                        parameters: vec![],
+                        block: Block { statements: vec![] }
+                    }),
+                    signature: Rc::new(FunctionSignature::Function {
+                        return_type: Box::new(VariableType::Number),
+                        arguments: vec![]
+                    })
+                })
+            ))
+        )
     }
 }

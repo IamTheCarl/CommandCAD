@@ -18,7 +18,7 @@
 
 use nom::{
     character::complete::char as nom_char,
-    combinator::map,
+    combinator::{map, opt},
     multi::separated_list0,
     sequence::{delimited, pair, preceded},
 };
@@ -41,7 +41,10 @@ impl<S: Span> StructDefinition<S> {
                     delimited(
                         pair(nom_char('{'), space0),
                         separated_list0(nom_char(','), preceded(space0, MemberVariable::parse)),
-                        preceded(space0, nom_char('}')),
+                        preceded(
+                            pair(opt(pair(space0, nom_char(','))), space0),
+                            nom_char('}'),
+                        ),
                     ),
                 ),
             ),
@@ -95,6 +98,36 @@ mod test {
 
         assert_eq!(
             StructDefinition::parse("struct MyStruct { a: Length, #[integer] b: Angle = true }"),
+            Ok((
+                "",
+                StructDefinition {
+                    name: "MyStruct",
+                    members: vec![
+                        MemberVariable {
+                            name: "a",
+                            ty: MemberVariableType {
+                                ty: VariableType::Measurement("Length"),
+                                constraints: None,
+                                default_value: None
+                            }
+                        },
+                        MemberVariable {
+                            name: "b",
+                            ty: MemberVariableType {
+                                ty: VariableType::Measurement("Angle"),
+                                constraints: Some(MemberVariableConstraintList {
+                                    constraints: vec![MemberVariableConstraint::Integer]
+                                }),
+                                default_value: Some(Litteral::Boolean("true", true))
+                            }
+                        }
+                    ]
+                }
+            ))
+        );
+
+        assert_eq!(
+            StructDefinition::parse("struct MyStruct { a: Length, #[integer] b: Angle = true, }"),
             Ok((
                 "",
                 StructDefinition {

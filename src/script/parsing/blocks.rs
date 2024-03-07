@@ -28,34 +28,33 @@ use nom::{
 use super::{parse_name, space0, MemberVariable, Span, Statement, VResult, VariableType};
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct NamedBlock<S: Span> {
-    pub name: S,
+pub struct CallableBlock<S: Span> {
     pub parameter_span: S,
     pub parameters: Vec<MemberVariable<S>>,
     pub block: Block<S>,
 }
 
-impl<S: Span> NamedBlock<S> {
-    pub fn parse(input: S) -> VResult<S, Self> {
-        map(
-            Self::parse_internal(success(())),
-            |(block, _return_type)| block,
-        )(input)
-    }
-
+impl<S: Span> CallableBlock<S> {
     pub fn parse_with_return_type(input: S) -> VResult<S, (Self, VariableType<S>)> {
-        Self::parse_internal(context(
-            "Could not parse return type",
-            preceded(pair(tag("->"), space0), VariableType::parse),
-        ))(input)
+        Self::parse_internal(
+            input,
+            context(
+                "Could not parse return type",
+                preceded(pair(tag("->"), space0), VariableType::parse),
+            ),
+        )
     }
 
-    fn parse_internal<T>(
-        return_type_parser: impl FnMut(S) -> VResult<S, T>,
-    ) -> impl FnMut(S) -> VResult<S, (Self, T)> {
+    pub fn parse(input: S) -> VResult<S, Self> {
+        Self::parse_internal(input, success(())).map(|(input, (callable, _))| (input, callable))
+    }
+
+    fn parse_internal<R>(
+        input: S,
+        return_type_parser: impl FnMut(S) -> VResult<S, R>,
+    ) -> VResult<S, (Self, R)> {
         map(
             tuple((
-                parse_name,
                 context(
                     "Expected parameter list",
                     terminated(
@@ -72,10 +71,9 @@ impl<S: Span> NamedBlock<S> {
                 delimited(space0, return_type_parser, space0),
                 Block::parse,
             )),
-            |(name, (parameter_span, parameters), return_type, block)| {
+            |((parameter_span, parameters), return_type, block)| {
                 (
                     Self {
-                        name,
                         parameter_span,
                         parameters,
                         block,
@@ -83,7 +81,29 @@ impl<S: Span> NamedBlock<S> {
                     return_type,
                 )
             },
-        )
+        )(input)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct NamedBlock<S: Span> {
+    pub name: S,
+    pub callable: CallableBlock<S>,
+}
+
+impl<S: Span> NamedBlock<S> {
+    pub fn parse(input: S) -> VResult<S, Self> {
+        map(
+            pair(parse_name, CallableBlock::parse),
+            |(name, callable)| Self { name, callable },
+        )(input)
+    }
+
+    pub fn parse_with_return_type(input: S) -> VResult<S, (Self, VariableType<S>)> {
+        map(
+            pair(parse_name, CallableBlock::parse_with_return_type),
+            |(name, (callable, return_type))| (Self { name, callable }, return_type),
+        )(input)
     }
 }
 
@@ -281,9 +301,11 @@ mod test {
                 "",
                 NamedBlock {
                     name: "my_thing",
-                    parameter_span: "(",
-                    parameters: vec![],
-                    block: Block { statements: vec![] }
+                    callable: CallableBlock {
+                        parameter_span: "(",
+                        parameters: vec![],
+                        block: Block { statements: vec![] }
+                    }
                 }
             ))
         );
@@ -294,16 +316,18 @@ mod test {
                 "",
                 NamedBlock {
                     name: "my_thing",
-                    parameter_span: "(",
-                    parameters: vec![MemberVariable {
-                        name: "one",
-                        ty: MemberVariableType {
-                            ty: VariableType::Measurement("Length"),
-                            constraints: None,
-                            default_value: None
-                        }
-                    }],
-                    block: Block { statements: vec![] }
+                    callable: CallableBlock {
+                        parameter_span: "(",
+                        parameters: vec![MemberVariable {
+                            name: "one",
+                            ty: MemberVariableType {
+                                ty: VariableType::Measurement("Length"),
+                                constraints: None,
+                                default_value: None
+                            }
+                        }],
+                        block: Block { statements: vec![] }
+                    }
                 }
             ))
         );
@@ -314,30 +338,32 @@ mod test {
                 "",
                 NamedBlock {
                     name: "my_thing",
-                    parameter_span: "(",
-                    parameters: vec![
-                        MemberVariable {
-                            name: "one",
-                            ty: MemberVariableType {
-                                ty: VariableType::Measurement("Length"),
-                                constraints: None,
-                                default_value: None
+                    callable: CallableBlock {
+                        parameter_span: "(",
+                        parameters: vec![
+                            MemberVariable {
+                                name: "one",
+                                ty: MemberVariableType {
+                                    ty: VariableType::Measurement("Length"),
+                                    constraints: None,
+                                    default_value: None
+                                }
+                            },
+                            MemberVariable {
+                                name: "two",
+                                ty: MemberVariableType {
+                                    ty: VariableType::Measurement("Angle"),
+                                    constraints: None,
+                                    default_value: Some(Litteral::Number(Number {
+                                        integer: Some("2"),
+                                        dot: None,
+                                        fractional: None
+                                    }))
+                                }
                             }
-                        },
-                        MemberVariable {
-                            name: "two",
-                            ty: MemberVariableType {
-                                ty: VariableType::Measurement("Angle"),
-                                constraints: None,
-                                default_value: Some(Litteral::Number(Number {
-                                    integer: Some("2"),
-                                    dot: None,
-                                    fractional: None
-                                }))
-                            }
-                        }
-                    ],
-                    block: Block { statements: vec![] }
+                        ],
+                        block: Block { statements: vec![] }
+                    }
                 }
             ))
         );
@@ -348,40 +374,42 @@ mod test {
                 "",
                 NamedBlock {
                     name: "my_thing",
-                    parameter_span: "(",
-                    parameters: vec![
-                        MemberVariable {
-                            name: "one",
-                            ty: MemberVariableType {
-                                ty: VariableType::Measurement("Length"),
-                                constraints: None,
-                                default_value: None
+                    callable: CallableBlock {
+                        parameter_span: "(",
+                        parameters: vec![
+                            MemberVariable {
+                                name: "one",
+                                ty: MemberVariableType {
+                                    ty: VariableType::Measurement("Length"),
+                                    constraints: None,
+                                    default_value: None
+                                }
+                            },
+                            MemberVariable {
+                                name: "two",
+                                ty: MemberVariableType {
+                                    ty: VariableType::Measurement("Angle"),
+                                    constraints: None,
+                                    default_value: Some(Litteral::Number(Number {
+                                        integer: Some("2"),
+                                        dot: None,
+                                        fractional: None
+                                    }))
+                                }
+                            },
+                            MemberVariable {
+                                name: "three",
+                                ty: MemberVariableType {
+                                    ty: VariableType::Number,
+                                    constraints: Some(MemberVariableConstraintList {
+                                        constraints: vec![MemberVariableConstraint::Integer]
+                                    }),
+                                    default_value: None,
+                                }
                             }
-                        },
-                        MemberVariable {
-                            name: "two",
-                            ty: MemberVariableType {
-                                ty: VariableType::Measurement("Angle"),
-                                constraints: None,
-                                default_value: Some(Litteral::Number(Number {
-                                    integer: Some("2"),
-                                    dot: None,
-                                    fractional: None
-                                }))
-                            }
-                        },
-                        MemberVariable {
-                            name: "three",
-                            ty: MemberVariableType {
-                                ty: VariableType::Number,
-                                constraints: Some(MemberVariableConstraintList {
-                                    constraints: vec![MemberVariableConstraint::Integer]
-                                }),
-                                default_value: None,
-                            }
-                        }
-                    ],
-                    block: Block { statements: vec![] }
+                        ],
+                        block: Block { statements: vec![] }
+                    }
                 }
             ))
         );
@@ -393,9 +421,11 @@ mod test {
                 (
                     NamedBlock {
                         name: "my_thing",
-                        parameter_span: "(",
-                        parameters: vec![],
-                        block: Block { statements: vec![] }
+                        callable: CallableBlock {
+                            parameter_span: "(",
+                            parameters: vec![],
+                            block: Block { statements: vec![] }
+                        },
                     },
                     VariableType::Struct("T")
                 )

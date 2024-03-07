@@ -21,7 +21,7 @@ use std::{fmt::Debug, rc::Rc};
 use fortuples::fortuples;
 
 use crate::script::{
-    execution::{run_named_block, ExecutionContext, Failure},
+    execution::{run_callable_block, ExecutionContext, Failure},
     parsing::{Expression, FunctionSignature, NamedBlock, VariableType},
     Span,
 };
@@ -47,7 +47,7 @@ impl<'a, S: Span> Object<'a, S> for UserFunction<'a, S> {
         spans: &[Expression<S>],
     ) -> OperatorResult<S, Value<'a, S>> {
         context.new_isolated_scope(|context| {
-            run_named_block(context, self.block, arguments, spans, span)
+            run_callable_block(context, &self.block.callable, arguments, spans, span)
         })
     }
 }

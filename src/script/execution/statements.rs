@@ -145,7 +145,7 @@ fn run_assignment<'a, S: Span>(
 
 fn run_return<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    return_statement: &Return<S>,
+    return_statement: &'a Return<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     let value = if let Some(expression) = return_statement.expression.as_ref() {
         run_expression(context, expression)?

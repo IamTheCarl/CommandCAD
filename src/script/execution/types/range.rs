@@ -87,9 +87,9 @@ impl<'a, S: Span> Object<'a, S> for Range {
 }
 
 impl Range {
-    pub fn from_parsed<S: Span>(
-        context: &mut ExecutionContext<S>,
-        range: &parsing::Range<S>,
+    pub fn from_parsed<'a, S: Span>(
+        context: &mut ExecutionContext<'a, S>,
+        range: &'a parsing::Range<S>,
     ) -> OperatorResult<S, Self> {
         let lower_bound = if let Some(lower_bound) = &range.lower_bound {
             let span = lower_bound.get_span();
@@ -134,44 +134,52 @@ mod test {
     fn iterate() {
         let mut context = ExecutionContext::default();
 
-        assert!(
-            Range::from_parsed(&mut context, &parsing::Range::parse("..").unwrap().1)
-                .unwrap()
-                .iterate(&mut context.log, &"span")
-                .is_err()
-        );
+        assert!(Range::from_parsed(
+            &mut context,
+            Box::leak(Box::new(parsing::Range::parse("..").unwrap().1))
+        )
+        .unwrap()
+        .iterate(&mut context.log, &"span")
+        .is_err());
 
-        assert!(
-            Range::from_parsed(&mut context, &parsing::Range::parse("1..").unwrap().1)
-                .unwrap()
-                .iterate(&mut context.log, &"span")
-                .is_err()
-        );
+        assert!(Range::from_parsed(
+            &mut context,
+            Box::leak(Box::new(parsing::Range::parse("1..").unwrap().1))
+        )
+        .unwrap()
+        .iterate(&mut context.log, &"span")
+        .is_err());
 
-        assert!(
-            Range::from_parsed(&mut context, &parsing::Range::parse("..1").unwrap().1)
-                .unwrap()
-                .iterate(&mut context.log, &"span")
-                .is_err()
-        );
-        assert!(
-            Range::from_parsed(&mut context, &parsing::Range::parse("..=1").unwrap().1)
-                .unwrap()
-                .iterate(&mut context.log, &"span")
-                .is_err()
-        );
-        assert!(
-            Range::from_parsed(&mut context, &parsing::Range::parse("..=1").unwrap().1)
-                .unwrap()
-                .iterate(&mut context.log, &"span")
-                .is_err()
-        );
+        assert!(Range::from_parsed(
+            &mut context,
+            Box::leak(Box::new(parsing::Range::parse("..1").unwrap().1))
+        )
+        .unwrap()
+        .iterate(&mut context.log, &"span")
+        .is_err());
+        assert!(Range::from_parsed(
+            &mut context,
+            Box::leak(Box::new(parsing::Range::parse("..=1").unwrap().1))
+        )
+        .unwrap()
+        .iterate(&mut context.log, &"span")
+        .is_err());
+        assert!(Range::from_parsed(
+            &mut context,
+            Box::leak(Box::new(parsing::Range::parse("..=1").unwrap().1))
+        )
+        .unwrap()
+        .iterate(&mut context.log, &"span")
+        .is_err());
         assert_eq!(
-            Range::from_parsed(&mut context, &parsing::Range::parse("1..5").unwrap().1)
-                .unwrap()
-                .iterate(&mut context.log, &"span")
-                .unwrap()
-                .collect::<Vec<_>>(),
+            Range::from_parsed(
+                &mut context,
+                Box::leak(Box::new(parsing::Range::parse("1..5").unwrap().1))
+            )
+            .unwrap()
+            .iterate(&mut context.log, &"span")
+            .unwrap()
+            .collect::<Vec<_>>(),
             [
                 Number::new(1.0).unwrap().into(),
                 Number::new(2.0).unwrap().into(),
@@ -180,11 +188,14 @@ mod test {
             ]
         );
         assert_eq!(
-            Range::from_parsed(&mut context, &parsing::Range::parse("1..=5").unwrap().1)
-                .unwrap()
-                .iterate(&mut context.log, &"span")
-                .unwrap()
-                .collect::<Vec<_>>(),
+            Range::from_parsed(
+                &mut context,
+                Box::leak(Box::new(parsing::Range::parse("1..=5").unwrap().1))
+            )
+            .unwrap()
+            .iterate(&mut context.log, &"span")
+            .unwrap()
+            .collect::<Vec<_>>(),
             [
                 Number::new(1.0).unwrap().into(),
                 Number::new(2.0).unwrap().into(),

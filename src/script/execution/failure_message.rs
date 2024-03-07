@@ -63,6 +63,10 @@ pub enum Failure<S> {
     TooManyArguments(S),
     ListWrongLength(S, usize, usize),
     ListElementFailure(S, usize, Box<Failure<S>>),
+    ListContainsDuplicate(S, usize),
+    ShellNotInSolid(S),
+    FaceNotInShell(S),
+    RegionNotInFace(S),
 }
 
 impl<S: Span + FormatSpan> std::fmt::Display for Failure<S> {
@@ -342,6 +346,23 @@ impl<S: Span + FormatSpan> std::fmt::Display for Failure<S> {
                     index,
                     failure
                 )
+            }
+            Self::ListContainsDuplicate(span, index) => {
+                write!(
+                    f,
+                    "{}: Element {} is a duplicate",
+                    span.format_span(),
+                    index
+                )
+            }
+            Self::ShellNotInSolid(span) => {
+                write!(f, "{}: Could not find shell in solid", span.format_span())
+            }
+            Self::FaceNotInShell(span) => {
+                write!(f, "{}: Could not find face in shell", span.format_span())
+            }
+            Self::RegionNotInFace(span) => {
+                write!(f, "{}: Could not find region in face", span.format_span())
             }
         }
     }

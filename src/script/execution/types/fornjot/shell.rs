@@ -1,0 +1,238 @@
+/*
+ * Copyright 2024 James Carl
+ * AGPL-3.0-only or AGPL-3.0-or-later
+ *
+ * This file is part of Command Cad.
+ *
+ * Command CAD is free software: you can redistribute it and/or modify it under the terms of
+ * the GNU Affero General Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along with this
+ * program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+use std::ops::Deref;
+
+use fj_core::{
+    objects::Shell as FornjotShell,
+    operations::{
+        holes::{AddHole, HoleLocation},
+        insert::Insert,
+        update::UpdateShell,
+    },
+    storage::{Handle, HandleWrapper},
+};
+
+use crate::script::{
+    execution::{
+        types::{function::AutoCall, List, Object, OperatorResult, Value},
+        ExecutionContext, Failure,
+    },
+    parsing::VariableType,
+    Measurement, Span,
+};
+
+use super::{
+    face::Face, handle_wrapper, object_set::check_for_duplicates, point_from_list,
+    scalar_from_measurement, unpack_dynamic_length_list, vector_from_list,
+};
+
+pub fn register_globals<S: Span>(_context: &mut ExecutionContext<S>) {
+    // TODO we should have the power to build shells from faces.
+}
+
+#[derive(Clone)]
+pub struct Shell {
+    pub handle: Handle<FornjotShell>,
+}
+
+impl<'a, S: Span> Object<'a, S> for Shell {
+    fn matches_type(&self, ty: &VariableType<S>) -> bool {
+        matches!(ty, VariableType::Shell)
+    }
+
+    fn attribute(
+        &self,
+        _log: &mut crate::script::RuntimeLog<S>,
+        _span: &S,
+        attribute: &S,
+    ) -> OperatorResult<S, Value<'a, S>> {
+        match attribute.as_str() {
+            "faces" => Ok(self.handle.faces().into()),
+            _ => Err(Failure::UnknownAttribute(attribute.clone())),
+        }
+    }
+
+    fn method_call(
+        &self,
+        context: &mut ExecutionContext<'a, S>,
+        span: &S,
+        attribute: &S,
+        arguments: Vec<Value<'a, S>>,
+        spans: &[crate::script::parsing::Expression<S>],
+    ) -> OperatorResult<S, Value<'a, S>> {
+        match attribute.as_str() {
+            "add_blind_hole" => |context: &mut ExecutionContext<'a, S>,
+                                 span: &S,
+                                 face: Face,
+                                 position: List<'a, S>,
+                                 radius: Measurement,
+                                 path: List<'a, S>|
+             -> OperatorResult<S, Value<S>> {
+                if !self.handle.deref().faces().contains(&face.handle) {
+                    return Err(Failure::FaceNotInShell(span.clone()));
+                }
+
+                let position = point_from_list(
+                    span,
+                    context.global_resources.convert_to_fornjot_units,
+                    position,
+                )?;
+
+                let radius = scalar_from_measurement(
+                    span,
+                    context.global_resources.convert_to_fornjot_units,
+                    &radius,
+                )?;
+
+                let path = vector_from_list(
+                    span,
+                    context.global_resources.convert_to_fornjot_units,
+                    path,
+                )?;
+
+                let new_shell = self.handle.deref().add_blind_hole(
+                    HoleLocation {
+                        face: &face.handle,
+                        position,
+                    },
+                    radius,
+                    path,
+                    &mut context.global_resources.fornjot_core,
+                );
+
+                Ok(Self::from(new_shell.insert(&mut context.global_resources.fornjot_core)).into())
+            }
+            .auto_call(context, span, arguments, spans),
+            "add_through_hole" => |context: &mut ExecutionContext<'a, S>,
+                                   span: &S,
+                                   front_face: Face,
+                                   front_position: List<'a, S>,
+
+                                   back_face: Face,
+                                   back_position: List<'a, S>,
+
+                                   radius: Measurement|
+             -> OperatorResult<S, Value<S>> {
+                let faces = self.handle.deref().faces();
+                if !faces.contains(&front_face.handle) || !faces.contains(&front_face.handle) {
+                    return Err(Failure::FaceNotInShell(span.clone()));
+                }
+
+                let front_position = point_from_list(
+                    span,
+                    context.global_resources.convert_to_fornjot_units,
+                    front_position,
+                )?;
+
+                let back_position = point_from_list(
+                    span,
+                    context.global_resources.convert_to_fornjot_units,
+                    back_position,
+                )?;
+
+                let radius = scalar_from_measurement(
+                    span,
+                    context.global_resources.convert_to_fornjot_units,
+                    &radius,
+                )?;
+
+                let new_shell = self.handle.deref().add_through_hole(
+                    [
+                        HoleLocation {
+                            face: &front_face.handle,
+                            position: front_position,
+                        },
+                        HoleLocation {
+                            face: &back_face.handle,
+                            position: back_position,
+                        },
+                    ],
+                    radius,
+                    &mut context.global_resources.fornjot_core,
+                );
+
+                Ok(Self::from(new_shell.insert(&mut context.global_resources.fornjot_core)).into())
+            }
+            .auto_call(context, span, arguments, spans),
+            "update_face" => |context: &mut ExecutionContext<'a, S>,
+                              span: &S,
+                              face: Face,
+                              update: Value<'a, S>|
+             -> OperatorResult<S, Value<S>> {
+                // Update shell will panic if the shell isn't found in the solid, so check that it's in there.
+                if !self.handle.deref().faces().contains(&face.handle) {
+                    return Err(Failure::FaceNotInShell(span.clone()));
+                }
+
+                // Due to borrowing issues, we have to run the update call before we go into
+                // the update function.
+                let new_faces = update.call(context, span, vec![face.clone().into()], &[])?;
+                let new_faces = new_faces.downcast::<List<S>>(span)?;
+                let num_faces = new_faces.len();
+                let new_faces = unpack_dynamic_length_list::<S, Face>(span, new_faces)?
+                    .map(|shell| HandleWrapper::from(shell.handle));
+
+                // Update shell will panic if we insert a duplicate, so deduplicate it.
+                let new_faces = check_for_duplicates(span, num_faces, new_faces)?;
+
+                let new_shell = self.handle.deref().update_face(
+                    &face.handle,
+                    |_face, _core| new_faces.into_iter().map(|h| h.0),
+                    &mut context.global_resources.fornjot_core,
+                );
+
+                Ok(Self::from(new_shell.insert(&mut context.global_resources.fornjot_core)).into())
+            }
+            .auto_call(context, span, arguments, spans),
+            "add_faces" => {
+                |context: &mut ExecutionContext<'a, S>,
+                 span: &S,
+                 new_faces: List<'a, S>|
+                 -> OperatorResult<S, Value<S>> {
+                    let num_faces = new_faces.len();
+                    let new_faces = unpack_dynamic_length_list::<S, Face>(span, new_faces)?
+                        .map(|shell| HandleWrapper::from(shell.handle));
+
+                    // Update shell will panic if we insert a duplicate, so deduplicate it.
+                    let new_faces = check_for_duplicates(span, num_faces, new_faces)?;
+
+                    let new_shell = self.handle.deref().add_faces(
+                        new_faces.into_iter().map(|h| h.0),
+                        &mut context.global_resources.fornjot_core,
+                    );
+
+                    Ok(
+                        Self::from(new_shell.insert(&mut context.global_resources.fornjot_core))
+                            .into(),
+                    )
+                }
+                .auto_call(context, span, arguments, spans)
+            }
+            _ => Err(Failure::UnknownAttribute(attribute.clone())),
+        }
+    }
+}
+
+handle_wrapper!(Shell, FornjotShell);
+
+// TODO test that the hole creating functions correctly prevent non-existing faces from being used.
+// TODO test adding duplicate faces to the shell (through update and add_faces)
+// TODO test updating a face that did not exist in the shell
+// TODO test blind hole
+// TODO test through hole
