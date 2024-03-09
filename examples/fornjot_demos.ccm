@@ -45,4 +45,39 @@ solid spacer(outer_radius: Length, inner_radius: Length, height: Length) {
     base_sketch.sweep(bottom_surface, sweep_path)
 }
 
+solid star(num_points: Number, r1: Length, r2: Length, h: Length) {
+  let num_verticies = num_points * 2;
+
+  let outer_points = [];
+  let inner_points = [];
+
+  for index in 0..num_verticies {
+    let angle_rad = 2rad / num_verticies * index;
+    
+    // TODO We need to add support for the modulous operator.
+    let radius = if (index / 2).fract() == 0 { r1 } else { r2 };
+
+    let [sin, cos] = angle_rad.sin_cos();
+
+    let x = radius * cos;
+    let y = radius * sin;
+
+    outer_points = outer_points.append([[x, y]]);
+    inner_points = inner_points.append([[x / 2, y / 2]]);
+  }
+
+  let bottom_surface = global_xy_plane();
+  let sweep_path = [0mm, 0mm, h];
+
+  let exterior = new_cycle(Polygon { points = outer_points });
+  let interiors = [ new_cycle(Polygon { points = inner_points }).reverse() ];
+  
+  let base = new_sketch([new_region(RawRegion {
+    exterior = exterior,
+    interiors = interiors,
+  })]);
+
+  base.sweep(bottom_surface, sweep_path)
+}
+
 // Further demos are not yet possible with the current limitations of the language.

@@ -23,7 +23,8 @@ use crate::script::{
         types::{function::AutoCall, NamedObject, Object, OperatorResult, UserFunction, Value},
         ExecutionContext, Failure,
     },
-    parsing::VariableType,
+    logging::RuntimeLog,
+    parsing::{Expression, VariableType},
     Span,
 };
 
@@ -45,7 +46,7 @@ impl<'a, S: Span> Object<'a, S> for Face {
 
     fn attribute(
         &self,
-        _log: &mut crate::script::RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         _span: &S,
         attribute: &S,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -61,7 +62,7 @@ impl<'a, S: Span> Object<'a, S> for Face {
         span: &S,
         attribute: &S,
         arguments: Vec<Value<'a, S>>,
-        spans: &[crate::script::parsing::Expression<S>],
+        spans: &[Expression<S>],
     ) -> OperatorResult<S, Value<'a, S>> {
         match attribute.as_str() {
             // "update_region" => |context: &mut ExecutionContext<'a, S>,

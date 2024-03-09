@@ -42,10 +42,16 @@ use script::{Failure, Runtime, SerializableValue};
 use tempfile::SpooledTempFile;
 use uom::si::{f64::Length, length::millimeter};
 
-use crate::script::Measurement;
+use crate::script::{print_all_supported_units, Measurement};
 
 fn main() {
-    stderrlog::new().init().unwrap();
+    print_all_supported_units();
+
+    stderrlog::new()
+        .show_level(true)
+        .verbosity(3)
+        .init()
+        .unwrap();
     let command = arguments::Command::parse();
 
     match command {
@@ -249,12 +255,6 @@ where
     }
 
     let result = runtime_action(&mut runtime, unpacked_arguments);
-
-    for message in runtime.log().messages.iter() {
-        match message.log_level() {
-            script::LogLevel::Warning => log::warn!("{}", message),
-        }
-    }
 
     match result {
         Ok(result) => {

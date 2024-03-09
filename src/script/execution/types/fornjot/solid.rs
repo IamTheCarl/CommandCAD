@@ -29,6 +29,7 @@ use crate::script::{
         types::{fornjot::shell::Shell, function::AutoCall, List, Object, OperatorResult, Value},
         ExecutionContext, Failure,
     },
+    logging::RuntimeLog,
     parsing::VariableType,
     Span,
 };
@@ -49,7 +50,7 @@ impl<'a, S: Span> Object<'a, S> for Solid {
 
     fn attribute(
         &self,
-        _log: &mut crate::script::RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         _span: &S,
         attribute: &S,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -95,7 +96,11 @@ impl<'a, S: Span> Object<'a, S> for Solid {
                     &mut context.global_resources.fornjot_core,
                 );
 
-                Ok(Self::from(new_solid.insert(&mut context.global_resources.fornjot_core)).into())
+                let new_solid =
+                    Self::from(new_solid.insert(&mut context.global_resources.fornjot_core));
+                context.unpack_validation_warnings(span);
+
+                Ok(new_solid.into())
             }
             .auto_call(context, span, arguments, spans),
             "add_shells" => {
@@ -115,10 +120,11 @@ impl<'a, S: Span> Object<'a, S> for Solid {
                         &mut context.global_resources.fornjot_core,
                     );
 
-                    Ok(
-                        Self::from(new_solid.insert(&mut context.global_resources.fornjot_core))
-                            .into(),
-                    )
+                    let new_solid =
+                        Self::from(new_solid.insert(&mut context.global_resources.fornjot_core));
+                    context.unpack_validation_warnings(span);
+
+                    Ok(new_solid.into())
                 }
                 .auto_call(context, span, arguments, spans)
             }

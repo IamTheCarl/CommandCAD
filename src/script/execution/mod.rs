@@ -23,13 +23,16 @@ use crate::script::execution::types::NoneType;
 use self::types::{validate_assignment_type, Measurement, OperatorResult};
 
 use super::{
+    logging::{self, RuntimeLog, StandardLog, UnpackValidationWarnings},
     parsing::{self, Block, CallableBlock},
-    RuntimeLog, Span,
+    Span,
 };
 
 pub mod types;
+use common_data_types::ConversionFactor;
 use compact_str::CompactString;
 use fj_core::Core;
+pub use types::print_all_supported_units;
 use types::{StructDefinition, UserFunction, Value};
 
 mod expressions;
@@ -363,7 +366,7 @@ impl<S: Span> From<Failure<S>> for ControlFlow<'_, S> {
 }
 
 pub struct GlobalResources {
-    pub convert_to_fornjot_units: fn(&Measurement) -> Option<f64>,
+    pub fornjot_unit_conversion_factor: &'static ConversionFactor,
 
     // FIXME we need to unwind the validation messages, otherwise this panics on drop.
     pub fornjot_core: Core,
@@ -372,8 +375,7 @@ pub struct GlobalResources {
 impl Default for GlobalResources {
     fn default() -> Self {
         Self {
-            convert_to_fornjot_units: Measurement::get_measurement_to_float_converter("mm")
-                .unwrap(),
+            fornjot_unit_conversion_factor: Measurement::get_conversion_factor("mm").unwrap(),
             fornjot_core: Default::default(),
         }
     }
@@ -381,7 +383,7 @@ impl Default for GlobalResources {
 
 pub struct ExecutionContext<'a, S: Span> {
     pub global_resources: GlobalResources,
-    pub log: RuntimeLog<S>,
+    pub log: &'a mut dyn RuntimeLog<'a, S>,
     pub stack: Stack<'a, S>,
 }
 
@@ -389,13 +391,14 @@ impl<'a, S: Span> Default for ExecutionContext<'a, S> {
     fn default() -> Self {
         let mut context = Self {
             global_resources: Default::default(),
-            log: RuntimeLog::new(),
+            log: StandardLog::global(),
             stack: Default::default(),
         };
 
         // FIXME this registers the global functions as part of the module,
         // which is not actually global. This is a bad way to do this because
         // other modules won't have access to the global functions.
+        // TODO add constants: std::constants::PI, Angle::HALF_TURN, Angle::FULL_TURN, Measurement::ZERO for all measurement types, SolidAngle::SPHERE.
         types::register_globals(&mut context);
 
         context
@@ -406,7 +409,7 @@ impl<'a, S: Span> ExecutionContext<'a, S> {
     pub fn new(module_scope: ModuleScope<'a, S>) -> Self {
         let mut context = Self {
             global_resources: GlobalResources::default(),
-            log: RuntimeLog::new(),
+            log: StandardLog::global(),
             stack: Stack::new(module_scope),
         };
 
@@ -414,8 +417,14 @@ impl<'a, S: Span> ExecutionContext<'a, S> {
         // which is not actually global. This is a bad way to do this because
         // other modules won't have access to the global functions.
         types::register_globals(&mut context);
+        logging::register_globals(&mut context);
 
         context
+    }
+
+    pub fn unpack_validation_warnings(&mut self, span: &S) {
+        self.global_resources
+            .unpack_validation_warnings(span, self.log)
     }
 
     pub fn new_scope<R>(&mut self, scope: impl FnOnce(&mut Self) -> R) -> R {

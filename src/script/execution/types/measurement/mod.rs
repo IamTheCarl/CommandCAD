@@ -19,107 +19,92 @@
 use std::{borrow::Cow, cmp::Ordering, str::FromStr};
 
 use uom::{
-    si::{self, Dimension, Quantity, Units},
+    si::{Dimension as UomDimension, Quantity, Units},
     typenum::ToInt,
+};
+
+use common_data_types::{
+    ConversionFactor, ConversionFactorDatabase, Dimension, DimensionNameDatabase, RatioTypeHint,
 };
 
 use crate::script::{
     execution::{ExecutionContext, Failure},
+    logging::RuntimeLog,
     parsing::{self, Expression, VariableType},
-    RuntimeLog, Span,
+    Span,
 };
 
 use super::{
-    function::AutoCall, number::UnwrapNotNan, NamedObject, Number, Object, OperatorResult, SString,
-    Value,
+    function::AutoCall,
+    number::{consts, unwrap_float, Number, UnwrapNotNan},
+    List, NamedObject, Object, OperatorResult, SString, Value,
 };
 
-mod from_parsed;
+lazy_static::lazy_static! {
+    static ref CONVERSION_FACTORS: ConversionFactorDatabase = include!(concat!(env!("OUT_DIR"), "/conversion_factors.rs"));
+    static ref DIMENSION_NAMES: DimensionNameDatabase = include!(concat!(env!("OUT_DIR"), "/dimension_names.rs"));
+}
+
+fn get_dimension_name(dimension: &Dimension) -> Cow<'static, str> {
+    if let Some(name) = DIMENSION_NAMES.get(dimension) {
+        name.clone()
+    } else {
+        format!(
+            "Measurement<L{}, M{}, T{}, I{}, Th{}, N{}, J{}>",
+            dimension.length,
+            dimension.mass,
+            dimension.time,
+            dimension.electric_current,
+            dimension.thermodynamic_temprature,
+            dimension.amount_of_substance,
+            dimension.luminous_intensity
+        )
+        .into()
+    }
+}
+
+pub trait ConvertUnit {
+    fn to_base_unit(&self, input: Number) -> Number;
+    fn from_base_unit(&self, input: Number) -> Number;
+    fn from_measurement_to_number<S: Span>(
+        &self,
+        span: &S,
+        measurement: &Measurement,
+    ) -> OperatorResult<S, Number>;
+}
+
+impl ConvertUnit for ConversionFactor {
+    fn to_base_unit(&self, input: Number) -> Number {
+        input * self.coefficient + self.constant
+    }
+
+    fn from_base_unit(&self, input: Number) -> Number {
+        (input - self.constant) / self.coefficient
+    }
+
+    fn from_measurement_to_number<S: Span>(
+        &self,
+        span: &S,
+        measurement: &Measurement,
+    ) -> OperatorResult<S, Number> {
+        if measurement.dimension == self.dimension {
+            Ok(self.from_base_unit(measurement.value))
+        } else {
+            Err(Failure::ExpectedGot(
+                span.clone(),
+                get_dimension_name(&self.dimension),
+                get_dimension_name(&measurement.dimension),
+            ))
+        }
+    }
+}
+
+pub fn print_all_supported_units() {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Measurement {
-    // Meter
-    length: i8,
-
-    // Kilogram
-    mass: i8,
-
-    // Second
-    time: i8,
-
-    // Apere
-    electric_current: i8,
-
-    // Kelvin
-    thermodynamic_temprature: i8,
-
-    // Mole
-    amount_of_substance: i8,
-
-    // Candela
-    luminous_intensity: i8,
-
-    // Hints of type for ratios.
-    angle_kind: bool,
-    constituent_concentration_kind: bool,
-    information_kind: bool,
-    solid_angle_kind: bool,
-    temperature_kind: bool,
-
+    dimension: Dimension,
     value: Number,
-}
-
-macro_rules! named_measurement_branchs {
-    ( $self:ident, $($name:ident),* ) => {
-
-	{
-            $(paste::paste! { const [<$name:snake:upper _IS_ANGLE_KIND>]: bool = has_impl::has_impl!(<si:: [< $name:snake:lower >] ::Dimension as Dimension>::Kind: si::marker::AngleKind); })*;
-            $(paste::paste! { const [<$name:snake:upper _IS_CONSTITUENT_CONCENTRATION_KIND>]: bool = has_impl::has_impl!(<si:: [< $name:snake:lower >] ::Dimension as Dimension>::Kind: si::marker::ConstituentConcentrationKind); })*;
-            $(paste::paste! { const [<$name:snake:upper _IS_INFORMATION_KIND>]: bool = has_impl::has_impl!(<si:: [< $name:snake:lower >] ::Dimension as Dimension>::Kind: si::marker::InformationKind); })*;
-            $(paste::paste! { const [<$name:snake:upper _IS_SOLID_ANGLE_KIND>]: bool = has_impl::has_impl!(<si:: [< $name:snake:lower >] ::Dimension as Dimension>::Kind: si::marker::SolidAngleKind); })*;
-            $(paste::paste! { const [<$name:snake:upper _IS_TEMPERATURE_KIND>]: bool = has_impl::has_impl!(<si:: [< $name:snake:lower >] ::Dimension as Dimension>::Kind: si::marker::TemperatureKind); })*;
-
-            match (
-       		$self.length,
-       		$self.mass,
-       		$self.time,
-       		$self.electric_current,
-       		$self.thermodynamic_temprature,
-       		$self.amount_of_substance,
-       		$self.luminous_intensity,
-       		$self.angle_kind,
-		$self.constituent_concentration_kind,
-		$self.information_kind,
-		$self.solid_angle_kind,
-		$self.temperature_kind,
-            ) {
-       		$((
-       		    <paste::paste! { si:: [< $name:snake:lower >] ::Dimension} as Dimension>::L::INT,
-       		    <paste::paste! { si:: [< $name:snake:lower >] ::Dimension} as Dimension>::M::INT,
-       		    <paste::paste! { si:: [< $name:snake:lower >] ::Dimension} as Dimension>::T::INT,
-       		    <paste::paste! { si:: [< $name:snake:lower >] ::Dimension} as Dimension>::I::INT,
-       		    <paste::paste! { si:: [< $name:snake:lower >] ::Dimension} as Dimension>::Th::INT,
-       		    <paste::paste! { si:: [< $name:snake:lower >] ::Dimension} as Dimension>::N::INT,
-       		    <paste::paste! { si:: [< $name:snake:lower >] ::Dimension} as Dimension>::J::INT,
-       		    paste::paste! { [<$name:snake:upper _IS_ANGLE_KIND>] },
-		    paste::paste! { [<$name:snake:upper _IS_CONSTITUENT_CONCENTRATION_KIND>] },
-		    paste::paste! { [<$name:snake:upper _IS_INFORMATION_KIND>] },
-		    paste::paste! { [<$name:snake:upper _IS_SOLID_ANGLE_KIND>] },
-		    paste::paste! { [<$name:snake:upper _IS_TEMPERATURE_KIND>] },
-       		) => stringify!($name).into(),)*
-       		_ => format!(
-                    "Measurement<L{}, M{}, T{}, I{}, Th{}, N{}, J{}>",
-                    $self.length,
-                    $self.mass,
-                    $self.time,
-                    $self.electric_current,
-                    $self.thermodynamic_temprature,
-                    $self.amount_of_substance,
-                    $self.luminous_intensity
-       		).into(),
-            }
-	}
-    }
 }
 
 impl<'a, S: Span> Object<'a, S> for Measurement {
@@ -132,128 +117,16 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
     }
 
     fn type_name(&self) -> Cow<'static, str> {
-        named_measurement_branchs!(
-            self,
-            Absement,
-            Acceleration,
-            Action,
-            AmountOfSubstance,
-            Angle,
-            AngularAbsement,
-            AngularAcceleration,
-            AngularJerk,
-            AngularVelocity,
-            Area,
-            ArealDensityOfStates,
-            ArealMassDensity,
-            ArealNumberDensity,
-            ArealNumberRate,
-            AvailableEnergy,
-            Capacitance,
-            CatalyticActivity,
-            CatalyticActivityConcentration,
-            Curvature,
-            DiffusionCoefficient,
-            DynamicViscosity,
-            ElectricCharge,
-            ElectricChargeArealDensity,
-            ElectricChargeLinearDensity,
-            ElectricChargeVolumetricDensity,
-            ElectricCurrent,
-            ElectricCurrentDensity,
-            ElectricDipoleMoment,
-            ElectricDisplacementField,
-            ElectricField,
-            ElectricFlux,
-            ElectricPermittivity,
-            ElectricPotential,
-            ElectricQuadrupoleMoment,
-            ElectricalConductance,
-            ElectricalConductivity,
-            ElectricalMobility,
-            ElectricalResistance,
-            ElectricalResistivity,
-            Energy,
-            Force,
-            Frequency,
-            FrequencyDrift,
-            HeatCapacity,
-            HeatFluxDensity,
-            HeatTransfer,
-            Inductance,
-            Information,
-            InformationRate,
-            InverseVelocity,
-            Jerk,
-            Length,
-            LinearDensityOfStates,
-            LinearMassDensity,
-            LinearNumberDensity,
-            LinearNumberRate,
-            LinearPowerDensity,
-            Luminance,
-            LuminousIntensity,
-            MagneticFieldStrength,
-            MagneticFlux,
-            MagneticFluxDensity,
-            MagneticMoment,
-            MagneticPermeability,
-            Mass,
-            MassConcentration,
-            MassDensity,
-            MassFlux,
-            MassPerEnergy,
-            MassRate,
-            Molality,
-            MolarConcentration,
-            MolarEnergy,
-            MolarFlux,
-            MolarHeatCapacity,
-            MolarMass,
-            MolarRadioactivity,
-            MolarVolume,
-            MomentOfInertia,
-            Momentum,
-            Power,
-            PowerRate,
-            Pressure,
-            RadiantExposure,
-            Radioactivity,
-            Ratio,
-            ReciprocalLength,
-            SolidAngle,
-            SpecificArea,
-            SpecificHeatCapacity,
-            SpecificPower,
-            SpecificRadioactivity,
-            SpecificVolume,
-            SurfaceElectricCurrentDensity,
-            TemperatureCoefficient,
-            TemperatureGradient,
-            TemperatureInterval,
-            ThermalConductance,
-            ThermalConductivity,
-            ThermodynamicTemperature,
-            Time,
-            Torque,
-            Velocity,
-            Volume,
-            VolumeRate,
-            VolumetricDensityOfStates,
-            VolumetricHeatCapacity,
-            VolumetricNumberDensity,
-            VolumetricNumberRate,
-            VolumetricPowerDensity
-        )
+        get_dimension_name(&self.dimension)
     }
 
     fn addition(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
-        let rhs = self.unpack_for_addition_or_subtraction(log, span, rhs)?;
+        let rhs = self.unpack_for_addition_or_subtraction(span, rhs)?;
 
         let value = Number::new(*self.value + *rhs.value).unwrap_not_nan_raw(span)?;
 
@@ -261,11 +134,11 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
     }
     fn subtraction(
         &self,
-        log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
-        let rhs = self.unpack_for_addition_or_subtraction(log, span, rhs)?;
+        let rhs = self.unpack_for_addition_or_subtraction(span, rhs)?;
 
         let value = Number::new(*self.value - *rhs.value).unwrap_not_nan_raw(span)?;
 
@@ -273,38 +146,13 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
     }
     fn multiply(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
         match rhs {
-            Value::Measurement(rhs) => {
-                let value = Number::new(*self.value * *rhs.value).unwrap_not_nan_raw(span)?;
-
-                Ok(Self {
-                    length: self.length + rhs.length,
-                    mass: self.mass + rhs.mass,
-                    time: self.time + rhs.time,
-                    electric_current: self.electric_current + rhs.electric_current,
-                    thermodynamic_temprature: self.thermodynamic_temprature
-                        + rhs.thermodynamic_temprature,
-                    amount_of_substance: self.amount_of_substance + rhs.amount_of_substance,
-                    luminous_intensity: self.luminous_intensity + rhs.luminous_intensity,
-                    angle_kind: self.angle_kind | rhs.angle_kind,
-                    constituent_concentration_kind: self.constituent_concentration_kind
-                        | rhs.constituent_concentration_kind,
-                    information_kind: self.information_kind | rhs.information_kind,
-                    solid_angle_kind: self.solid_angle_kind | rhs.solid_angle_kind,
-                    temperature_kind: self.temperature_kind | rhs.temperature_kind,
-                    value,
-                }
-                .into())
-            }
-            Value::Number(rhs) => {
-                let value = Number::new(*self.value * **rhs).unwrap_not_nan_raw(span)?;
-
-                Ok(Self { value, ..*self }.into())
-            }
+            Value::Measurement(rhs) => Ok(self.multiply_by_measurement(span, rhs)?.into()),
+            Value::Number(rhs) => Ok(self.multiply_by_number(span, rhs)?.into()),
             _ => Err(Failure::ExpectedGot(
                 span.clone(),
                 "Measurement or Number".into(),
@@ -314,38 +162,13 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
     }
     fn divide(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
         match rhs {
-            Value::Measurement(rhs) => {
-                let value = Number::new(*self.value / *rhs.value).unwrap_not_nan_raw(span)?;
-
-                Ok(Self {
-                    length: self.length - rhs.length,
-                    mass: self.mass - rhs.mass,
-                    time: self.time - rhs.time,
-                    electric_current: self.electric_current - rhs.electric_current,
-                    thermodynamic_temprature: self.thermodynamic_temprature
-                        - rhs.thermodynamic_temprature,
-                    amount_of_substance: self.amount_of_substance - rhs.amount_of_substance,
-                    luminous_intensity: self.luminous_intensity - rhs.luminous_intensity,
-                    angle_kind: self.angle_kind | rhs.angle_kind,
-                    constituent_concentration_kind: self.constituent_concentration_kind
-                        | rhs.constituent_concentration_kind,
-                    information_kind: self.information_kind | rhs.information_kind,
-                    solid_angle_kind: self.solid_angle_kind | rhs.solid_angle_kind,
-                    temperature_kind: self.temperature_kind | rhs.temperature_kind,
-                    value,
-                }
-                .into())
-            }
-            Value::Number(rhs) => {
-                let value = Number::new(*self.value / **rhs).unwrap_not_nan_raw(span)?;
-
-                Ok(Self { value, ..*self }.into())
-            }
+            Value::Measurement(rhs) => Ok(self.divide_by_measurement(span, rhs)?.into()),
+            Value::Number(rhs) => Ok(self.divide_by_number(span, rhs)?.into()),
             _ => Err(Failure::ExpectedGot(
                 span.clone(),
                 "Measurement or Number".into(),
@@ -353,10 +176,18 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
             )),
         }
     }
-    fn unary_plus(&self, _log: &mut RuntimeLog<S>, _span: &S) -> OperatorResult<S, Value<'a, S>> {
+    fn unary_plus(
+        &self,
+        _log: &mut dyn RuntimeLog<S>,
+        _span: &S,
+    ) -> OperatorResult<S, Value<'a, S>> {
         Ok(self.clone().into())
     }
-    fn unary_minus(&self, _log: &mut RuntimeLog<S>, _span: &S) -> OperatorResult<S, Value<'a, S>> {
+    fn unary_minus(
+        &self,
+        _log: &mut dyn RuntimeLog<S>,
+        _span: &S,
+    ) -> OperatorResult<S, Value<'a, S>> {
         Ok(Self {
             value: -self.value,
             ..self.clone()
@@ -365,24 +196,12 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
     }
     fn cmp(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Ordering> {
         let rhs = rhs.downcast_ref::<Self>(span)?;
-        if self.length == rhs.length
-            && self.mass == rhs.mass
-            && self.time == rhs.time
-            && self.electric_current == rhs.electric_current
-            && self.thermodynamic_temprature == rhs.thermodynamic_temprature
-            && self.amount_of_substance == rhs.amount_of_substance
-            && self.luminous_intensity == rhs.luminous_intensity
-            && self.angle_kind == rhs.angle_kind
-            && self.constituent_concentration_kind == rhs.constituent_concentration_kind
-            && self.information_kind == rhs.information_kind
-            && self.solid_angle_kind == rhs.solid_angle_kind
-            && self.temperature_kind == rhs.temperature_kind
-        {
+        if self.dimension == rhs.dimension {
             Ok(std::cmp::Ord::cmp(&self.value, &rhs.value))
         } else {
             Err(Failure::ExpectedGot(
@@ -408,6 +227,212 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
                 self.to_number(span, ty.as_str())
             }
             .auto_call(context, span, arguments, expressions),
+            "abs" => |_context: &mut ExecutionContext<'a, S>,
+                      span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                Ok(Self {
+                    value: Number::new(self.value.abs()).unwrap_not_nan_raw(span)?,
+                    ..self.clone()
+                }
+                .into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "clamp" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S,
+                        min: Value<'a, S>,
+                        max: Value<'a, S>|
+             -> OperatorResult<S, Value<'a, S>> {
+                let min = self.unpack_for_addition_or_subtraction(span, &min)?;
+                let max = self.unpack_for_addition_or_subtraction(span, &max)?;
+
+                Ok(Self {
+                    value: self.value.clamp(min.value, max.value),
+                    ..self.clone()
+                }
+                .into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "copysign" => |_context: &mut ExecutionContext<'a, S>,
+                           span: &S,
+                           sign: Number|
+             -> OperatorResult<S, Value<'a, S>> {
+                Ok(Self {
+                    value: Number::new(self.value.copysign(*sign)).unwrap_not_nan_raw(span)?,
+                    ..self.clone()
+                }
+                .into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "hypot" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S,
+                        other: Value<'a, S>|
+             -> OperatorResult<S, Value<'a, S>> {
+                let other = self.unpack_for_addition_or_subtraction(span, &other)?;
+
+                Ok(Self {
+                    value: Number::new(self.value.hypot(*other.value)).unwrap_not_nan_raw(span)?,
+                    ..self.clone()
+                }
+                .into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "is_finite" => |_context: &mut ExecutionContext<'a, S>,
+                            _span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                Ok(self.value.is_finite().into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "is_infinite" => |_context: &mut ExecutionContext<'a, S>,
+                              _span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                Ok(self.value.is_infinite().into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "is_sign_negative" => |_context: &mut ExecutionContext<'a, S>,
+                                   _span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                Ok(self.value.is_sign_negative().into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "is_sign_posative" => |_context: &mut ExecutionContext<'a, S>,
+                                   _span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                Ok(self.value.is_sign_positive().into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "max" => |_context: &mut ExecutionContext<'a, S>,
+                      _span: &S,
+                      other: Value<'a, S>|
+             -> OperatorResult<S, Value<'a, S>> {
+                let other = self.unpack_for_addition_or_subtraction(span, &other)?;
+                Ok(Number::new(*self.value.max(other.value))
+                    .unwrap_not_nan_raw(span)?
+                    .into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "min" => |_context: &mut ExecutionContext<'a, S>,
+                      _span: &S,
+                      other: Value<'a, S>|
+             -> OperatorResult<S, Value<'a, S>> {
+                let other = self.unpack_for_addition_or_subtraction(span, &other)?;
+                Ok(Number::new(*self.value.min(other.value))
+                    .unwrap_not_nan_raw(span)?
+                    .into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "mul_add" => |context: &mut ExecutionContext<'a, S>,
+                          span: &S,
+                          a: Value<'a, S>,
+                          b: Value<'a, S>|
+             -> OperatorResult<S, Value<'a, S>> {
+                let multiply_result = self.multiply(context.log, span, &b)?;
+                let add_result = multiply_result.addition(context.log, span, &a)?;
+
+                Ok(add_result)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "signum" => |_context: &mut ExecutionContext<'a, S>,
+                         span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                Number::new(self.value.signum()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "acos" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_inverse_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).acos()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "acosh" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_inverse_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).acosh()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "asin" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_inverse_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).asin()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "asinh" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_inverse_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).asinh()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "atan" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_inverse_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).atan()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "atanh" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_inverse_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).atanh()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "cos" => |_context: &mut ExecutionContext<'a, S>,
+                      span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).cos()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "cosh" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).cosh()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "sin" => |_context: &mut ExecutionContext<'a, S>,
+                      span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).sin()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "sin_cos" => |_context: &mut ExecutionContext<'a, S>,
+                          _span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_trig_compatible(span)?;
+                let (sin, cos) = (self.value * consts::PI).sin_cos();
+                let sin = Number::new(sin).unwrap_not_nan(span)?;
+                let cos = Number::new(cos).unwrap_not_nan(span)?;
+
+                Ok(List::from([sin, cos]).into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "sinh" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).sinh()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "tan" => |_context: &mut ExecutionContext<'a, S>,
+                      span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).tan()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            "tanh" => |_context: &mut ExecutionContext<'a, S>,
+                       span: &S|
+             -> OperatorResult<S, Value<'a, S>> {
+                self.check_trig_compatible(span)?;
+                Number::new((self.value * consts::PI).tanh()).unwrap_not_nan(span)
+            }
+            .auto_call(context, span, arguments, expressions),
+            // TODO we need functions to convert zero dimensional types to: Angles, Constitute Concentration, Information, Solid Angle, and Temperature.
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
     }
@@ -420,22 +445,89 @@ impl NamedObject for Measurement {
 }
 
 impl Measurement {
+    pub fn multiply_by_measurement<S: Span>(
+        &self,
+        span: &S,
+        rhs: &Self,
+    ) -> OperatorResult<S, Self> {
+        let value = Number::new(*self.value * *rhs.value).unwrap_not_nan_raw(span)?;
+
+        let dimension = Dimension {
+            length: self.dimension.length + rhs.dimension.length,
+            mass: self.dimension.mass + rhs.dimension.mass,
+            time: self.dimension.time + rhs.dimension.time,
+            electric_current: self.dimension.electric_current + rhs.dimension.electric_current,
+            thermodynamic_temprature: self.dimension.thermodynamic_temprature
+                + rhs.dimension.thermodynamic_temprature,
+            amount_of_substance: self.dimension.amount_of_substance
+                + rhs.dimension.amount_of_substance,
+            luminous_intensity: self.dimension.luminous_intensity
+                + rhs.dimension.luminous_intensity,
+            ratio_type_hint: RatioTypeHint(
+                self.dimension.ratio_type_hint.0 | rhs.dimension.ratio_type_hint.0,
+            ),
+        };
+
+        Ok(Self { dimension, value })
+    }
+
+    pub fn multiply_by_number<S: Span>(&self, span: &S, rhs: &Number) -> OperatorResult<S, Self> {
+        let value = Number::new(*self.value * **rhs).unwrap_not_nan_raw(span)?;
+
+        Ok(Self { value, ..*self })
+    }
+
+    pub fn divide_by_measurement<S: Span>(&self, span: &S, rhs: &Self) -> OperatorResult<S, Self> {
+        let value = Number::new(*self.value / *rhs.value).unwrap_not_nan_raw(span)?;
+
+        let dimension = Dimension {
+            length: self.dimension.length - rhs.dimension.length,
+            mass: self.dimension.mass - rhs.dimension.mass,
+            time: self.dimension.time - rhs.dimension.time,
+            electric_current: self.dimension.electric_current - rhs.dimension.electric_current,
+            thermodynamic_temprature: self.dimension.thermodynamic_temprature
+                - rhs.dimension.thermodynamic_temprature,
+            amount_of_substance: self.dimension.amount_of_substance
+                - rhs.dimension.amount_of_substance,
+            luminous_intensity: self.dimension.luminous_intensity
+                - rhs.dimension.luminous_intensity,
+            ratio_type_hint: RatioTypeHint(
+                self.dimension.ratio_type_hint.0 | rhs.dimension.ratio_type_hint.0,
+            ),
+        };
+
+        Ok(Self { dimension, value })
+    }
+
+    pub fn divide_by_number<S: Span>(&self, span: &S, rhs: &Number) -> OperatorResult<S, Self> {
+        let value = Number::new(*self.value / **rhs).unwrap_not_nan_raw(span)?;
+
+        Ok(Self { value, ..*self })
+    }
+
+    fn check_inverse_trig_compatible<S: Span>(&self, span: &S) -> OperatorResult<S, ()> {
+        if self.dimension.is_zero_dimension() {
+            Ok(())
+        } else {
+            Err(Failure::InverseTrigIncompatible(span.clone()))
+        }
+    }
+
+    fn check_trig_compatible<S: Span>(&self, span: &S) -> OperatorResult<S, ()> {
+        if self.dimension.is_zero_dimension() && self.dimension.ratio_type_hint.is_angle() {
+            Ok(())
+        } else {
+            Err(Failure::TrigIncompatible(span.clone()))
+        }
+    }
+
     fn unpack_for_addition_or_subtraction<'b, S: Span>(
         &'b self,
-        _log: &mut RuntimeLog<S>,
         span: &S,
         rhs: &'b Value<'_, S>,
     ) -> OperatorResult<S, &Self> {
         if let Value::Measurement(rhs) = rhs {
-            if rhs.length == self.length
-                && rhs.mass == self.mass
-                && rhs.time == self.time
-                && rhs.electric_current == self.electric_current
-                && rhs.thermodynamic_temprature == self.thermodynamic_temprature
-                && rhs.amount_of_substance == self.amount_of_substance
-                && rhs.luminous_intensity == self.luminous_intensity
-                && rhs.angle_kind == self.angle_kind
-            {
+            if self.dimension == rhs.dimension {
                 Ok(rhs)
             } else {
                 Err(Failure::ExpectedGot(
@@ -452,11 +544,78 @@ impl Measurement {
             ))
         }
     }
+
+    pub fn from_number<'a, S: Span>(
+        span: &S,
+        value: Number,
+        ty: SString,
+    ) -> OperatorResult<S, Value<'a, S>> {
+        if let Some(conversion_factor) = CONVERSION_FACTORS.get(ty.as_str()) {
+            let value = conversion_factor.to_base_unit(value);
+            let dimension = conversion_factor.dimension.clone();
+
+            Ok(Self { dimension, value }.into())
+        } else {
+            Err(Failure::UnknownUnitType(
+                span.clone(),
+                ty.into_string().into(),
+            ))
+        }
+    }
+
+    pub fn to_number<'a, S: Span>(&self, span: &S, ty: &str) -> OperatorResult<S, Value<'a, S>> {
+        if let Some(conversion_factor) = CONVERSION_FACTORS.get(ty) {
+            if self.dimension == conversion_factor.dimension {
+                Ok(conversion_factor.from_base_unit(self.value).into())
+            } else {
+                Err(Failure::DimensionalMissmatch(
+                    span.clone(),
+                    Object::<S>::type_name(self),
+                    ty.to_string().into(),
+                ))
+            }
+        } else {
+            Err(Failure::UnknownUnitType(
+                span.clone(),
+                ty.to_string().into(),
+            ))
+        }
+    }
+
+    pub fn from_parsed_raw<S: Span>(
+        measurement: &parsing::Measurement<S>,
+    ) -> OperatorResult<S, Self> {
+        if let Some(conversion_factor) = CONVERSION_FACTORS.get(measurement.ty.as_str()) {
+            let value = unwrap_float(measurement.number.get_span().clone(), &measurement.number)?;
+            let value = conversion_factor.to_base_unit(value);
+
+            let dimension = conversion_factor.dimension.clone();
+
+            Ok(Self { dimension, value })
+        } else {
+            Err(Failure::UnknownUnitType(
+                measurement.ty.clone(),
+                measurement.ty.to_string().into(),
+            ))
+        }
+    }
+
+    pub fn from_parsed<'a, S: Span>(
+        measurement: &parsing::Measurement<S>,
+    ) -> OperatorResult<S, Value<'a, S>> {
+        Self::from_parsed_raw(measurement).map(|measurement| measurement.into())
+    }
+
+    pub fn get_conversion_factor(
+        keyboard_friendly_abbreviation: &str,
+    ) -> Option<&'static ConversionFactor> {
+        CONVERSION_FACTORS.get(keyboard_friendly_abbreviation)
+    }
 }
 
 impl<D, U> TryFrom<Quantity<D, U, f64>> for Measurement
 where
-    D: Dimension + ?Sized,
+    D: UomDimension + ?Sized,
     D::L: ToInt<i8>,
     D::M: ToInt<i8>,
     D::T: ToInt<i8>,
@@ -469,12 +628,8 @@ where
     type Error = ordered_float::FloatIsNan;
 
     fn try_from(value: Quantity<D, U, f64>) -> std::result::Result<Self, Self::Error> {
-        let angle_kind: bool = has_impl::has_impl!(D::Kind: si::marker::AngleKind);
-        let constituent_concentration_kind: bool =
-            has_impl::has_impl!(D::Kind: si::marker::ConstituentConcentrationKind);
-        let information_kind: bool = has_impl::has_impl!(D::Kind: si::marker::InformationKind);
-        let solid_angle_kind: bool = has_impl::has_impl!(D::Kind: si::marker::SolidAngleKind);
-        let temperature_kind: bool = has_impl::has_impl!(D::Kind: si::marker::TemperatureKind);
+        // Due to language limitations in Rust, we are incapable of getting ratio type hints.
+        // https://stackoverflow.com/questions/30274091/is-it-possible-to-check-if-an-object-implements-a-trait-at-runtime
 
         let length = D::L::INT;
         let mass = D::M::INT;
@@ -484,9 +639,7 @@ where
         let amount_of_substance = D::N::INT;
         let luminous_intensity = D::J::INT;
 
-        let value = Number::new(value.value)?;
-
-        Ok(Self {
+        let dimension = Dimension {
             length,
             mass,
             time,
@@ -494,19 +647,18 @@ where
             thermodynamic_temprature,
             amount_of_substance,
             luminous_intensity,
-            angle_kind,
-            constituent_concentration_kind,
-            information_kind,
-            solid_angle_kind,
-            temperature_kind,
-            value,
-        })
+            ratio_type_hint: RatioTypeHint::default(),
+        };
+
+        let value = Number::new(value.value)?;
+
+        Ok(Self { dimension, value })
     }
 }
 
 impl<D, U> TryInto<Quantity<D, U, f64>> for Measurement
 where
-    D: Dimension + ?Sized,
+    D: UomDimension + ?Sized,
     D::L: ToInt<i8>,
     D::M: ToInt<i8>,
     D::T: ToInt<i8>,
@@ -519,13 +671,16 @@ where
     type Error = ();
 
     fn try_into(self) -> std::result::Result<Quantity<D, U, f64>, Self::Error> {
-        if D::L::INT == self.length
-            && D::M::INT == self.mass
-            && D::T::INT == self.time
-            && D::I::INT == self.electric_current
-            && D::Th::INT == self.thermodynamic_temprature
-            && D::N::INT == self.amount_of_substance
-            && D::J::INT == self.luminous_intensity
+        // Due to language limitations in Rust, we are incapable of getting ratio type hints.
+        // https://stackoverflow.com/questions/30274091/is-it-possible-to-check-if-an-object-implements-a-trait-at-runtime
+
+        if D::L::INT == self.dimension.length
+            && D::M::INT == self.dimension.mass
+            && D::T::INT == self.dimension.time
+            && D::I::INT == self.dimension.electric_current
+            && D::Th::INT == self.dimension.thermodynamic_temprature
+            && D::N::INT == self.dimension.amount_of_substance
+            && D::J::INT == self.dimension.luminous_intensity
         {
             Ok(Quantity {
                 dimension: std::marker::PhantomData,
@@ -556,7 +711,10 @@ impl FromStr for Measurement {
 mod test {
     use uom::si::f64 as si;
 
-    use crate::script::execution::{expressions::run_expression, ExecutionContext};
+    use crate::script::{
+        execution::{expressions::run_expression, ExecutionContext},
+        logging::StandardLog,
+    };
 
     use super::*;
 
@@ -564,7 +722,7 @@ mod test {
 
     #[test]
     fn addition() {
-        let mut log = RuntimeLog::default();
+        let mut log = StandardLog;
 
         let a = si::Length::new::<meter>(3.0);
         let b = si::Length::new::<meter>(2.0);
@@ -578,7 +736,7 @@ mod test {
 
     #[test]
     fn subtraction() {
-        let mut log = RuntimeLog::default();
+        let mut log = StandardLog;
 
         let a = si::Length::new::<meter>(3.0);
         let b = si::Length::new::<meter>(2.0);
@@ -592,7 +750,7 @@ mod test {
 
     #[test]
     fn multiplication() {
-        let mut log = RuntimeLog::default();
+        let mut log = StandardLog;
 
         let a = si::Length::new::<meter>(3.0);
         let b = si::Length::new::<meter>(2.0);
@@ -612,7 +770,7 @@ mod test {
 
     #[test]
     fn division() {
-        let mut log = RuntimeLog::default();
+        let mut log = StandardLog;
 
         let a = si::Length::new::<meter>(3.0);
         let b = si::Length::new::<meter>(2.0);
@@ -635,7 +793,7 @@ mod test {
 
     #[test]
     fn comparisions() {
-        let mut log = RuntimeLog::default();
+        let mut log = StandardLog;
 
         let a = si::Length::new::<meter>(3.0);
         let b = si::Length::new::<meter>(2.0);

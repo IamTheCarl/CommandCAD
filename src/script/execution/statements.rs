@@ -321,10 +321,8 @@ fn run_for<'a, S: Span>(
     for_statement: &'a For<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
     let iter_expression = run_expression(context, &for_statement.iterator_expression)?;
-    let mut iterator = iter_expression.iterate(
-        &mut context.log,
-        for_statement.iterator_expression.get_span(),
-    )?;
+    let mut iterator =
+        iter_expression.iterate(context.log, for_statement.iterator_expression.get_span())?;
 
     loop_impl(
         |context| {

@@ -38,6 +38,7 @@ pub trait Span:
     + ToString
     + AsStr
     + FromStr
+    + FormatSpan
 {
     fn chars(&self) -> impl Iterator<Item = char>;
 }
@@ -116,6 +117,31 @@ impl Span for imstr::ImString {
 impl Span for LocatedSpan<imstr::ImString> {
     fn chars(&self) -> impl Iterator<Item = char> {
         self.fragment().chars()
+    }
+}
+
+pub trait FormatSpan {
+    fn format_span(&self) -> String;
+}
+
+impl<'a> FormatSpan for &'a str {
+    fn format_span(&self) -> String {
+        format!("`{}`", self)
+    }
+}
+impl<'a> FormatSpan for LocatedSpan<&'a str> {
+    fn format_span(&self) -> String {
+        format!("[{}:{}]", self.location_line(), self.get_column())
+    }
+}
+impl FormatSpan for imstr::ImString {
+    fn format_span(&self) -> String {
+        format!("`{}`", self)
+    }
+}
+impl FormatSpan for LocatedSpan<imstr::ImString> {
+    fn format_span(&self) -> String {
+        format!("[{}:{}]", self.location_line(), self.get_column())
     }
 }
 

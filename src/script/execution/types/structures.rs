@@ -23,8 +23,9 @@ use crate::script::{
         expressions::{run_expression, run_trailer},
         ExecutionContext, Failure,
     },
+    logging::RuntimeLog,
     parsing::{self, MemberVariable, StructInitialization, Trailer, VariableType},
-    RuntimeLog, Span,
+    Span,
 };
 
 use super::{serializable::SerializableValue, NamedObject, Object, OperatorResult, Value};
@@ -52,7 +53,7 @@ impl<'a, S: Span> Object<'a, S> for Structure<'a, S> {
 
     fn attribute(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         _span: &S,
         name: &S,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -65,7 +66,11 @@ impl<'a, S: Span> Object<'a, S> for Structure<'a, S> {
         }
     }
 
-    fn export(&self, log: &mut RuntimeLog<S>, span: &S) -> OperatorResult<S, SerializableValue> {
+    fn export(
+        &self,
+        log: &mut dyn RuntimeLog<S>,
+        span: &S,
+    ) -> OperatorResult<S, SerializableValue> {
         let mut members = HashMap::with_capacity(self.members.len());
 
         for (key, item) in self.members.iter() {

@@ -20,8 +20,9 @@ use std::{cmp::Ordering, fmt::Write, rc::Rc};
 
 use crate::script::{
     execution::{types::Number, ExecutionContext, Failure},
+    logging::RuntimeLog,
     parsing::{self, Expression, VariableType},
-    RuntimeLog, Span,
+    Span,
 };
 
 use super::{
@@ -46,7 +47,7 @@ impl<'a, S: Span> Object<'a, S> for SString {
 
     fn format(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         f: &mut dyn Write,
         style: Style,
@@ -77,7 +78,7 @@ impl<'a, S: Span> Object<'a, S> for SString {
 
     fn index(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         index: Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -138,7 +139,7 @@ impl<'a, S: Span> Object<'a, S> for SString {
 
     fn cmp(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Ordering> {
@@ -149,7 +150,7 @@ impl<'a, S: Span> Object<'a, S> for SString {
 
     fn addition(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -215,7 +216,7 @@ impl<'a, S: Span> Object<'a, S> for SString {
                 match formatting::Format::parse((*self.string).as_ref()) {
                     Ok((_, format)) => {
                         let mut output = String::new();
-                        format.format(&mut context.log, span, &mut output, &arguments)?;
+                        format.format(context.log, span, &mut output, &arguments)?;
 
                         Ok(Self::from(output).into())
                     }
@@ -230,7 +231,11 @@ impl<'a, S: Span> Object<'a, S> for SString {
         }
     }
 
-    fn export(&self, _log: &mut RuntimeLog<S>, _span: &S) -> OperatorResult<S, SerializableValue> {
+    fn export(
+        &self,
+        _log: &mut dyn RuntimeLog<S>,
+        _span: &S,
+    ) -> OperatorResult<S, SerializableValue> {
         Ok(SerializableValue::String(String::clone(&self.string)))
     }
 }

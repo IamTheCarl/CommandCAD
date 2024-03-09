@@ -52,6 +52,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                         &mut context.global_resources.fornjot_core,
                     );
                     let circle = circle.insert(&mut context.global_resources.fornjot_core);
+                    context.unpack_validation_warnings(span);
 
                     Ok(Cycle { handle: circle }.into())
                 }
@@ -61,6 +62,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                     let polygone =
                         FornjotCycle::polygon(points, &mut context.global_resources.fornjot_core);
                     let polygon = polygone.insert(&mut context.global_resources.fornjot_core);
+                    context.unpack_validation_warnings(span);
 
                     Ok(Cycle { handle: polygon }.into())
                 }
@@ -106,6 +108,7 @@ impl<'a, S: Span> Object<'a, S> for Cycle {
                         .reverse(&mut context.global_resources.fornjot_core);
 
                     let reversed = reversed.insert(&mut context.global_resources.fornjot_core);
+                    context.unpack_validation_warnings(span);
 
                     Ok(Self::from(reversed).into())
                 }

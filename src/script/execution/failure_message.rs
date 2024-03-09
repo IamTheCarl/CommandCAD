@@ -18,7 +18,6 @@
 
 use std::{borrow::Cow, num::ParseFloatError};
 
-use nom_locate::LocatedSpan;
 use ordered_float::ParseNotNanError;
 
 use crate::script::Span;
@@ -45,6 +44,7 @@ pub enum Failure<S> {
     ListIsEmpty(S),
     UnknownUnitType(S, Cow<'static, str>),
     CannotConvertFromTo(S, Cow<'static, str>, Cow<'static, str>),
+    DimensionalMissmatch(S, Cow<'static, str>, Cow<'static, str>),
     InvalidCharIndex(S, isize),
     Formatting(S, std::fmt::Error),
     FormatArgumentIndexOutOfRange(S, isize),
@@ -62,14 +62,17 @@ pub enum Failure<S> {
     SliceOutOfRange(S, Option<isize>, &'static str, Option<isize>),
     TooManyArguments(S),
     ListWrongLength(S, usize, usize),
-    ListElementFailure(S, usize, Box<Failure<S>>),
+    ListElement(S, usize, Box<Failure<S>>),
     ListContainsDuplicate(S, usize),
     ShellNotInSolid(S),
     FaceNotInShell(S),
     RegionNotInFace(S),
+    User(S, String),
+    InverseTrigIncompatible(S),
+    TrigIncompatible(S),
 }
 
-impl<S: Span + FormatSpan> std::fmt::Display for Failure<S> {
+impl<S: Span> std::fmt::Display for Failure<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UnclosedStatement(span) => {
@@ -194,6 +197,15 @@ impl<S: Span + FormatSpan> std::fmt::Display for Failure<S> {
                 write!(
                     f,
                     "{}: Cannot convert from `{}` to `{}`",
+                    span.format_span(),
+                    from,
+                    to
+                )
+            }
+            Self::DimensionalMissmatch(span, from, to) => {
+                write!(
+                    f,
+                    "{}: Cannot convert from `{}` to `{}` because they are not of the same dimension",
                     span.format_span(),
                     from,
                     to
@@ -338,7 +350,7 @@ impl<S: Span + FormatSpan> std::fmt::Display for Failure<S> {
                 expected_length,
                 actual_length
             ),
-            Self::ListElementFailure(span, index, failure) => {
+            Self::ListElement(span, index, failure) => {
                 write!(
                     f,
                     "{}: Error with element {} of list: {}",
@@ -364,31 +376,19 @@ impl<S: Span + FormatSpan> std::fmt::Display for Failure<S> {
             Self::RegionNotInFace(span) => {
                 write!(f, "{}: Could not find region in face", span.format_span())
             }
+            Self::User(span, message) => {
+                write!(f, "{}: {}", span.format_span(), message)
+            }
+            Self::InverseTrigIncompatible(span) => {
+                write!(f, "{}: Inverse trigonometric functions can only be used with zero dimensional types (Angles, Ratios)", span.format_span())
+            }
+            Self::TrigIncompatible(span) => {
+                write!(
+                    f,
+                    "{}: Trigonometric functions can only be used with angles",
+                    span.format_span()
+                )
+            }
         }
-    }
-}
-
-pub trait FormatSpan {
-    fn format_span(&self) -> String;
-}
-
-impl<'a> FormatSpan for &'a str {
-    fn format_span(&self) -> String {
-        format!("`{}`", self)
-    }
-}
-impl<'a> FormatSpan for LocatedSpan<&'a str> {
-    fn format_span(&self) -> String {
-        format!("[{}:{}]", self.location_line(), self.get_column())
-    }
-}
-impl FormatSpan for imstr::ImString {
-    fn format_span(&self) -> String {
-        format!("`{}`", self)
-    }
-}
-impl FormatSpan for LocatedSpan<imstr::ImString> {
-    fn format_span(&self) -> String {
-        format!("[{}:{}]", self.location_line(), self.get_column())
     }
 }

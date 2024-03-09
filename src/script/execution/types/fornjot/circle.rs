@@ -73,7 +73,7 @@ pub fn unwrap_circle<S: Span>(
     let center = center.downcast::<List<S>>(span)?;
     let center = point_from_list::<S, 2>(
         span,
-        context.global_resources.convert_to_fornjot_units,
+        context.global_resources.fornjot_unit_conversion_factor,
         center,
     )?;
 
@@ -81,7 +81,7 @@ pub fn unwrap_circle<S: Span>(
     let radius = radius.downcast::<Measurement>(span)?;
     let radius = scalar_from_measurement(
         span,
-        context.global_resources.convert_to_fornjot_units,
+        context.global_resources.fornjot_unit_conversion_factor,
         &radius,
     )?;
 

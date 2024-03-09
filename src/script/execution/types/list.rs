@@ -20,8 +20,9 @@ use std::{fmt::Write, isize, rc::Rc};
 
 use crate::script::{
     execution::{expressions::run_expression, types::Number, ExecutionContext, Failure},
+    logging::RuntimeLog,
     parsing::{self, Expression, VariableType},
-    RuntimeLog, Span,
+    Span,
 };
 
 use super::{
@@ -109,7 +110,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
 
     fn format(
         &self,
-        log: &mut RuntimeLog<S>,
+        log: &mut dyn RuntimeLog<S>,
         span: &S,
         f: &mut dyn Write,
         style: Style,
@@ -124,7 +125,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
 
     fn index(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         index: Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -203,7 +204,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
 
     fn iterate(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         _span: &S,
     ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
         Ok(Box::new(self.vector.iter().cloned()))
@@ -377,7 +378,11 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
         }
     }
 
-    fn export(&self, log: &mut RuntimeLog<S>, span: &S) -> OperatorResult<S, SerializableValue> {
+    fn export(
+        &self,
+        log: &mut dyn RuntimeLog<S>,
+        span: &S,
+    ) -> OperatorResult<S, SerializableValue> {
         let mut list = Vec::with_capacity(self.vector.len());
 
         for item in self.vector.iter() {

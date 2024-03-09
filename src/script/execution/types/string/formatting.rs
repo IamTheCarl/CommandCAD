@@ -34,7 +34,8 @@ use crate::script::{
         types::{unsupported_operation_message, Number, Object, OperatorResult, Value},
         Failure,
     },
-    RuntimeLog, Span,
+    logging::RuntimeLog,
+    Span,
 };
 
 pub type VResult<I, O> = IResult<I, O, nom::error::VerboseError<I>>;
@@ -230,7 +231,7 @@ impl Format {
 
     pub fn format<S: Span>(
         &self,
-        log: &mut RuntimeLog<S>,
+        log: &mut dyn RuntimeLog<S>,
         span: &S,
         f: &mut dyn Write,
         arguments: &[Value<'_, S>],
@@ -341,7 +342,7 @@ pub trait UnsupportedMessage {
 
 #[cfg(test)]
 mod test {
-    use crate::script::execution::types::Number;
+    use crate::script::{execution::types::Number, logging::StandardLog};
 
     use super::*;
 
@@ -491,7 +492,7 @@ mod test {
 
     #[test]
     fn do_format() {
-        let mut log = RuntimeLog::default();
+        let mut log = StandardLog;
 
         let mut formatted = String::default();
         Format::parse("Test {}")

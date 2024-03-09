@@ -217,17 +217,17 @@ mod test {
 
     #[test]
     fn serialize_boolean() {
-        let mut context = ExecutionContext::default();
+        let context = ExecutionContext::default();
 
         let boolean: Value<&'static str> = true.into();
         assert_eq!(
-            boolean.export(&mut context.log, &""),
+            boolean.export(context.log, &""),
             Ok(SerializableValue::Boolean(true))
         );
 
         let boolean: Value<&'static str> = false.into();
         assert_eq!(
-            boolean.export(&mut context.log, &""),
+            boolean.export(context.log, &""),
             Ok(SerializableValue::Boolean(false))
         );
     }
@@ -246,11 +246,11 @@ mod test {
 
     #[test]
     fn serialize_number() {
-        let mut context = ExecutionContext::default();
+        let context = ExecutionContext::default();
 
         let value: Value<&'static str> = Number::new(42.0).unwrap().into();
         assert_eq!(
-            value.export(&mut context.log, &""),
+            value.export(context.log, &""),
             Ok(SerializableValue::Number(42.0))
         );
     }
@@ -360,7 +360,7 @@ mod test {
         .unwrap();
 
         assert_eq!(
-            value.export(&mut context.log, &""),
+            value.export(context.log, &""),
             Ok(SerializableValue::Struct {
                 ty: "MyStruct".to_string(),
                 members: HashMap::from([("value".to_string(), SerializableValue::Number(42.0))])
@@ -392,7 +392,7 @@ mod test {
 
     #[test]
     fn serialize_list() {
-        let mut context = ExecutionContext::default();
+        let context = ExecutionContext::default();
 
         let value: Value<&'static str> = List::from([
             Number::new(1.0).unwrap().into(),
@@ -401,7 +401,7 @@ mod test {
         ])
         .into();
         assert_eq!(
-            value.export(&mut context.log, &""),
+            value.export(context.log, &""),
             Ok(SerializableValue::List(vec![
                 SerializableValue::Number(1.0),
                 SerializableValue::Boolean(true),
@@ -424,11 +424,11 @@ mod test {
 
     #[test]
     fn serialize_string() {
-        let mut context = ExecutionContext::default();
+        let context = ExecutionContext::default();
 
         let value: Value<&'static str> = SString::from("This is a test".to_string()).into();
         assert_eq!(
-            value.export(&mut context.log, &""),
+            value.export(context.log, &""),
             Ok(SerializableValue::String("This is a test".to_string()))
         );
     }

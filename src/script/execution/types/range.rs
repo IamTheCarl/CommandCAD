@@ -18,8 +18,9 @@
 
 use crate::script::{
     execution::{expressions::run_trailer, ExecutionContext, Failure},
+    logging::RuntimeLog,
     parsing::{self, VariableType},
-    RuntimeLog, Span,
+    Span,
 };
 
 use super::{NamedObject, Number, Object, OperatorResult, Value};
@@ -38,7 +39,7 @@ impl<'a, S: Span> Object<'a, S> for Range {
 
     fn iterate(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
     ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
         match (
@@ -139,7 +140,7 @@ mod test {
             Box::leak(Box::new(parsing::Range::parse("..").unwrap().1))
         )
         .unwrap()
-        .iterate(&mut context.log, &"span")
+        .iterate(context.log, &"span")
         .is_err());
 
         assert!(Range::from_parsed(
@@ -147,7 +148,7 @@ mod test {
             Box::leak(Box::new(parsing::Range::parse("1..").unwrap().1))
         )
         .unwrap()
-        .iterate(&mut context.log, &"span")
+        .iterate(context.log, &"span")
         .is_err());
 
         assert!(Range::from_parsed(
@@ -155,21 +156,21 @@ mod test {
             Box::leak(Box::new(parsing::Range::parse("..1").unwrap().1))
         )
         .unwrap()
-        .iterate(&mut context.log, &"span")
+        .iterate(context.log, &"span")
         .is_err());
         assert!(Range::from_parsed(
             &mut context,
             Box::leak(Box::new(parsing::Range::parse("..=1").unwrap().1))
         )
         .unwrap()
-        .iterate(&mut context.log, &"span")
+        .iterate(context.log, &"span")
         .is_err());
         assert!(Range::from_parsed(
             &mut context,
             Box::leak(Box::new(parsing::Range::parse("..=1").unwrap().1))
         )
         .unwrap()
-        .iterate(&mut context.log, &"span")
+        .iterate(context.log, &"span")
         .is_err());
         assert_eq!(
             Range::from_parsed(
@@ -177,7 +178,7 @@ mod test {
                 Box::leak(Box::new(parsing::Range::parse("1..5").unwrap().1))
             )
             .unwrap()
-            .iterate(&mut context.log, &"span")
+            .iterate(context.log, &"span")
             .unwrap()
             .collect::<Vec<_>>(),
             [
@@ -193,7 +194,7 @@ mod test {
                 Box::leak(Box::new(parsing::Range::parse("1..=5").unwrap().1))
             )
             .unwrap()
-            .iterate(&mut context.log, &"span")
+            .iterate(context.log, &"span")
             .unwrap()
             .collect::<Vec<_>>(),
             [

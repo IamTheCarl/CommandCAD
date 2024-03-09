@@ -76,24 +76,30 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                 "Circle" => {
                     let (center, radius) = unwrap_circle(context, span, configuration)?;
 
-                    Ok(Region::from(
+                    let region = Region::from(
                         FornjotRegion::circle(
                             center,
                             radius,
                             &mut context.global_resources.fornjot_core,
                         )
                         .insert(&mut context.global_resources.fornjot_core),
-                    )
-                    .into())
+                    );
+
+                    context.unpack_validation_warnings(span);
+
+                    Ok(region.into())
                 }
                 "Polygon" => {
                     let points = unwrap_polygon(context, span, configuration)?;
 
-                    Ok(Region::from(
+                    let region = Region::from(
                         FornjotRegion::polygon(points, &mut context.global_resources.fornjot_core)
                             .insert(&mut context.global_resources.fornjot_core),
-                    )
-                    .into())
+                    );
+
+                    context.unpack_validation_warnings(span);
+
+                    Ok(region.into())
                 }
                 "RawRegion" => {
                     let region = Region::build_raw(context, span, configuration)?;
@@ -140,10 +146,14 @@ impl Region {
         let interior_cycles = unpack_dynamic_length_list::<S, Cycle>(span, interior_cylce_list)?
             .map(|cycle| cycle.handle);
 
-        Ok(Self::from(
+        let region = Self::from(
             FornjotRegion::new(exterior_cycle, interior_cycles)
                 .insert(&mut context.global_resources.fornjot_core),
-        ))
+        );
+
+        context.unpack_validation_warnings(span);
+
+        Ok(region)
     }
 }
 

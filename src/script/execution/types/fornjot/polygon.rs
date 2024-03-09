@@ -70,10 +70,10 @@ pub fn unwrap_polygon<S: Span>(
     {
         let point = point_from_list::<S, 2>(
             span,
-            context.global_resources.convert_to_fornjot_units,
+            context.global_resources.fornjot_unit_conversion_factor,
             point,
         )
-        .map_err(|failure| Failure::ListElementFailure(span.clone(), index, Box::new(failure)))?;
+        .map_err(|failure| Failure::ListElement(span.clone(), index, Box::new(failure)))?;
 
         fornjot_points.push(point);
     }

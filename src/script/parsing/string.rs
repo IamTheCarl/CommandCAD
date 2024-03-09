@@ -16,7 +16,8 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 use nom::{
-    bytes::complete::{escaped, take_while1},
+    branch::alt,
+    bytes::complete::{escaped, take_till, take_while1},
     character::complete::{char as nom_char, one_of},
     sequence::delimited,
 };
@@ -32,11 +33,14 @@ impl<S: Span> PString<S> {
     pub fn parse(input: S) -> VResult<S, Self> {
         let (input, value) = delimited(
             nom_char('"'),
-            escaped(
-                take_while1(|c| !matches!(c, '\\' | '"')),
-                '\\',
-                one_of(r#""n\"#),
-            ),
+            alt((
+                escaped(
+                    take_while1(|c| !matches!(c, '\\' | '"')),
+                    '\\',
+                    one_of(r#""n\"#),
+                ),
+                take_till(|c| c == '"'),
+            )),
             nom_char('"'),
         )(input)?;
 
@@ -94,5 +98,6 @@ mod test {
                 }
             ))
         );
+        assert_eq!(PString::parse("\"\""), Ok(("", PString { value: "" })));
     }
 }

@@ -19,7 +19,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::char as nom_char,
-    combinator::{map, opt, success, value},
+    combinator::{map, success, value},
     error::context,
     multi::separated_list0,
     sequence::{delimited, pair, preceded, separated_pair, terminated},

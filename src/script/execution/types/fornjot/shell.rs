@@ -33,7 +33,8 @@ use crate::script::{
         types::{function::AutoCall, List, Object, OperatorResult, Value},
         ExecutionContext, Failure,
     },
-    parsing::VariableType,
+    logging::RuntimeLog,
+    parsing::{Expression, VariableType},
     Measurement, Span,
 };
 
@@ -58,7 +59,7 @@ impl<'a, S: Span> Object<'a, S> for Shell {
 
     fn attribute(
         &self,
-        _log: &mut crate::script::RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         _span: &S,
         attribute: &S,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -74,7 +75,7 @@ impl<'a, S: Span> Object<'a, S> for Shell {
         span: &S,
         attribute: &S,
         arguments: Vec<Value<'a, S>>,
-        spans: &[crate::script::parsing::Expression<S>],
+        spans: &[Expression<S>],
     ) -> OperatorResult<S, Value<'a, S>> {
         match attribute.as_str() {
             "add_blind_hole" => |context: &mut ExecutionContext<'a, S>,
@@ -90,19 +91,19 @@ impl<'a, S: Span> Object<'a, S> for Shell {
 
                 let position = point_from_list(
                     span,
-                    context.global_resources.convert_to_fornjot_units,
+                    context.global_resources.fornjot_unit_conversion_factor,
                     position,
                 )?;
 
                 let radius = scalar_from_measurement(
                     span,
-                    context.global_resources.convert_to_fornjot_units,
+                    context.global_resources.fornjot_unit_conversion_factor,
                     &radius,
                 )?;
 
                 let path = vector_from_list(
                     span,
-                    context.global_resources.convert_to_fornjot_units,
+                    context.global_resources.fornjot_unit_conversion_factor,
                     path,
                 )?;
 
@@ -116,7 +117,11 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                     &mut context.global_resources.fornjot_core,
                 );
 
-                Ok(Self::from(new_shell.insert(&mut context.global_resources.fornjot_core)).into())
+                let new_shell =
+                    Self::from(new_shell.insert(&mut context.global_resources.fornjot_core));
+                context.unpack_validation_warnings(span);
+
+                Ok(new_shell.into())
             }
             .auto_call(context, span, arguments, spans),
             "add_through_hole" => |context: &mut ExecutionContext<'a, S>,
@@ -136,19 +141,19 @@ impl<'a, S: Span> Object<'a, S> for Shell {
 
                 let front_position = point_from_list(
                     span,
-                    context.global_resources.convert_to_fornjot_units,
+                    context.global_resources.fornjot_unit_conversion_factor,
                     front_position,
                 )?;
 
                 let back_position = point_from_list(
                     span,
-                    context.global_resources.convert_to_fornjot_units,
+                    context.global_resources.fornjot_unit_conversion_factor,
                     back_position,
                 )?;
 
                 let radius = scalar_from_measurement(
                     span,
-                    context.global_resources.convert_to_fornjot_units,
+                    context.global_resources.fornjot_unit_conversion_factor,
                     &radius,
                 )?;
 
@@ -167,7 +172,11 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                     &mut context.global_resources.fornjot_core,
                 );
 
-                Ok(Self::from(new_shell.insert(&mut context.global_resources.fornjot_core)).into())
+                let new_shell =
+                    Self::from(new_shell.insert(&mut context.global_resources.fornjot_core));
+                context.unpack_validation_warnings(span);
+
+                Ok(new_shell.into())
             }
             .auto_call(context, span, arguments, spans),
             "update_face" => |context: &mut ExecutionContext<'a, S>,
@@ -197,7 +206,11 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                     &mut context.global_resources.fornjot_core,
                 );
 
-                Ok(Self::from(new_shell.insert(&mut context.global_resources.fornjot_core)).into())
+                let new_shell =
+                    Self::from(new_shell.insert(&mut context.global_resources.fornjot_core));
+                context.unpack_validation_warnings(span);
+
+                Ok(new_shell.into())
             }
             .auto_call(context, span, arguments, spans),
             "add_faces" => {
@@ -217,10 +230,11 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                         &mut context.global_resources.fornjot_core,
                     );
 
-                    Ok(
-                        Self::from(new_shell.insert(&mut context.global_resources.fornjot_core))
-                            .into(),
-                    )
+                    let new_shell =
+                        Self::from(new_shell.insert(&mut context.global_resources.fornjot_core));
+                    context.unpack_validation_warnings(span);
+
+                    Ok(new_shell.into())
                 }
                 .auto_call(context, span, arguments, spans)
             }

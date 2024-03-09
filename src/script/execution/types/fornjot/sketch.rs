@@ -53,6 +53,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                         .map(|region| region.handle);
                     let handle = FornjotSketch::new(regions)
                         .insert(&mut context.global_resources.fornjot_core);
+                    context.unpack_validation_warnings(span);
 
                     Ok(Sketch { handle }.into())
                 }
@@ -65,9 +66,11 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                             &mut context.global_resources.fornjot_core,
                         )
                         .insert(&mut context.global_resources.fornjot_core);
+                        context.unpack_validation_warnings(span);
 
                         let handle = FornjotSketch::new([region])
                             .insert(&mut context.global_resources.fornjot_core);
+                        context.unpack_validation_warnings(span);
 
                         Ok(Sketch { handle }.into())
                     }
@@ -80,9 +83,11 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                         );
                         let polygon = polygon;
                         let region = polygon.insert(&mut context.global_resources.fornjot_core);
+                        context.unpack_validation_warnings(span);
 
                         let handle = FornjotSketch::new([region])
                             .insert(&mut context.global_resources.fornjot_core);
+                        context.unpack_validation_warnings(span);
 
                         Ok(Sketch { handle }.into())
                     }
@@ -132,7 +137,7 @@ impl<'a, S: Span> Object<'a, S> for Sketch {
                 let surface = surface.handle;
                 let path = vector_from_list::<S, 3>(
                     span,
-                    context.global_resources.convert_to_fornjot_units,
+                    context.global_resources.fornjot_unit_conversion_factor,
                     path,
                 )?;
 
@@ -140,6 +145,7 @@ impl<'a, S: Span> Object<'a, S> for Sketch {
                     .handle
                     .sweep_sketch(surface, path, &mut context.global_resources.fornjot_core)
                     .insert(&mut context.global_resources.fornjot_core);
+                context.unpack_validation_warnings(span);
 
                 Ok(Solid::from(solid).into())
             }

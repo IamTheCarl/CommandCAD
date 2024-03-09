@@ -33,10 +33,12 @@ use crate::script::{
 };
 
 pub use crate::script::execution::types::{Measurement, SerializableValue};
-use execution::{types::Object, ExecutionContext, ModuleScope};
 
-use self::execution::{types::Sketch, GlobalResources};
 mod execution;
+pub use execution::print_all_supported_units;
+use execution::{types::Object, types::Sketch, ExecutionContext, GlobalResources, ModuleScope};
+
+pub mod logging;
 
 type RuntimeSpan = LocatedSpan<ImString>;
 pub type Failure = self::execution::Failure<RuntimeSpan>;
@@ -187,7 +189,7 @@ impl Runtime {
                 // TODO attaching a span to a user function would be useful for debug purposes.
                 let result = task.call(runtime.context, runtime.code, argument_values, &[])?;
 
-                let result = result.export(&mut runtime.context.log, runtime.code)?;
+                let result = result.export(runtime.context.log, runtime.code)?;
 
                 Ok(result)
             } else {
@@ -199,83 +201,6 @@ impl Runtime {
             }
         })
     }
-
-    pub fn log(&self) -> &RuntimeLog<RuntimeSpan> {
-        self.with_context(|context| &context.log)
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Default)]
-pub struct RuntimeLog<S> {
-    pub messages: Vec<LogMessage<S>>,
-}
-
-impl<S: Span> RuntimeLog<S> {
-    pub fn new() -> Self {
-        Self {
-            messages: Vec::new(),
-        }
-    }
-
-    fn push(&mut self, message: LogMessage<S>) {
-        self.messages.push(message);
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum LogMessage<S> {
-    FormatIntegerPrecision(S),
-}
-
-impl<S> LogMessage<S> {
-    pub fn log_level(&self) -> LogLevel {
-        match self {
-            Self::FormatIntegerPrecision(_) => LogLevel::Warning,
-        }
-    }
-}
-
-impl<S: Span + FormatSpan> std::fmt::Display for LogMessage<S> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::FormatIntegerPrecision(span) => {
-                write!(
-                    f,
-                    "{}: Integer formats such as Octal and Hex ignore precision",
-                    span.format_span()
-                )
-            }
-        }
-    }
-}
-
-pub trait FormatSpan {
-    fn format_span(&self) -> String;
-}
-
-impl<'a> FormatSpan for &'a str {
-    fn format_span(&self) -> String {
-        format!("`{}`", self)
-    }
-}
-impl<'a> FormatSpan for LocatedSpan<&'a str> {
-    fn format_span(&self) -> String {
-        format!("[{}:{}]", self.location_line(), self.get_column())
-    }
-}
-impl FormatSpan for imstr::ImString {
-    fn format_span(&self) -> String {
-        format!("`{}`", self)
-    }
-}
-impl FormatSpan for LocatedSpan<imstr::ImString> {
-    fn format_span(&self) -> String {
-        format!("[{}:{}]", self.location_line(), self.get_column())
-    }
-}
-
-pub enum LogLevel {
-    Warning,
 }
 
 #[cfg(test)]

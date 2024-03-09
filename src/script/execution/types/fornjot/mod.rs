@@ -16,18 +16,19 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use common_data_types::ConversionFactor;
 use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
 use fj_math::{Point, Scalar, Vector};
 
 use crate::script::{
     execution::{
-        types::{number::RawNumber, Measurement, Object},
+        types::{Measurement, Object},
         ExecutionContext, Failure,
     },
     Span,
 };
 
-use super::{List, NamedObject, OperatorResult, Value};
+use super::{measurement::ConvertUnit, List, NamedObject, OperatorResult, Value};
 
 // TODO I want a box type that can be a square or a rectangle.
 mod circle;
@@ -66,7 +67,7 @@ where
     // Verify that they're all of the right type.
     for (index, item) in list.iter().enumerate() {
         if item.enum_downcast_ref::<T>().is_none() {
-            return Err(Failure::ListElementFailure(
+            return Err(Failure::ListElement(
                 span.clone(),
                 index,
                 Box::new(Failure::ExpectedGot(
@@ -163,7 +164,7 @@ where
 
 fn vector_from_list<'a, S, const D: usize>(
     span: &S,
-    convert_to_fornjot_units: fn(&Measurement) -> Option<f64>,
+    fornjot_unit_conversion_factor: &ConversionFactor,
     list: List<'a, S>,
 ) -> OperatorResult<S, Vector<D>>
 where
@@ -186,7 +187,12 @@ where
 
     // We've already checked the length and that all of the types are correct, so these unwraps should never fail.
     let array: [Scalar; D] = std::array::from_fn(|_| {
-        Scalar::from_f64(convert_to_fornjot_units(&measurements.next().unwrap()).unwrap())
+        Scalar::from_f64(
+            fornjot_unit_conversion_factor
+                .from_measurement_to_number(span, &measurements.next().unwrap())
+                .unwrap()
+                .into_inner(),
+        )
     });
 
     Ok(Vector::from(array))
@@ -194,27 +200,23 @@ where
 
 fn scalar_from_measurement<S: Span>(
     span: &S,
-    convert_to_fornjot_units: fn(&Measurement) -> Option<RawNumber>,
+    fornjot_unit_conversion_factor: &ConversionFactor,
     measurement: &Measurement,
 ) -> OperatorResult<S, Scalar> {
-    let length = convert_to_fornjot_units(measurement).ok_or(Failure::ExpectedGot(
-        span.clone(),
-        "Length".into(),
-        Object::<S>::type_name(measurement),
-    ))?;
+    let length = fornjot_unit_conversion_factor.from_measurement_to_number(span, measurement)?;
 
-    Ok(Scalar::from_f64(length))
+    Ok(Scalar::from_f64(length.into_inner()))
 }
 
 fn point_from_list<'a, S, const D: usize>(
     span: &S,
-    convert_to_fornjot_units: fn(&Measurement) -> Option<RawNumber>,
+    fornjot_unit_conversion_factor: &ConversionFactor,
     list: List<'a, S>,
 ) -> OperatorResult<S, Point<D>>
 where
     S: Span,
 {
-    let coords = vector_from_list(span, convert_to_fornjot_units, list)?;
+    let coords = vector_from_list(span, fornjot_unit_conversion_factor, list)?;
 
     Ok(Point { coords })
 }
@@ -268,7 +270,7 @@ mod test {
                 List::<'_, &'static str>::from(values)
             )
             .map(|v| v.collect::<Vec<_>>()),
-            Err(Failure::ListElementFailure(
+            Err(Failure::ListElement(
                 "span",
                 1,
                 Box::new(Failure::ExpectedGot(
@@ -285,11 +287,7 @@ mod test {
         assert_eq!(
             vector_from_list::<&'static str, 3usize>(
                 &"span",
-                |value| {
-                    let measurement: Length = value.clone().try_into().ok()?;
-
-                    Some(measurement.get::<millimeter>())
-                },
+                Measurement::get_conversion_factor("mm").unwrap(),
                 List::<'_, &'static str>::from([
                     Measurement::try_from(Length::new::<millimeter>(1.0))
                         .unwrap()

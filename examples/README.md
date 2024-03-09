@@ -78,6 +78,11 @@ Create a simple ring spacer.
 cargo run -- form examples/fornjot_demos.ccm spacer --output ~/output.stl -- 10mm 5mm 5mm
 ```
 
+Create a star.
+```
+cargo run -- form examples/fornjot_demos.ccm star --output ~/output.stl -- 5 10mm 5mm 5mm
+```
+
 ## Sketches
 
 Demonstrates the creation of 2D objects.

@@ -18,7 +18,7 @@
 
 use std::fmt::Write;
 
-use crate::script::{parsing::VariableType, RuntimeLog, Span};
+use crate::script::{logging::RuntimeLog, parsing::VariableType, Span};
 
 use super::{
     serializable::SerializableValue,
@@ -35,7 +35,7 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
 
     fn format(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         f: &mut dyn Write,
         style: Style,
@@ -56,7 +56,7 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
 
     fn eq(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, bool> {
@@ -66,7 +66,7 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
 
     fn and(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -76,7 +76,7 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
 
     fn or(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -86,13 +86,17 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
 
     fn unary_logical_not(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         _span: &S,
     ) -> OperatorResult<S, Value<'a, S>> {
         Ok((!(*self)).into())
     }
 
-    fn export(&self, _log: &mut RuntimeLog<S>, _span: &S) -> OperatorResult<S, SerializableValue> {
+    fn export(
+        &self,
+        _log: &mut dyn RuntimeLog<S>,
+        _span: &S,
+    ) -> OperatorResult<S, SerializableValue> {
         Ok(SerializableValue::Boolean(*self))
     }
 }

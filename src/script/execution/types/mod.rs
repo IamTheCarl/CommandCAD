@@ -22,8 +22,9 @@ use enum_dispatch::enum_dispatch;
 use enum_downcast::{AsVariant, EnumDowncast};
 
 use crate::script::{
+    logging::RuntimeLog,
     parsing::{Expression, Litteral, VariableType},
-    RuntimeLog, Span,
+    Span,
 };
 
 use super::{ExecutionContext, Failure};
@@ -50,11 +51,10 @@ mod list;
 pub use list::List;
 
 mod string;
-pub use string::SString;
+pub use string::{formatting::Style, SString};
 
 mod measurement;
-pub use self::measurement::Measurement;
-use self::string::formatting::Style;
+pub use self::measurement::{print_all_supported_units, Measurement};
 
 mod range;
 pub use range::Range;
@@ -99,7 +99,7 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
 
     fn format(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         _f: &mut dyn Write,
         _style: Style,
@@ -114,7 +114,7 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
 
     fn and(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -122,7 +122,7 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
     }
     fn or(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -130,18 +130,23 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
     }
     fn cmp(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Ordering> {
         unsupported_operation_message(self, span, "compare")
     }
-    fn eq(&self, log: &mut RuntimeLog<S>, span: &S, rhs: &Value<'a, S>) -> OperatorResult<S, bool> {
+    fn eq(
+        &self,
+        log: &mut dyn RuntimeLog<S>,
+        span: &S,
+        rhs: &Value<'a, S>,
+    ) -> OperatorResult<S, bool> {
         Ok(matches!(self.cmp(log, span, rhs)?, Ordering::Equal))
     }
     fn addition(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -149,7 +154,7 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
     }
     fn subtraction(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -157,7 +162,7 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
     }
     fn multiply(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -165,7 +170,7 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
     }
     fn divide(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         _rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -173,7 +178,7 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
     }
     fn attribute(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         _span: &S,
         attribute: &S,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -200,7 +205,7 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
     }
     fn index(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
         _index: Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
@@ -208,26 +213,38 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
     }
     fn iterate(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
     ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
         unsupported_operation_message(self, span, "iterate")
     }
-    fn unary_plus(&self, _log: &mut RuntimeLog<S>, span: &S) -> OperatorResult<S, Value<'a, S>> {
+    fn unary_plus(
+        &self,
+        _log: &mut dyn RuntimeLog<S>,
+        span: &S,
+    ) -> OperatorResult<S, Value<'a, S>> {
         unsupported_operation_message(self, span, "unary plus")
     }
-    fn unary_minus(&self, _log: &mut RuntimeLog<S>, span: &S) -> OperatorResult<S, Value<'a, S>> {
+    fn unary_minus(
+        &self,
+        _log: &mut dyn RuntimeLog<S>,
+        span: &S,
+    ) -> OperatorResult<S, Value<'a, S>> {
         unsupported_operation_message(self, span, "unary minus")
     }
     fn unary_logical_not(
         &self,
-        _log: &mut RuntimeLog<S>,
+        _log: &mut dyn RuntimeLog<S>,
         span: &S,
     ) -> OperatorResult<S, Value<'a, S>> {
         unsupported_operation_message(self, span, "unary logical not")
     }
 
-    fn export(&self, _log: &mut RuntimeLog<S>, span: &S) -> OperatorResult<S, SerializableValue> {
+    fn export(
+        &self,
+        _log: &mut dyn RuntimeLog<S>,
+        span: &S,
+    ) -> OperatorResult<S, SerializableValue> {
         unsupported_operation_message(self, span, "export")
     }
 }

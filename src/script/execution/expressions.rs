@@ -40,13 +40,13 @@ pub fn run_expression<'a, S: Span>(
             let a_value = run_expression(context, a)?;
             let b_value = run_comparison(context, b)?;
 
-            a_value.and(&mut context.log, a.get_span(), &b_value)
+            a_value.and(context.log, a.get_span(), &b_value)
         }
         Expression::Or(a, b) => {
             let a_value = run_expression(context, a)?;
             let b_value = run_comparison(context, b)?;
 
-            a_value.or(&mut context.log, a.get_span(), &b_value)
+            a_value.or(context.log, a.get_span(), &b_value)
         }
         Expression::Buffer(comparison) => run_comparison(context, comparison),
     }
@@ -64,7 +64,7 @@ pub fn run_comparison<'a, S: Span>(
         let value_a = run_comparison(context, a)?;
         let value_b = run_arithmetic_expression(context, b)?;
 
-        value_a.cmp(&mut context.log, a.get_span(), &value_b)
+        value_a.cmp(context.log, a.get_span(), &value_b)
     }
 
     match comparison {
@@ -93,13 +93,13 @@ pub fn run_arithmetic_expression<'a, S: Span>(
             let value_a = run_arithmetic_expression(context, a)?;
             let value_b = run_term(context, b)?;
 
-            value_a.addition(&mut context.log, a.get_span(), &value_b)
+            value_a.addition(context.log, a.get_span(), &value_b)
         }
         ArithmeticExpression::Subtraction(a, b) => {
             let value_a = run_arithmetic_expression(context, a)?;
             let value_b = run_term(context, b)?;
 
-            value_a.subtraction(&mut context.log, a.get_span(), &value_b)
+            value_a.subtraction(context.log, a.get_span(), &value_b)
         }
         ArithmeticExpression::Term(term) => run_term(context, term),
     }
@@ -114,13 +114,13 @@ pub fn run_term<'a, S: Span>(
             let a_value = run_term(context, a)?;
             let b_value = run_trailer(context, b)?;
 
-            a_value.multiply(&mut context.log, a.get_span(), &b_value)
+            a_value.multiply(context.log, a.get_span(), &b_value)
         }
         Term::Divide(a, b) => {
             let a_value = run_term(context, a)?;
             let b_value = run_trailer(context, b)?;
 
-            a_value.divide(&mut context.log, a.get_span(), &b_value)
+            a_value.divide(context.log, a.get_span(), &b_value)
         }
         Term::Range(range) => Ok(Range::from_parsed(context, range)?.into()),
         Term::Trailer(trailer) => run_trailer(context, trailer),
@@ -136,7 +136,7 @@ pub fn run_trailer<'a, S: Span>(
         Trailer::Attribute(trailer, attribute) => {
             let value = run_trailer(context, trailer)?;
 
-            value.attribute(&mut context.log, trailer.get_span(), attribute)
+            value.attribute(context.log, trailer.get_span(), attribute)
         }
         Trailer::Call(trailer, arguments) => {
             let value = run_trailer(context, trailer)?;
@@ -175,7 +175,7 @@ pub fn run_trailer<'a, S: Span>(
             let value = run_trailer(context, trailer)?;
             let index = run_expression(context, index)?;
 
-            value.index(&mut context.log, trailer.get_span(), index)
+            value.index(context.log, trailer.get_span(), index)
         }
     }
 }
@@ -189,13 +189,13 @@ pub fn run_factor<'a, S: Span>(
         Factor::Variable(variable) => context.stack.get_variable(variable).cloned(),
         Factor::Parenthesis(expression) => run_expression(context, expression),
         Factor::UnaryPlus(factor) => {
-            run_factor(context, factor)?.unary_plus(&mut context.log, factor.get_span())
+            run_factor(context, factor)?.unary_plus(context.log, factor.get_span())
         }
         Factor::UnaryMinus(factor) => {
-            run_factor(context, factor)?.unary_minus(&mut context.log, factor.get_span())
+            run_factor(context, factor)?.unary_minus(context.log, factor.get_span())
         }
         Factor::UnaryLogicalNot(factor) => {
-            run_factor(context, factor)?.unary_logical_not(&mut context.log, factor.get_span())
+            run_factor(context, factor)?.unary_logical_not(context.log, factor.get_span())
         }
     }
 }
