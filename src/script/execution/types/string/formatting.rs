@@ -31,11 +31,11 @@ use nom::{
 
 use crate::script::{
     execution::{
-        types::{unsupported_operation_message, Number, Object, OperatorResult, Value},
+        types::{unsupported_operation_message, Object, OperatorResult, Value},
         Failure,
     },
     logging::RuntimeLog,
-    Span,
+    Measurement, Span,
 };
 
 pub type VResult<I, O> = IResult<I, O, nom::error::VerboseError<I>>;
@@ -249,12 +249,13 @@ impl Format {
                 Precision::Inline(precision) => Ok(Some(*precision)),
                 Precision::Referenced(index) => {
                     if let Some(argument) = arguments.get(*index as usize) {
-                        let precision = argument.downcast_ref::<Number>(span)?.into_inner().trunc();
+                        let precision = argument.downcast_ref::<Measurement>(span)?;
+                        let precision = precision.to_index(span)?;
 
-                        if precision > 0.0 {
+                        if precision.is_positive() {
                             Ok(Some(precision as u8))
                         } else {
-                            Err(Failure::InvalidPrecision(span.clone(), precision as isize))
+                            Err(Failure::InvalidPrecision(span.clone(), precision))
                         }
                     } else {
                         Err(Failure::FormatArgumentIndexOutOfRange(
@@ -342,7 +343,8 @@ pub trait UnsupportedMessage {
 
 #[cfg(test)]
 mod test {
-    use crate::script::{execution::types::Number, logging::StandardLog};
+    use crate::script::logging::StandardLog;
+    use common_data_types::Number;
 
     use super::*;
 

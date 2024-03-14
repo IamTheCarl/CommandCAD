@@ -62,6 +62,7 @@ pub enum Command {
     Run(RunArgs),
     Sketch(SketchArgs),
     Form(FormArgs),
+    ListUnits(ListUnitsArgs),
 }
 
 #[derive(Clone, Debug)]
@@ -192,4 +193,12 @@ pub struct FormArgs {
 
     #[arg(last = true)]
     pub arguments: Vec<String>,
+}
+
+#[derive(clap::Args)]
+#[command(version, about)]
+/// List builtin units of measurement
+pub struct ListUnitsArgs {
+    /// Optional filter. Will only print results containing the keyword.
+    pub search: Option<String>,
 }

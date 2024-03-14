@@ -36,7 +36,7 @@ where
     }
 }
 
-pub fn check_for_duplicates<'a, S, T>(
+pub fn check_for_duplicates<S, T>(
     span: &S,
     expected_items: usize,
     items: impl Iterator<Item = T>,

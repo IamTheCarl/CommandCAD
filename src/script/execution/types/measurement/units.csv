@@ -49,12 +49,12 @@ Acceleration,1,0,2,0,0,0,0,false,false,false,false,false,yoctometer per second s
 Acceleration,1,0,2,0,0,0,0,false,false,false,false,false,yottameter per second squared,yottameters per second squared,Ym/s²,Ym/s^2,1E+024,0
 Acceleration,1,0,2,0,0,0,0,false,false,false,false,false,zeptometer per second squared,zeptometers per second squared,zm/s²,zm/s^2,1E-21,0
 Acceleration,1,0,2,0,0,0,0,false,false,false,false,false,zettameter per second squared,zettameters per second squared,Zm/s²,Zm/s^2,1E+021,0
-Action,2,0,-1,0,0,0,0,false,false,false,false,false,atomic unit of action,atomic units of action,ħ,n<-,1.054571817E-34,0
-Action,2,0,-1,0,0,0,0,false,false,false,false,false,electronvolt second,electronvolt seconds,eV · s,eV*s,1.602176634E-19,0
-Action,2,0,-1,0,0,0,0,false,false,false,false,false,erg second,erg seconds,erg · s,erg*s,0.0000001,0
-Action,2,0,-1,0,0,0,0,false,false,false,false,false,joule second,joule seconds,J · s,J*s,1,0
-Action,2,0,-1,0,0,0,0,false,false,false,false,false,planck constant,planck constants,h,h,6.62607015E-34,0
-Action,2,0,-1,0,0,0,0,false,false,false,false,false,reduced planck constant,reduced planck constants,ħ,n<-,1.054571817E-34,0
+Action,2,1,-1,0,0,0,0,false,false,false,false,false,atomic unit of action,atomic units of action,ħ,n<-,1.054571817E-34,0
+Action,2,1,-1,0,0,0,0,false,false,false,false,false,electronvolt second,electronvolt seconds,eV · s,eV*s,1.602176634E-19,0
+Action,2,1,-1,0,0,0,0,false,false,false,false,false,erg second,erg seconds,erg · s,erg*s,0.0000001,0
+Action,2,1,-1,0,0,0,0,false,false,false,false,false,joule second,joule seconds,J · s,J*s,1,0
+Action,2,1,-1,0,0,0,0,false,false,false,false,false,planck constant,planck constants,h,h (planck),6.62607015E-34,0
+Action,2,1,-1,0,0,0,0,false,false,false,false,false,reduced planck constant,reduced planck constants,ħ,n<- planc,1.054571817E-34,0
 AmountOfSubstance,0,0,0,0,0,1,0,false,false,false,false,false,attomole,attomoles,amol,amol,1E-18,0
 AmountOfSubstance,0,0,0,0,0,1,0,false,false,false,false,false,centimole,centimoles,cmol,cmol,0.01,0
 AmountOfSubstance,0,0,0,0,0,1,0,false,false,false,false,false,decamole,decamoles,damol,damol,10,0
@@ -94,11 +94,11 @@ AngularAcceleration,0,0,-2,0,0,0,0,true,false,false,false,false,degree per secon
 AngularAcceleration,0,0,-2,0,0,0,0,true,false,false,false,false,radian per second squared,radians per second squared,rad/s²,rad/s^2,1,0
 AngularJerk,0,0,-3,0,0,0,0,true,false,false,false,false,degree per second cubed,degrees per second cubed,°/s³,deg/s^3,0.0174532925199433,0
 AngularJerk,0,0,-3,0,0,0,0,true,false,false,false,false,radian per second cubed,radians per second cubed,rad/s³,rad/s^3,1,0
-AngularVelocity,0,0,-2,0,0,0,0,true,false,false,false,false,degree per second,degrees per second,°/s,deg/s,0.0174532925199433,0
-AngularVelocity,0,0,-2,0,0,0,0,true,false,false,false,false,radian per second,radians per second,rad/s,rad/s,1,0
-AngularVelocity,0,0,-2,0,0,0,0,true,false,false,false,false,revolution per hour,revolutions per hour,rph,rph,0.00174532925199433,0
-AngularVelocity,0,0,-2,0,0,0,0,true,false,false,false,false,revolution per minute,revolutions per minute,rpm,rpm,0.10471975511966,0
-AngularVelocity,0,0,-2,0,0,0,0,true,false,false,false,false,revolution per second,revolutions per second,rps,rps,6.28318530717959,0
+AngularVelocity,0,0,-1,0,0,0,0,true,false,false,false,false,degree per second,degrees per second,°/s,deg/s,0.0174532925199433,0
+AngularVelocity,0,0,-1,0,0,0,0,true,false,false,false,false,radian per second,radians per second,rad/s,rad/s,1,0
+AngularVelocity,0,0,-1,0,0,0,0,true,false,false,false,false,revolution per hour,revolutions per hour,rph,rph,0.00174532925199433,0
+AngularVelocity,0,0,-1,0,0,0,0,true,false,false,false,false,revolution per minute,revolutions per minute,rpm,rpm,0.10471975511966,0
+AngularVelocity,0,0,-1,0,0,0,0,true,false,false,false,false,revolution per second,revolutions per second,rps,rps,6.28318530717959,0
 Area,2,0,0,0,0,0,0,false,false,false,false,false,acre,acres,ac,ac,4046.873,0
 Area,2,0,0,0,0,0,0,false,false,false,false,false,are,ares,a,a,100,0
 Area,2,0,0,0,0,0,0,false,false,false,false,false,barn,barns,b,b,1E-28,0
@@ -136,36 +136,36 @@ ArealMassDensity,-2,1,0,0,-1,0,0,false,false,false,false,false,gram per square c
 ArealMassDensity,-2,1,0,0,-1,0,0,false,false,false,false,false,gram per square meter,grams per square meter,g/m²,g/m^2,0.001,0
 ArealMassDensity,-2,1,0,0,-1,0,0,false,false,false,false,false,kilogram per square meter,kilograms per square meter,kg/m²,kg/m^2,1,0
 ArealMassDensity,-2,1,0,0,-1,0,0,false,false,false,false,false,ounce per square foot,ounces per square foot,oz/ft²,oz/ft^2,0.305151693636721,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per acre,per acre,ac⁻²,ac⁻^2,0.000247104369225325,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per are,per are,a⁻²,a⁻^2,0.01,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per barn,per barn,b⁻²,b⁻^2,1E+028,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per circular mil,per circular mil,cmil⁻²,cmil⁻^2,1973525159.97888,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per hectare,per hectare,ha⁻²,ha⁻^2,0.0001,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square centimeter,per square centimeter,cm⁻²,cm⁻^2,10000,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square decimeter,per square decimeter,dm⁻²,dm⁻^2,100,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square foot,per square foot,ft⁻²,ft⁻^2,10.7639104167097,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square inch,per square inch,in⁻²,in⁻^2,1550.0031000062,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square kilometer,per square kilometer,km⁻²,km⁻^2,0.000001,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square meter,per square meter,m⁻²,m⁻^2,1,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square micrometer,per square micrometer,µm⁻²,um⁻^2,1000000000000,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square mile,per square mile,mi⁻²,mi⁻^2,3.86102174990772E-07,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square millimeter,per square millimeter,mm⁻²,mm⁻^2,1000000,0
-ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square yard,per square yard,yd⁻²,yd⁻^2,1.1959899890854,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per acre second,per acre second,ac⁻¹ · s⁻¹,ac⁻^1*s⁻^1,0.000247104369225325,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per are second,per are second,a⁻¹ · s⁻¹,a⁻^1*s⁻^1,0.01,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per barn second,per barn second,b⁻¹ · s⁻¹,b⁻^1*s⁻^1,1E+028,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per circular mil second,per circular mil second,cmil⁻¹ · s⁻¹,cmil⁻^1*s⁻^1,1973525159.97888,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per hectare second,per hectare second,ha⁻¹ · s⁻¹,ha⁻^1*s⁻^1,0.0001,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square centimeter second,per square centimeter second,cm⁻² · s⁻¹,cm⁻^2*s⁻^1,10000,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square foot second,per square foot second,ft⁻² · s⁻¹,ft⁻^2*s⁻^1,10.7639104167097,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square inch second,per square inch second,in⁻² · s⁻¹,in⁻^2*s⁻^1,1550.0031000062,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square meter second,per square meter second,m⁻² · s⁻¹,m⁻^2*s⁻^1,1,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square mile second,per square mile second,mi⁻² · s⁻¹,mi⁻^2*s⁻^1,3.86102174990772E-07,0
-ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square yard second,per square yard second,yd⁻² · s⁻¹,yd⁻^2*s⁻^1,1.1959899890854,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per acre,per acre,ac⁻²,Ac^-2,0.000247104369225325,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per are,per are,a⁻²,A^-2,0.01,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per barn,per barn,b⁻²,b^-2,1E+028,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per circular mil,per circular mil,cmil⁻²,cmil^-2,1973525159.97888,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per hectare,per hectare,ha⁻²,ha^-2,0.0001,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square centimeter,per square centimeter,cm⁻²,cm^-2,10000,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square decimeter,per square decimeter,dm⁻²,dm^-2,100,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square foot,per square foot,ft⁻²,ft^-2,10.7639104167097,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square inch,per square inch,in⁻²,in^-2,1550.0031000062,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square kilometer,per square kilometer,km⁻²,km^-2,0.000001,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square meter,per square meter,m⁻²,m^-2,1,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square micrometer,per square micrometer,µm⁻²,um^-2,1000000000000,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square mile,per square mile,mi⁻²,mi^-2,3.86102174990772E-07,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square millimeter,per square millimeter,mm⁻²,mm^-2,1000000,0
+ArealNumberDensity,-2,0,0,0,0,0,0,false,true,false,false,false,per square yard,per square yard,yd⁻²,yd^-2,1.1959899890854,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per acre second,per acre second,ac⁻¹ · s⁻¹,ac^-1*s^-1,0.000247104369225325,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per are second,per are second,a⁻¹ · s⁻¹,a^-1*s^-1,0.01,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per barn second,per barn second,b⁻¹ · s⁻¹,b^-1*s^-1,1E+028,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per circular mil second,per circular mil second,cmil⁻¹ · s⁻¹,cmil^-1*s^-1,1973525159.97888,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per hectare second,per hectare second,ha⁻¹ · s⁻¹,ha^-1*s^-1,0.0001,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square centimeter second,per square centimeter second,cm⁻² · s⁻¹,cm^-2*s^-1,10000,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square foot second,per square foot second,ft⁻² · s⁻¹,ft^-2*s^-1,10.7639104167097,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square inch second,per square inch second,in⁻² · s⁻¹,in^-2*s^-1,1550.0031000062,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square meter second,per square meter second,m⁻² · s⁻¹,m^-2*s^-1,1,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square mile second,per square mile second,mi⁻² · s⁻¹,mi^-2*s^-1,3.86102174990772E-07,0
+ArealNumberRate,-2,0,1,0,0,0,0,false,true,false,false,false,per square yard second,per square yard second,yd⁻² · s⁻¹,yd^-2*s^-1,1.1959899890854,0
 AvailableEnergy,2,0,-2,0,0,0,0,false,false,false,false,false,attojoule per kilogram,attojoules per kilogram,aJ/kg,aJ/kg,1E-18,0
-AvailableEnergy,2,0,-2,0,0,0,0,false,false,false,false,false,British thermal unit (IT) per pound,British thermal units (IT) per pound,Btu (IT)/lb,Btu_(IT)/lb,2326.0001710787,0
+AvailableEnergy,2,0,-2,0,0,0,0,false,false,false,false,false,British thermal unit (IT) per pound,British thermal units (IT) per pound,Btu (IT)/lb,Btu (IT)/lb,2326.0001710787,0
 AvailableEnergy,2,0,-2,0,0,0,0,false,false,false,false,false,British thermal unit per pound,British thermal units per pound,Btu/lb,Btu/lb,2324.44370761062,0
-AvailableEnergy,2,0,-2,0,0,0,0,false,false,false,false,false,calorie (IT) per gram,calories (IT) per gram,cal (IT)/lb,cal_(IT)/lb,4186.8,0
+AvailableEnergy,2,0,-2,0,0,0,0,false,false,false,false,false,calorie (IT) per gram,calories (IT) per gram,cal (IT)/lb,Cal (IT)/lb,4186.8,0
 AvailableEnergy,2,0,-2,0,0,0,0,false,false,false,false,false,calorie per gram,calories per gram,cal/lb,cal/lb,4184,0
 AvailableEnergy,2,0,-2,0,0,0,0,false,false,false,false,false,centijoule per kilogram,centijoules per kilogram,cJ/kg,cJ/kg,0.01,0
 AvailableEnergy,2,0,-2,0,0,0,0,false,false,false,false,false,decajoule per kilogram,decajoules per kilogram,daJ/kg,daJ/kg,10,0
@@ -349,7 +349,7 @@ CatalyticActivityConcentration,-3,0,-1,0,0,1,0,false,true,false,false,false,nano
 CatalyticActivityConcentration,-3,0,-1,0,0,1,0,false,true,false,false,false,nanokatal per deciliter,nanokatals per deciliter,nkat/dL,nkat/dL,0.00001,0
 CatalyticActivityConcentration,-3,0,-1,0,0,1,0,false,true,false,false,false,nanokatal per liter,nanokatals per liter,nkat/L,nkat/L,0.000001,0
 CatalyticActivityConcentration,-3,0,-1,0,0,1,0,false,true,false,false,false,nanokatal per milliliter,nanokatals per milliliter,nkat/mL,nkat/mL,0.001,0
-CatalyticActivityConcentration,-3,0,-1,0,0,1,0,false,true,false,false,false,particle per second cubic meter,particles per second cubic meter,particle · s⁻¹ · m⁻³,particle*s⁻^1*m⁻^3,1.66053906717385E-24,0
+CatalyticActivityConcentration,-3,0,-1,0,0,1,0,false,true,false,false,false,particle per second cubic meter,particles per second cubic meter,particle · s⁻¹ · m⁻³,particle*s^-1*m^-3,1.66053906717385E-24,0
 CatalyticActivityConcentration,-3,0,-1,0,0,1,0,false,true,false,false,false,peta enzyme unit per cubic meter,peta enzyme units per cubic meter,PU/m³,PU/m^3,16666666.6666667,0
 CatalyticActivityConcentration,-3,0,-1,0,0,1,0,false,true,false,false,false,petakatal per cubic meter,petakatals per cubic meter,Pkat/m³,Pkat/m^3,1000000000000000,0
 CatalyticActivityConcentration,-3,0,-1,0,0,1,0,false,true,false,false,false,pico enzyme unit per cubic decimeter,pico enzyme units per cubic decimeter,pU/dm³,pU/dm^3,1.66666666666667E-17,0
@@ -397,7 +397,7 @@ DynamicViscosity,-1,1,-1,0,0,0,0,false,false,false,false,false,reyn,reyns,reyn,r
 DynamicViscosity,-1,1,-1,0,0,0,0,false,false,false,false,false,slug per foot second,slugs per foot second,slug/(ft · s),slug/(ft*s),47.880249343832,0
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,abcoulomb,abcoulombs,abC,abC,10,0
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,ampere hour,ampere hours,A · h,A*h,3600,0
-ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,atomic unit of charge,atomic units of charge,a.u. of charge,a.u._of_charge,1.602176634E-19,0
+ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,atomic unit of charge,atomic units of charge,a.u. of charge,a.u. of charge,1.602176634E-19,0
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,attocoulomb,attocoulombs,aC,aC,1E-18,0
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,centicoulomb,centicoulombs,cC,cC,0.01,0
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,coulomb,coulombs,C,C,1,0
@@ -406,7 +406,7 @@ ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,decacoulomb,decacoulo
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,decicoulomb,decicoulombs,dC,dC,0.1,0
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,elementary charge,elementary charges,e,e,1.602176634E-19,0
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,exacoulomb,exacoulombs,EC,EC,1E+018,0
-ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,faraday,faradays,F,F,96485.31,0
+ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,faraday,faradays,F,Faraday,96485.31,0
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,femtocoulomb,femtocoulombs,fC,fC,1E-15,0
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,franklin,franklins,Fr,Fr,3.335641E-10,0
 ElectricCharge,0,0,1,1,0,0,0,false,false,false,false,false,gigaampere hour,gigaampere hours,GA · h,GA*h,3600000000000,0
@@ -440,7 +440,7 @@ ElectricChargeVolumetricDensity,-3,0,1,1,0,0,0,false,true,false,false,false,coul
 ElectricChargeVolumetricDensity,-3,0,1,1,0,0,0,false,true,false,false,false,coulomb per cubic meter,coulombs per cubic meter,C/m³,C/m^3,1,0
 ElectricCurrent,0,0,0,1,0,0,0,false,false,false,false,false,abampere,abamperes,abA,abA,10,0
 ElectricCurrent,0,0,0,1,0,0,0,false,false,false,false,false,ampere,amperes,A,A,1,0
-ElectricCurrent,0,0,0,1,0,0,0,false,false,false,false,false,atomic unit of charge per second,atomic units of charge per second,a.u. of charge/s,a.u._of_charge/s,1.602176634E-19,0
+ElectricCurrent,0,0,0,1,0,0,0,false,false,false,false,false,atomic unit of charge per second,atomic units of charge per second,a.u. of charge/s,a.u. of charge/s,1.602176634E-19,0
 ElectricCurrent,0,0,0,1,0,0,0,false,false,false,false,false,attoampere,attoamperes,aA,aA,1E-18,0
 ElectricCurrent,0,0,0,1,0,0,0,false,false,false,false,false,centiampere,centiamperes,cA,cA,0.01,0
 ElectricCurrent,0,0,0,1,0,0,0,false,false,false,false,false,decaampere,decaamperes,daA,daA,10,0
@@ -467,14 +467,14 @@ ElectricCurrent,0,0,0,1,0,0,0,false,false,false,false,false,zettaampere,zettaamp
 ElectricCurrentDensity,-2,0,0,1,0,0,0,false,false,false,false,false,ampere per square centimeter,amperes per square centimeter,A/cm²,A/cm^2,10000,0
 ElectricCurrentDensity,-2,0,0,1,0,0,0,false,false,false,false,false,ampere per square meter,amperes per square meter,A/m²,A/m^2,1,0
 ElectricCurrentDensity,-2,0,0,1,0,0,0,false,false,false,false,false,ampere per square millimeter,amperes per square millimeter,A/mm²,A/mm^2,1000000,0
-ElectricDipoleMoment,1,0,1,1,0,0,0,false,false,false,false,false,atomic unit of charge centimeter,atomic unit of charge centimeters,a.u. of charge · cm,a.u._of_charge*cm,1.602176634E-21,0
+ElectricDipoleMoment,1,0,1,1,0,0,0,false,false,false,false,false,atomic unit of charge centimeter,atomic unit of charge centimeters,a.u. of charge · cm,a.u. of charge*cm,1.602176634E-21,0
 ElectricDipoleMoment,1,0,1,1,0,0,0,false,false,false,false,false,atomic unit of electric dipole moment,atomic units of electric dipole moment,e · a₀,e*a\0,8.47835362554077E-30,0
 ElectricDipoleMoment,1,0,1,1,0,0,0,false,false,false,false,false,coulomb meter,coulomb meters,C · m,C*m,1,0
 ElectricDipoleMoment,1,0,1,1,0,0,0,false,false,false,false,false,debye,debyes,D,D,3.33564095198152E-30,0
 ElectricDipoleMoment,1,0,1,1,0,0,0,false,false,false,false,false,elementary charge centimeter,elementary charge centimeters,e · cm,e*cm,1.602176634E-21,0
-ElectricDisplacementField,-2,0,1,1,0,0,0,false,false,false,false,false,coulomb per square centimeter,coulombs per square centimeter,C/cm²,C/cm^2,10000,0
-ElectricDisplacementField,-2,0,1,1,0,0,0,false,false,false,false,false,coulomb per square meter,coulombs per square meter,C/m²,C/m^2,1,0
-ElectricField,1,1,-3,-1,0,0,0,false,false,false,false,false,atomic unit of electric field,atomic units of electric field,a.u. of electric field,a.u._of_electric_field,514220674763.26,0
+ElectricDisplacementField,-2,0,1,1,0,0,0,false,false,false,false,false,coulomb per square centimeter,coulombs per square centimeter,C/cm²,C/cm^2 (displacement),10000,0
+ElectricDisplacementField,-2,0,1,1,0,0,0,false,false,false,false,false,coulomb per square meter,coulombs per square meter,C/m²,C/m^2 (displacement),1,0
+ElectricField,1,1,-3,-1,0,0,0,false,false,false,false,false,atomic unit of electric field,atomic units of electric field,a.u. of electric field,a.u. of electric field,514220674763.26,0
 ElectricField,1,1,-3,-1,0,0,0,false,false,false,false,false,kilovolt per millimeter,kilovolts per millimeter,kV/mm,kV/mm,1000000,0
 ElectricField,1,1,-3,-1,0,0,0,false,false,false,false,false,megavolt per centimeter,megavolts per centimeter,MV/cm,MV/cm,100000000,0
 ElectricField,1,1,-3,-1,0,0,0,false,false,false,false,false,megavolt per meter,megavolts per meter,MV/m,MV/m,1000000,0
@@ -483,8 +483,8 @@ ElectricField,1,1,-3,-1,0,0,0,false,false,false,false,false,volt per meter,volts
 ElectricField,1,1,-3,-1,0,0,0,false,false,false,false,false,volt per micrometer,volts per micrometer,V/μm,V/um,1000000,0
 ElectricField,1,1,-3,-1,0,0,0,false,false,false,false,false,volt per mil,volts per mil,V/mil,V/mil,39370.0787401575,0
 ElectricField,1,1,-3,-1,0,0,0,false,false,false,false,false,volt per millimeter,volts per millimeter,V/mm,V/mm,1000,0
-ElectricFlux,3,1,-3,-1,0,0,0,false,false,false,false,false,volt centimeter,volt centimeters,V ⋅ cm,V_⋅_cm,0.01,0
-ElectricFlux,3,1,-3,-1,0,0,0,false,false,false,false,false,volt meter,volt meters,V ⋅ m,V_⋅_m,1,0
+ElectricFlux,3,1,-3,-1,0,0,0,false,false,false,false,false,volt centimeter,volt centimeters,V ⋅ cm,V*cm,0.01,0
+ElectricFlux,3,1,-3,-1,0,0,0,false,false,false,false,false,volt meter,volt meters,V ⋅ m,V*m,1,0
 ElectricPermittivity,-3,-1,4,2,0,0,0,false,false,false,false,false,farad per meter,farads per meter,F/m,F/m,1,0
 ElectricPermittivity,-3,-1,4,2,0,0,0,false,false,false,false,false,vacuum electric permittivity,vacuum electric permittivity,ε₀,epsilon\0,8.8541878128E-12,0
 ElectricPotential,2,1,-3,-1,0,0,0,false,false,false,false,false,abvolt,abvolts,abV,abV,0.00000001,0
@@ -598,15 +598,15 @@ ElectricalResistivity,3,1,-3,-2,0,0,0,false,false,false,false,false,zeptoohm met
 ElectricalResistivity,3,1,-3,-2,0,0,0,false,false,false,false,false,zettaohm meter,zettaohm meters,ZΩ · m,Zohm*m,1E+021,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,attojoule,attojoules,aJ,aJ,1E-18,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,British thermal unit,British thermal units,Btu,Btu,1054.35,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,British thermal unit (39 °F),British thermal units (39 °F),Btu₃₉,Btu\3\9,1059.67,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,British thermal unit (59 °F),British thermal units (59 °F),Btu₅₉,Btu\5\9,1054.8,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,British thermal unit (60 °F),British thermal units (60 °F),Btu₆₀,Btu\6\0,1054.68,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,British thermal unit (IT),British thermal units (IT),Btu (IT),Btu_(IT),1055.056,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,British thermal unit (39 °F),British thermal units (39 °F),Btu₃₉,Btu\39,1059.67,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,British thermal unit (59 °F),British thermal units (59 °F),Btu₅₉,Btu\59,1054.8,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,British thermal unit (60 °F),British thermal units (60 °F),Btu₆₀,Btu\60,1054.68,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,British thermal unit (IT),British thermal units (IT),Btu (IT),Btu (IT),1055.056,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,calorie,calories,cal,cal,4.184,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,calorie (15 °C),calories (15 °C),cal₁₅,cal₁\5,4.1858,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,calorie (20 °C),calories (20 °C),cal₂₀,cal\2\0,4.1819,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,calorie (IT),calories (IT),cal (IT),cal_(IT),4.1868,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,Calorie (IT),Calories (IT),Cal (IT),Cal_(IT),4186.8,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,calorie (15 °C),calories (15 °C),cal₁₅,Cal\15,4.1858,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,calorie (20 °C),calories (20 °C),cal₂₀,Cal\20,4.1819,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,calorie (IT),calories (IT),cal (IT),cal (IT),4.1868,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,Calorie (IT),Calories (IT),Cal (IT),Cal (IT),4186.8,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,Calorie,Calories,Cal,Cal,4184,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,centijoule,centijoules,cJ,cJ,0.01,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,decaelectronvolt,decaelectronvolts,daeV,daeV,1.602176634E-18,0
@@ -628,7 +628,7 @@ Energy,2,1,-2,0,0,0,0,false,false,false,false,false,hectojoule,hectojoules,hJ,hJ
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,hectowatt hour,hectowatt hours,hW · h,hW*h,360000,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,joule,joules,J,J,1,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,kilocalorie,kilocalories,kcal,kcal,4184,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,kilocalorie (IT),kilocalories (IT),kcal (IT),kcal_(IT),4186.8,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,kilocalorie (IT),kilocalories (IT),kcal (IT),Kcal (IT),4186.8,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,kiloelectronvolt,kiloelectronvolts,keV,keV,1.602176634E-16,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,kilojoule,kilojoules,kJ,kJ,1000,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,kilowatt hour,kilowatt hours,kW · h,kW*h,3600000,0
@@ -644,13 +644,13 @@ Energy,2,1,-2,0,0,0,0,false,false,false,false,false,petaelectronvolt,petaelectro
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,petajoule,petajoules,PJ,PJ,1000000000000000,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,petawatt hour,petawatt hours,PW · h,PW*h,3.6E+018,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,picojoule,picojoules,pJ,pJ,1E-12,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,quad,quads,10¹⁵ Btu (IT),10^1⁵_Btu_(IT),1.055056E+018,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,quad,quads,10¹⁵ Btu (IT),10^15 Btu (IT),1.055056E+018,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,teraelectronvolt,teraelectronvolts,TeV,TeV,0.0000001602176634,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,terajoule,terajoules,TJ,TJ,1000000000000,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,terawatt hour,terawatt hours,TW · h,TW*h,3600000000000000,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,therm (EC),therms (EC),thm (EC),thm_(EC),105506000,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,therm (EC),therms (EC),thm (EC),Thm (EC),105506000,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,therm,therms,thm,thm,105480400,0
-Energy,2,1,-2,0,0,0,0,false,false,false,false,false,ton of TNT,tons of TNT,t of TNT,t_of_TNT,4184000000,0
+Energy,2,1,-2,0,0,0,0,false,false,false,false,false,ton of TNT,tons of TNT,t of TNT,T of TNT,4184000000,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,watt hour,watt hours,W · h,W*h,3600,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,watt second,watt seconds,W · s,W*s,1,0
 Energy,2,1,-2,0,0,0,0,false,false,false,false,false,yoctojoule,yoctojoules,yJ,yJ,1E-24,0
@@ -680,7 +680,7 @@ Force,1,1,-2,0,0,0,0,false,false,false,false,false,piconewton,piconewtons,pN,pN,
 Force,1,1,-2,0,0,0,0,false,false,false,false,false,pound-force,pounds-force,lbf,lbf,4.448222,0
 Force,1,1,-2,0,0,0,0,false,false,false,false,false,poundal,poundals,pdl,pdl,0.138255,0
 Force,1,1,-2,0,0,0,0,false,false,false,false,false,teranewton,teranewtons,TN,TN,1000000000000,0
-Force,1,1,-2,0,0,0,0,false,false,false,false,false,ton-force,tons-force,2000 lbf,2000_lbf,8896.443,0
+Force,1,1,-2,0,0,0,0,false,false,false,false,false,ton-force,tons-force,2000 lbf,2000 lbf,8896.443,0
 Force,1,1,-2,0,0,0,0,false,false,false,false,false,yoctonewton,yoctonewtons,yN,yN,1E-24,0
 Force,1,1,-2,0,0,0,0,false,false,false,false,false,yottanewton,yottanewtons,YN,YN,1E+024,0
 Force,1,1,-2,0,0,0,0,false,false,false,false,false,zeptonewton,zeptonewtons,zN,zN,1E-21,0
@@ -690,7 +690,7 @@ Frequency,0,0,-1,0,0,0,0,false,false,false,false,false,centihertz,centihertz,cHz
 Frequency,0,0,-1,0,0,0,0,false,false,false,false,false,cycle per day,cycles per day,1/d,1/d,1.15740740740741E-05,0
 Frequency,0,0,-1,0,0,0,0,false,false,false,false,false,cycle per hour,cycles per hour,1/h,1/h,0.000277777777777778,0
 Frequency,0,0,-1,0,0,0,0,false,false,false,false,false,cycle per minute,cycles per minute,1/min,1/min,0.0166666666666667,0
-Frequency,0,0,-1,0,0,0,0,false,false,false,false,false,cycle per shake,cycles per shake,100 MHz,100_MHz,100000000,0
+Frequency,0,0,-1,0,0,0,0,false,false,false,false,false,cycle per shake,cycles per shake,100 MHz,100 MHz,100000000,0
 Frequency,0,0,-1,0,0,0,0,false,false,false,false,false,cycle per year,cycles per year,1/a,1/a,3.17097919837646E-08,0
 Frequency,0,0,-1,0,0,0,0,false,false,false,false,false,decahertz,decahertz,daHz,daHz,10,0
 Frequency,0,0,-1,0,0,0,0,false,false,false,false,false,decihertz,decihertz,dHz,dHz,0.1,0
@@ -719,7 +719,7 @@ FrequencyDrift,0,0,-2,0,0,0,0,false,false,false,false,false,terahertz per second
 HeatCapacity,2,1,-2,0,-1,0,0,false,false,false,false,false,attogram square meter per second squared kelvin,attogram square meters per second squared kelvin,ag · m²/(s² · K),ag*m^2/(s^2*K),1E-21,0
 HeatCapacity,2,1,-2,0,-1,0,0,false,false,false,false,false,attojoule per kelvin,attojoules per kelvin,aJ/K,aJ/K,1E-18,0
 HeatCapacity,2,1,-2,0,-1,0,0,false,false,false,false,false,Boltzmann constant,Boltzmann constants,k,k,1.380649E-23,0
-HeatCapacity,2,1,-2,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per degree Fahrenheit,British thermal units (IT) per degree Fahrenheit,Btu (IT)/°F,Btu_(IT)/degF,1899.1008,0
+HeatCapacity,2,1,-2,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per degree Fahrenheit,British thermal units (IT) per degree Fahrenheit,Btu (IT)/°F,Btu (IT)/degF,1899.1008,0
 HeatCapacity,2,1,-2,0,-1,0,0,false,false,false,false,false,British thermal unit per degree Fahrenheit,British thermal units per degree Fahrenheit,Btu/°F,Btu/degF,1897.83,0
 HeatCapacity,2,1,-2,0,-1,0,0,false,false,false,false,false,calorie per kelvin,calories per kelvin,cal/K,cal/K,4.184,0
 HeatCapacity,2,1,-2,0,-1,0,0,false,false,false,false,false,centigram square meter per second squared kelvin,centigram square meters per second squared kelvin,cg · m²/(s² · K),cg*m^2/(s^2*K),0.00001,0
@@ -790,12 +790,12 @@ HeatFluxDensity,0,1,-3,0,0,0,0,false,false,false,false,false,zeptowatt per squar
 HeatFluxDensity,0,1,-3,0,0,0,0,false,false,false,false,false,zettawatt per square meter,zettawatts per square meter,ZW/m²,ZW/m^2,1E+021,0
 HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,attogram per second cubed kelvin,attograms per second cubed kelvin,ag/(s³ · K),ag/(s^3*K),1E-21,0
 HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,attowatt per square meter kelvin,attowatts per square meter kelvin,aW/(m² · K),aW/(m^2*K),1E-18,0
-HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per hour square foot degree Fahrenheit,British thermal units (IT) per hour square foot degree Fahrenheit,Btu (IT)/(hr · ft² · °F),Btu_(IT)/(hr*ft^2*degF),5.67826413430605,0
-HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per hour square inch degree Fahrenheit,British thermal units (IT) per hour square inch degree Fahrenheit,Btu (IT)/(hr · in² · °F),Btu_(IT)/(hr*in^2*degF),817.670035340071,0
-HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per minute square foot degree Fahrenheit,British thermal units (IT) per minute square foot degree Fahrenheit,Btu (IT)/(min · ft² · °F),Btu_(IT)/(min*ft^2*degF),340.695848058363,0
-HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per minute square inch degree Fahrenheit,British thermal units (IT) per minute square inch degree Fahrenheit,Btu (IT)/(min · in² · °F),Btu_(IT)/(min*in^2*degF),49060.2021204043,0
-HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per second square foot degree Fahrenheit,British thermal units (IT) per second square foot degree Fahrenheit,Btu (IT)/(s · ft² · °F),Btu_(IT)/(s*ft^2*degF),20441.7508835018,0
-HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per second square inch degree Fahrenheit,British thermal units (IT) per second square inch degree Fahrenheit,Btu (IT)/(s · in² · °F),Btu_(IT)/(s*in^2*degF),2943612.12722425,0
+HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per hour square foot degree Fahrenheit,British thermal units (IT) per hour square foot degree Fahrenheit,Btu (IT)/(hr · ft² · °F),Btu (IT)/(hr*ft^2*degF),5.67826413430605,0
+HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per hour square inch degree Fahrenheit,British thermal units (IT) per hour square inch degree Fahrenheit,Btu (IT)/(hr · in² · °F),Btu (IT)/(hr*in^2*degF),817.670035340071,0
+HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per minute square foot degree Fahrenheit,British thermal units (IT) per minute square foot degree Fahrenheit,Btu (IT)/(min · ft² · °F),Btu (IT)/(min*ft^2*degF),340.695848058363,0
+HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per minute square inch degree Fahrenheit,British thermal units (IT) per minute square inch degree Fahrenheit,Btu (IT)/(min · in² · °F),Btu (IT)/(min*in^2*degF),49060.2021204043,0
+HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per second square foot degree Fahrenheit,British thermal units (IT) per second square foot degree Fahrenheit,Btu (IT)/(s · ft² · °F),Btu (IT)/(s*ft^2*degF),20441.7508835018,0
+HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per second square inch degree Fahrenheit,British thermal units (IT) per second square inch degree Fahrenheit,Btu (IT)/(s · in² · °F),Btu (IT)/(s*in^2*degF),2943612.12722425,0
 HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit per hour square foot degree Fahrenheit,British thermal units per hour square foot degree Fahrenheit,Btu/(hr · ft² · °F),Btu/(hr*ft^2*degF),5.67446447392895,0
 HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit per hour square inch degree Fahrenheit,British thermal units per hour square inch degree Fahrenheit,Btu/(hr · in² · °F),Btu/(hr*in^2*degF),817.122884245769,0
 HeatTransfer,0,1,-3,0,-1,0,0,false,false,false,false,false,British thermal unit per minute square foot degree Fahrenheit,British thermal units per minute square foot degree Fahrenheit,Btu/(min · ft² · °F),Btu/(min*ft^2*degF),340.467868435737,0
@@ -872,7 +872,7 @@ Inductance,2,1,-2,-2,0,0,0,false,false,false,false,false,yoctohenry,yoctohenries
 Inductance,2,1,-2,-2,0,0,0,false,false,false,false,false,yottahenry,yottahenries,YH,YH,1E+024,0
 Inductance,2,1,-2,-2,0,0,0,false,false,false,false,false,zeptohenry,zeptohenries,zH,zH,1E-21,0
 Inductance,2,1,-2,-2,0,0,0,false,false,false,false,false,zettahenry,zettahenries,ZH,ZH,1E+021,0
-Information,0,0,0,0,0,0,0,false,false,true,false,false,bit,bits,b,b,0.125,0
+Information,0,0,0,0,0,0,0,false,false,true,false,false,bit,bits,b,bit,0.125,0
 Information,0,0,0,0,0,0,0,false,false,true,false,false,byte,bytes,B,B,1,0
 Information,0,0,0,0,0,0,0,false,false,true,false,false,crumb,crumbs,crumb,crumb,0.25,0
 Information,0,0,0,0,0,0,0,false,false,true,false,false,deciban,decibans,deciban,deciban,0.041524101186092,0
@@ -949,35 +949,35 @@ InformationRate,0,0,-1,0,0,0,0,false,true,false,false,false,zebibit per second,z
 InformationRate,0,0,-1,0,0,0,0,false,true,false,false,false,zebibyte per second,zebibytes per second,ZiB/s,ZiB/s,1.18059162071741E+021,0
 InformationRate,0,0,-1,0,0,0,0,false,true,false,false,false,zettabit per second,zettabits per second,Zb/s,Zb/s,1.25E+020,0
 InformationRate,0,0,-1,0,0,0,0,false,true,false,false,false,zettabyte per second,zettabytes per second,ZB/s,ZB/s,1E+021,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,attosecond per meter,attoseconds per meter,am/s,am/s,1E-18,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,centisecond per meter,centiseconds per meter,cm/s,cm/s,0.01,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,decasecond per meter,decaseconds per meter,dam/s,dam/s,10,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,decisecond per meter,deciseconds per meter,dm/s,dm/s,0.1,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,exasecond per meter,exaseconds per meter,Em/s,Em/s,1E+018,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,femtosecond per meter,femtoseconds per meter,fm/s,fm/s,1E-15,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,gigasecond per meter,gigaseconds per meter,Gm/s,Gm/s,1000000000,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,hectosecond per meter,hectoseconds per meter,hm/s,hm/s,100,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,hour per foot,hours per foot,h/ft,h/ft,11811.0236220472,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,hour per kilometer,hours per kilometer,h/km,h/km,3.6,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,hour per mile,hours per mile,h/mi,h/mi,2.2369362920544,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,kilosecond per meter,kiloseconds per meter,km/s,km/s,1000,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,megasecond per meter,megaseconds per meter,Mm/s,Mm/s,1000000,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,microsecond per meter,microseconds per meter,µm/s,um/s,0.000001,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,millisecond per meter,milliseconds per meter,mm/s,mm/s,0.001,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,minute per foot,minutes per foot,min/ft,min/ft,196.850393700787,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,minute per mile,minutes per mile,min/mi,min/mi,0.03728227153,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,nanosecond per meter,nanoseconds per meter,nm/s,nm/s,0.000000001,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,petasecond per meter,petaseconds per meter,Pm/s,Pm/s,1000000000000000,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,picosecond per meter,picoseconds per meter,pm/s,pm/s,1E-12,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,second per foot,seconds per foot,s/ft,s/ft,3.28083989501312,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,second per inch,seconds per inch,s/in,s/in,39.3700787401575,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,second per meter,seconds per meter,m/s,m/s,1,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,second per mile,seconds per mile,s/mi,s/mi,0.000621371192237334,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,terasecond per meter,teraseconds per meter,Tm/s,Tm/s,1000000000000,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,yoctosecond per meter,yoctoseconds per meter,ym/s,ym/s,1E-24,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,yottasecond per meter,yottaseconds per meter,Ym/s,Ym/s,1E+024,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,zeptosecond per meter,zeptoseconds per meter,zm/s,zm/s,1E-21,0
-InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,zettasecond per meter,zettaseconds per meter,Zm/s,Zm/s,1E+021,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,attosecond per meter,attoseconds per meter,am/s,am/s (inverse),1E-18,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,centisecond per meter,centiseconds per meter,cm/s,cm/s (inverse),0.01,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,decasecond per meter,decaseconds per meter,dam/s,dam/s (inverse),10,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,decisecond per meter,deciseconds per meter,dm/s,dm/s (inverse),0.1,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,exasecond per meter,exaseconds per meter,Em/s,Em/s (inverse),1E+018,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,femtosecond per meter,femtoseconds per meter,fm/s,fm/s (inverse),1E-15,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,gigasecond per meter,gigaseconds per meter,Gm/s,Gm/s (inverse),1000000000,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,hectosecond per meter,hectoseconds per meter,hm/s,hm/s (inverse),100,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,hour per foot,hours per foot,h/ft,h/ft (inverse),11811.0236220472,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,hour per kilometer,hours per kilometer,h/km,h/km (inverse),3.6,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,hour per mile,hours per mile,h/mi,h/mi (inverse),2.2369362920544,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,kilosecond per meter,kiloseconds per meter,km/s,km/s (inverse),1000,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,megasecond per meter,megaseconds per meter,Mm/s,Mm/s (inverse),1000000,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,microsecond per meter,microseconds per meter,µm/s,um/s (inverse),0.000001,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,millisecond per meter,milliseconds per meter,mm/s,mm/s (inverse),0.001,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,minute per foot,minutes per foot,min/ft,min/ft (inverse),196.850393700787,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,minute per mile,minutes per mile,min/mi,min/mi (inverse),0.03728227153,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,nanosecond per meter,nanoseconds per meter,nm/s,nm/s (inverse),0.000000001,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,petasecond per meter,petaseconds per meter,Pm/s,Pm/s (inverse),1000000000000000,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,picosecond per meter,picoseconds per meter,pm/s,pm/s (inverse),1E-12,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,second per foot,seconds per foot,s/ft,s/ft (inverse),3.28083989501312,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,second per inch,seconds per inch,s/in,s/in (inverse),39.3700787401575,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,second per meter,seconds per meter,m/s,m/s (inverse),1,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,second per mile,seconds per mile,s/mi,s/mi (inverse),0.000621371192237334,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,terasecond per meter,teraseconds per meter,Tm/s,Tm/s (inverse),1000000000000,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,yoctosecond per meter,yoctoseconds per meter,ym/s,ym/s (inverse),1E-24,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,yottasecond per meter,yottaseconds per meter,Ym/s,Ym/s (inverse),1E+024,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,zeptosecond per meter,zeptoseconds per meter,zm/s,zm/s (inverse),1E-21,0
+InverseVelocity,-1,0,1,0,0,0,0,false,false,false,false,false,zettasecond per meter,zettaseconds per meter,Zm/s,Zm/s (inverse),1E+021,0
 Jerk,1,0,-3,0,0,0,0,false,false,false,false,false,attometer per second cubed,attometers per second cubed,am/s³,am/s^3,1E-18,0
 Jerk,1,0,-3,0,0,0,0,false,false,false,false,false,centimeter per second cubed,centimeters per second cubed,cm/s³,cm/s^3,0.01,0
 Jerk,1,0,-3,0,0,0,0,false,false,false,false,false,decameter per second cubed,decameters per second cubed,dam/s³,dam/s^3,10,0
@@ -1004,7 +1004,7 @@ Jerk,1,0,-3,0,0,0,0,false,false,false,false,false,zeptometer per second cubed,ze
 Jerk,1,0,-3,0,0,0,0,false,false,false,false,false,zettameter per second cubed,zettameters per second cubed,Zm/s³,Zm/s^3,1E+021,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,ångström,ångströms,Å,ang,1E-10,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,astronomical unit,astronomical units,ua,ua,149597900000,0
-Length,1,0,0,0,0,0,0,false,false,false,false,false,atomic unit of length,atomic units of length,a.u. of length,a.u._of_length,5.29177210903E-11,0
+Length,1,0,0,0,0,0,0,false,false,false,false,false,atomic unit of length,atomic units of length,a.u. of length,a.u. of length,5.29177210903E-11,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,attometer,attometers,am,am,1E-18,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,bohr radius,bohr radiuses,a₀,a\0,5.29177210903E-11,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,centimeter,centimeters,cm,cm,0.01,0
@@ -1016,30 +1016,30 @@ Length,1,0,0,0,0,0,0,false,false,false,false,false,fathom,fathoms,fathom,fathom,
 Length,1,0,0,0,0,0,0,false,false,false,false,false,femtometer,femtometers,fm,fm,1E-15,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,fermi,fermis,fermi,fermi,1E-15,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,foot,feet,ft,ft,0.3048,0
-Length,1,0,0,0,0,0,0,false,false,false,false,false,foot (U.S. survey),feet (U.S. survey),ft (U.S. survey),ft_(U.S._survey),0.3048006,0
+Length,1,0,0,0,0,0,0,false,false,false,false,false,foot (U.S. survey),feet (U.S. survey),ft (U.S. survey),ft (U.S. survey),0.3048006,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,gigameter,gigameters,Gm,Gm,1000000000,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,hectometer,hectometers,hm,hm,100,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,inch,inches,in,in,0.0254,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,kilometer,kilometers,km,km,1000,0
-Length,1,0,0,0,0,0,0,false,false,false,false,false,light year,light years,l. y.,l._y.,9.46073E+015,0
+Length,1,0,0,0,0,0,0,false,false,false,false,false,light year,light years,l. y.,l. y.,9.46073E+015,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,megameter,megameters,Mm,Mm,1000000,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,meter,meters,m,m,1,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,microinch,microinches,μin,uin,0.0000000254,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,micrometer,micrometers,µm,um,0.000001,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,micron,microns,μ,u,0.000001,0
-Length,1,0,0,0,0,0,0,false,false,false,false,false,mil,mils,0.001 in,0.001_in,0.0000254,0
+Length,1,0,0,0,0,0,0,false,false,false,false,false,mil,mils,0.001 in,0.001 in,0.0000254,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,mile,miles,mi,mi,1609.344,0
-Length,1,0,0,0,0,0,0,false,false,false,false,false,mile (U.S. survey),miles (U.S. survey),mi (U.S. survey),mi_(U.S._survey),1609.347,0
+Length,1,0,0,0,0,0,0,false,false,false,false,false,mile (U.S. survey),miles (U.S. survey),mi (U.S. survey),mi (U.S. survey),1609.347,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,millimeter,millimeters,mm,mm,0.001,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,nanometer,nanometers,nm,nm,0.000000001,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,nautical mile,nautical miles,M,M,1852,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,parsec,parsecs,pc,pc,3.085678E+016,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,petameter,petameters,Pm,Pm,1000000000000000,0
-Length,1,0,0,0,0,0,0,false,false,false,false,false,pica (computer),picas (computer),1/6 in (computer),1/6_in_(computer),0.00423333333333333,0
-Length,1,0,0,0,0,0,0,false,false,false,false,false,pica (printer's),picas (printer's),1/6 in,1/6_in,0.004217518,0
+Length,1,0,0,0,0,0,0,false,false,false,false,false,pica (computer),picas (computer),1/6 in (computer),1/6 in (computer),0.00423333333333333,0
+Length,1,0,0,0,0,0,0,false,false,false,false,false,pica (printer's),picas (printer's),1/6 in,1/6 in,0.004217518,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,picometer,picometers,pm,pm,1E-12,0
-Length,1,0,0,0,0,0,0,false,false,false,false,false,point (computer),points (computer),1/72 in (computer),1/72_in_(computer),0.0003527778,0
-Length,1,0,0,0,0,0,0,false,false,false,false,false,point (printer's),points (printer's),1/72 in,1/72_in,0.0003514598,0
+Length,1,0,0,0,0,0,0,false,false,false,false,false,point (computer),points (computer),1/72 in (computer),1/72 in (computer),0.0003527778,0
+Length,1,0,0,0,0,0,0,false,false,false,false,false,point (printer's),points (printer's),1/72 in,1/72 in,0.0003514598,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,rod,rods,rd,rd,5.02921,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,terameter,terameters,Tm,Tm,1000000000000,0
 Length,1,0,0,0,0,0,0,false,false,false,false,false,yard,yards,yd,yd,0.9144,0
@@ -1058,28 +1058,28 @@ LinearMassDensity,-1,1,0,0,0,0,0,false,false,false,false,false,ounce per inch,ou
 LinearMassDensity,-1,1,0,0,0,0,0,false,false,false,false,false,pound per foot,pounds per foot,lb/ft,lb/ft,1.48816404199475,0
 LinearMassDensity,-1,1,0,0,0,0,0,false,false,false,false,false,pound per inch,pounds per inch,lb/in,lb/in,17.857968503937,0
 LinearMassDensity,-1,1,0,0,0,0,0,false,false,false,false,false,pound per yard,pounds per yard,lb/yd,lb/yd,0.496054680664917,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per centimeter,per centimeter,cm⁻¹,cm⁻^1,100,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per decimeter,per decimeter,dm⁻¹,dm⁻^1,10,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per foot,per foot,ft⁻¹,ft⁻^1,3.28083989501312,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,foot (U.S. survey),foot (U.S. survey),ft (U.S. survey),ft_(U.S._survey),3.28083343667959,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per inch,per inch,in⁻¹,in⁻^1,39.3700787401575,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per kilometer,per kilometer,km⁻¹,km⁻^1,0.001,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per meter,per meter,m⁻¹,m⁻^1,1,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per mile,per mile,mi⁻¹,mi⁻^1,0.000621371192237334,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per mile (U.S. survey),per mile (U.S. survey),mi⁻¹ (U.S. survey),mi⁻^1_(U.S._survey),0.000621370033933018,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per millimeter,per millimeter,mm⁻¹,mm⁻^1,1000,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per nautical mile,per nautical mile,M⁻¹,M⁻^1,0.000539956803455724,0
-LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per yard,per yard,yd⁻¹,yd⁻^1,1.09361329833771,0
-LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per centimeter second,per centimeter second,cm⁻¹ · s⁻¹,cm⁻^1*s⁻^1,100,0
-LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per foot second,per foot second,ft⁻¹ · s⁻¹,ft⁻^1*s⁻^1,3.28083989501312,0
-LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per foot (U.S. survey) second,per foot (U.S. survey) second,ft⁻¹ (U.S. survey) · s⁻¹,ft⁻^1_(U.S._survey)*s⁻^1,3.28083343667959,0
-LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per inch second,per inch second,in⁻¹ · s⁻¹,in⁻^1*s⁻^1,39.3700787401575,0
-LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per kilometer second,per kilometer second,km⁻¹ · s⁻¹,km⁻^1*s⁻^1,0.001,0
-LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per meter second,per meter second,m⁻¹ · s⁻¹,m⁻^1*s⁻^1,1,0
-LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per mile second,per mile second,mi⁻¹ · s⁻¹,mi⁻^1*s⁻^1,0.000621371192237334,0
-LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per mile (U.S. survey) second,per mile (U.S. survey) second,mi⁻¹ (U.S. survey) · s⁻¹,mi⁻^1_(U.S._survey)*s⁻^1,0.000621370033933018,0
-LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per millimeter second,per millimeter second,mm⁻¹ · s⁻¹,mm⁻^1*s⁻^1,1000,0
-LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per yard second,per yard second,yd⁻¹ · s⁻¹,yd⁻^1*s⁻^1,1.09361329833771,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per centimeter,per centimeter,cm⁻¹,cm^-1 (number density),100,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per decimeter,per decimeter,dm⁻¹,dm^-1 (number density),10,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per foot,per foot,ft⁻¹,ft^-1,3.28083989501312,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,foot (U.S. survey),foot (U.S. survey),ft (U.S. survey),ft (U.S. survey) (number density),3.28083343667959,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per inch,per inch,in⁻¹,in^-1,39.3700787401575,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per kilometer,per kilometer,km⁻¹,km^-1 (number density),0.001,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per meter,per meter,m⁻¹,m^-1 (number density),1,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per mile,per mile,mi⁻¹,mi^-1,0.000621371192237334,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per mile (U.S. survey),per mile (U.S. survey),mi⁻¹ (U.S. survey),mi^-1 (U.S. survey),0.000621370033933018,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per millimeter,per millimeter,mm⁻¹,mm^-1 (number density),1000,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per nautical mile,per nautical mile,M⁻¹,M^-1,0.000539956803455724,0
+LinearNumberDensity,-1,0,0,0,0,0,0,false,true,false,false,false,per yard,per yard,yd⁻¹,yd^-1,1.09361329833771,0
+LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per centimeter second,per centimeter second,cm⁻¹ · s⁻¹,cm^-1*s^-1,100,0
+LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per foot second,per foot second,ft⁻¹ · s⁻¹,ft^-1*s^-1,3.28083989501312,0
+LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per foot (U.S. survey) second,per foot (U.S. survey) second,ft⁻¹ (U.S. survey) · s⁻¹,ft^-1 (U.S. survey)*s^-1,3.28083343667959,0
+LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per inch second,per inch second,in⁻¹ · s⁻¹,in^-1*s^-1,39.3700787401575,0
+LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per kilometer second,per kilometer second,km⁻¹ · s⁻¹,km^-1*s^-1,0.001,0
+LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per meter second,per meter second,m⁻¹ · s⁻¹,m^-1*s^-1,1,0
+LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per mile second,per mile second,mi⁻¹ · s⁻¹,mi^-1*s^-1,0.000621371192237334,0
+LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per mile (U.S. survey) second,per mile (U.S. survey) second,mi⁻¹ (U.S. survey) · s⁻¹,mi^-1 (U.S. survey)*s^-1,0.000621370033933018,0
+LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per millimeter second,per millimeter second,mm⁻¹ · s⁻¹,mm^-1*s^-1,1000,0
+LinearNumberRate,-1,0,-1,0,0,0,0,false,true,false,false,false,per yard second,per yard second,yd⁻¹ · s⁻¹,yd^-1*s^-1,1.09361329833771,0
 LinearPowerDensity,1,1,-3,0,0,0,0,false,false,false,false,false,watt per centimeter,watts per centimeter,W/cm,W/cm,100,0
 LinearPowerDensity,1,1,-3,0,0,0,0,false,false,false,false,false,watt per meter,watts per meter,W/m,W/m,1,0
 LinearPowerDensity,1,1,-3,0,0,0,0,false,false,false,false,false,watt per millimeter,watts per millimeter,W/mm,W/mm,1000,0
@@ -1172,7 +1172,7 @@ MagneticFluxDensity,0,1,-2,-1,0,0,0,false,false,false,false,false,decatesla,deca
 MagneticFluxDensity,0,1,-2,-1,0,0,0,false,false,false,false,false,decitesla,deciteslas,dT,dT,0.1,0
 MagneticFluxDensity,0,1,-2,-1,0,0,0,false,false,false,false,false,exatesla,exateslas,ET,ET,1E+018,0
 MagneticFluxDensity,0,1,-2,-1,0,0,0,false,false,false,false,false,femtotesla,femtoteslas,fT,fT,1E-15,0
-MagneticFluxDensity,0,1,-2,-1,0,0,0,false,false,false,false,false,gamma,gammas,γ,γ,0.000000001,0
+MagneticFluxDensity,0,1,-2,-1,0,0,0,false,false,false,false,false,gamma,gammas,γ,Gamma,0.000000001,0
 MagneticFluxDensity,0,1,-2,-1,0,0,0,false,false,false,false,false,gauss,gauss,G,G,0.0001,0
 MagneticFluxDensity,0,1,-2,-1,0,0,0,false,false,false,false,false,gigatesla,gigateslas,GT,GT,1000000000,0
 MagneticFluxDensity,0,1,-2,-1,0,0,0,false,false,false,false,false,hectotesla,hectoteslas,hT,hT,100,0
@@ -1221,79 +1221,79 @@ Mass,0,1,0,0,0,0,0,false,false,false,false,false,gigagram,gigagrams,Gg,Gg,100000
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,grain,grains,gr,gr,0.00006479891,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,gram,grams,g,g,0.001,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,hectogram,hectograms,hg,hg,0.1,0
-Mass,0,1,0,0,0,0,0,false,false,false,false,false,hundredweight (long),hundredweight (long),cwt long,cwt_long,50.80235,0
-Mass,0,1,0,0,0,0,0,false,false,false,false,false,hundredweight (short),hundredweight (short),cwt short,cwt_short,45.35924,0
+Mass,0,1,0,0,0,0,0,false,false,false,false,false,hundredweight (long),hundredweight (long),cwt long,cwt long,50.80235,0
+Mass,0,1,0,0,0,0,0,false,false,false,false,false,hundredweight (short),hundredweight (short),cwt short,cwt short,45.35924,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,kilogram,kilograms,kg,kg,1,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,megagram,megagrams,Mg,Mg,1000,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,microgram,micrograms,µg,ug,0.000000001,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,milligram,milligrams,mg,mg,0.000001,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,nanogram,nanograms,ng,ng,1E-12,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,ounce,ounces,oz,oz,0.02834952,0
-Mass,0,1,0,0,0,0,0,false,false,false,false,false,troy ounce,troy ounces,oz t,oz_t,0.03110348,0
+Mass,0,1,0,0,0,0,0,false,false,false,false,false,troy ounce,troy ounces,oz t,oz t,0.03110348,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,pennyweight,pennyweight,dwt,dwt,0.001555174,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,petagram,petagrams,Pg,Pg,1000000000000,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,picogram,picograms,pg,pg,1E-15,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,pound,pounds,lb,lb,0.4535924,0
-Mass,0,1,0,0,0,0,0,false,false,false,false,false,troy pound,troy pounds,lb t,lb_t,0.3732417,0
+Mass,0,1,0,0,0,0,0,false,false,false,false,false,troy pound,troy pounds,lb t,lb t,0.3732417,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,slug,slugs,slug,slug,14.5939,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,teragram,teragrams,Tg,Tg,1000000000,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,ton,tons,t,t,1000,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,assay ton,assay tons,AT,AT,0.02916667,0
-Mass,0,1,0,0,0,0,0,false,false,false,false,false,long ton,long tons,2240 lb,2240_lb,1016.047,0
-Mass,0,1,0,0,0,0,0,false,false,false,false,false,short ton,short tons,2000 lb,2000_lb,907.1847,0
+Mass,0,1,0,0,0,0,0,false,false,false,false,false,long ton,long tons,2240 lb,2240 lb,1016.047,0
+Mass,0,1,0,0,0,0,0,false,false,false,false,false,short ton,short tons,2000 lb,2000 lb,907.1847,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,yoctogram,yoctograms,yg,yg,1E-27,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,yottagram,yottagrams,Yg,Yg,1E+021,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,zeptogram,zeptograms,zg,zg,1E-24,0
 Mass,0,1,0,0,0,0,0,false,false,false,false,false,zettagram,zettagrams,Zg,Zg,1E+018,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,attogram per cubic meter,attograms per cubic meter,ag/m³,ag/m^3,1E-21,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,centigram per cubic meter,centigrams per cubic meter,cg/m³,cg/m^3,0.00001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,decagram per cubic meter,decagrams per cubic meter,dag/m³,dag/m^3,0.01,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,decigram per cubic meter,decigrams per cubic meter,dg/m³,dg/m^3,0.0001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,exagram per cubic meter,exagrams per cubic meter,Eg/m³,Eg/m^3,1000000000000000,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,femtogram per cubic decimeter,femtograms per cubic decimeter,fg/dm³,fg/dm^3,1E-15,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,femtogram per cubic meter,femtograms per cubic meter,fg/m³,fg/m^3,1E-18,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,femtogram per deciliter,femtograms per deciliter,fg/dL,fg/dL,1E-14,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,femtogram per liter,femtograms per liter,fg/L,fg/L,1E-15,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,femtogram per milliliter,femtograms per milliliter,fg/mL,fg/mL,1E-12,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gigagram per cubic meter,gigagrams per cubic meter,Gg/m³,Gg/m^3,1000000,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gram per cubic decimeter,grams per cubic decimeter,g/dm³,g/dm^3,1,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gram per cubic meter,grams per cubic meter,g/m³,g/m^3,0.001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gram per deciliter,grams per deciliter,g/dL,g/dL,10,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gram per liter,grams per liter,g/L,g/L,1,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gram per milliliter,grams per milliliter,g/mL,g/mL,1000,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,hectogram per cubic meter,hectograms per cubic meter,hg/m³,hg/m^3,0.1,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,kilogram per cubic decimeter,kilograms per cubic decimeter,kg/dm³,kg/dm^3,1000,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,kilogram per cubic meter,kilograms per cubic meter,kg/m³,kg/m^3,1,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,kilogram per deciliter,kilograms per deciliter,kg/dL,kg/dL,10000,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,kilogram per liter,kilograms per liter,kg/L,kg/L,1000,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,kilogram per milliliter,kilograms per milliliter,kg/mL,kg/mL,1000000,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,megagram per cubic meter,megagrams per cubic meter,Mg/m³,Mg/m^3,1000,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,microgram per cubic decimeter,micrograms per cubic decimeter,μg/dm³,ug/dm^3,0.000001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,microgram per cubic meter,micrograms per cubic meter,µg/m³,ug/m^3,0.000000001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,microgram per deciliter,micrograms per deciliter,μg/dL,ug/dL,0.00001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,microgram per liter,micrograms per liter,μg/L,ug/L,0.000001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,microgram per milliliter,micrograms per milliliter,μg/mL,ug/mL,0.001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,milligram per cubic decimeter,milligrams per cubic decimeter,mg/dm³,mg/dm^3,0.001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,milligram per cubic meter,milligrams per cubic meter,mg/m³,mg/m^3,0.000001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,milligram per deciliter,milligrams per deciliter,mg/dL,mg/dL,0.01,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,milligram per liter,milligrams per liter,mg/L,mg/L,0.001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,milligram per milliliter,milligrams per milliliter,mg/mL,mg/mL,1,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,nanogram per cubic decimeter,nanograms per cubic decimeter,ng/dm³,ng/dm^3,0.000000001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,nanogram per cubic meter,nanograms per cubic meter,ng/m³,ng/m^3,1E-12,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,nanogram per deciliter,nanograms per deciliter,ng/dL,ng/dL,0.00000001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,nanogram per liter,nanograms per liter,ng/L,ng/L,0.000000001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,nanogram per milliliter,nanograms per milliliter,ng/mL,ng/mL,0.000001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,petagram per cubic meter,petagrams per cubic meter,Pg/m³,Pg/m^3,1000000000000,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,picogram per cubic decimeter,picograms per cubic decimeter,pg/dm³,pg/dm^3,1E-12,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,picogram per cubic meter,picograms per cubic meter,pg/m³,pg/m^3,1E-15,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,picogram per deciliter,picograms per deciliter,pg/dL,pg/dL,1E-11,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,picogram per liter,picograms per liter,pg/L,pg/L,1E-12,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,picogram per milliliter,picograms per milliliter,pg/mL,pg/mL,0.000000001,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,teragram per cubic meter,teragrams per cubic meter,Tg/m³,Tg/m^3,1000000000,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,yoctogram per cubic meter,yoctograms per cubic meter,yg/m³,yg/m^3,1E-27,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,yottagram per cubic meter,yottagrams per cubic meter,Yg/m³,Yg/m^3,1E+021,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,zeptogram per cubic meter,zeptograms per cubic meter,zg/m³,zg/m^3,1E-24,0
-MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,zettagram per cubic meter,zettagrams per cubic meter,Zg/m³,Zg/m^3,1E+018,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,attogram per cubic meter,attograms per cubic meter,ag/m³,ag/m^3 (mass concentration),1E-21,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,centigram per cubic meter,centigrams per cubic meter,cg/m³,cg/m^3 (mass concentration),0.00001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,decagram per cubic meter,decagrams per cubic meter,dag/m³,dag/m^3 (mass concentration),0.01,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,decigram per cubic meter,decigrams per cubic meter,dg/m³,dg/m^3 (mass concentration),0.0001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,exagram per cubic meter,exagrams per cubic meter,Eg/m³,Eg/m^3 (mass concentration),1000000000000000,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,femtogram per cubic decimeter,femtograms per cubic decimeter,fg/dm³,fg/dm^3 (mass concentration),1E-15,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,femtogram per cubic meter,femtograms per cubic meter,fg/m³,fg/m^3 (mass concentration),1E-18,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,femtogram per deciliter,femtograms per deciliter,fg/dL,fg/dL (mass concentration),1E-14,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,femtogram per liter,femtograms per liter,fg/L,fg/L (mass concentration),1E-15,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,femtogram per milliliter,femtograms per milliliter,fg/mL,fg/mL (mass concentration),1E-12,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gigagram per cubic meter,gigagrams per cubic meter,Gg/m³,Gg/m^3 (mass concentration),1000000,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gram per cubic decimeter,grams per cubic decimeter,g/dm³,g/dm^3 (mass concentration),1,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gram per cubic meter,grams per cubic meter,g/m³,g/m^3 (mass concentration),0.001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gram per deciliter,grams per deciliter,g/dL,g/dL (mass concentration),10,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gram per liter,grams per liter,g/L,g/L (mass concentration),1,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,gram per milliliter,grams per milliliter,g/mL,g/mL (mass concentration),1000,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,hectogram per cubic meter,hectograms per cubic meter,hg/m³,hg/m^3 (mass concentration),0.1,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,kilogram per cubic decimeter,kilograms per cubic decimeter,kg/dm³,kg/dm^3 (mass concentration),1000,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,kilogram per cubic meter,kilograms per cubic meter,kg/m³,kg/m^3 (mass concentration),1,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,kilogram per deciliter,kilograms per deciliter,kg/dL,kg/dL (mass concentration),10000,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,kilogram per liter,kilograms per liter,kg/L,kg/L (mass concentration),1000,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,kilogram per milliliter,kilograms per milliliter,kg/mL,kg/mL (mass concentration),1000000,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,megagram per cubic meter,megagrams per cubic meter,Mg/m³,Mg/m^3 (mass concentration),1000,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,microgram per cubic decimeter,micrograms per cubic decimeter,μg/dm³,ug/dm^3 (mass concentration),0.000001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,microgram per cubic meter,micrograms per cubic meter,µg/m³,ug/m^3 (mass concentration),0.000000001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,microgram per deciliter,micrograms per deciliter,μg/dL,ug/dL (mass concentration),0.00001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,microgram per liter,micrograms per liter,μg/L,ug/L (mass concentration),0.000001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,microgram per milliliter,micrograms per milliliter,μg/mL,ug/mL (mass concentration),0.001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,milligram per cubic decimeter,milligrams per cubic decimeter,mg/dm³,mg/dm^3 (mass concentration),0.001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,milligram per cubic meter,milligrams per cubic meter,mg/m³,mg/m^3 (mass concentration),0.000001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,milligram per deciliter,milligrams per deciliter,mg/dL,mg/dL (mass concentration),0.01,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,milligram per liter,milligrams per liter,mg/L,mg/L (mass concentration),0.001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,milligram per milliliter,milligrams per milliliter,mg/mL,mg/mL (mass concentration),1,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,nanogram per cubic decimeter,nanograms per cubic decimeter,ng/dm³,ng/dm^3 (mass concentration),0.000000001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,nanogram per cubic meter,nanograms per cubic meter,ng/m³,ng/m^3 (mass concentration),1E-12,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,nanogram per deciliter,nanograms per deciliter,ng/dL,ng/dL (mass concentration),0.00000001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,nanogram per liter,nanograms per liter,ng/L,ng/L (mass concentration),0.000000001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,nanogram per milliliter,nanograms per milliliter,ng/mL,ng/mL (mass concentration),0.000001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,petagram per cubic meter,petagrams per cubic meter,Pg/m³,Pg/m^3 (mass concentration),1000000000000,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,picogram per cubic decimeter,picograms per cubic decimeter,pg/dm³,pg/dm^3 (mass concentration),1E-12,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,picogram per cubic meter,picograms per cubic meter,pg/m³,pg/m^3 (mass concentration),1E-15,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,picogram per deciliter,picograms per deciliter,pg/dL,pg/dL (mass concentration),1E-11,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,picogram per liter,picograms per liter,pg/L,pg/L (mass concentration),1E-12,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,picogram per milliliter,picograms per milliliter,pg/mL,pg/mL (mass concentration),0.000000001,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,teragram per cubic meter,teragrams per cubic meter,Tg/m³,Tg/m^3 (mass concentration),1000000000,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,yoctogram per cubic meter,yoctograms per cubic meter,yg/m³,yg/m^3 (mass concentration),1E-27,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,yottagram per cubic meter,yottagrams per cubic meter,Yg/m³,Yg/m^3 (mass concentration),1E+021,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,zeptogram per cubic meter,zeptograms per cubic meter,zg/m³,zg/m^3 (mass concentration),1E-24,0
+MassConcentration,-3,1,0,0,0,0,0,false,true,false,false,false,zettagram per cubic meter,zettagrams per cubic meter,Zg/m³,Zg/m^3 (mass concentration),1E+018,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,attogram per cubic meter,attograms per cubic meter,ag/m³,ag/m^3,1E-21,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,carat per cubic meter,carats per cubic meter,ct/m³,ct/m^3,0.0002,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,centigram per cubic meter,centigrams per cubic meter,cg/m³,cg/m^3,0.00001,0
@@ -1307,8 +1307,8 @@ MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,grain per gallon,grains
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,gram per cubic centimeter,grams per cubic centimeter,g/cm³,g/cm^3,1000,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,gram per cubic meter,grams per cubic meter,g/m³,g/m^3,0.001,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,hectogram per cubic meter,hectograms per cubic meter,hg/m³,hg/m^3,0.1,0
-MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,hundredweight (long) per cubic meter,hundredweight (long) per cubic meter,cwt long/m³,cwt_long/m^3,50.80235,0
-MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,hundredweight (short) per cubic meter,hundredweight (short) per cubic meter,cwt short/m³,cwt_short/m^3,45.35924,0
+MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,hundredweight (long) per cubic meter,hundredweight (long) per cubic meter,cwt long/m³,cwt long/m^3,50.80235,0
+MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,hundredweight (short) per cubic meter,hundredweight (short) per cubic meter,cwt short/m³,cwt short/m^3,45.35924,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,kilogram per cubic meter,kilograms per cubic meter,kg/m³,kg/m^3,1,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,megagram per cubic meter,megagrams per cubic meter,Mg/m³,Mg/m^3,1000,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,microgram per cubic meter,micrograms per cubic meter,µg/m³,ug/m^3,0.000000001,0
@@ -1317,8 +1317,8 @@ MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,nanogram per cubic mete
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,ounce per cubic inch,ounces per cubic inch,oz/in³,oz/in^3,1729.99427597141,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,ounce per cubic meter,ounces per cubic meter,oz/m³,oz/m^3,0.02834952,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,ounce per gallon,ounces per gallon,oz/gal,oz/gal,7.48915045442874,0
-MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,ounce per Imperial gallon,ounces per Imperial gallon,oz/gal (UK),oz/gal_(UK),6.23602260403996,0
-MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,troy ounce per cubic meter,troy ounces per cubic meter,oz t/m³,oz_t/m^3,0.03110348,0
+MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,ounce per Imperial gallon,ounces per Imperial gallon,oz/gal (UK),oz/gal (UK),6.23602260403996,0
+MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,troy ounce per cubic meter,troy ounces per cubic meter,oz t/m³,oz t/m^3,0.03110348,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,pennyweight per cubic meter,pennyweight per cubic meter,dwt/m³,dwt/m^3,0.001555174,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,petagram per cubic meter,petagrams per cubic meter,Pg/m³,Pg/m^3,1000000000000,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,picogram per cubic meter,picograms per cubic meter,pg/m³,pg/m^3,1E-15,0
@@ -1327,17 +1327,17 @@ MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,pound per cubic inch,po
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,pound per cubic meter,pounds per cubic meter,lb/m³,lb/m^3,0.4535924,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,pound per cubic yard,pounds per cubic yard,lb/yd³,lb/yd^3,0.593276427892882,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,pound per gallon,pounds per gallon,lb/gal,lb/gal,119.826428404623,0
-MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,pound per Imperial gallon,pounds per Imperial gallon,lb/gal (UK),lb/gal_(UK),99.7763792621791,0
-MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,troy pound per cubic meter,troy pounds per cubic meter,lb t/m³,lb_t/m^3,0.3732417,0
+MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,pound per Imperial gallon,pounds per Imperial gallon,lb/gal (UK),lb/gal (UK),99.7763792621791,0
+MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,troy pound per cubic meter,troy pounds per cubic meter,lb t/m³,lb t/m^3,0.3732417,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,slug per cubic foot,slugs per cubic foot,slug/ft³,slug/ft^3,515.378652639683,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,slug per cubic meter,slugs per cubic meter,slug/m³,slug/m^3,14.5939,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,teragram per cubic meter,teragrams per cubic meter,Tg/m³,Tg/m^3,1000000000,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,assay ton per cubic meter,assay tons per cubic meter,AT/m³,AT/m^3,0.02916667,0
-MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,long ton per cubic meter,long tons per cubic meter,2240 lb/m³,2240_lb/m^3,1016.047,0
-MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,long ton per cubic yard,long tons per cubic yard,2240 lb/yd³,2240_lb/yd^3,1328.93922987087,0
+MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,long ton per cubic meter,long tons per cubic meter,2240 lb/m³,2240 lb/m^3,1016.047,0
+MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,long ton per cubic yard,long tons per cubic yard,2240 lb/yd³,2240 lb/yd^3,1328.93922987087,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,ton per cubic meter,tons per cubic meter,t/m³,t/m^3,1000,0
-MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,short ton per cubic meter,short tons per cubic meter,2000 lb/m³,2000_lb/m^3,907.1847,0
-MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,short ton per cubic yard,short tons per cubic yard,2000 lb/yd³,2000_lb/yd^3,1186.55272499071,0
+MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,short ton per cubic meter,short tons per cubic meter,2000 lb/m³,2000 lb/m^3,907.1847,0
+MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,short ton per cubic yard,short tons per cubic yard,2000 lb/yd³,2000 lb/yd^3,1186.55272499071,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,yoctogram per cubic meter,yoctograms per cubic meter,yg/m³,yg/m^3,1E-27,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,yottagram per cubic meter,yottagrams per cubic meter,Yg/m³,Yg/m^3,1E+021,0
 MassDensity,-3,1,0,0,0,0,0,false,false,false,false,false,zeptogram per cubic meter,zeptograms per cubic meter,zg/m³,zg/m^3,1E-24,0
@@ -1354,11 +1354,11 @@ MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,gram per kilowatt hou
 MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,gram per megawatt hour,grams per megawatt hour,g/MWh,g/MWh,2.77777777777778E-13,0
 MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,gram per watt hour,grams per watt hour,g/Wh,g/Wh,2.77777777777778E-07,0
 MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,hectogram per joule,hectograms per joule,hg/J,hg/J,0.1,0
-MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,kilogram per gigawatt hour,kilograms per gigawatt hour,g/GWh,g/GWh,2.77777777777778E-13,0
+MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,kilogram per gigawatt hour,kilograms per gigawatt hour,kg/GWh,kg/GWh,2.77777777777778E-13,0
 MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,kilogram per joule,kilograms per joule,kg/J,kg/J,1,0
-MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,kilogram per kilowatt hour,kilograms per kilowatt hour,g/kWh,g/kWh,2.77777777777778E-07,0
-MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,kilogram per megawatt hour,kilograms per megawatt hour,g/MWh,g/MWh,2.77777777777778E-10,0
-MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,kilogram per watt hour,kilograms per watt hour,g/Wh,g/Wh,0.000277777777777778,0
+MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,kilogram per kilowatt hour,kilograms per kilowatt hour,kg/kWh,kg/kWh,2.77777777777778E-07,0
+MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,kilogram per megawatt hour,kilograms per megawatt hour,kg/MWh,kg/MWh,2.77777777777778E-10,0
+MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,kilogram per watt hour,kilograms per watt hour,kg/Wh,kg/Wh,0.000277777777777778,0
 MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,megagram per joule,megagrams per joule,Mg/J,Mg/J,1000,0
 MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,microgram per joule,micrograms per joule,µg/J,ug/J,0.000000001,0
 MassPerEnergy,-2,0,2,0,0,0,0,false,false,false,false,false,milligram per joule,milligrams per joule,mg/J,mg/J,0.000001,0
@@ -1382,8 +1382,8 @@ MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,gram per hour,grams per ho
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,gram per minute,grams per minute,g/min,g/min,1.66666666666667E-05,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,gram per second,grams per second,g/s,g/s,0.001,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,hectogram per second,hectograms per second,hg/s,hg/s,0.1,0
-MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,hundredweight (long) per second,hundredweight (long) per second,cwt long/s,cwt_long/s,50.80235,0
-MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,hundredweight (short) per second,hundredweight (short) per second,cwt short/s,cwt_short/s,45.35924,0
+MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,hundredweight (long) per second,hundredweight (long) per second,cwt long/s,cwt long/s,50.80235,0
+MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,hundredweight (short) per second,hundredweight (short) per second,cwt short/s,cwt short/s,45.35924,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,kilogram per day,kilograms per day,kg/d,kg/d,1.15740740740741E-05,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,kilogram per hour,kilograms per hour,kg/h,kg/h,0.000277777777777778,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,kilogram per minute,kilograms per minute,kg/min,kg/min,0.0166666666666667,0
@@ -1393,7 +1393,7 @@ MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,microgram per second,micro
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,milligram per second,milligrams per second,mg/s,mg/s,0.000001,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,nanogram per second,nanograms per second,ng/s,ng/s,1E-12,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,ounce per second,ounces per second,oz/s,oz/s,0.02834952,0
-MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,troy ounce per second,troy ounces per second,oz t/s,oz_t/s,0.03110348,0
+MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,troy ounce per second,troy ounces per second,oz t/s,oz t/s,0.03110348,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,pennyweight per second,pennyweight per second,dwt/s,dwt/s,0.001555174,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,petagram per second,petagrams per second,Pg/s,Pg/s,1000000000000,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,picogram per second,picograms per second,pg/s,pg/s,1E-15,0
@@ -1401,17 +1401,17 @@ MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,pound per day,pounds per d
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,pound per hour,pounds per hour,lb/h,lb/h,0.000125997888888889,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,pound per minute,pounds per minute,lb/min,lb/min,0.00755987333333333,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,pound per second,pounds per second,lb/s,lb/s,0.4535924,0
-MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,troy pound per second,troy pounds per second,lb t/s,lb_t/s,0.3732417,0
+MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,troy pound per second,troy pounds per second,lb t/s,lb t/s,0.3732417,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,slug per second,slugs per second,slug/s,slug/s,14.5939,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,teragram per second,teragrams per second,Tg/s,Tg/s,1000000000,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,assay ton per second,assay tons per second,AT/s,AT/s,0.02916667,0
-MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,long ton per second,long tons per second,2240 lb/s,2240_lb/s,1016.047,0
+MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,long ton per second,long tons per second,2240 lb/s,2240 lb/s,1016.047,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,ton per day,tons per day,t/d,t/d,0.0115740740740741,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,ton per hour,tons per hour,t/h,t/h,0.277777777777778,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,ton per minute,tons per minute,t/min,t/min,16.6666666666667,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,ton per second,tons per second,t/s,t/s,1000,0
-MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,short ton per hour,short tons per hour,2000 lb/h,2000_lb/h,0.25199575,0
-MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,short ton per second,short tons per second,2000 lb/s,2000_lb/s,907.1847,0
+MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,short ton per hour,short tons per hour,2000 lb/h,2000 lb/h,0.25199575,0
+MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,short ton per second,short tons per second,2000 lb/s,2000 lb/s,907.1847,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,yoctogram per second,yoctograms per second,yg/s,yg/s,1E-27,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,yottagram per second,yottagrams per second,Yg/s,Yg/s,1E+021,0
 MassRate,0,1,-1,0,0,0,0,false,false,false,false,false,zeptogram per second,zeptograms per second,zg/s,zg/s,1E-24,0
@@ -1475,12 +1475,12 @@ MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,attojoule per mole,att
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,British thermal unit (39 °F) per mole,British thermal units (39 °F) per mole,Btu₃₉/mol,Btu\3\9/mol,1059.67,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,British thermal unit (59 °F) per mole,British thermal units (59 °F) per mole,Btu₅₉/mol,Btu\5\9/mol,1054.8,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,British thermal unit (60 °F) per mole,British thermal units (60 °F) per mole,Btu₆₀/mol,Btu\6\0/mol,1054.68,0
-MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,British thermal unit (IT) per mole,British thermal units (IT) per mole,Btu (IT)/mol,Btu_(IT)/mol,1055.056,0
+MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,British thermal unit (IT) per mole,British thermal units (IT) per mole,Btu (IT)/mol,Btu (IT)/mol,1055.056,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,British thermal unit per mole,British thermal units per mole,Btu/mol,Btu/mol,1054.35,0
-MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,calorie (15 °C) per mole,calories (15 °C) per mole,cal₁₅/mol,cal₁\5/mol,4.1858,0
-MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,calorie (20 °C) per mole,calories (20 °C) per mole,cal₂₀/mol,cal\2\0/mol,4.1819,0
-MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,Calorie (IT) per mole,Calories (IT) per mole,Cal (IT)/mol,Cal_(IT)/mol,4186.8,0
-MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,calorie (IT) per mole,calories (IT) per mole,cal (IT)/mol,cal_(IT)/mol,4.1868,0
+MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,calorie (15 °C) per mole,calories (15 °C) per mole,cal₁₅/mol,Cal\15/mol,4.1858,0
+MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,calorie (20 °C) per mole,calories (20 °C) per mole,cal₂₀/mol,Cal\20/mol,4.1819,0
+MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,Calorie (IT) per mole,Calories (IT) per mole,Cal (IT)/mol,Cal (IT)/mol,4186.8,0
+MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,calorie (IT) per mole,calories (IT) per mole,cal (IT)/mol,cal (IT)/mol,4.1868,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,Calorie per mole,Calories per mole,Cal/mol,Cal/mol,4184,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,calorie per mole,calories per mole,cal/mol,cal/mol,4.184,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,centijoule per mole,centijoules per mole,cJ/mol,cJ/mol,0.01,0
@@ -1500,7 +1500,7 @@ MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,hectojoule per mole,he
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,hectowatt hour per mole,hectowatt hours per mole,hW · h/mol,hW*h/mol,360000,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,joule per mole,joules per mole,J/mol,J/mol,1,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,joule per particle,joules per particle,J/particle,J/particle,6.02214076E+023,0
-MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,kilocalorie (IT) per mole,kilocalories (IT) per mole,kcal (IT)/mol,kcal_(IT)/mol,4186.8,0
+MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,kilocalorie (IT) per mole,kilocalories (IT) per mole,kcal (IT)/mol,kcal (IT)/mol,4186.8,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,kilocalorie per mole,kilocalories per mole,kcal/mol,kcal/mol,4184,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,kilogram square meter per second squared mole,kilograms square meter per second squared mole,kg · m²/(s² · mol),kg*m^2/(s^2*mol),1,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,kilojoule per mole,kilojoules per mole,kJ/mol,kJ/mol,1000,0
@@ -1515,12 +1515,12 @@ MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,nanojoule per mole,nan
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,petajoule per mole,petajoules per mole,PJ/mol,PJ/mol,1000000000000000,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,petawatt hour per mole,petawatt hours per mole,PW · h/mol,PW*h/mol,3.6E+018,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,picojoule per mole,picojoules per mole,pJ/mol,pJ/mol,1E-12,0
-MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,quad per mole,quads per mole,10¹⁵ Btu (IT)/mol,10^1⁵_Btu_(IT)/mol,1.055056E+018,0
+MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,quad per mole,quads per mole,10¹⁵ Btu (IT)/mol,10^15 Btu (IT)/mol,1.055056E+018,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,terajoule per mole,terajoules per mole,TJ/mol,TJ/mol,1000000000000,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,terawatt hour per mole,terawatt hours per mole,TW · h/mol,TW*h/mol,3600000000000000,0
-MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,therm (EC) per mole,therms (EC) per mole,thm (EC)/mol,thm_(EC)/mol,105506000,0
+MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,therm (EC) per mole,therms (EC) per mole,thm (EC)/mol,thm (EC)/mol,105506000,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,therm per mole,therms per mole,thm/mol,thm/mol,105480400,0
-MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,ton of TNT per mole,tons of TNT per mole,t of TNT/mol,t_of_TNT/mol,4184000000,0
+MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,ton of TNT per mole,tons of TNT per mole,t of TNT/mol,t of TNT/mol,4184000000,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,watt hour per mole,watt hours per mole,W · h/mol,W*h/mol,3600,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,watt second per mole,watt seconds per mole,W · s/mol,W*s/mol,1,0
 MolarEnergy,2,1,-2,0,0,-1,0,false,false,false,false,false,yoctojoule per mole,yoctojoules per mole,yJ/mol,yJ/mol,1E-24,0
@@ -1532,12 +1532,12 @@ MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,attojoule per k
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,British thermal unit (39 °F) per kelvin mole,British thermal units (39 °F) per kelvin mole,Btu₃₉/(K · mol),Btu\3\9/(K*mol),1059.67,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,British thermal unit (59 °F) per kelvin mole,British thermal units (59 °F) per kelvin mole,Btu₅₉/(K · mol),Btu\5\9/(K*mol),1054.8,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,British thermal unit (60 °F) per kelvin mole,British thermal units (60 °F) per kelvin mole,Btu₆₀/(K · mol),Btu\6\0/(K*mol),1054.68,0
-MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,British thermal unit (IT) per kelvin mole,British thermal units (IT) per kelvin mole,Btu (IT)/(K · mol),Btu_(IT)/(K*mol),1055.056,0
+MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,British thermal unit (IT) per kelvin mole,British thermal units (IT) per kelvin mole,Btu (IT)/(K · mol),Btu (IT)/(K*mol),1055.056,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,British thermal unit per kelvin mole,British thermal units per kelvin mole,Btu/(K · mol),Btu/(K*mol),1054.35,0
-MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,calorie (15 °C) per kelvin mole,calories (15 °C) per kelvin mole,cal₁₅/(K · mol),cal₁\5/(K*mol),4.1858,0
-MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,calorie (20 °C) per kelvin mole,calories (20 °C) per kelvin mole,cal₂₀/(K · mol),cal\2\0/(K*mol),4.1819,0
-MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,Calorie (IT) per kelvin mole,Calories (IT) per kelvin mole,Cal (IT)/(K · mol),Cal_(IT)/(K*mol),4186.8,0
-MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,calorie (IT) per kelvin mole,calories (IT) per kelvin mole,cal (IT)/(K · mol),cal_(IT)/(K*mol),4.1868,0
+MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,calorie (15 °C) per kelvin mole,calories (15 °C) per kelvin mole,cal₁₅/(K · mol),cal\15/(K*mol),4.1858,0
+MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,calorie (20 °C) per kelvin mole,calories (20 °C) per kelvin mole,cal₂₀/(K · mol),cal\20/(K*mol),4.1819,0
+MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,Calorie (IT) per kelvin mole,Calories (IT) per kelvin mole,Cal (IT)/(K · mol),Cal (IT)/(K*mol),4186.8,0
+MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,calorie (IT) per kelvin mole,calories (IT) per kelvin mole,cal (IT)/(K · mol),cal (IT)/(K*mol),4.1868,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,Calorie per kelvin mole,Calories per kelvin mole,Cal/(K · mol),Cal/(K*mol),4184,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,calorie per kelvin mole,calories per kelvin mole,cal/(K · mol),cal/(K*mol),4.184,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,centijoule per kelvin mole,centijoules per kelvin mole,cJ/(K · mol),cJ/(K*mol),0.01,0
@@ -1550,7 +1550,7 @@ MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,gigajoule per k
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,hectojoule per kelvin mole,hectojoules per kelvin mole,hJ/(K · mol),hJ/(K*mol),100,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,joule per kelvin mole,joules per kelvin mole,J/(K · mol),J/(K*mol),1,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,joule per kelvin particle,joules per kelvin particle,J/(K · particle),J/(K*particle),6.02214076E+023,0
-MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,kilocalorie (IT) per kelvin mole,kilocalories (IT) per kelvin mole,kcal (IT)/(K · mol),kcal_(IT)/(K*mol),4186.8,0
+MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,kilocalorie (IT) per kelvin mole,kilocalories (IT) per kelvin mole,kcal (IT)/(K · mol),kcal (IT)/(K*mol),4186.8,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,kilocalorie per kelvin mole,kilocalories per kelvin mole,kcal/(K · mol),kcal/(K*mol),4184,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,kilojoule per kelvin mole,kilojoules per kelvin mole,kJ/(K · mol),kJ/(K*mol),1000,0
 MolarHeatCapacity,2,1,-2,0,-1,-1,0,false,false,false,false,false,megajoule per kelvin mole,megajoules per kelvin mole,MJ/(K · mol),MJ/(K*mol),1000000,0
@@ -1659,11 +1659,11 @@ Power,2,1,-3,0,0,0,0,false,false,false,false,false,foot pound-force per second,f
 Power,2,1,-3,0,0,0,0,false,false,false,false,false,gigawatt,gigawatts,GW,GW,1000000000,0
 Power,2,1,-3,0,0,0,0,false,false,false,false,false,hectowatt,hectowatts,hW,hW,100,0
 Power,2,1,-3,0,0,0,0,false,false,false,false,false,horsepower,horsepower,hp,hp,745.6999,0
-Power,2,1,-3,0,0,0,0,false,false,false,false,false,horsepower (boiler),horsepower (boiler),hp (S),hp_(S),9809.5,0
-Power,2,1,-3,0,0,0,0,false,false,false,false,false,horsepower (electric),horsepower (electric),hp (E),hp_(E),746,0
-Power,2,1,-3,0,0,0,0,false,false,false,false,false,horsepower (Imperial),horsepower (Imperial),hp (I),hp_(I),745.7,0
-Power,2,1,-3,0,0,0,0,false,false,false,false,false,metric horsepower,metric horsepower,hp (M),hp_(M),735.4988,0
-Power,2,1,-3,0,0,0,0,false,false,false,false,false,hydraulic horsepower,hydraulic horsepower,hp (hydraulic),hp_(hydraulic),746.043,0
+Power,2,1,-3,0,0,0,0,false,false,false,false,false,horsepower (boiler),horsepower (boiler),hp (S),hp (S),9809.5,0
+Power,2,1,-3,0,0,0,0,false,false,false,false,false,horsepower (electric),horsepower (electric),hp (E),hp (E),746,0
+Power,2,1,-3,0,0,0,0,false,false,false,false,false,horsepower (Imperial),horsepower (Imperial),hp (I),hp (I),745.7,0
+Power,2,1,-3,0,0,0,0,false,false,false,false,false,metric horsepower,metric horsepower,hp (M),hp (M),735.4988,0
+Power,2,1,-3,0,0,0,0,false,false,false,false,false,hydraulic horsepower,hydraulic horsepower,hp (hydraulic),hp (hydraulic),746.043,0
 Power,2,1,-3,0,0,0,0,false,false,false,false,false,kilowatt,kilowatts,kW,kW,1000,0
 Power,2,1,-3,0,0,0,0,false,false,false,false,false,megawatt,megawatts,MW,MW,1000000,0
 Power,2,1,-3,0,0,0,0,false,false,false,false,false,microwatt,microwatts,µW,uW,0.000001,0
@@ -1688,11 +1688,11 @@ PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,foot pound-force per seco
 PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,gigawatt per second,gigawatts per second,GW/s,GW/s,1000000000,0
 PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,hectowatt per second,hectowatts per second,hW/s,hW/s,100,0
 PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,horsepower per second,horsepower per second,hp/s,hp/s,745.6999,0
-PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,horsepower per second (boiler),horsepower per second (boiler),hp/s (S),hp/s_(S),9809.5,0
-PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,horsepower per second (electric),horsepower per second (electric),hp/s (E),hp/s_(E),746,0
-PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,horsepower per second (Imperial),horsepower per second (Imperial),hp/s (I),hp/s_(I),745.7,0
-PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,metric horsepower per second,metric horsepower per second,hp/s (M),hp/s_(M),735.4988,0
-PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,hydraulic horsepower per second,hydraulic horsepower per second,hp/s (hydraulic),hp/s_(hydraulic),746.043,0
+PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,horsepower per second (boiler),horsepower per second (boiler),hp/s (S),hp/s (S),9809.5,0
+PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,horsepower per second (electric),horsepower per second (electric),hp/s (E),hp/s (E),746,0
+PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,horsepower per second (Imperial),horsepower per second (Imperial),hp/s (I),hp/s (I),745.7,0
+PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,metric horsepower per second,metric horsepower per second,hp/s (M),hp/s (M),735.4988,0
+PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,hydraulic horsepower per second,hydraulic horsepower per second,hp/s (hydraulic),hp/s (hydraulic),746.043,0
 PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,kilowatt per second,kilowatts per second,kW/s,kW/s,1000,0
 PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,megawatt per second,megawatts per second,MW/s,MW/s,1000000,0
 PowerRate,2,1,-4,0,0,0,0,false,false,false,false,false,microwatt per second,microwatts per second,µW/s,uW/s,0.000001,0
@@ -1710,28 +1710,28 @@ Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,atmosphere,atmospheres,at
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,atmosphere (technical),atmospheres (technical),at,at,98066.5,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,attopascal,attopascals,aPa,aPa,1E-18,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,bar,bar,bar,bar,100000,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,centimeter of mercury,centimeters of mercury,cm Hg,cm_Hg,1333.224,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,centimeter of mercury (0 °C),centimeters of mercury (0 °C),cm Hg (0 °C),cm_Hg_(0_degC),1333.22,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,centimeter of water,centimeters of water,cm H₂O,cm_H\2O,98.0665,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,centimeter of water (4 °C),centimeters of water (4 °C),cm H₂O (4 °C),cm_H\2O_(4_degC),98.0638,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,centimeter of mercury,centimeters of mercury,cm Hg,cm Hg,1333.224,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,centimeter of mercury (0 °C),centimeters of mercury (0 °C),cm Hg (0 °C),cm Hg (0 degC),1333.22,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,centimeter of water,centimeters of water,cm H₂O,cm H\2O,98.0665,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,centimeter of water (4 °C),centimeters of water (4 °C),cm H₂O (4 °C),cm H\2O (4 degC),98.0638,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,centipascal,centipascals,cPa,cPa,0.01,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,decapascal,decapascals,daPa,daPa,10,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,decipascal,decipascals,dPa,dPa,0.1,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,dyne per square centimeter,dynes per square centimeter,dyn/cm²,dyn/cm^2,0.1,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,exapascal,exapascals,EPa,EPa,1E+018,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,femtopascal,femtopascals,fPa,fPa,1E-15,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,foot of mercury,feet of mercury,ft Hg,ft_Hg,40636.66,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,foot of water,feet of water,ft H₂O,ft_H\2O,2989.067,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,foot of water (39.2 °F),feet of water (39.2 °F),ft H₂O (39.2 °F),ft_H\2O_(39.2_degF),2988.98,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,foot of mercury,feet of mercury,ft Hg,ft Hg,40636.66,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,foot of water,feet of water,ft H₂O,ft H\2O,2989.067,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,foot of water (39.2 °F),feet of water (39.2 °F),ft H₂O (39.2 °F),ft H\2O (39.2 degF),2988.98,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,gigapascal,gigapascals,GPa,GPa,1000000000,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,gram-force per square centimeter,grams-force per square centimeter,gf/cm²,gf/cm^2,98.0665,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,hectopascal,hectopascals,hPa,hPa,100,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of mercury,inches of mercury,in Hg,in_Hg,3386.389,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of mercury (32 °F),inches of mercury (32 °F),in Hg (32 °F),in_Hg_(32_degF),3386.38,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of mercury (60 °F),inches of mercury (60 °F),in Hg (60 °F),in_Hg_(60_degF),3376.85,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of water,inches of water,in H₂O,in_H\2O,249.0889,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of water (39.2 °F),inches of water (39.2 °F),in H₂O (39.2 °F),in_H\2O_(39.2_degF),249.082,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of water (60 °F),inches of water (60 °F),in H₂O (60 °F),in_H\2O_(60_degF),248.84,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of mercury,inches of mercury,in Hg,in Hg,3386.389,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of mercury (32 °F),inches of mercury (32 °F),in Hg (32 °F),in Hg (32 degF),3386.38,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of mercury (60 °F),inches of mercury (60 °F),in Hg (60 °F),in Hg (60 degF),3376.85,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of water,inches of water,in H₂O,in H\2O,249.0889,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of water (39.2 °F),inches of water (39.2 °F),in H₂O (39.2 °F),in H\2O (39.2 degF),249.082,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,inch of water (60 °F),inches of water (60 °F),in H₂O (60 °F),in H\2O (60 degF),248.84,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,kilogram-force per square centimeter,kilograms-force per square centimeter,kgf/cm²,kgf/cm^2,98066.5,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,kilogram-force per square meter,kilograms-force per square meter,kgf/m²,kgf/m^2,9.80665,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,kilogram-force per square millimeter,kilograms-force per square millimeter,kgf/mm²,kgf/mm^2,9806650,0
@@ -1740,8 +1740,8 @@ Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,kip per square inch,kips 
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,megapascal,megapascals,MPa,MPa,1000000,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,micropascal,micropascals,µPa,uPa,0.000001,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,millibar,millibar,mbar,mbar,100,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,millimeter of mercury,millimeters of mercury,mm Hg,mm_Hg,133.3224,0
-Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,millimeter of water,millimeters of water,mm H₂O,mm_H\2O,9.80665,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,millimeter of mercury,millimeters of mercury,mm Hg,mm Hg,133.3224,0
+Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,millimeter of water,millimeters of water,mm H₂O,mm H\2O,9.80665,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,millipascal,millipascals,mPa,mPa,0.001,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,millitorr,millitorr,mTorr,mTorr,0.1333224,0
 Pressure,-1,1,-2,0,0,0,0,false,false,false,false,false,nanopascal,nanopascals,nPa,nPa,0.000000001,0
@@ -1824,40 +1824,40 @@ Radioactivity,0,0,-1,0,0,0,0,false,true,false,false,false,petabecquerel,petabecq
 Radioactivity,0,0,-1,0,0,0,0,false,true,false,false,false,terabecquerel,terabecquerels,TBq,TBq,1000000000000,0
 Radioactivity,0,0,-1,0,0,0,0,false,true,false,false,false,yottabecquerel,yottabecquerels,YBq,YBq,1E+024,0
 Radioactivity,0,0,-1,0,0,0,0,false,true,false,false,false,zettabecquerel,zettabecquerels,ZBq,ZBq,1E+021,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,basis point,basis points,bp,bp,0.0001,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,part per billion,parts per billion,ppb,ppb,0.000000001,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,part per hundred,parts per hundred,parts per hundred,parts_per_hundred,0.01,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,part per million,parts per million,ppm,ppm,0.000001,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,part per quadrillion,parts per quadrillion,ppq,ppq,1E-15,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,part per then thousand,parts per ten thousand,parts per ten thousand,parts_per_ten_thousand,0.0001,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,part per thousand,parts per thousand,parts per thousand,parts_per_thousand,0.001,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,part per trillion,parts per trillion,ppt,ppt,1E-12,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,per mille,per mille,‰,%\0,0.001,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,percent,percent,%,%,0.01,0
-Ratio,0,0,0,0,0,0,0,false,false,false,false,false,,,,ratio,1,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,basis point,basis points,bp,bp,0.0001,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,part per billion,parts per billion,ppb,ppb,0.000000001,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,part per hundred,parts per hundred,parts per hundred,parts per hundred,0.01,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,part per million,parts per million,ppm,ppm,0.000001,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,part per quadrillion,parts per quadrillion,ppq,ppq,1E-15,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,part per then thousand,parts per ten thousand,parts per ten thousand,parts per ten thousand,0.0001,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,part per thousand,parts per thousand,parts per thousand,parts per thousand,0.001,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,part per trillion,parts per trillion,ppt,ppt,1E-12,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,per mille,per mille,‰,%\0,0.001,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,percent,percent,%,%,0.01,0
+Number,0,0,0,0,0,0,0,false,false,false,false,false,number,number,,,1,0
 ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,diopter,diopters,dpt,dpt,1,0
-ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal ångström,reciprocal ångströms,Å⁻¹,ang⁻^1,10000000000,0
-ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal centimeter,reciprocal centimeters,cm⁻¹,cm⁻^1,100,0
-ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal decimeter,reciprocal decimeters,dm⁻¹,dm⁻^1,10,0
-ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal kilometer,reciprocal kilometers,km⁻¹,km⁻^1,0.001,0
-ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal meter,reciprocal meters,m⁻¹,m⁻^1,1,0
-ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal micrometer,reciprocal micrometers,µm⁻¹,um⁻^1,1000000,0
-ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal millimeter,reciprocal millimeters,mm⁻¹,mm⁻^1,1000,0
-ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal nanometer,reciprocal nanometers,nm⁻¹,nm⁻^1,1000000000,0
+ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal ångström,reciprocal ångströms,Å⁻¹,ang^-1,10000000000,0
+ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal centimeter,reciprocal centimeters,cm⁻¹,cm^-1,100,0
+ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal decimeter,reciprocal decimeters,dm⁻¹,dm^-1,10,0
+ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal kilometer,reciprocal kilometers,km⁻¹,km^-1,0.001,0
+ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal meter,reciprocal meters,m⁻¹,m^-1,1,0
+ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal micrometer,reciprocal micrometers,µm⁻¹,um^-1,1000000,0
+ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal millimeter,reciprocal millimeters,mm⁻¹,mm^-1,1000,0
+ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,reciprocal nanometer,reciprocal nanometers,nm⁻¹,nm^-1,1000000000,0
 ReciprocalLength,-1,0,0,0,0,0,0,false,false,false,false,false,Rydberg constant,Rydberg constants,R∞,Rinfinity,10973731.56816,0
 SolidAngle,2,-1,0,0,0,0,0,false,false,false,true,false,spat,spats,sp,sp,12.5663706143592,0
 SolidAngle,2,-1,0,0,0,0,0,false,false,false,true,false,square degree,square degrees,°²,deg^2,0.000304617419786709,0
 SolidAngle,2,-1,0,0,0,0,0,false,false,false,true,false,square minute,square minutes,′²,angle_minute^2,8.46159499407524E-08,0
 SolidAngle,2,-1,0,0,0,0,0,false,false,false,true,false,square second,square seconds,″²,angle_second^2,2.35044305390979E-11,0
 SolidAngle,2,-1,0,0,0,0,0,false,false,false,true,false,steradian,steradians,sr,sr,1,0
-SpecificArea,0,0,0,0,0,0,0,false,false,false,false,false,square centimeter per gram,square centimeters per gram,cm²/g,cm^2/g,0.1,0
-SpecificArea,0,0,0,0,0,0,0,false,false,false,false,false,square centimeter per kilogram,square centimeters per kilogram,cm²/kg,cm^2/kg,0.0001,0
-SpecificArea,0,0,0,0,0,0,0,false,false,false,false,false,square meter per gram,square meters per gram,m²/g,m^2/g,1000,0
-SpecificArea,0,0,0,0,0,0,0,false,false,false,false,false,square meter per kilogram,square meters per kilogram,m²/kg,m^2/kg,1,0
+SpecificArea,2,-1,0,0,0,0,0,false,false,false,false,false,square centimeter per gram,square centimeters per gram,cm²/g,cm^2/g,0.1,0
+SpecificArea,2,-1,0,0,0,0,0,false,false,false,false,false,square centimeter per kilogram,square centimeters per kilogram,cm²/kg,cm^2/kg,0.0001,0
+SpecificArea,2,-1,0,0,0,0,0,false,false,false,false,false,square meter per gram,square meters per gram,m²/g,m^2/g,1000,0
+SpecificArea,2,-1,0,0,0,0,0,false,false,false,false,false,square meter per kilogram,square meters per kilogram,m²/kg,m^2/kg,1,0
 SpecificHeatCapacity,2,0,0,0,-1,0,0,false,false,false,false,false,attojoule per kilogram kelvin,attojoules per kilogram kelvin,aJ/(kg · K),aJ/(kg*K),1E-18,0
-SpecificHeatCapacity,2,0,0,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per ounce degree Fahrenheit,British thermal units (IT) per ounce degree Fahrenheit,Btu (IT)/(oz · °F),Btu_(IT)/(oz*degF),66988.8167418708,0
-SpecificHeatCapacity,2,0,0,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per pound degree Fahrenheit,British thermal units (IT) per pound degree Fahrenheit,Btu (IT)/(lb · °F),Btu_(IT)/(lb*degF),4186.80030794167,0
-SpecificHeatCapacity,2,0,0,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per ton degree Fahrenheit,British thermal units (IT) per ton degree Fahrenheit,Btu (IT)/(t · °F),Btu_(IT)/(t*degF),1.8991008,0
+SpecificHeatCapacity,2,0,0,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per ounce degree Fahrenheit,British thermal units (IT) per ounce degree Fahrenheit,Btu (IT)/(oz · °F),Btu (IT)/(oz*degF),66988.8167418708,0
+SpecificHeatCapacity,2,0,0,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per pound degree Fahrenheit,British thermal units (IT) per pound degree Fahrenheit,Btu (IT)/(lb · °F),Btu (IT)/(lb*degF),4186.80030794167,0
+SpecificHeatCapacity,2,0,0,0,-1,0,0,false,false,false,false,false,British thermal unit (IT) per ton degree Fahrenheit,British thermal units (IT) per ton degree Fahrenheit,Btu (IT)/(t · °F),Btu (IT)/(t*degF),1.8991008,0
 SpecificHeatCapacity,2,0,0,0,-1,0,0,false,false,false,false,false,British thermal unit per ounce degree Fahrenheit,British thermal units per ounce degree Fahrenheit,Btu/(oz · °F),Btu/(oz*degF),66943.990586084,0
 SpecificHeatCapacity,2,0,0,0,-1,0,0,false,false,false,false,false,British thermal unit per pound degree Fahrenheit,British thermal units per pound degree Fahrenheit,Btu/(lb · °F),Btu/(lb*degF),4183.99867369912,0
 SpecificHeatCapacity,2,0,0,0,-1,0,0,false,false,false,false,false,British thermal unit per ton degree Fahrenheit,British thermal units per ton degree Fahrenheit,Btu/(t · °F),Btu/(t*degF),1.89783,0
@@ -1906,12 +1906,12 @@ SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,foot pound-force per 
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,foot pound-force per second per pound,foot pounds-force per second per pound,(ft · lbf/s)/lb,(ft*lbf/s)/lb,2.98906683621683,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,gigawatt per kilogram,gigawatts per kilogram,GW/kg,GW/kg,1000000000,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,hectowatt per kilogram,hectowatts per kilogram,hW/kg,hW/kg,100,0
-SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,horsepower (boiler) per pound,horsepower (boiler) per pound,(hp (S))/lb,(hp_(S))/lb,21626.2441786944,0
-SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,horsepower (electric) per pound,horsepower (electric) per pound,(hp (E))/lb,(hp_(E))/lb,1644.64836712432,0
-SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,horsepower (Imperial) per pound,horsepower (Imperial) per pound,(hp (I))/lb,(hp_(I))/lb,1643.98698038151,0
-SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,metric horsepower per pound,metric horsepower per pound,(hp (M))/lb,(hp_(M))/lb,1621.49718557895,0
+SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,horsepower (boiler) per pound,horsepower (boiler) per pound,(hp (S))/lb,(hp (S))/lb,21626.2441786944,0
+SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,horsepower (electric) per pound,horsepower (electric) per pound,(hp (E))/lb,(hp (E))/lb,1644.64836712432,0
+SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,horsepower (Imperial) per pound,horsepower (Imperial) per pound,(hp (I))/lb,(hp (I))/lb,1643.98698038151,0
+SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,metric horsepower per pound,metric horsepower per pound,(hp (M))/lb,(hp (M))/lb,1621.49718557895,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,horsepower per pound,horsepower per pound,hp/lb,hp/lb,1643.98675991926,0
-SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,hydraulic horsepower per pound,hydraulic horsepower per pound,(hp (hydraulic))/lb,(hp_(hydraulic))/lb,1644.74316589079,0
+SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,hydraulic horsepower per pound,hydraulic horsepower per pound,(hp (hydraulic))/lb,(hp (hydraulic))/lb,1644.74316589079,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,kilowatt per kilogram,kilowatts per kilogram,kW/kg,kW/kg,1000,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,megawatt per kilogram,megawatts per kilogram,MW/kg,MW/kg,1000000,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,microwatt per kilogram,microwatts per kilogram,µW/kg,uW/kg,0.000001,0
@@ -1919,7 +1919,7 @@ SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,milliwatt per kilogra
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,nanowatt per kilogram,nanowatts per kilogram,nW/kg,nW/kg,0.000000001,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,petawatt per kilogram,petawatts per kilogram,PW/kg,PW/kg,1000000000000000,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,picowatt per kilogram,picowatts per kilogram,pW/kg,pW/kg,1E-12,0
-SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,square meter per cubic second,square meters per cubic second,m² · s⁻³,m^2*s⁻^3,1,0
+SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,square meter per cubic second,square meters per cubic second,m² · s⁻³,m^2*s^-3,1,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,terawatt per kilogram,terawatts per kilogram,TW/kg,TW/kg,1000000000000,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,watt per kilogram,watts per kilogram,W/kg,W/kg,1,0
 SpecificPower,2,0,-3,0,0,0,0,false,false,false,false,false,yoctowatt per kilogram,yoctowatts per kilogram,yW/kg,yW/kg,1E-24,0
@@ -1933,11 +1933,11 @@ SpecificVolume,3,-1,0,0,0,0,0,false,false,false,false,false,cubic centimeter per
 SpecificVolume,3,-1,0,0,0,0,0,false,false,false,false,false,cubic centimeter per kilogram,cubic centimeters per kilogram,cm³/kg,cm^3/kg,0.000001,0
 SpecificVolume,3,-1,0,0,0,0,0,false,false,false,false,false,cubic meter per gram,cubic meters per gram,m³/g,m^3/g,1000,0
 SpecificVolume,3,-1,0,0,0,0,0,false,false,false,false,false,cubic meter per kilogram,cubic meters per kilogram,m³/kg,m^3/kg,1,0
-SurfaceElectricCurrentDensity,-1,0,0,1,0,0,0,false,true,false,false,false,ampere per centimeter,amperes per centimeter,A/cm,A/cm,100,0
-SurfaceElectricCurrentDensity,-1,0,0,1,0,0,0,false,true,false,false,false,ampere per meter,amperes per meter,A/m,A/m,1,0
-SurfaceElectricCurrentDensity,-1,0,0,1,0,0,0,false,true,false,false,false,ampere per micrometer,amperes per micrometer,A/μm,A/um,1000000,0
-SurfaceElectricCurrentDensity,-1,0,0,1,0,0,0,false,true,false,false,false,ampere per millimeter,amperes per millimeter,A/mm,A/mm,1000,0
-TemperatureCoefficient,0,0,0,0,-1,0,0,false,false,false,false,false,per kelvin,per kelvin,K⁻¹,K⁻^1,1,0
+SurfaceElectricCurrentDensity,-1,0,0,1,0,0,0,false,true,false,false,false,ampere per centimeter,amperes per centimeter,A/cm,A/cm (surface density),100,0
+SurfaceElectricCurrentDensity,-1,0,0,1,0,0,0,false,true,false,false,false,ampere per meter,amperes per meter,A/m,A/m (surface density),1,0
+SurfaceElectricCurrentDensity,-1,0,0,1,0,0,0,false,true,false,false,false,ampere per micrometer,amperes per micrometer,A/μm,A/um (surface density),1000000,0
+SurfaceElectricCurrentDensity,-1,0,0,1,0,0,0,false,true,false,false,false,ampere per millimeter,amperes per millimeter,A/mm,A/mm (surface density),1000,0
+TemperatureCoefficient,0,0,0,0,-1,0,0,false,false,false,false,false,per kelvin,per kelvin,K⁻¹,K^-1,1,0
 TemperatureCoefficient,0,0,0,0,-1,0,0,false,false,false,false,false,ppm per degree Celsius,ppm per degree Celsius,ppm/°C,ppm/degC,0.000001,0
 TemperatureCoefficient,0,0,0,0,-1,0,0,false,false,false,false,false,ppm per kelvin,ppm per kelvin,ppm/K,ppm/K,0.000001,0
 TemperatureGradient,-1,0,0,0,1,0,0,false,false,false,false,false,kelvin per centimeter,kelvins per centimeter,K/cm,K/cm,100,0
@@ -1946,30 +1946,30 @@ TemperatureGradient,-1,0,0,0,1,0,0,false,false,false,false,false,kelvin per kilo
 TemperatureGradient,-1,0,0,0,1,0,0,false,false,false,false,false,kelvin per meter,kelvins per meter,K/m,K/m,1,0
 TemperatureGradient,-1,0,0,0,1,0,0,false,false,false,false,false,kelvin per micrometer,kelvins per micrometer,K/µm,K/um,1000000,0
 TemperatureGradient,-1,0,0,0,1,0,0,false,false,false,false,false,kelvin per millimeter,kelvins per millimeter,K/mm,K/mm,1000,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,attokelvin,attokelvins,aK,aK,1E-18,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,centikelvin,centikelvins,cK,cK,0.01,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,decakelvin,decakelvins,daK,daK,10,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,decikelvin,decikelvins,dK,dK,0.1,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,degree Celsius,degrees Celsius,°C,degC,1,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,degree Fahrenheit,degrees Fahrenheit,°F,degF,0.555555555555556,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,degree Rankine,degrees Rankine,°R,degR,0.555555555555556,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,exakelvin,exakelvins,EK,EK,1E+018,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,femtokelvin,femtokelvins,fK,fK,1E-15,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,gigakelvin,gigakelvins,GK,GK,1000000000,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,hectokelvin,hectokelvins,hK,hK,100,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,kelvin,kelvins,K,K,1,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,kilokelvin,kilokelvins,kK,kK,1000,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,megakelvin,megakelvins,MK,MK,1000000,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,microkelvin,microkelvins,µK,uK,0.000001,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,millikelvin,millikelvins,mK,mK,0.001,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,nanokelvin,nanokelvins,nK,nK,0.000000001,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,petakelvin,petakelvins,PK,PK,1000000000000000,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,picokelvin,picokelvins,pK,pK,1E-12,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,terakelvin,terakelvins,TK,TK,1000000000000,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,yoctokelvin,yoctokelvins,yK,yK,1E-24,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,yottakelvin,yottakelvins,YK,YK,1E+024,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,zeptokelvin,zeptokelvins,zK,zK,1E-21,0
-TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,zettakelvin,zettakelvins,ZK,ZK,1E+021,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,attokelvin,attokelvins,aK,aK (interval),1E-18,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,centikelvin,centikelvins,cK,cK (interval),0.01,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,decakelvin,decakelvins,daK,daK (interval),10,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,decikelvin,decikelvins,dK,dK (interval),0.1,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,degree Celsius,degrees Celsius,°C,degC (interval),1,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,degree Fahrenheit,degrees Fahrenheit,°F,degF (interval),0.555555555555556,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,degree Rankine,degrees Rankine,°R,degR (interval),0.555555555555556,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,exakelvin,exakelvins,EK,EK (interval),1E+018,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,femtokelvin,femtokelvins,fK,fK (interval),1E-15,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,gigakelvin,gigakelvins,GK,GK (interval),1000000000,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,hectokelvin,hectokelvins,hK,hK (interval),100,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,kelvin,kelvins,K,K (interval),1,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,kilokelvin,kilokelvins,kK,kK (interval),1000,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,megakelvin,megakelvins,MK,MK (interval),1000000,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,microkelvin,microkelvins,µK,uK (interval),0.000001,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,millikelvin,millikelvins,mK,mK (interval),0.001,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,nanokelvin,nanokelvins,nK,nK (interval),0.000000001,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,petakelvin,petakelvins,PK,PK (interval),1000000000000000,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,picokelvin,picokelvins,pK,pK (interval),1E-12,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,terakelvin,terakelvins,TK,TK (interval),1000000000000,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,yoctokelvin,yoctokelvins,yK,yK (interval),1E-24,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,yottakelvin,yottakelvins,YK,YK (interval),1E+024,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,zeptokelvin,zeptokelvins,zK,zK (interval),1E-21,0
+TemperatureInterval,0,0,0,0,1,0,0,false,false,false,false,false,zettakelvin,zettakelvins,ZK,ZK (interval),1E+021,0
 ThermalConductance,2,1,-3,0,-1,0,0,false,false,false,false,false,attogram meter squared per second cubed kelvin,attograms meter squared per second cubed kelvin,ag · m²/(s³ · K),ag*m^2/(s^3*K),1E-21,0
 ThermalConductance,2,1,-3,0,-1,0,0,false,false,false,false,false,attowatt per kelvin,attowatts per kelvin,aW/K,aW/K,1E-18,0
 ThermalConductance,2,1,-3,0,-1,0,0,false,false,false,false,false,centigram meter squared per second cubed kelvin,centigrams meter squared per second cubed kelvin,cg · m²/(s³ · K),cg*m^2/(s^3*K),0.00001,0
@@ -2030,7 +2030,7 @@ ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,femtogram mete
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,femtowatt per meter kelvin,femtowatts per meter kelvin,fW/(m · K),fW/(m*K),1E-15,0
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,gigagram meter per second cubed kelvin,gigagrams meter per second cubed kelvin,Gg · m/(s³ · K),Gg*m/(s^3*K),1000000,0
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,gigawatt per meter kelvin,gigawatts per meter kelvin,GW/(m · K),GW/(m*K),1000000000,0
-ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,gram meter per second cubed kelvin,grams meter per second cubed kelvin,g · m/(s³ · K),g*m/(s^3*K),0.001,0
+ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,gram meter per second cubed kelvin,grams meter per second cubed kelvin,g · m/(s³ · K),g*m/(s^3*K) (conductivity),0.001,0
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,hectogram meter per second cubed kelvin,hectograms meter per second cubed kelvin,hg · m/(s³ · K),hg*m/(s^3*K),0.1,0
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,hectowatt per meter kelvin,hectowatts per meter kelvin,hW/(m · K),hW/(m*K),100,0
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,kilogram meter per second cubed degree celsius,kilograms meter per second cubed degree celsius,kg · m/(s³ · °C),kg*m/(s^3*degC),1,0
@@ -2039,7 +2039,7 @@ ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,kilowatt per m
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,kilowatt per meter kelvin,kilowatts per meter kelvin,kW/(m · K),kW/(m*K),1000,0
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,megagram meter per second cubed kelvin,megagrams meter per second cubed kelvin,Mg · m/(s³ · K),Mg*m/(s^3*K),1000,0
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,megawatt per meter kelvin,megawatts per meter kelvin,MW/(m · K),MW/(m*K),1000000,0
-ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,microgram meter per second cubed kelvin,micrograms meter per second cubed kelvin,µg · m/(s³ · K),ug*m/(s^3*K),0.000000001,0
+ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,microgram meter per second cubed kelvin,micrograms meter per second cubed kelvin,µg · m/(s³ · K),ug*m/(s^3*K) (conductivity),0.000000001,0
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,microwatt per meter kelvin,microwatts per meter kelvin,µW/(m · K),uW/(m*K),0.000001,0
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,milligram meter per second cubed kelvin,milligrams meter per second cubed kelvin,mg · m/(s³ · K),mg*m/(s^3*K),0.000001,0
 ThermalConductivity,1,1,-3,0,-1,0,0,false,false,false,false,false,milliwatt per meter degree celsius,milliwatts per meter degree celsius,mW/(m · °C),mW/(m*degC),0.001,0
@@ -2089,7 +2089,7 @@ ThermodynamicTemperature,0,0,0,0,1,0,0,false,false,false,false,true,zettakelvin,
 Time,0,0,1,0,0,0,0,false,false,false,false,false,attosecond,attoseconds,as,as,1E-18,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,centisecond,centiseconds,cs,cs,0.01,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,day,days,d,d,86400,0
-Time,0,0,1,0,0,0,0,false,false,false,false,false,day (sidereal),days (sidereal),d (sidereal),d_(sidereal),86164.09,0
+Time,0,0,1,0,0,0,0,false,false,false,false,false,day (sidereal),days (sidereal),d (sidereal),d (sidereal),86164.09,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,decasecond,decaseconds,das,das,10,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,decisecond,deciseconds,ds,ds,0.1,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,exasecond,exaseconds,Es,Es,1E+018,0
@@ -2097,7 +2097,7 @@ Time,0,0,1,0,0,0,0,false,false,false,false,false,femtosecond,femtoseconds,fs,fs,
 Time,0,0,1,0,0,0,0,false,false,false,false,false,gigasecond,gigaseconds,Gs,Gs,1000000000,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,hectosecond,hectoseconds,hs,hs,100,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,hour,hours,h,h,3600,0
-Time,0,0,1,0,0,0,0,false,false,false,false,false,hour (sidereal),hours (sidereal),h (sidereal),h_(sidereal),3590.17,0
+Time,0,0,1,0,0,0,0,false,false,false,false,false,hour (sidereal),hours (sidereal),h (sidereal),h (sidereal),3590.17,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,kilosecond,kiloseconds,ks,ks,1000,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,megasecond,megaseconds,Ms,Ms,1000000,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,microsecond,microseconds,µs,us,0.000001,0
@@ -2107,12 +2107,12 @@ Time,0,0,1,0,0,0,0,false,false,false,false,false,nanosecond,nanoseconds,ns,ns,0.
 Time,0,0,1,0,0,0,0,false,false,false,false,false,petasecond,petaseconds,Ps,Ps,1000000000000000,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,picosecond,picoseconds,ps,ps,1E-12,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,second,seconds,s,s,1,0
-Time,0,0,1,0,0,0,0,false,false,false,false,false,second (sidereal),seconds (sidereal),s (sidereal),s_(sidereal),0.9972696,0
-Time,0,0,1,0,0,0,0,false,false,false,false,false,shake,shakes,10.0 ns,10.0_ns,0.00000001,0
+Time,0,0,1,0,0,0,0,false,false,false,false,false,second (sidereal),seconds (sidereal),s (sidereal),s (sidereal),0.9972696,0
+Time,0,0,1,0,0,0,0,false,false,false,false,false,shake,shakes,10.0 ns,10.0 ns,0.00000001,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,terasecond,teraseconds,Ts,Ts,1000000000000,0
-Time,0,0,1,0,0,0,0,false,false,false,false,false,year,years,a,a,31536000,0
-Time,0,0,1,0,0,0,0,false,false,false,false,false,year (sidereal),years (sidereal),a (sidereal),a_(sidereal),31558150,0
-Time,0,0,1,0,0,0,0,false,false,false,false,false,year (tropical),years (tropical),a (tropical),a_(tropical),31556930,0
+Time,0,0,1,0,0,0,0,false,false,false,false,false,year,years,a,y,31536000,0
+Time,0,0,1,0,0,0,0,false,false,false,false,false,year (sidereal),years (sidereal),a (sidereal),a (sidereal),31558150,0
+Time,0,0,1,0,0,0,0,false,false,false,false,false,year (tropical),years (tropical),a (tropical),a (tropical),31556930,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,yoctosecond,yoctoseconds,ys,ys,1E-24,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,yottasecond,yottaseconds,Ys,Ys,1E+024,0
 Time,0,0,1,0,0,0,0,false,false,false,false,false,zeptosecond,zeptoseconds,zs,zs,1E-21,0
@@ -2189,10 +2189,10 @@ Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,mile per second,miles per 
 Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,millimeter per minute,millimeters per minute,mm/min,mm/min,1.66666666666667E-05,0
 Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,millimeter per second,millimeters per second,mm/s,mm/s,0.001,0
 Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,nanometer per second,nanometers per second,nm/s,nm/s,0.000000001,0
-Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,natural unit of velocity,natural units of velocity,c,c,299792458,0
+Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,natural unit of velocity,natural units of velocity,c,c (natural units),299792458,0
 Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,petameter per second,petameters per second,Pm/s,Pm/s,1000000000000000,0
 Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,picometer per second,picometers per second,pm/s,pm/s,1E-12,0
-Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,speed of light in vacuum,speeds of light in vacuum,c,c,299792458,0
+Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,speed of light in vacuum,speeds of light in vacuum,c,c (speed of light),299792458,0
 Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,terameter per second,terameters per second,Tm/s,Tm/s,1000000000000,0
 Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,yoctometer per second,yoctometers per second,ym/s,ym/s,1E-24,0
 Velocity,1,0,-1,0,0,0,0,false,false,false,false,false,yottameter per second,yottameters per second,Ym/s,Ym/s,1E+024,0
@@ -2235,12 +2235,12 @@ Volume,3,0,0,0,0,0,0,false,false,false,false,false,deciliter,deciliters,dL,dL,0.
 Volume,3,0,0,0,0,0,0,false,false,false,false,false,exaliter,exaliters,EL,EL,1000000000000000,0
 Volume,3,0,0,0,0,0,0,false,false,false,false,false,femtoliter,femtoliters,fL,fL,1E-18,0
 Volume,3,0,0,0,0,0,0,false,false,false,false,false,fluid ounce,fluid ounces,fl oz,fl_oz,0.00002957353,0
-Volume,3,0,0,0,0,0,0,false,false,false,false,false,Imperial fluid ounce,Imperial fluid ounces,fl oz (UK),fl_oz_(UK),0.00002841306,0
+Volume,3,0,0,0,0,0,0,false,false,false,false,false,Imperial fluid ounce,Imperial fluid ounces,fl oz (UK),fl oz (UK),0.00002841306,0
 Volume,3,0,0,0,0,0,0,false,false,false,false,false,gallon,gallons,gal,gal,0.003785412,0
-Volume,3,0,0,0,0,0,0,false,false,false,false,false,Imperial gallon,Imperial gallons,gal (UK),gal_(UK),0.00454609,0
+Volume,3,0,0,0,0,0,0,false,false,false,false,false,Imperial gallon,Imperial gallons,gal (UK),gal (UK),0.00454609,0
 Volume,3,0,0,0,0,0,0,false,false,false,false,false,gigaliter,gigaliters,GL,GL,1000000,0
 Volume,3,0,0,0,0,0,0,false,false,false,false,false,gill,gills,gi,gi,0.0001182941,0
-Volume,3,0,0,0,0,0,0,false,false,false,false,false,Imperial gill,Imperial gills,gi (UK),gi_(UK),0.0001420653,0
+Volume,3,0,0,0,0,0,0,false,false,false,false,false,Imperial gill,Imperial gills,gi (UK),gi (UK),0.0001420653,0
 Volume,3,0,0,0,0,0,0,false,false,false,false,false,hectoliter,hectoliters,hL,hL,0.1,0
 Volume,3,0,0,0,0,0,0,false,false,false,false,false,kiloliter,kiloliters,kL,kL,1,0
 Volume,3,0,0,0,0,0,0,false,false,false,false,false,liter,liters,L,L,0.001,0
@@ -2305,14 +2305,14 @@ VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,decaliter per second,dec
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,deciliter per second,deciliters per second,dL/s,dL/s,0.0001,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,exaliter per second,exaliters per second,EL/s,EL/s,1000000000000000,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,femtoliter per second,femtoliters per second,fL/s,fL/s,1E-18,0
-VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,Imperial fluid ounce per second,Imperial fluid ounces per second,fl oz (UK)/s,fl_oz_(UK)/s,0.00002841306,0
+VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,Imperial fluid ounce per second,Imperial fluid ounces per second,fl oz (UK)/s,fl oz (UK)/s,0.00002841306,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,fluid ounce per second,fluid ounces per second,fl oz/s,fl_oz/s,0.00002957353,0
-VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,Imperial gallon per second,Imperial gallons per second,gal (UK)/s,gal_(UK)/s,0.00454609,0
+VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,Imperial gallon per second,Imperial gallons per second,gal (UK)/s,gal (UK)/s,0.00454609,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,gallon per day,gallons per day,gal/d,gal/d,4.38126388888889E-08,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,gallon per minute,gallons per minute,gal/min,gal/min,0.0000630902,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,gallon per second,gallons per second,gal/s,gal/s,0.003785412,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,gigaliter per second,gigaliters per second,GL/s,GL/s,1000000,0
-VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,Imperial gill per second,Imperial gills per second,gi (UK)/s,gi_(UK)/s,0.0001420653,0
+VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,Imperial gill per second,Imperial gills per second,gi (UK)/s,gi (UK)/s,0.0001420653,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,gill per second,gills per second,gi/s,gi/s,0.0001182941,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,hectoliter per second,hectoliters per second,hL/s,hL/s,0.1,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,kiloliter per second,kiloliters per second,kL/s,kL/s,1,0
@@ -2325,10 +2325,10 @@ VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,nanoliter per second,nan
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,peck per second,pecks per second,pk/s,pk/s,0.008809768,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,petaliter per second,petaliters per second,PL/s,PL/s,1000000000000,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,picoliter per second,picoliters per second,pL/s,pL/s,1E-15,0
-VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,dry pint per second,dry pints per second,dry pt/s,dry_pt/s,0.0005506105,0
-VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,liquid pint per second,liquid pints per second,liq pt/s,liq_pt/s,0.0004731765,0
-VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,dry quart per second,dry quarts per second,dry qt/s,dry_qt/s,0.001101221,0
-VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,liquid quart per second,liquid quarts per second,liq qt/s,liq_qt/s,0.0009463529,0
+VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,dry pint per second,dry pints per second,dry pt/s,dry pt/s,0.0005506105,0
+VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,liquid pint per second,liquid pints per second,liq pt/s,liq pt/s,0.0004731765,0
+VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,dry quart per second,dry quarts per second,dry qt/s,dry qt/s,0.001101221,0
+VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,liquid quart per second,liquid quarts per second,liq qt/s,liq qt/s,0.0009463529,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,register ton per second,register tons per second,RT/s,RT/s,2.831685,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,stere per second,steres per second,st/s,st/s,1,0
 VolumeRate,3,0,-1,0,0,0,0,false,false,false,false,false,tablespoon per second,tablespoons per second,tbsp/s,tbsp/s,0.00001478676,0
@@ -2343,39 +2343,39 @@ VolumetricDensityOfStates,-5,-1,2,0,0,0,0,false,true,false,false,false,state per
 VolumetricDensityOfStates,-5,-1,2,0,0,0,0,false,true,false,false,false,state per cubic meter joule,states per cubic meter joule,1/(m³ · J),1/(m^3*J),1,0
 VolumetricHeatCapacity,-3,0,0,0,0,0,0,false,true,false,false,false,calorie per cubic meter kelvin,calories per cubic meter kelvin,cal/(m³ · K),cal/(m^3*K),4.184,0
 VolumetricHeatCapacity,-3,0,0,0,0,0,0,false,true,false,false,false,joule per cubic meter kelvin,joules per cubic meter kelvin,J/(m³ · K),J/(m^3*K),1,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per centiliter,per centiliter,cL⁻¹,cL⁻^1,100000,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic centimeter,per cubic centimeter,cm⁻³,cm⁻^3,1000000,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic decimeter,per cubic decimeter,dm⁻³,dm⁻^3,1000,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic foot,per cubic foot,ft⁻³,ft⁻^3,35.3146624712848,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic inch,per cubic inch,in⁻³,in⁻^3,61023.7589903253,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic kilometer,per cubic kilometer,km⁻³,km⁻^3,0.000000001,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic meter,per cubic meter,m⁻³,m⁻^3,1,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic mile,per cubic mile,mi⁻³,mi⁻^3,2.39912748531614E-10,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic millimeter,per cubic millimeter,mm⁻³,mm⁻^3,1000000000,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic yard,per cubic yard,yd⁻³,yd⁻^3,1.30795054743616,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per deciliter,per deciliter,dL⁻¹,dL⁻^1,10000,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per fluid ounce,per fluid ounce,per fl oz,per_fl_oz,33814.0222016107,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per Imperial fluid ounce,per Imperial fluid ounce,per fl oz (UK),per_fl_oz_(UK),35195.0828245884,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per centiliter,per centiliter,cL⁻¹,cL^-1,100000,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic centimeter,per cubic centimeter,cm⁻³,cm^-3,1000000,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic decimeter,per cubic decimeter,dm⁻³,dm^-3,1000,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic foot,per cubic foot,ft⁻³,ft^-3,35.3146624712848,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic inch,per cubic inch,in⁻³,in^-3,61023.7589903253,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic kilometer,per cubic kilometer,km⁻³,km^-3,0.000000001,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic meter,per cubic meter,m⁻³,m^-3,1,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic mile,per cubic mile,mi⁻³,mi^-3,2.39912748531614E-10,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic millimeter,per cubic millimeter,mm⁻³,mm^-3,1000000000,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per cubic yard,per cubic yard,yd⁻³,yd^-3,1.30795054743616,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per deciliter,per deciliter,dL⁻¹,dL^-1,10000,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per fluid ounce,per fluid ounce,per fl oz,per fl oz,33814.0222016107,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per Imperial fluid ounce,per Imperial fluid ounce,per fl oz (UK),per fl oz (UK),35195.0828245884,0
 VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per gallon,per gallon,per gal,per_gal,264.172037284185,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per Imperial gallon,per Imperial gallon,per gal (UK),per_gal_(UK),219.969248299088,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per liter,per liter,L⁻¹,L⁻^1,1000,0
-VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per milliliter,per milliliter,mL⁻¹,mL⁻^1,1000000,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per Imperial gallon,per Imperial gallon,per gal (UK),per gal (UK),219.969248299088,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per liter,per liter,L⁻¹,L^-1,1000,0
+VolumetricNumberDensity,-3,0,0,0,0,0,0,false,true,false,false,false,per milliliter,per milliliter,mL⁻¹,mL^-1,1000000,0
 VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,becquerel per cubic meter,becquerels per cubic meter,Bq/m³,Bq/m^3,1,0
 VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,curie per cubic meter,curies per cubic meter,Ci/m³,Ci/m^3,37000000000,0
 VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,disintegration per minute per cubic meter,disintegrations per minute per cubic meter,dpm/m³,dpm/m^3,0.0166666666666667,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic centimeter second,per cubic centimeter second,cm⁻³ · s⁻¹,cm⁻^3*s⁻^1,1000000,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic foot second,per cubic foot second,ft⁻³ · s⁻¹,ft⁻^3*s⁻^1,35.3146624712848,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic inch second,per cubic inch second,in⁻³ · s⁻¹,in⁻^3*s⁻^1,61023.7589903253,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic meter second,per cubic meter second,m⁻³ · s⁻¹,m⁻^3*s⁻^1,1,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic mile second,per cubic mile second,mi⁻³ · s⁻¹,mi⁻^3*s⁻^1,2.39912748531614E-10,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic millimeter second,per cubic millimeter second,mm⁻³ · s⁻¹,mm⁻^3*s⁻^1,1000000000,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic yard second,per cubic yard second,yd⁻³ · s⁻¹,yd⁻^3*s⁻^1,1.30795054743616,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per Imperial fluid ounce second,per Imperial fluid ounce second,fl oz⁻¹ (UK) · s⁻¹,fl_oz⁻^1_(UK)*s⁻^1,35195.0828245884,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per fluid ounce second,per fluid ounce second,fl oz⁻¹ · s⁻¹,fl_oz⁻^1*s⁻^1,33814.0222016107,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per Imperial gallon second,per Imperial gallon second,gal⁻¹ (UK) · s⁻¹,gal⁻^1_(UK)*s⁻^1,219.969248299088,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per gallon second,per gallon second,gal⁻¹ · s⁻¹,gal⁻^1*s⁻^1,264.172037284185,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per liter second,per liter second,L⁻¹ · s⁻¹,L⁻^1*s⁻^1,1000,0
-VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per milliliter second,per milliliter second,mL⁻¹ · s⁻¹,mL⁻^1*s⁻^1,1000000,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic centimeter second,per cubic centimeter second,cm⁻³ · s⁻¹,cm^-3*s^-1,1000000,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic foot second,per cubic foot second,ft⁻³ · s⁻¹,ft^-3*s^-1,35.3146624712848,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic inch second,per cubic inch second,in⁻³ · s⁻¹,in^-3*s^-1,61023.7589903253,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic meter second,per cubic meter second,m⁻³ · s⁻¹,m^-3*s^-1,1,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic mile second,per cubic mile second,mi⁻³ · s⁻¹,mi^-3*s^-1,2.39912748531614E-10,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic millimeter second,per cubic millimeter second,mm⁻³ · s⁻¹,mm^-3*s^-1,1000000000,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per cubic yard second,per cubic yard second,yd⁻³ · s⁻¹,yd^-3*s^-1,1.30795054743616,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per Imperial fluid ounce second,per Imperial fluid ounce second,fl oz⁻¹ (UK) · s⁻¹,fl oz^-1 (UK)*s^-1,35195.0828245884,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per fluid ounce second,per fluid ounce second,fl oz⁻¹ · s⁻¹,fl oz^-1*s^-1,33814.0222016107,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per Imperial gallon second,per Imperial gallon second,gal⁻¹ (UK) · s⁻¹,gal^-1 (UK)*s^-1,219.969248299088,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per gallon second,per gallon second,gal⁻¹ · s⁻¹,gal^-1*s^-1,264.172037284185,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per liter second,per liter second,L⁻¹ · s⁻¹,L^-1*s^-1,1000,0
+VolumetricNumberRate,-3,0,-1,0,0,0,0,false,true,false,false,false,per milliliter second,per milliliter second,mL⁻¹ · s⁻¹,mL^-1*s^-1,1000000,0
 VolumetricPowerDensity,-1,1,-3,0,0,0,0,false,false,false,false,false,watt per cubic centimeter,watts per cubic centimeter,W/cm³,W/cm^3,1000000,0
 VolumetricPowerDensity,-1,1,-3,0,0,0,0,false,false,false,false,false,watt per cubic meter,watts per cubic meter,W/m³,W/m^3,1,0
 VolumetricPowerDensity,-1,1,-3,0,0,0,0,false,false,false,false,false,watt per cubic millimeter,watts per cubic millimeter,W/mm³,W/mm^3,1000000000,0

@@ -27,9 +27,8 @@ use fj_core::{
 use crate::script::{
     execution::{
         types::{
-            fornjot::{cycle::Cycle, unpack_dynamic_length_list},
-            function::IntoBuiltinFunction,
-            List, Object, OperatorResult, StructDefinition, Structure,
+            fornjot::cycle::Cycle, function::IntoBuiltinFunction, List, Object, OperatorResult,
+            StructDefinition, Structure,
         },
         ExecutionContext, Failure,
     },
@@ -143,7 +142,8 @@ impl Region {
             .unwrap()
             .downcast::<List<S>>(span)?;
 
-        let interior_cycles = unpack_dynamic_length_list::<S, Cycle>(span, interior_cylce_list)?
+        let interior_cycles = interior_cylce_list
+            .unpack_dynamic_length::<Cycle>(span)?
             .map(|cycle| cycle.handle);
 
         let region = Self::from(
@@ -182,9 +182,11 @@ mod test {
             run_expression(
                 &mut context,
                 Box::leak(Box::new(
-                    Expression::parse("new_region(Circle { center = [1mm, 2mm], radius = 3mm })")
-                        .unwrap()
-                        .1
+                    Expression::parse(
+                        "new_region(Circle { center = vec2(1mm, 2mm), radius = 3mm })"
+                    )
+                    .unwrap()
+                    .1
                 ))
             ),
             Ok(Value::Region(_))
@@ -200,7 +202,7 @@ mod test {
                 &mut context,
                 Box::leak(Box::new(
                     Expression::parse(
-                        "new_region(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
+                        "new_region(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)] })"
                     )
                     .unwrap()
                     .1
@@ -218,8 +220,8 @@ mod test {
             run_expression(
                 &mut context,
                 Box::leak(Box::new(Expression::parse(
-                    "new_region(RawRegion { exterior = new_cycle(Circle { center = [1mm, 2mm], radius = 3mm }),
-                     interiors = [new_cycle(Circle { center = [1mm, 2mm], radius = 3mm / 2 })] })"
+                    "new_region(RawRegion { exterior = new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm }),
+                     interiors = [new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm / 2 })] })"
                 )
                 .unwrap()
                 .1)),

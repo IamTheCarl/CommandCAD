@@ -16,6 +16,8 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use common_data_types::Number;
+
 use crate::script::{
     execution::{expressions::run_trailer, ExecutionContext, Failure},
     logging::RuntimeLog,
@@ -23,13 +25,13 @@ use crate::script::{
     Span,
 };
 
-use super::{NamedObject, Number, Object, OperatorResult, Value};
+use super::{Measurement, NamedObject, Object, OperatorResult, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Range {
-    pub lower_bound: Option<Number>,
+    pub lower_bound: Option<Measurement>,
     pub upper_bound_is_inclusive: bool,
-    pub upper_bound: Option<Number>,
+    pub upper_bound: Option<Measurement>,
 }
 
 impl<'a, S: Span> Object<'a, S> for Range {
@@ -43,8 +45,8 @@ impl<'a, S: Span> Object<'a, S> for Range {
         span: &S,
     ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
         match (
-            self.lower_bound,
-            self.upper_bound,
+            self.lower_bound.as_ref(),
+            self.upper_bound.as_ref(),
             self.upper_bound_is_inclusive,
         ) {
             (None, None, false) => Err(Failure::CannotConvertFromTo(
@@ -68,15 +70,15 @@ impl<'a, S: Span> Object<'a, S> for Range {
                 "iterator".into(),
             )),
             (Some(lower_bound), Some(upper_bound), false) => {
-                let lower_bound = lower_bound.trunc() as isize;
-                let upper_bound = upper_bound.trunc() as isize;
+                let lower_bound = lower_bound.to_index(span)?;
+                let upper_bound = upper_bound.to_index(span)?;
                 Ok(Box::new(
                     (lower_bound..upper_bound).map(|index| Number::new(index as _).unwrap().into()),
                 ))
             }
             (Some(lower_bound), Some(upper_bound), true) => {
-                let lower_bound = lower_bound.trunc() as isize;
-                let upper_bound = upper_bound.trunc() as isize;
+                let lower_bound = lower_bound.to_index(span)?;
+                let upper_bound = upper_bound.to_index(span)?;
                 Ok(Box::new(
                     (lower_bound..=upper_bound)
                         .map(|index| Number::new(index as _).unwrap().into()),

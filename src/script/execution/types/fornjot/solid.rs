@@ -34,7 +34,7 @@ use crate::script::{
     Span,
 };
 
-use super::{handle_wrapper, object_set::check_for_duplicates, unpack_dynamic_length_list};
+use super::{handle_wrapper, object_set::check_for_duplicates};
 
 pub fn register_globals<S: Span>(_context: &mut ExecutionContext<'_, S>) {}
 
@@ -84,7 +84,8 @@ impl<'a, S: Span> Object<'a, S> for Solid {
                 let new_shells = update.call(context, span, vec![shell.clone().into()], &[])?;
                 let new_shells = new_shells.downcast::<List<S>>(span)?;
                 let num_shells = new_shells.len();
-                let new_shells = unpack_dynamic_length_list::<S, Shell>(span, new_shells)?
+                let new_shells = new_shells
+                    .unpack_dynamic_length::<Shell>(span)?
                     .map(|shell| HandleWrapper::from(shell.handle));
 
                 // Update shell will panic if we insert a duplicate, so deduplicate it.
@@ -109,7 +110,8 @@ impl<'a, S: Span> Object<'a, S> for Solid {
                  new_shells: List<'a, S>|
                  -> OperatorResult<S, Value<S>> {
                     let num_shells = new_shells.len();
-                    let new_shells = unpack_dynamic_length_list::<S, Shell>(span, new_shells)?
+                    let new_shells = new_shells
+                        .unpack_dynamic_length::<Shell>(span)?
                         .map(|shell| HandleWrapper::from(shell.handle));
 
                     // Update shell will panic if we insert a duplicate, so deduplicate it.

@@ -17,7 +17,7 @@
  */
 use nom::{
     branch::alt,
-    bytes::complete::take_while1,
+    bytes::complete::{tag, take_while, take_while1},
     character::complete::char as nom_char,
     combinator::{consumed, map, verify},
     multi::fold_many0,
@@ -42,35 +42,44 @@ impl<S: Span> Measurement<S> {
     }
 
     fn parse_type(input: S) -> VResult<S, S> {
-        fn take_body<S: Span>(input: S) -> VResult<S, S> {
-            take_while1(|c: char| {
-                c.is_alphanumeric() || matches!(c, '^' | '/' | '_' | '.' | '%' | '<' | '-' | '\\')
-            })(input)
+        fn parse_unit<S: Span>(input: S) -> VResult<S, S> {
+            verify(
+                map(
+                    consumed(fold_many0(
+                        alt((
+                            take_while1(|c: char| {
+                                c.is_alphanumeric() || matches!(c, '^' | '/' | '%' | '-' | '\\')
+                            }),
+                            tag("<-"),
+                        )),
+                        || (),
+                        |_, _| (),
+                    )),
+                    |(span, _)| span,
+                ),
+                |input: &S| {
+                    let input = input.as_str();
+                    // If the unit type exists, it must start with a letter or number.
+                    input.is_empty()
+                        || input
+                            .chars()
+                            .next()
+                            .map(|input| input.is_alphanumeric())
+                            .unwrap_or(false)
+                },
+            )(input)
         }
 
-        verify(
-            map(
-                consumed(fold_many0(
-                    alt((
-                        // This can't handle nested () but none of our supported unit types need that.
-                        take_body,
-                        delimited(nom_char('('), take_body, nom_char(')')),
-                    )),
-                    || (),
-                    |_, _| (),
-                )),
-                |(span, _)| span,
-            ),
-            |input: &S| {
-                // The unit type must start with a letter or number.
-                input
-                    .as_str()
-                    .chars()
-                    .next()
-                    .map(|input| input.is_alphanumeric())
-                    .unwrap_or(false)
-            },
-        )(input)
+        fn parse_unit_quoted<S: Span>(input: S) -> VResult<S, S> {
+            delimited(nom_char('<'), take_while(|c| c != '>'), nom_char('>'))(input)
+        }
+
+        fn empty_unit<S: Span>(input: S) -> VResult<S, S> {
+            let empty = input.slice(..0);
+            Ok((input, empty))
+        }
+
+        alt((parse_unit_quoted, parse_unit, empty_unit))(input)
     }
 
     pub fn get_span(&self) -> &S {
@@ -81,6 +90,23 @@ impl<S: Span> Measurement<S> {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn parse_type() {
+        assert_eq!(
+            Measurement::parse_type("<cm^3(STP)>"),
+            Ok(("", "cm^3(STP)"))
+        );
+        assert_eq!(Measurement::parse_type("mm"), Ok(("", "mm")));
+        assert_eq!(Measurement::parse_type(""), Ok(("", "")));
+
+        assert_eq!(Measurement::parse_type("mm <"), Ok((" <", "mm")));
+        assert_eq!(
+            Measurement::parse_type("mm.floor()"),
+            Ok((".floor()", "mm"))
+        );
+        assert_eq!(Measurement::parse_type(".floor()"), Ok((".floor()", "")));
+    }
 
     #[test]
     fn measurement() {
@@ -125,6 +151,69 @@ mod test {
                         fractional: Some("44"),
                     },
                     ty: "m"
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn number() {
+        assert_eq!(
+            Measurement::parse("22"),
+            Ok((
+                "",
+                Measurement {
+                    number: Number {
+                        integer: Some("22"),
+                        dot: None,
+                        fractional: None
+                    },
+                    ty: ""
+                }
+            ))
+        );
+
+        assert_eq!(
+            Measurement::parse("22.44"),
+            Ok((
+                "",
+                Measurement {
+                    number: Number {
+                        integer: Some("22"),
+                        dot: Some("."),
+                        fractional: Some("44"),
+                    },
+                    ty: ""
+                }
+            ))
+        );
+
+        assert_eq!(
+            Measurement::parse("22.44 <"),
+            Ok((
+                "<",
+                Measurement {
+                    number: Number {
+                        integer: Some("22"),
+                        dot: Some("."),
+                        fractional: Some("44"),
+                    },
+                    ty: ""
+                }
+            ))
+        );
+
+        assert_eq!(
+            Measurement::parse("22.44.floor()"),
+            Ok((
+                ".floor()",
+                Measurement {
+                    number: Number {
+                        integer: Some("22"),
+                        dot: Some("."),
+                        fractional: Some("44"),
+                    },
+                    ty: ""
                 }
             ))
         );

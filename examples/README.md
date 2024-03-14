@@ -93,7 +93,7 @@ Please note that export of 2D objects is not yet supported, so the output of the
 Creates a circle with the provided diameter.
 
 ```
-cargo run -- form examples/sketches.ccm circle -- 1cm
+cargo run -- sketch examples/sketches.ccm circle -- 1cm
 ```
 
 ### Square
@@ -101,7 +101,7 @@ cargo run -- form examples/sketches.ccm circle -- 1cm
 Creates a square with the provided side length.
 
 ```
-cargo run -- form examples/sketches.ccm square -- 1cm
+cargo run -- sketch examples/sketches.ccm square -- 1cm
 ```
 
 ### Square with Circle
@@ -109,5 +109,5 @@ cargo run -- form examples/sketches.ccm square -- 1cm
 Creates a sketch with both a square and a circle with the provided dimensions.
 
 ```
-cargo run -- form examples/sketches.ccm squre_with_circle -- 1cm 1cm
+cargo run -- sketch examples/sketches.ccm square_with_circle -- 2cm 1cm
 ```

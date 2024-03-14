@@ -169,7 +169,7 @@ mod test {
         member_variable::{
             MemberVariableConstraint, MemberVariableConstraintList, MemberVariableType,
         },
-        Assign, Assignable, AssignableVariable, Break, Litteral, Loop, Number, Return,
+        Assign, Assignable, AssignableVariable, Break, Litteral, Loop, Measurement, Number, Return,
     };
 
     use super::*;
@@ -354,10 +354,13 @@ mod test {
                                 ty: MemberVariableType {
                                     ty: VariableType::Measurement("Angle"),
                                     constraints: None,
-                                    default_value: Some(Litteral::Number(Number {
-                                        integer: Some("2"),
-                                        dot: None,
-                                        fractional: None
+                                    default_value: Some(Litteral::Measurement(Measurement {
+                                        number: Number {
+                                            integer: Some("2"),
+                                            dot: None,
+                                            fractional: None
+                                        },
+                                        ty: ""
                                     }))
                                 }
                             }
@@ -390,17 +393,20 @@ mod test {
                                 ty: MemberVariableType {
                                     ty: VariableType::Measurement("Angle"),
                                     constraints: None,
-                                    default_value: Some(Litteral::Number(Number {
-                                        integer: Some("2"),
-                                        dot: None,
-                                        fractional: None
+                                    default_value: Some(Litteral::Measurement(Measurement {
+                                        number: Number {
+                                            integer: Some("2"),
+                                            dot: None,
+                                            fractional: None
+                                        },
+                                        ty: ""
                                     }))
                                 }
                             },
                             MemberVariable {
                                 name: "three",
                                 ty: MemberVariableType {
-                                    ty: VariableType::Number,
+                                    ty: VariableType::Measurement("Number"),
                                     constraints: Some(MemberVariableConstraintList {
                                         constraints: vec![MemberVariableConstraint::Integer]
                                     }),

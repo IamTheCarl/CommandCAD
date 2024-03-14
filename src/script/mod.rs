@@ -207,6 +207,7 @@ impl Runtime {
 mod test {
     use std::borrow::Cow;
 
+    use common_data_types::Number;
     use uom::si::{
         f64::Length,
         length::{meter, millimeter},
@@ -246,7 +247,7 @@ mod test {
             Runtime::load(("root_module", "function my_sketch() -> Number { 2 }")).unwrap();
 
         assert!(matches!(
-            dbg!(runtime.run_sketch("my_sketch", vec![])),
+            runtime.run_sketch("my_sketch", vec![]),
             Err(Failure::ExpectedGot(
                 _,
                 Cow::Borrowed("sketch"),
@@ -259,7 +260,7 @@ mod test {
     fn run_solid() {
         let mut runtime = Runtime::load((
             "root_module",
-            "solid my_solid(input: Length = 1cm) { new_sketch(Circle { center = [0m, 0m], radius = input }).sweep(global_xy_plane(), [0cm, 0cm, 1cm]) }",
+            "solid my_solid(input: Length = 1cm) { new_sketch(Circle { center = vec2(0m, 0m), radius = input }).sweep(global_xy_plane(), vec3(0cm, 0cm, 1cm)) }",
         ))
         .unwrap();
 
@@ -303,18 +304,27 @@ mod test {
         .unwrap();
 
         assert!(matches!(
-            dbg!(runtime.run_task("my_task", vec![])),
+            runtime.run_task("my_task", vec![]),
             Err(Failure::MissingArguments(_))
         ));
 
         assert_eq!(
             runtime.run_task("my_task", vec![SerializableValue::Default]),
-            Ok(SerializableValue::Number(50.0))
+            Ok(SerializableValue::Measurement(
+                Number::new(50.0).unwrap().into()
+            ))
         );
 
         assert_eq!(
-            runtime.run_task("my_task", vec![SerializableValue::Number(22.0)]),
-            Ok(SerializableValue::Number(22.0))
+            runtime.run_task(
+                "my_task",
+                vec![SerializableValue::Measurement(
+                    Number::new(22.0).unwrap().into()
+                )]
+            ),
+            Ok(SerializableValue::Measurement(
+                Number::new(22.0).unwrap().into()
+            ))
         );
 
         let mut runtime =

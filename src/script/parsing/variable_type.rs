@@ -154,13 +154,13 @@ impl<S: Span> Display for FunctionSignature<S> {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum VariableType<S: Span> {
-    Number,
     String,
     List,
     Boolean,
     Range,
     Struct(S),
     Measurement(S),
+    Vector(u8, S),
     Cycle,
     Region,
     Sketch,
@@ -176,7 +176,6 @@ impl<S: Span> VariableType<S> {
         context(
             "Invalid type",
             alt((
-                map(tag("Number"), |_| Self::Number),
                 map(tag("String"), |_| Self::String),
                 map(tag("List"), |_| Self::List),
                 map(tag("Boolean"), |_| Self::Boolean),
@@ -192,6 +191,39 @@ impl<S: Span> VariableType<S> {
                     preceded(pair(take_keyword("struct"), space0), parse_name),
                     Self::Struct,
                 ),
+                map(
+                    preceded(
+                        pair(take_keyword("Vector2"), space0),
+                        delimited(
+                            pair(nom_char('<'), space0),
+                            parse_name,
+                            pair(space0, nom_char('>')),
+                        ),
+                    ),
+                    |name| Self::Vector(2, name),
+                ),
+                map(
+                    preceded(
+                        pair(take_keyword("Vector3"), space0),
+                        delimited(
+                            pair(nom_char('<'), space0),
+                            parse_name,
+                            pair(space0, nom_char('>')),
+                        ),
+                    ),
+                    |name| Self::Vector(3, name),
+                ),
+                map(
+                    preceded(
+                        pair(take_keyword("Vector4"), space0),
+                        delimited(
+                            pair(nom_char('<'), space0),
+                            parse_name,
+                            pair(space0, nom_char('>')),
+                        ),
+                    ),
+                    |name| Self::Vector(4, name),
+                ),
                 map(FunctionSignature::parse, Self::Function),
                 map(parse_name, Self::Measurement),
             )),
@@ -200,13 +232,15 @@ impl<S: Span> VariableType<S> {
 
     pub fn name(&self) -> Cow<'static, str> {
         match self {
-            VariableType::Number => "Number".into(),
             VariableType::String => "String".into(),
             VariableType::List => "List".into(),
             VariableType::Boolean => "Boolean".into(),
             VariableType::Range => "Range".into(),
             VariableType::Struct(name) => format!("struct {}", name.as_str()).into(),
             VariableType::Measurement(name) => name.to_string().into(),
+            VariableType::Vector(dimension, name) => {
+                format!("Vector{}<{}>", dimension, name.as_str()).into()
+            }
             VariableType::Cycle => "Cycle".into(),
             VariableType::Region => "Region".into(),
             VariableType::Sketch => "Sketch".into(),
@@ -222,13 +256,15 @@ impl<S: Span> VariableType<S> {
 impl<S: Span> Display for VariableType<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VariableType::Number => write!(f, "Number"),
             VariableType::String => write!(f, "String"),
             VariableType::List => write!(f, "List"),
             VariableType::Boolean => write!(f, "Boolean"),
             VariableType::Range => write!(f, "Range"),
             VariableType::Struct(name) => write!(f, "struct {}", name.as_str()),
             VariableType::Measurement(name) => write!(f, "{}", name.as_str()),
+            VariableType::Vector(dimension, name) => {
+                write!(f, "Vector{}<{}>", dimension, name.as_str())
+            }
             VariableType::Cycle => write!(f, "Cycle"),
             VariableType::Region => write!(f, "Region"),
             VariableType::Sketch => write!(f, "Sketch"),
@@ -256,8 +292,16 @@ mod test {
             Ok(("", VariableType::Measurement("Angle")))
         );
         assert_eq!(
-            VariableType::parse("Number"),
-            Ok(("", VariableType::Number))
+            VariableType::parse("Vector2<Length>"),
+            Ok(("", VariableType::Vector(2, "Length")))
+        );
+        assert_eq!(
+            VariableType::parse("Vector3<Length>"),
+            Ok(("", VariableType::Vector(3, "Length")))
+        );
+        assert_eq!(
+            VariableType::parse("Vector4<Length>"),
+            Ok(("", VariableType::Vector(4, "Length")))
         );
         assert_eq!(VariableType::parse("List"), Ok(("", VariableType::List)));
         assert_eq!(
@@ -274,7 +318,7 @@ mod test {
             Ok((
                 "",
                 VariableType::Function(FunctionSignature::Function {
-                    return_type: Box::new(VariableType::Number),
+                    return_type: Box::new(VariableType::Measurement("Number")),
                     arguments: vec![]
                 })
             ))
@@ -285,7 +329,7 @@ mod test {
             Ok((
                 "",
                 VariableType::Function(FunctionSignature::Function {
-                    return_type: Box::new(VariableType::Number),
+                    return_type: Box::new(VariableType::Measurement("Number")),
                     arguments: vec![]
                 })
             ))

@@ -284,6 +284,7 @@ name = "command_cad"
 version = "0.4.0"
 dependencies = [
  "anyhow",
+ "arrayvec",
  "atty",
  "casey",
  "clap",
@@ -301,9 +302,9 @@ dependencies = [
  "imstr",
  "lazy_static",
  "log",
+ "nalgebra",
  "nom",
  "nom_locate",
- "ordered-float",
  "ouroboros",
  "paste",
  "semver",
@@ -321,6 +322,7 @@ dependencies = [
 name = "common_data_types"
 version = "0.1.0"
 dependencies = [
+ "ordered-float",
  "paste",
  "serde",
 ]

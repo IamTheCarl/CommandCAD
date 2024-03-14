@@ -30,7 +30,7 @@ use fj_core::{
 
 use crate::script::{
     execution::{
-        types::{function::AutoCall, List, Object, OperatorResult, Value},
+        types::{function::AutoCall, List, Object, OperatorResult, Value, Vector2, Vector3},
         ExecutionContext, Failure,
     },
     logging::RuntimeLog,
@@ -38,10 +38,7 @@ use crate::script::{
     Measurement, Span,
 };
 
-use super::{
-    face::Face, handle_wrapper, object_set::check_for_duplicates, point_from_list,
-    scalar_from_measurement, unpack_dynamic_length_list, vector_from_list,
-};
+use super::{face::Face, handle_wrapper, object_set::check_for_duplicates};
 
 pub fn register_globals<S: Span>(_context: &mut ExecutionContext<S>) {
     // TODO we should have the power to build shells from faces.
@@ -81,31 +78,18 @@ impl<'a, S: Span> Object<'a, S> for Shell {
             "add_blind_hole" => |context: &mut ExecutionContext<'a, S>,
                                  span: &S,
                                  face: Face,
-                                 position: List<'a, S>,
+                                 position: Vector2,
                                  radius: Measurement,
-                                 path: List<'a, S>|
+                                 path: Vector3|
              -> OperatorResult<S, Value<S>> {
                 if !self.handle.deref().faces().contains(&face.handle) {
                     return Err(Failure::FaceNotInShell(span.clone()));
                 }
 
-                let position = point_from_list(
-                    span,
-                    context.global_resources.fornjot_unit_conversion_factor,
-                    position,
-                )?;
+                let position = position.as_fornjot_point(context, span)?;
+                let radius = radius.as_scalar(context, span)?;
 
-                let radius = scalar_from_measurement(
-                    span,
-                    context.global_resources.fornjot_unit_conversion_factor,
-                    &radius,
-                )?;
-
-                let path = vector_from_list(
-                    span,
-                    context.global_resources.fornjot_unit_conversion_factor,
-                    path,
-                )?;
+                let path = path.as_fornjot_vector(context, span)?;
 
                 let new_shell = self.handle.deref().add_blind_hole(
                     HoleLocation {
@@ -127,10 +111,10 @@ impl<'a, S: Span> Object<'a, S> for Shell {
             "add_through_hole" => |context: &mut ExecutionContext<'a, S>,
                                    span: &S,
                                    front_face: Face,
-                                   front_position: List<'a, S>,
+                                   front_position: Vector2,
 
                                    back_face: Face,
-                                   back_position: List<'a, S>,
+                                   back_position: Vector2,
 
                                    radius: Measurement|
              -> OperatorResult<S, Value<S>> {
@@ -139,23 +123,10 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                     return Err(Failure::FaceNotInShell(span.clone()));
                 }
 
-                let front_position = point_from_list(
-                    span,
-                    context.global_resources.fornjot_unit_conversion_factor,
-                    front_position,
-                )?;
+                let front_position = front_position.as_fornjot_point(context, span)?;
+                let back_position = back_position.as_fornjot_point(context, span)?;
 
-                let back_position = point_from_list(
-                    span,
-                    context.global_resources.fornjot_unit_conversion_factor,
-                    back_position,
-                )?;
-
-                let radius = scalar_from_measurement(
-                    span,
-                    context.global_resources.fornjot_unit_conversion_factor,
-                    &radius,
-                )?;
+                let radius = radius.as_scalar(context, span)?;
 
                 let new_shell = self.handle.deref().add_through_hole(
                     [
@@ -194,7 +165,8 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                 let new_faces = update.call(context, span, vec![face.clone().into()], &[])?;
                 let new_faces = new_faces.downcast::<List<S>>(span)?;
                 let num_faces = new_faces.len();
-                let new_faces = unpack_dynamic_length_list::<S, Face>(span, new_faces)?
+                let new_faces = new_faces
+                    .unpack_dynamic_length::<Face>(span)?
                     .map(|shell| HandleWrapper::from(shell.handle));
 
                 // Update shell will panic if we insert a duplicate, so deduplicate it.
@@ -219,7 +191,8 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                  new_faces: List<'a, S>|
                  -> OperatorResult<S, Value<S>> {
                     let num_faces = new_faces.len();
-                    let new_faces = unpack_dynamic_length_list::<S, Face>(span, new_faces)?
+                    let new_faces = new_faces
+                        .unpack_dynamic_length::<Face>(span)?
                         .map(|shell| HandleWrapper::from(shell.handle));
 
                     // Update shell will panic if we insert a duplicate, so deduplicate it.

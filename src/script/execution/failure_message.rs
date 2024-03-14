@@ -18,7 +18,7 @@
 
 use std::{borrow::Cow, num::ParseFloatError};
 
-use ordered_float::ParseNotNanError;
+use common_data_types::ParseNotNanError;
 
 use crate::script::Span;
 
@@ -70,6 +70,17 @@ pub enum Failure<S> {
     User(S, String),
     InverseTrigIncompatible(S),
     TrigIncompatible(S),
+    ExpectedZeroDimension(S),
+    NumberMustBePositive(S),
+    FunctionCall(Box<Failure<S>>),
+    CharacterNotInVector(S, char),
+    SwizzleTooLong(S, usize),
+}
+
+impl<S: Span> Failure<S> {
+    pub fn from_function_call(self) -> Self {
+        Self::FunctionCall(Box::new(self))
+    }
 }
 
 impl<S: Span> std::fmt::Display for Failure<S> {
@@ -387,6 +398,39 @@ impl<S: Span> std::fmt::Display for Failure<S> {
                     f,
                     "{}: Trigonometric functions can only be used with angles",
                     span.format_span()
+                )
+            }
+            Self::ExpectedZeroDimension(span) => {
+                write!(
+                    f,
+                    "{}: Operation expects zero dimensional type, such as numbers, ratios, angles, etc",
+                    span.format_span()
+                )
+            }
+            Self::NumberMustBePositive(span) => {
+                write!(
+                    f,
+                    "{}: Operation requires a positive value",
+                    span.format_span()
+                )
+            }
+            // Failures related to the signature of a function call are wrapped like this so that we can catch them
+            // and use it for multi-signature functions
+            Self::FunctionCall(failure) => failure.fmt(f),
+            Self::CharacterNotInVector(span, c) => {
+                write!(
+                    f,
+                    "{}: Vector does not contain component `{}`",
+                    span.format_span(),
+                    c
+                )
+            }
+            Self::SwizzleTooLong(span, length) => {
+                write!(
+                    f,
+                    "{}: A swizzle of {} is too long. It must be 4 components or less",
+                    span.format_span(),
+                    length
                 )
             }
         }

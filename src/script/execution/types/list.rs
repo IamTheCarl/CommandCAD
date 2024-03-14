@@ -16,10 +16,12 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use common_data_types::Number;
+use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
 use std::{fmt::Write, isize, rc::Rc};
 
 use crate::script::{
-    execution::{expressions::run_expression, types::Number, ExecutionContext, Failure},
+    execution::{expressions::run_expression, ExecutionContext, Failure},
     logging::RuntimeLog,
     parsing::{self, Expression, VariableType},
     Span,
@@ -27,7 +29,7 @@ use crate::script::{
 
 use super::{
     function::AutoCall, number::UnwrapNotNan, serializable::SerializableValue,
-    string::formatting::Style, NamedObject, Object, OperatorResult, Value,
+    string::formatting::Style, Measurement, NamedObject, Object, OperatorResult, Value,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,21 +74,19 @@ impl<'a, S: Span> List<'a, S> {
         .into())
     }
 
-    fn internalize_index(&self, span: &S, index: Number) -> OperatorResult<S, usize> {
-        let raw_index = index.trunc() as isize;
-
-        let index = if raw_index >= 0 {
-            Ok(raw_index as usize)
-        } else if let Some(index) = self.vector.len().checked_sub(raw_index.unsigned_abs()) {
-            Ok(index)
+    fn internalize_index(&self, span: &S, index: isize) -> OperatorResult<S, usize> {
+        let new_index = if index >= 0 {
+            Ok(index as usize)
+        } else if let Some(new_index) = self.vector.len().checked_sub(index.unsigned_abs()) {
+            Ok(new_index)
         } else {
-            Err(Failure::IndexOutOfRange(span.clone(), raw_index))
+            Err(Failure::IndexOutOfRange(span.clone(), index))
         }?;
 
-        if index >= self.vector.len() {
-            Err(Failure::IndexOutOfRange(span.clone(), raw_index))
+        if new_index >= self.vector.len() {
+            Err(Failure::IndexOutOfRange(span.clone(), index))
         } else {
-            Ok(index)
+            Ok(new_index)
         }
     }
 
@@ -130,16 +130,15 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
         index: Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
         match index {
-            Value::Number(index) => {
+            Value::Measurement(index) => {
+                let index = index.to_index(span)?;
+
                 let localized_index = self.internalize_index(span, index)?;
 
                 self.vector
                     .get(localized_index)
                     .cloned()
-                    .ok_or(Failure::IndexOutOfRange(
-                        span.clone(),
-                        index.into_inner().trunc() as isize,
-                    ))
+                    .ok_or(Failure::IndexOutOfRange(span.clone(), index))
             }
             Value::Range(range) => {
                 // TODO could we keep an immutable reference to the original list to avoid a copy?
@@ -148,28 +147,45 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
                     range.upper_bound,
                     range.upper_bound_is_inclusive,
                 ) {
-                    (None, None, false) => self.vector.get(..),
+                    (None, None, false) => self.vector.get(..).ok_or((None, None)),
                     (Some(lower_bound), None, false) => {
-                        let lower_bound = self.internalize_index(span, lower_bound)?;
-                        self.vector.get(lower_bound..)
+                        let signed_lower_bound = lower_bound.to_index(span)?;
+                        let lower_bound = self.internalize_index(span, signed_lower_bound)?;
+                        self.vector
+                            .get(lower_bound..)
+                            .ok_or((Some(signed_lower_bound), None))
                     }
                     (None, Some(upper_bound), false) => {
-                        let upper_bound = self.internalize_index(span, upper_bound)?;
-                        self.vector.get(..upper_bound)
+                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let upper_bound = self.internalize_index(span, signed_upper_bound)?;
+                        self.vector
+                            .get(..upper_bound)
+                            .ok_or((None, Some(signed_upper_bound)))
                     }
                     (None, Some(upper_bound), true) => {
-                        let upper_bound = self.internalize_index(span, upper_bound)?;
-                        self.vector.get(..=upper_bound)
+                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let upper_bound = self.internalize_index(span, signed_upper_bound)?;
+                        self.vector
+                            .get(..=upper_bound)
+                            .ok_or((None, Some(signed_upper_bound)))
                     }
                     (Some(lower_bound), Some(upper_bound), false) => {
-                        let lower_bound = self.internalize_index(span, lower_bound)?;
-                        let upper_bound = self.internalize_index(span, upper_bound)?;
-                        self.vector.get(lower_bound..upper_bound)
+                        let signed_lower_bound = lower_bound.to_index(span)?;
+                        let lower_bound = self.internalize_index(span, signed_lower_bound)?;
+                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let upper_bound = self.internalize_index(span, signed_upper_bound)?;
+                        self.vector
+                            .get(lower_bound..upper_bound)
+                            .ok_or((Some(signed_lower_bound), Some(signed_upper_bound)))
                     }
                     (Some(lower_bound), Some(upper_bound), true) => {
-                        let lower_bound = self.internalize_index(span, lower_bound)?;
-                        let upper_bound = self.internalize_index(span, upper_bound)?;
-                        self.vector.get(lower_bound..=upper_bound)
+                        let signed_lower_bound = lower_bound.to_index(span)?;
+                        let lower_bound = self.internalize_index(span, signed_lower_bound)?;
+                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let upper_bound = self.internalize_index(span, signed_upper_bound)?;
+                        self.vector
+                            .get(lower_bound..=upper_bound)
+                            .ok_or((Some(signed_lower_bound), Some(signed_upper_bound)))
                     }
                     (_, None, true) => unreachable!(), // Inclusive ranges without an upper bound are illegal to construct.
                 };
@@ -183,16 +199,9 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
 
                 slice
                     .map(|slice| Self::from(slice.iter().cloned()).into())
-                    .ok_or(Failure::SliceOutOfRange(
-                        span.clone(),
-                        range
-                            .lower_bound
-                            .map(|bound| bound.into_inner().trunc() as isize),
-                        range_type,
-                        range
-                            .upper_bound
-                            .map(|bound| bound.into_inner().trunc() as isize),
-                    ))
+                    .map_err(|(lower_bound, upper_bound)| {
+                        Failure::SliceOutOfRange(span.clone(), lower_bound, range_type, upper_bound)
+                    })
             }
             _ => Err(Failure::ExpectedGot(
                 span.clone(),
@@ -250,9 +259,10 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
             }
             "insert" => |_context: &mut ExecutionContext<'a, S>,
                          span: &S,
-                         index: Number,
+                         index: Measurement,
                          value: Value<'a, S>|
              -> OperatorResult<S, Value<S>> {
+                let index = index.to_index(span)?;
                 let mut vector = self.unwrap_or_clone();
                 let index = self.internalize_index(span, index)?;
                 vector.insert(index, value);
@@ -271,7 +281,9 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
             }
             "len" => {
                 |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
-                    Number::new(self.vector.len() as f64).unwrap_not_nan(span)
+                    Number::new(self.vector.len() as f64)
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
                 }
                 .auto_call(context, span, arguments, expressions)
             }
@@ -290,8 +302,9 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
             .auto_call(context, span, arguments, expressions),
             "remove" => |_context: &mut ExecutionContext<'a, S>,
                          span: &S,
-                         index: Number|
+                         index: Measurement|
              -> OperatorResult<S, Value<S>> {
+                let index = index.to_index(span)?;
                 let index = self.internalize_index(span, index)?;
 
                 let mut vector = self.unwrap_or_clone();
@@ -347,31 +360,41 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
                 .auto_call(context, span, arguments, expressions)
             }
             "rotate_left" => |_context: &mut ExecutionContext<'a, S>,
-                              _span: &S,
-                              mid: Number|
+                              span: &S,
+                              mid: Measurement|
              -> OperatorResult<S, Value<S>> {
-                let mid = mid.trunc() as usize % self.vector.len();
-                let mut vector = self.unwrap_or_clone();
-                vector.rotate_left(mid);
+                let mid = mid.to_index(span)?;
+                if mid.is_positive() {
+                    let mid = mid as usize % self.vector.len();
+                    let mut vector = self.unwrap_or_clone();
+                    vector.rotate_left(mid);
 
-                Ok(Self {
-                    vector: Rc::new(vector),
+                    Ok(Self {
+                        vector: Rc::new(vector),
+                    }
+                    .into())
+                } else {
+                    Err(Failure::NumberMustBePositive(span.clone()))
                 }
-                .into())
             }
             .auto_call(context, span, arguments, expressions),
             "rotate_right" => |_context: &mut ExecutionContext<'a, S>,
                                _span: &S,
-                               mid: Number|
+                               mid: Measurement|
              -> OperatorResult<S, Value<S>> {
-                let mid = mid.trunc() as usize % self.vector.len();
-                let mut vector = self.unwrap_or_clone();
-                vector.rotate_right(mid);
+                let mid = mid.to_index(span)?;
+                if mid.is_positive() {
+                    let mid = mid as usize % self.vector.len();
+                    let mut vector = self.unwrap_or_clone();
+                    vector.rotate_right(mid);
 
-                Ok(Self {
-                    vector: Rc::new(vector),
+                    Ok(Self {
+                        vector: Rc::new(vector),
+                    }
+                    .into())
+                } else {
+                    Err(Failure::NumberMustBePositive(span.clone()))
                 }
-                .into())
             }
             .auto_call(context, span, arguments, expressions),
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
@@ -397,6 +420,53 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
 impl<'a, S: Span> NamedObject for List<'a, S> {
     fn static_type_name() -> &'static str {
         "List"
+    }
+}
+
+impl<'a, S: Span> List<'a, S> {
+    pub fn unpack_dynamic_length<T>(
+        self,
+        span: &S,
+    ) -> OperatorResult<S, impl Iterator<Item = T> + Clone + 'a>
+    where
+        T: NamedObject + Clone,
+        Value<'a, S>: IntoVariant<T> + AsVariant<T> + TryInto<T>,
+    {
+        // Verify that they're all of the right type.
+        for (index, item) in self.iter().enumerate() {
+            if item.enum_downcast_ref::<T>().is_none() {
+                return Err(Failure::ListElement(
+                    span.clone(),
+                    index,
+                    Box::new(Failure::ExpectedGot(
+                        span.clone(),
+                        T::static_type_name().into(),
+                        item.type_name(),
+                    )),
+                ));
+            }
+        }
+
+        // Okay, we've validated them. Now we can really take them.
+        // The unwraps will not fail because we've already validated the types.
+        let iter = self.consume().map(|v| v.enum_downcast::<T>().unwrap());
+        Ok(iter)
+    }
+
+    pub fn unpack_fixed_length<T, const D: usize>(
+        self,
+        span: &S,
+    ) -> OperatorResult<S, impl Iterator<Item = T> + Clone + 'a>
+    where
+        T: NamedObject + Clone,
+        Value<'a, S>: IntoVariant<T> + AsVariant<T> + TryInto<T>,
+    {
+        if self.len() == D {
+            // This cannot exceed length D because we already validated that the list matched that length.
+            self.unpack_dynamic_length(span)
+        } else {
+            Err(Failure::ListWrongLength(span.clone(), D, self.len()))
+        }
     }
 }
 
@@ -441,6 +511,53 @@ mod test {
                 Box::leak(Box::new(Expression::parse("[1, 2, 3][-4]").unwrap().1))
             ),
             Err(Failure::IndexOutOfRange("[", -4))
+        );
+    }
+
+    #[test]
+    fn test_unpack() {
+        assert_eq!(
+            List::<'_, &'static str>::from([
+                Number::new(1.0).unwrap().into(),
+                Number::new(2.0).unwrap().into(),
+                Number::new(3.0).unwrap().into(),
+            ])
+            .unpack_fixed_length::<Measurement, 3usize>(&"span",)
+            .map(|v| v.collect::<Vec<_>>()),
+            Ok(vec![
+                Number::new(1.0).unwrap().into(),
+                Number::new(2.0).unwrap().into(),
+                Number::new(3.0).unwrap().into(),
+            ])
+        );
+
+        let values = [
+            Number::new(1.0).unwrap().into(),
+            Number::new(2.0).unwrap().into(),
+        ];
+
+        assert_eq!(
+            List::<'_, &'static str>::from(values)
+                .unpack_fixed_length::<Measurement, 3usize>(&"span",)
+                .map(|v| v.collect::<Vec<_>>()),
+            Err(Failure::ListWrongLength("span", 3, 2))
+        );
+
+        let values = [Number::new(1.0).unwrap().into(), true.into()];
+
+        assert_eq!(
+            List::<'_, &'static str>::from(values)
+                .unpack_fixed_length::<Measurement, 2usize>(&"span")
+                .map(|v| v.collect::<Vec<_>>()),
+            Err(Failure::ListElement(
+                "span",
+                1,
+                Box::new(Failure::ExpectedGot(
+                    "span",
+                    "Measurement".into(),
+                    "Boolean".into()
+                ))
+            ))
         );
     }
 }

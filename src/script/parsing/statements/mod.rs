@@ -229,7 +229,7 @@ mod test {
                         }
                     },
                     signature: Rc::new(FunctionSignature::Function {
-                        return_type: Box::new(VariableType::Number),
+                        return_type: Box::new(VariableType::Measurement("Number")),
                         arguments: vec![]
                     })
                 })

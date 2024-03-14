@@ -79,8 +79,7 @@ struct DisplayLitteral<'a, S: Span>(&'a Litteral<S>);
 impl<S: Span> Display for DisplayLitteral<'_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            Litteral::Measurement(_measurement) => write!(f, "Measurement"),
-            Litteral::Number(number) => write!(f, "{}", number),
+            Litteral::Measurement(measurement) => write!(f, "{}", measurement.ty.as_str()),
             Litteral::String(string) => write!(f, "\"{}\"", string.value.as_str()),
             Litteral::List(_list) => write!(f, "[...]"),
             Litteral::Boolean(_span, value) => write!(f, "{}", value),
@@ -241,7 +240,7 @@ impl<S: Span> Display for MemberVariable<S> {
 
 #[cfg(test)]
 mod test {
-    use crate::script::parsing::Number;
+    use crate::script::parsing::{Measurement, Number};
 
     use super::*;
 
@@ -256,10 +255,13 @@ mod test {
             MemberVariableConstraint::parse("min(0)"),
             Ok((
                 "",
-                MemberVariableConstraint::Min(Litteral::Number(Number {
-                    integer: Some("0"),
-                    dot: None,
-                    fractional: None
+                MemberVariableConstraint::Min(Litteral::Measurement(Measurement {
+                    number: Number {
+                        integer: Some("0"),
+                        dot: None,
+                        fractional: None
+                    },
+                    ty: ""
                 }))
             ))
         );
@@ -267,10 +269,13 @@ mod test {
             MemberVariableConstraint::parse("max(0)"),
             Ok((
                 "",
-                MemberVariableConstraint::Max(Litteral::Number(Number {
-                    integer: Some("0"),
-                    dot: None,
-                    fractional: None
+                MemberVariableConstraint::Max(Litteral::Measurement(Measurement {
+                    number: Number {
+                        integer: Some("0"),
+                        dot: None,
+                        fractional: None
+                    },
+                    ty: "",
                 }))
             ))
         );
@@ -279,20 +284,29 @@ mod test {
             Ok((
                 "",
                 MemberVariableConstraint::Enum(vec![
-                    Litteral::Number(Number {
-                        integer: Some("0"),
-                        dot: None,
-                        fractional: None
+                    Litteral::Measurement(Measurement {
+                        number: Number {
+                            integer: Some("0"),
+                            dot: None,
+                            fractional: None
+                        },
+                        ty: ""
                     }),
-                    Litteral::Number(Number {
-                        integer: Some("1"),
-                        dot: None,
-                        fractional: None
+                    Litteral::Measurement(Measurement {
+                        number: Number {
+                            integer: Some("1"),
+                            dot: None,
+                            fractional: None
+                        },
+                        ty: ""
                     }),
-                    Litteral::Number(Number {
-                        integer: Some("2"),
-                        dot: None,
-                        fractional: None
+                    Litteral::Measurement(Measurement {
+                        number: Number {
+                            integer: Some("2"),
+                            dot: None,
+                            fractional: None
+                        },
+                        ty: ""
                     })
                 ])
             ))
@@ -358,7 +372,7 @@ mod test {
                 MemberVariable {
                     name: "variable",
                     ty: MemberVariableType {
-                        ty: VariableType::Number,
+                        ty: VariableType::Measurement("Number"),
                         constraints: None,
                         default_value: None
                     },
@@ -373,12 +387,15 @@ mod test {
                 MemberVariable {
                     name: "variable",
                     ty: MemberVariableType {
-                        ty: VariableType::Number,
+                        ty: VariableType::Measurement("Number"),
                         constraints: None,
-                        default_value: Some(Litteral::Number(Number {
-                            integer: Some("2"),
-                            dot: None,
-                            fractional: None
+                        default_value: Some(Litteral::Measurement(Measurement {
+                            number: Number {
+                                integer: Some("2"),
+                                dot: None,
+                                fractional: None
+                            },
+                            ty: ""
                         }))
                     },
                 }
@@ -392,14 +409,17 @@ mod test {
                 MemberVariable {
                     name: "variable",
                     ty: MemberVariableType {
-                        ty: VariableType::Number,
+                        ty: VariableType::Measurement("Number"),
                         constraints: Some(MemberVariableConstraintList {
                             constraints: vec![MemberVariableConstraint::Integer]
                         }),
-                        default_value: Some(Litteral::Number(Number {
-                            integer: Some("2"),
-                            dot: None,
-                            fractional: None
+                        default_value: Some(Litteral::Measurement(Measurement {
+                            number: Number {
+                                integer: Some("2"),
+                                dot: None,
+                                fractional: None
+                            },
+                            ty: ""
                         }))
                     },
                 }
@@ -414,7 +434,7 @@ mod test {
             Ok((
                 "",
                 MemberVariableType {
-                    ty: VariableType::Number,
+                    ty: VariableType::Measurement("Number"),
                     constraints: None,
                     default_value: None
                 },
@@ -426,12 +446,15 @@ mod test {
             Ok((
                 "",
                 MemberVariableType {
-                    ty: VariableType::Number,
+                    ty: VariableType::Measurement("Number"),
                     constraints: None,
-                    default_value: Some(Litteral::Number(Number {
-                        integer: Some("2"),
-                        dot: None,
-                        fractional: None
+                    default_value: Some(Litteral::Measurement(Measurement {
+                        number: Number {
+                            integer: Some("2"),
+                            dot: None,
+                            fractional: None
+                        },
+                        ty: ""
                     }))
                 },
             ))
@@ -442,14 +465,17 @@ mod test {
             Ok((
                 "",
                 MemberVariableType {
-                    ty: VariableType::Number,
+                    ty: VariableType::Measurement("Number"),
                     constraints: Some(MemberVariableConstraintList {
                         constraints: vec![MemberVariableConstraint::Integer]
                     }),
-                    default_value: Some(Litteral::Number(Number {
-                        integer: Some("2"),
-                        dot: None,
-                        fractional: None
+                    default_value: Some(Litteral::Measurement(Measurement {
+                        number: Number {
+                            integer: Some("2"),
+                            dot: None,
+                            fractional: None
+                        },
+                        ty: ""
                     }))
                 },
             ))

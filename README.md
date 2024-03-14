@@ -28,7 +28,7 @@ Command CAD's solution to this problem is to make dimension and unit a part of t
 let main_body: Length = 15cm;
 let nominal_angle_to_sun: Angle = 60deg;
 let solar_panel_size: Area = main_body * 1m; // A length * by a length gives an area.
-let nominal_power_output: Power = solar_panel_size * nominal_angle_to_sun.sin() * (30w/1m); // 30watts per meter multiplied by meters results in watts.
+let nominal_power_output: Power = solar_panel_size * nominal_angle_to_sun.sin() * (30w/1m^2); // 30watts per meter multiplied by square meters results in watts.
 ```
 Not only is the dimension of measurements tracked and verified for you (preventing common mathematical errors), but the units are automatically converted as well.
 If I were to do all my calculations using meters and then specify that my STL file should use millimeters, Command CAD will convert all of the final results to millimeters when exporting the STL file.

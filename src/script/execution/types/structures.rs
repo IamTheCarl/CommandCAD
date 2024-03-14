@@ -325,11 +325,10 @@ impl<'a, S: Span> NamedObject for StructDefinition<'a, S> {
 #[cfg(test)]
 mod test {
     use crate::script::{
-        execution::{
-            expressions::run_expression, types::Number, ExecutionContext, Module, ModuleScope,
-        },
+        execution::{expressions::run_expression, ExecutionContext, Module, ModuleScope},
         parsing::Expression,
     };
+    use common_data_types::Number;
 
     use super::*;
 

@@ -16,7 +16,10 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{objects::Face as FornjotFace, storage::Handle};
+use fj_core::{
+    objects::Vertex as FornjotVertex,
+    storage::{Handle, HandleWrapper},
+};
 
 use crate::script::{
     execution::{types::Object, ExecutionContext},
@@ -31,17 +34,14 @@ pub fn register_globals<S: Span>(_context: &mut ExecutionContext<S>) {
 }
 
 #[derive(Clone)]
-pub struct Face {
-    pub handle: Handle<FornjotFace>,
+pub struct Vertex {
+    pub handle: HandleWrapper<FornjotVertex>,
 }
 
-impl<'a, S: Span> Object<'a, S> for Face {
+impl<'a, S: Span> Object<'a, S> for Vertex {
     fn matches_type(&self, ty: &VariableType<S>) -> bool {
         matches!(ty, VariableType::Face)
     }
 }
 
-handle_wrapper!(Face, FornjotFace);
-
-// TODO test adding duplicate regions to the face (through update and add_regions)
-// TODO test updating a region that did not exist in the face
+handle_wrapper!(Vertex, FornjotVertex);

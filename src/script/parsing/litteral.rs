@@ -17,12 +17,11 @@
  */
 use nom::{branch::alt, combinator::map};
 
-use super::{closure::Closure, take_keyword, List, Measurement, Number, PString, Span, VResult};
+use super::{closure::Closure, take_keyword, List, Measurement, PString, Span, VResult};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Litteral<S: Span> {
     Measurement(Measurement<S>),
-    Number(Number<S>),
     String(PString<S>),
     List(List<S>),
     Boolean(S, bool),
@@ -34,7 +33,6 @@ impl<S: Span> Litteral<S> {
     pub fn parse(input: S) -> VResult<S, Self> {
         alt((
             map(Measurement::parse, Self::Measurement),
-            map(Number::parse, Self::Number),
             map(PString::parse, Self::String),
             map(Closure::parse, Self::Closure),
             map(List::parse, Self::List),
@@ -47,7 +45,6 @@ impl<S: Span> Litteral<S> {
     pub fn get_span(&self) -> &S {
         match self {
             Litteral::Measurement(spanable) => spanable.get_span(),
-            Litteral::Number(spanable) => spanable.get_span(),
             Litteral::String(spanable) => spanable.get_span(),
             Litteral::List(spanable) => spanable.get_span(),
             Litteral::Boolean(spanable, _) => spanable,
@@ -61,7 +58,7 @@ impl<S: Span> Litteral<S> {
 mod test {
     use std::rc::Rc;
 
-    use crate::script::parsing::{Block, CallableBlock, FunctionSignature, VariableType};
+    use crate::script::parsing::{Block, CallableBlock, FunctionSignature, Number, VariableType};
 
     use super::*;
 
@@ -83,15 +80,18 @@ mod test {
             ))
         );
 
-        // Number(Number<S>),
+        // Measurement, but it's just a number
         assert_eq!(
             Litteral::parse("1234.5678"),
             Ok((
                 "",
-                Litteral::Number(Number {
-                    integer: Some("1234"),
-                    dot: Some("."),
-                    fractional: Some("5678")
+                Litteral::Measurement(Measurement {
+                    number: Number {
+                        integer: Some("1234"),
+                        dot: Some("."),
+                        fractional: Some("5678")
+                    },
+                    ty: "",
                 })
             ))
         );
@@ -144,7 +144,7 @@ mod test {
                         block: Block { statements: vec![] }
                     }),
                     signature: Rc::new(FunctionSignature::Function {
-                        return_type: Box::new(VariableType::Number),
+                        return_type: Box::new(VariableType::Measurement("Number")),
                         arguments: vec![]
                     })
                 })

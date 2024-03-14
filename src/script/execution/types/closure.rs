@@ -95,11 +95,10 @@ impl<'a, S: Span> NamedObject for Closure<'a, S> {
 
 #[cfg(test)]
 mod test {
+    use common_data_types::Number;
+
     use crate::script::execution::{
-        expressions::run_expression,
-        run_block,
-        types::{NoneType, Number},
-        ControlFlow, Failure,
+        expressions::run_expression, run_block, types::NoneType, ControlFlow, Failure,
     };
 
     use super::*;

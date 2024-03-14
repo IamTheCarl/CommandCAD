@@ -21,7 +21,7 @@ use std::{fmt::Debug, rc::Rc};
 use fortuples::fortuples;
 
 use crate::script::{
-    execution::{run_callable_block, ExecutionContext, Failure},
+    execution::{run_callable_block, types::NoneType, ExecutionContext, Failure},
     parsing::{Expression, FunctionSignature, NamedBlock, VariableType},
     Span,
 };
@@ -111,6 +111,12 @@ impl<'a, S: Span> Object<'a, S> for BuiltinFunction<'a, S> {
     }
 }
 
+impl<'a, S: Span> BuiltinFunction<'a, S> {
+    pub fn new<F: BuiltinFunctionPointer<'a, S> + 'static>(function: F) -> Self {
+        Self(Rc::new(function))
+    }
+}
+
 impl<S: Span> Debug for BuiltinFunction<'_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Function").finish()
@@ -135,6 +141,12 @@ pub trait UnpackArguments<'a, S: Span, Tuple> {
         arguments: Vec<Value<'a, S>>,
         expressions: &[Expression<S>],
     ) -> OperatorResult<S, Tuple>;
+
+    fn unpack_arguments_optional(
+        _span: &S,
+        arguments: Vec<Value<'a, S>>,
+        expressions: &[Expression<S>],
+    ) -> OperatorResult<S, Tuple>;
 }
 
 #[rustfmt::skip]
@@ -155,14 +167,37 @@ fortuples! {
 	    
 	    #(let casey::lower!(#Member) = {
 		if let Some(value) = arguments.pop() {
-		    value.downcast(expression_iter.next().unwrap().get_span())?
+		    value.downcast(expression_iter.next().unwrap().get_span()).map_err(|f| f.from_function_call())?
 		} else {
-		    return Err(Failure::MissingArguments(_span.clone()));
+		    return Err(Failure::MissingArguments(_span.clone()).from_function_call());
 		}
 	    };)*
 
 	    if let Some(extra_expression) = expression_iter.next() {
-		Err(Failure::TooManyArguments(extra_expression.get_span().clone()))
+		Err(Failure::TooManyArguments(extra_expression.get_span().clone()).from_function_call())
+	    } else {
+		Ok((#(casey::lower!(#Member)),*))
+	    }
+	}
+	
+	fn unpack_arguments_optional(
+            _span: &S,
+            mut arguments: Vec<Value<'a, S>>,
+            expressions: &[Expression<S>],
+	) -> OperatorResult<S, #Tuple> {
+	    arguments.reverse();
+	    let mut expression_iter = expressions.iter();
+	    
+	    #(let casey::lower!(#Member) = {
+		if let Some(value) = arguments.pop() {
+		    value.downcast(expression_iter.next().unwrap().get_span()).map_err(|f| f.from_function_call())?
+		} else {
+		    Value::<'a, S>::from(NoneType).downcast(_span)?
+		}
+	    };)*
+
+	    if let Some(extra_expression) = expression_iter.next() {
+		Err(Failure::TooManyArguments(extra_expression.get_span().clone()).from_function_call())
 	    } else {
 		Ok((#(casey::lower!(#Member)),*))
 	    }
@@ -177,6 +212,14 @@ where
     type Unpacker: UnpackArguments<'a, S, T>;
 
     fn auto_call(
+        &self,
+        context: &mut ExecutionContext<'a, S>,
+        span: &S,
+        arguments: Vec<Value<'a, S>>,
+        expressions: &[Expression<S>],
+    ) -> OperatorResult<S, Value<'a, S>>;
+
+    fn auto_call_optional(
         &self,
         context: &mut ExecutionContext<'a, S>,
         span: &S,
@@ -204,6 +247,18 @@ fortuples! {
             expressions: &[Expression<S>],
 	) -> OperatorResult<S, Value<'a, S>> {
             let (#(casey::lower!(#Member)),*) = Self::Unpacker::unpack_arguments(span, arguments, expressions)?;
+
+            (self)(context, span, #(casey::lower!(#Member)),*)
+	}
+	
+	fn auto_call_optional(
+            &self,
+            context: &mut ExecutionContext<'a, S>,
+            span: &S,
+            arguments: Vec<Value<'a, S>>,
+            expressions: &[Expression<S>],
+	) -> OperatorResult<S, Value<'a, S>> {
+            let (#(casey::lower!(#Member)),*) = Self::Unpacker::unpack_arguments_optional(span, arguments, expressions)?;
 
             (self)(context, span, #(casey::lower!(#Member)),*)
 	}

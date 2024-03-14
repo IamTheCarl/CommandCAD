@@ -25,9 +25,8 @@ use fj_core::{
 use crate::script::{
     execution::{
         types::{
-            fornjot::vector_from_list,
             function::{AutoCall, IntoBuiltinFunction},
-            List, Object, OperatorResult, Value,
+            Object, OperatorResult, Value, Vector3,
         },
         ExecutionContext, Failure,
     },
@@ -37,7 +36,7 @@ use crate::script::{
 
 use super::{
     circle::unwrap_circle, handle_wrapper, polygon::unwrap_polygon, region::Region, solid::Solid,
-    surface::Surface, unpack_dynamic_length_list,
+    surface::Surface,
 };
 
 pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
@@ -49,7 +48,8 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
          -> OperatorResult<S, Value<'a, S>> {
             match argument {
                 Value::List(regions) => {
-                    let regions = unpack_dynamic_length_list::<S, Region>(span, regions)?
+                    let regions = regions
+                        .unpack_dynamic_length::<Region>(span)?
                         .map(|region| region.handle);
                     let handle = FornjotSketch::new(regions)
                         .insert(&mut context.global_resources.fornjot_core);
@@ -132,14 +132,10 @@ impl<'a, S: Span> Object<'a, S> for Sketch {
             "sweep" => |context: &mut ExecutionContext<'a, S>,
                         span: &S,
                         surface: Surface,
-                        path: List<'a, S>|
+                        path: Vector3|
              -> OperatorResult<S, Value<S>> {
                 let surface = surface.handle;
-                let path = vector_from_list::<S, 3>(
-                    span,
-                    context.global_resources.fornjot_unit_conversion_factor,
-                    path,
-                )?;
+                let path = path.as_fornjot_vector(context, span)?;
 
                 let solid = self
                     .handle
@@ -171,9 +167,11 @@ mod test {
             run_expression(
                 &mut context,
                 Box::leak(Box::new(
-                    Expression::parse("new_sketch(Circle { center = [1mm, 2mm], radius = 3mm })")
-                        .unwrap()
-                        .1
+                    Expression::parse(
+                        "new_sketch(Circle { center = vec2(1mm, 2mm), radius = 3mm })"
+                    )
+                    .unwrap()
+                    .1
                 )),
             ),
             Ok(Value::Sketch(_))
@@ -189,7 +187,7 @@ mod test {
                 &mut context,
                 Box::leak(Box::new(
                     Expression::parse(
-                        "new_sketch(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
+                        "new_sketch(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)] })"
                     )
                     .unwrap()
                     .1
@@ -208,8 +206,8 @@ mod test {
                 &mut context,
                 Box::leak(Box::new(
                     Expression::parse(
-                        "new_sketch([new_region(Circle { center = [1mm, 2mm], radius = 3mm }),
-new_region(Circle { center = [4mm, 2mm], radius = 3mm })])"
+                        "new_sketch([new_region(Circle { center = vec2(1mm, 2mm), radius = 3mm }),
+new_region(Circle { center = vec2(4mm, 2mm), radius = 3mm })])"
                     )
                     .unwrap()
                     .1
@@ -227,7 +225,7 @@ new_region(Circle { center = [4mm, 2mm], radius = 3mm })])"
             run_expression(
                 &mut context,
                 Box::leak(Box::new(Expression::parse(
-                    "new_sketch(Circle { center = [1mm, 2mm], radius = 3mm }).sweep(global_xz_plane(), [0cm, 1cm, 0cm])"
+                    "new_sketch(Circle { center = vec2(1mm, 2mm), radius = 3mm }).sweep(global_xz_plane(), vec3(0cm, 1cm, 0cm))"
                 )
                 .unwrap()
                 .1)),

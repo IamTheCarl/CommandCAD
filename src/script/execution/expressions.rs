@@ -202,13 +202,13 @@ pub fn run_factor<'a, S: Span>(
 
 #[cfg(test)]
 mod test {
-    use super::super::types::DefaultValue;
     use super::*;
-    use ordered_float::NotNan;
+
+    use common_data_types::Number;
 
     use crate::script::{
         execution::{
-            types::{function::IntoBuiltinFunction, List, Measurement, Number, SString},
+            types::{function::IntoBuiltinFunction, DefaultValue, List, Measurement, SString},
             Module, ModuleScope,
         },
         parsing::Litteral,
@@ -223,7 +223,7 @@ mod test {
                 &mut context,
                 Box::leak(Box::new(Expression::parse("24").unwrap().1))
             ),
-            Ok(Value::Number(NotNan::new(24.0).unwrap()))
+            Ok(Number::new(24.0).unwrap().into())
         );
     }
 
@@ -347,7 +347,7 @@ mod test {
                 &mut context,
                 Box::leak(Box::new(Litteral::parse("22").unwrap().1))
             ),
-            Ok(NotNan::new(22.0).unwrap().into())
+            Ok(Number::new(22.0).unwrap().into())
         );
         // String
         assert_eq!(
@@ -441,7 +441,7 @@ mod test {
                 &mut context,
                 Box::leak(Box::new(Expression::parse("+15").unwrap().1))
             ),
-            Ok(Value::Number(NotNan::new(15.0).unwrap()))
+            Ok(Number::new(15.0).unwrap().into())
         );
 
         assert_eq!(
@@ -449,7 +449,7 @@ mod test {
                 &mut context,
                 Box::leak(Box::new(Expression::parse("-15").unwrap().1))
             ),
-            Ok(Value::Number(NotNan::new(-15.0).unwrap()))
+            Ok(Number::new(-15.0).unwrap().into())
         );
     }
 
@@ -492,7 +492,7 @@ mod test {
                         .1
                 ))
             ),
-            Ok(NotNan::new(42.0).unwrap().into())
+            Ok(Number::new(42.0).unwrap().into())
         );
     }
 
@@ -505,7 +505,7 @@ mod test {
                 &mut context,
                 Box::leak(Box::new(Expression::parse("24.25.floor()").unwrap().1))
             ),
-            Ok(NotNan::new(24.0).unwrap().into())
+            Ok(Number::new(24.0).unwrap().into())
         );
     }
 
@@ -602,7 +602,7 @@ mod test {
                 Box::leak(Box::new(Expression::parse("5..").unwrap().1))
             ),
             Ok(Range {
-                lower_bound: Some(Number::new(5.0).unwrap()),
+                lower_bound: Some(Number::new(5.0).unwrap().into()),
                 upper_bound_is_inclusive: false,
                 upper_bound: None
             }
@@ -616,7 +616,7 @@ mod test {
             Ok(Range {
                 lower_bound: None,
                 upper_bound_is_inclusive: false,
-                upper_bound: Some(Number::new(5.0).unwrap())
+                upper_bound: Some(Number::new(5.0).unwrap().into())
             }
             .into())
         );
@@ -628,7 +628,7 @@ mod test {
             Ok(Range {
                 lower_bound: None,
                 upper_bound_is_inclusive: true,
-                upper_bound: Some(Number::new(5.0).unwrap())
+                upper_bound: Some(Number::new(5.0).unwrap().into())
             }
             .into())
         );

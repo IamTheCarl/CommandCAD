@@ -138,9 +138,11 @@ mod test {
             run_expression(
                 &mut context,
                 Box::leak(Box::new(
-                    Expression::parse("new_cycle(Circle { center = [1mm, 2mm], radius = 3mm })")
-                        .unwrap()
-                        .1
+                    Expression::parse(
+                        "new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm })"
+                    )
+                    .unwrap()
+                    .1
                 )),
             ),
             Ok(Value::Cycle(_))
@@ -156,7 +158,7 @@ mod test {
                 &mut context,
                 Box::leak(Box::new(
                     Expression::parse(
-                        "new_cycle(Polygon { points = [[0m, 0m], [0m, 1m], [1m, 1m], [1m, 0m]] })"
+                        "new_cycle(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)] })"
                     )
                     .unwrap()
                     .1

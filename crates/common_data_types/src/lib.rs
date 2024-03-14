@@ -1,10 +1,26 @@
 use std::{borrow::Cow, collections::HashMap};
 
+use ordered_float::NotNan;
 use paste::paste;
 use serde::Serialize;
 
-pub type ConversionFactorDatabase = HashMap<String, ConversionFactor>;
+pub type RawNumber = f64;
+pub type Number = NotNan<RawNumber>;
+pub use ordered_float::{FloatIsNan, ParseNotNanError};
+pub use std::f64::consts;
+
+pub type ConversionFactorDatabase = HashMap<Cow<'static, str>, ConversionFactor>;
 pub type DimensionNameDatabase = HashMap<Dimension, Cow<'static, str>>;
+pub type UnitList = Vec<(String, Vec<UnitDescription>)>;
+pub type BaseUnits = HashMap<Dimension, Cow<'static, str>>;
+
+#[derive(Debug, Serialize)]
+pub struct UnitDescription {
+    pub abbreviation: String,
+    pub keyboard_friendly_abbreviation: String,
+    pub name: String,
+    pub plural_name: String,
+}
 
 #[derive(Serialize, PartialEq, Eq, Hash, Clone, Copy, Default)]
 pub struct RatioTypeHint(pub u8);
@@ -42,6 +58,14 @@ impl RatioTypeHint {
     bit_getter_setter!(Self::INFORMATION_MASK, information);
     bit_getter_setter!(Self::SOLID_ANGLE_MASK, solid_angle);
     bit_getter_setter!(Self::TEMPRATURE_MASK, temperature);
+}
+
+impl std::ops::BitOr for RatioTypeHint {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
 }
 
 impl std::fmt::Debug for RatioTypeHint {
@@ -86,7 +110,105 @@ pub struct Dimension {
     pub ratio_type_hint: RatioTypeHint,
 }
 
+impl std::ops::Add for Dimension {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            length: self.length + rhs.length,
+            mass: self.mass + rhs.mass,
+            time: self.time + rhs.time,
+            electric_current: self.electric_current + rhs.electric_current,
+            thermodynamic_temprature: self.thermodynamic_temprature + rhs.thermodynamic_temprature,
+            amount_of_substance: self.amount_of_substance + rhs.amount_of_substance,
+            luminous_intensity: self.luminous_intensity + rhs.luminous_intensity,
+            ratio_type_hint: self.ratio_type_hint | rhs.ratio_type_hint,
+        }
+    }
+}
+
+impl std::ops::Sub for Dimension {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            length: self.length - rhs.length,
+            mass: self.mass - rhs.mass,
+            time: self.time - rhs.time,
+            electric_current: self.electric_current - rhs.electric_current,
+            thermodynamic_temprature: self.thermodynamic_temprature - rhs.thermodynamic_temprature,
+            amount_of_substance: self.amount_of_substance - rhs.amount_of_substance,
+            luminous_intensity: self.luminous_intensity - rhs.luminous_intensity,
+            ratio_type_hint: self.ratio_type_hint | rhs.ratio_type_hint,
+        }
+    }
+}
+
+impl std::ops::Neg for Dimension {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self {
+            length: -self.length,
+            mass: -self.mass,
+            time: -self.time,
+            electric_current: -self.electric_current,
+            thermodynamic_temprature: -self.thermodynamic_temprature,
+            amount_of_substance: -self.amount_of_substance,
+            luminous_intensity: -self.luminous_intensity,
+            ratio_type_hint: self.ratio_type_hint,
+        }
+    }
+}
+
+impl std::ops::Mul<i8> for Dimension {
+    type Output = Self;
+
+    fn mul(self, rhs: i8) -> Self::Output {
+        Self {
+            length: self.length * rhs,
+            mass: self.mass * rhs,
+            time: self.time * rhs,
+            electric_current: self.electric_current * rhs,
+            thermodynamic_temprature: self.thermodynamic_temprature * rhs,
+            amount_of_substance: self.amount_of_substance * rhs,
+            luminous_intensity: self.luminous_intensity * rhs,
+            ratio_type_hint: self.ratio_type_hint,
+        }
+    }
+}
+
+impl std::ops::Div<i8> for Dimension {
+    type Output = Self;
+
+    fn div(self, rhs: i8) -> Self::Output {
+        Self {
+            length: self.length / rhs,
+            mass: self.mass / rhs,
+            time: self.time / rhs,
+            electric_current: self.electric_current / rhs,
+            thermodynamic_temprature: self.thermodynamic_temprature / rhs,
+            amount_of_substance: self.amount_of_substance / rhs,
+            luminous_intensity: self.luminous_intensity / rhs,
+            ratio_type_hint: self.ratio_type_hint,
+        }
+    }
+}
+
 impl Dimension {
+    pub fn zero() -> Self {
+        Self {
+            length: 0,
+            mass: 0,
+            time: 0,
+            electric_current: 0,
+            thermodynamic_temprature: 0,
+            amount_of_substance: 0,
+            luminous_intensity: 0,
+            ratio_type_hint: RatioTypeHint(0),
+        }
+    }
+
     pub fn is_zero_dimension(&self) -> bool {
         self.length == 0
             && self.mass == 0

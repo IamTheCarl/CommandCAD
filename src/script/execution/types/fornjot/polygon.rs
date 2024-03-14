@@ -23,13 +23,11 @@ use parsing::Span;
 
 use crate::script::{
     execution::{
-        types::{List, OperatorResult, StructDefinition, Structure},
-        ExecutionContext, Failure,
+        types::{List, OperatorResult, StructDefinition, Structure, Vector2},
+        ExecutionContext,
     },
     parsing::{self, MemberVariable, MemberVariableType, VariableType},
 };
-
-use super::{point_from_list, unpack_dynamic_length_list};
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     context.stack.new_variable_str(
@@ -65,15 +63,8 @@ pub fn unwrap_polygon<S: Span>(
         .downcast::<List<S>>(span)?;
     let mut fornjot_points = Vec::with_capacity(provided_points.len());
 
-    for (index, point) in
-        unpack_dynamic_length_list::<S, List<S>>(span, provided_points)?.enumerate()
-    {
-        let point = point_from_list::<S, 2>(
-            span,
-            context.global_resources.fornjot_unit_conversion_factor,
-            point,
-        )
-        .map_err(|failure| Failure::ListElement(span.clone(), index, Box::new(failure)))?;
+    for point in provided_points.unpack_dynamic_length::<Vector2>(span)? {
+        let point = point.as_fornjot_point(context, span)?;
 
         fornjot_points.push(point);
     }

@@ -23,26 +23,24 @@ use parsing::Span;
 
 use crate::script::{
     execution::{
-        types::{List, Measurement, OperatorResult, StructDefinition, Structure},
+        types::{Measurement, OperatorResult, StructDefinition, Structure, Vector2},
         ExecutionContext,
     },
     parsing::{self, MemberVariable, MemberVariableType, VariableType},
 };
 
-use super::{point_from_list, scalar_from_measurement};
-
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     context.stack.new_variable_str(
         "Circle",
         StructDefinition {
-            // TODO replace box leak with lazy static.
+            // FIXME replace box leak with lazy static.
             definition: Box::leak(Box::new(parsing::StructDefinition {
                 name: S::from_str("Circle"),
                 members: vec![
                     MemberVariable {
                         name: S::from_str("center"),
                         ty: MemberVariableType {
-                            ty: VariableType::List,
+                            ty: VariableType::Vector(2, S::from_str("Length")),
                             constraints: None,
                             default_value: None,
                         },
@@ -70,20 +68,12 @@ pub fn unwrap_circle<S: Span>(
 ) -> OperatorResult<S, (Point<2>, Scalar)> {
     let mut members = Rc::unwrap_or_clone(circle.members);
     let center = members.remove("center").unwrap();
-    let center = center.downcast::<List<S>>(span)?;
-    let center = point_from_list::<S, 2>(
-        span,
-        context.global_resources.fornjot_unit_conversion_factor,
-        center,
-    )?;
+    let center = center.downcast::<Vector2>(span)?;
+    let center = center.as_fornjot_point(context, span)?;
 
     let radius = members.remove("radius").unwrap();
     let radius = radius.downcast::<Measurement>(span)?;
-    let radius = scalar_from_measurement(
-        span,
-        context.global_resources.fornjot_unit_conversion_factor,
-        &radius,
-    )?;
+    let radius = radius.as_scalar(context, span)?;
 
     Ok((center, radius))
 }

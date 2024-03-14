@@ -16,22 +16,23 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use common_data_types::Number;
 use std::{cmp::Ordering, fmt::Write, rc::Rc};
 
 use crate::script::{
-    execution::{types::Number, ExecutionContext, Failure},
+    execution::{ExecutionContext, Failure},
     logging::RuntimeLog,
     parsing::{self, Expression, VariableType},
     Span,
 };
 
 use super::{
-    function::AutoCall, number::UnwrapNotNan, serializable::SerializableValue, NamedObject, Object,
-    OperatorResult, Range, Value,
+    function::AutoCall, number::UnwrapNotNan, serializable::SerializableValue, Measurement,
+    NamedObject, Object, OperatorResult, Range, Value,
 };
 
 pub mod formatting;
-use self::formatting::{Style, UnsupportedMessage, UnwrapFormattingResult};
+use formatting::{Style, UnsupportedMessage, UnwrapFormattingResult};
 
 static ESCAPE_SEQUENCES: &[(&str, &str)] = &[("\\\"", "\""), ("\\n", "\n"), ("\\\\", "\\")];
 
@@ -82,7 +83,7 @@ impl<'a, S: Span> Object<'a, S> for SString {
         span: &S,
         index: Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
-        let range = index.downcast_ref::<Range>(span)?;
+        let range = index.downcast::<Range>(span)?;
 
         // TODO could we keep an immutable reference to the original string to avoid a copy?
         let slice = match (
@@ -90,33 +91,50 @@ impl<'a, S: Span> Object<'a, S> for SString {
             range.upper_bound,
             range.upper_bound_is_inclusive,
         ) {
-            (None, None, false) => self.string.get(..),
+            (None, None, false) => self.string.get(..).ok_or((None, None)),
             (Some(lower_bound), None, false) => {
-                let lower_bound = self.internalize_index(span, lower_bound)?;
-                self.string.get(lower_bound..)
+                let signed_lower_bound = lower_bound.to_index(span)?;
+                let lower_bound = self.internalize_index(span, signed_lower_bound)?;
+                self.string
+                    .get(lower_bound..)
+                    .ok_or((Some(signed_lower_bound), None))
             }
             (None, Some(upper_bound), false) => {
-                let upper_bound = self.internalize_index(span, upper_bound)?;
-                self.string.get(..upper_bound)
+                let signed_upper_bound = upper_bound.to_index(span)?;
+                let upper_bound = self.internalize_index(span, signed_upper_bound)?;
+                self.string
+                    .get(..upper_bound)
+                    .ok_or((None, Some(signed_upper_bound)))
             }
             (None, Some(upper_bound), true) => {
-                let upper_bound = self.internalize_index(span, upper_bound)?;
-                self.string.get(..=upper_bound)
+                let signed_upper_bound = upper_bound.to_index(span)?;
+                let upper_bound = self.internalize_index(span, signed_upper_bound)?;
+                self.string
+                    .get(..=upper_bound)
+                    .ok_or((None, Some(signed_upper_bound)))
             }
             (Some(lower_bound), Some(upper_bound), false) => {
-                let lower_bound = self.internalize_index(span, lower_bound)?;
-                let upper_bound = self.internalize_index(span, upper_bound)?;
-                self.string.get(lower_bound..upper_bound)
+                let signed_lower_bound = lower_bound.to_index(span)?;
+                let lower_bound = self.internalize_index(span, signed_lower_bound)?;
+                let signed_upper_bound = upper_bound.to_index(span)?;
+                let upper_bound = self.internalize_index(span, signed_upper_bound)?;
+                self.string
+                    .get(lower_bound..upper_bound)
+                    .ok_or((Some(signed_lower_bound), Some(signed_upper_bound)))
             }
             (Some(lower_bound), Some(upper_bound), true) => {
-                let lower_bound = self.internalize_index(span, lower_bound)?;
-                let upper_bound = self.internalize_index(span, upper_bound)?;
-                self.string.get(lower_bound..=upper_bound)
+                let signed_lower_bound = lower_bound.to_index(span)?;
+                let lower_bound = self.internalize_index(span, signed_lower_bound)?;
+                let signed_upper_bound = upper_bound.to_index(span)?;
+                let upper_bound = self.internalize_index(span, signed_upper_bound)?;
+                self.string
+                    .get(lower_bound..=upper_bound)
+                    .ok_or((Some(signed_lower_bound), Some(signed_upper_bound)))
             }
             (_, None, true) => unreachable!(), // Inclusive ranges without an upper bound are illegal to construct.
         };
 
-        // TOOD String has an identical error handling. We should probably move this to a common library.
+        // TODO List has an identical error handling. We should probably move this to a common library.
         let range_type = if range.upper_bound_is_inclusive {
             "..="
         } else {
@@ -125,16 +143,9 @@ impl<'a, S: Span> Object<'a, S> for SString {
 
         slice
             .map(|slice| Self::from(slice.to_string()).into())
-            .ok_or(Failure::SliceOutOfRange(
-                span.clone(),
-                range
-                    .lower_bound
-                    .map(|bound| bound.into_inner().trunc() as isize),
-                range_type,
-                range
-                    .upper_bound
-                    .map(|bound| bound.into_inner().trunc() as isize),
-            ))
+            .map_err(|(lower_bound, upper_bound)| {
+                Failure::SliceOutOfRange(span.clone(), lower_bound, range_type, upper_bound)
+            })
     }
 
     fn cmp(
@@ -162,8 +173,9 @@ impl<'a, S: Span> Object<'a, S> for SString {
 
                 Ok(Self::from(string).into())
             }
-            Value::Number(rhs) => {
+            Value::Measurement(rhs) => {
                 // convert numbers to strings.
+                let rhs = rhs.to_number(span)?;
                 let mut string = self.unwrap_or_clone();
 
                 string += &format!("{}", rhs.into_inner());
@@ -189,11 +201,12 @@ impl<'a, S: Span> Object<'a, S> for SString {
         match attribute.as_str() {
             "insert" => |_context: &mut ExecutionContext<'a, S>,
                          span: &S,
-                         index: Number,
+                         index: Measurement,
                          text: SString|
              -> OperatorResult<S, Value<S>> {
                 let mut string = self.unwrap_or_clone();
 
+                let index = index.to_index(span)?;
                 let index = self.internalize_index(span, index)?;
 
                 string.insert_str(index, text.as_str());
@@ -208,7 +221,9 @@ impl<'a, S: Span> Object<'a, S> for SString {
             }
             "len" => {
                 |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
-                    Number::new(self.string.len() as f64).unwrap_not_nan(span)
+                    Number::new(self.string.len() as f64)
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
                 }
                 .auto_call(context, span, arguments, expressions)
             }
@@ -272,25 +287,23 @@ impl SString {
         self.unwrap_or_clone()
     }
 
-    fn internalize_index<S: Span>(&self, span: &S, index: Number) -> OperatorResult<S, usize> {
-        let raw_index = index.trunc() as isize;
-
-        let index = if raw_index >= 0 {
-            Ok(raw_index as usize)
-        } else if let Some(index) = self.string.len().checked_sub(raw_index.unsigned_abs()) {
+    fn internalize_index<S: Span>(&self, span: &S, index: isize) -> OperatorResult<S, usize> {
+        let new_index = if index >= 0 {
+            Ok(index as usize)
+        } else if let Some(index) = self.string.len().checked_sub(index.unsigned_abs()) {
             Ok(index)
         } else {
-            Err(Failure::IndexOutOfRange(span.clone(), raw_index))
+            Err(Failure::IndexOutOfRange(span.clone(), index))
         }?;
 
-        if index >= self.string.len() {
-            Err(Failure::IndexOutOfRange(span.clone(), raw_index))
-        } else if self.string.is_char_boundary(index) {
-            Ok(index)
-        } else if index < self.string.len() {
-            Err(Failure::InvalidCharIndex(span.clone(), index as isize))
+        if new_index >= self.string.len() {
+            Err(Failure::IndexOutOfRange(span.clone(), index))
+        } else if self.string.is_char_boundary(new_index) {
+            Ok(new_index)
+        } else if new_index < self.string.len() {
+            Err(Failure::InvalidCharIndex(span.clone(), new_index as isize))
         } else {
-            Err(Failure::IndexOutOfRange(span.clone(), index as isize))
+            Err(Failure::IndexOutOfRange(span.clone(), new_index as isize))
         }
     }
 }

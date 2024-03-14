@@ -81,7 +81,7 @@ mod test {
         statements::expression::{
             arithmetic::ArithmeticExpression, comparison::Comparison, term::Term, trailer::Trailer,
         },
-        Number,
+        Measurement, Number,
     };
 
     use super::*;
@@ -93,10 +93,13 @@ mod test {
             Factor::parse("22"),
             Ok((
                 "",
-                Factor::Litteral(Litteral::Number(Number {
-                    integer: Some("22"),
-                    dot: None,
-                    fractional: None
+                Factor::Litteral(Litteral::Measurement(Measurement {
+                    number: Number {
+                        integer: Some("22"),
+                        dot: None,
+                        fractional: None
+                    },
+                    ty: ""
                 }))
             ))
         );

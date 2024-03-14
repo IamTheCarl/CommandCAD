@@ -553,11 +553,10 @@ mod test {
     use super::*;
 
     use crate::script::{
-        execution::{
-            expressions::run_expression, run_block, types::Number, ExecutionContext, ModuleScope,
-        },
+        execution::{expressions::run_expression, run_block, ExecutionContext, ModuleScope},
         parsing::Expression,
     };
+    use common_data_types::Number;
 
     #[test]
     fn functions() {

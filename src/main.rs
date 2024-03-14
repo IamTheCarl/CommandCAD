@@ -25,7 +25,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context, Result};
-use arguments::{OutputTarget, SolidOutputFormat, TaskOutputFormat};
+use arguments::{ListUnitsArgs, OutputTarget, SolidOutputFormat, TaskOutputFormat};
 use atty::Stream;
 use clap::Parser;
 
@@ -45,8 +45,6 @@ use uom::si::{f64::Length, length::millimeter};
 use crate::script::{print_all_supported_units, Measurement};
 
 fn main() {
-    print_all_supported_units();
-
     stderrlog::new()
         .show_level(true)
         .verbosity(3)
@@ -58,6 +56,14 @@ fn main() {
         arguments::Command::Run(run_args) => run(run_args),
         arguments::Command::Sketch(sketch_args) => sketch(sketch_args),
         arguments::Command::Form(form_args) => form(form_args),
+        arguments::Command::ListUnits(list_args) => list_units(list_args),
+    }
+}
+
+fn list_units(list_args: ListUnitsArgs) {
+    let mut output = std::io::stdout();
+    if let Err(error) = print_all_supported_units(&mut output, list_args.search.as_deref()) {
+        log::error!("Output failure: {:?}", error);
     }
 }
 

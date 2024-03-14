@@ -39,7 +39,6 @@ mod boolean;
 pub use boolean::Boolean;
 
 mod number;
-pub use number::Number;
 
 pub mod function;
 pub use function::{BuiltinFunction, UserFunction};
@@ -51,10 +50,13 @@ mod list;
 pub use list::List;
 
 mod string;
-pub use string::{formatting::Style, SString};
+pub use string::{
+    formatting::{Style, UnwrapFormattingResult},
+    SString,
+};
 
 mod measurement;
-pub use self::measurement::{print_all_supported_units, Measurement};
+pub use self::measurement::{print_all_supported_units, Measurement, Vector2, Vector3, Vector4};
 
 mod range;
 pub use range::Range;
@@ -67,12 +69,13 @@ pub use serializable::SerializableValue;
 
 mod fornjot;
 pub use fornjot::{
-    cycle::Cycle, face::Face, region::Region, shell::Shell, sketch::Sketch, solid::Solid,
-    surface::Surface,
+    curve::Curve, cycle::Cycle, face::Face, half_edge::HalfEdge, region::Region, shell::Shell,
+    sketch::Sketch, solid::Solid, surface::Surface, vertex::Vertex,
 };
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
-    fornjot::register_globals(context)
+    measurement::register_globals(context);
+    fornjot::register_globals(context);
 }
 
 pub type OperatorResult<S, R> = std::result::Result<R, Failure<S>>;
@@ -255,7 +258,6 @@ pub enum Value<'a, S: Span> {
     NoneType,
     Default(DefaultValue),
     Boolean,
-    Number,
     BuiltinFunction(BuiltinFunction<'a, S>),
     UserFunction(UserFunction<'a, S>),
     Structure(Structure<'a, S>),
@@ -264,7 +266,10 @@ pub enum Value<'a, S: Span> {
     String(SString),
     Range(Range),
     Closure(Closure<'a, S>),
-    Measurement(Measurement),
+    Measurement,
+    Vector2(Vector2),
+    Vector3(Vector3),
+    Vector4(Vector4),
     Cycle,
     Region,
     Sketch,
@@ -272,6 +277,9 @@ pub enum Value<'a, S: Span> {
     Solid,
     Shell,
     Face,
+    Curve,
+    HalfEdge,
+    Vertex,
 }
 
 impl<'a, S: Span> NamedObject for Value<'a, S> {
@@ -314,13 +322,23 @@ impl<'a, S: Span> Value<'a, S> {
         }
     }
 
+    pub fn downcast_optional<T>(self, span: &S) -> OperatorResult<S, Option<T>>
+    where
+        T: NamedObject,
+        Self: TryInto<T>,
+    {
+        match self {
+            Self::NoneType(_) => Ok(None),
+            this => Ok(Some(this.downcast::<T>(span)?)),
+        }
+    }
+
     pub fn from_litteral(
         context: &mut ExecutionContext<'a, S>,
         value: &'a Litteral<S>,
     ) -> OperatorResult<S, Self> {
         match value {
             Litteral::Measurement(measurement) => Measurement::from_parsed(measurement),
-            Litteral::Number(number) => number::from_parsed(number),
             Litteral::String(string) => SString::from_parsed(string),
             Litteral::List(list) => List::from_parsed(context, list),
             Litteral::Boolean(_span, value) => Ok(Self::Boolean(*value)),

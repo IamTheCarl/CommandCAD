@@ -424,22 +424,19 @@ fn run_define_function<'a, S: Span>(
 
 fn run_define_structure<'a, S: Span>(
     context: &mut ExecutionContext<'a, S>,
-    structure: &'a parsing::StructDefinition<S>,
+    definition: &'a parsing::StructDefinition<S>,
 ) -> ExecutionResult<'a, S, Value<'a, S>> {
-    context.stack.new_variable(
-        &structure.name,
-        StructDefinition {
-            definition: structure.into(),
-        }
-        .into(),
-    );
+    context
+        .stack
+        .new_variable(&definition.name, StructDefinition { definition }.into());
 
     Ok(NoneType.into())
 }
 
 #[cfg(test)]
 mod test {
-    use crate::script::execution::{types::Number, ControlFlow, Failure};
+    use crate::script::execution::{ControlFlow, Failure};
+    use common_data_types::Number;
 
     use super::*;
 
