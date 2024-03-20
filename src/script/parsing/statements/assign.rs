@@ -188,7 +188,7 @@ mod test {
                 "",
                 AssignableVariable {
                     name: "variable",
-                    ty: Some(VariableType::Measurement("Length")),
+                    ty: Some(VariableType::Scalar("Length")),
                 }
             ))
         );
@@ -236,11 +236,11 @@ mod test {
                     vec![
                         AssignableVariable {
                             name: "a",
-                            ty: Some(VariableType::Measurement("Length"))
+                            ty: Some(VariableType::Scalar("Length"))
                         },
                         AssignableVariable {
                             name: "b",
-                            ty: Some(VariableType::Measurement("Angle"))
+                            ty: Some(VariableType::Scalar("Angle"))
                         }
                     ]
                 )
@@ -275,7 +275,7 @@ mod test {
                     is_new: false,
                     to_assign: Assignable::Variable(AssignableVariable {
                         name: "a",
-                        ty: Some(VariableType::Measurement("Length")),
+                        ty: Some(VariableType::Scalar("Length")),
                     }),
                     statement: Box::new(Statement::parse("b").unwrap().1)
                 }

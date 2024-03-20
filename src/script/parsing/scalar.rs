@@ -27,17 +27,17 @@ use nom::{
 use super::{space0, Number, Span, VResult};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Measurement<S: Span> {
+pub struct Scalar<S: Span> {
     pub number: Number<S>,
     pub ty: S,
 }
 
-impl<S: Span> Measurement<S> {
+impl<S: Span> Scalar<S> {
     pub fn parse(input: S) -> VResult<S, Self> {
         // TODO the unit type parsing is terribly under-tested.
         map(
             separated_pair(Number::parse, space0, Self::parse_type),
-            |(number, ty)| Measurement { number, ty },
+            |(number, ty)| Scalar { number, ty },
         )(input)
     }
 
@@ -93,28 +93,22 @@ mod test {
 
     #[test]
     fn parse_type() {
-        assert_eq!(
-            Measurement::parse_type("<cm^3(STP)>"),
-            Ok(("", "cm^3(STP)"))
-        );
-        assert_eq!(Measurement::parse_type("mm"), Ok(("", "mm")));
-        assert_eq!(Measurement::parse_type(""), Ok(("", "")));
+        assert_eq!(Scalar::parse_type("<cm^3(STP)>"), Ok(("", "cm^3(STP)")));
+        assert_eq!(Scalar::parse_type("mm"), Ok(("", "mm")));
+        assert_eq!(Scalar::parse_type(""), Ok(("", "")));
 
-        assert_eq!(Measurement::parse_type("mm <"), Ok((" <", "mm")));
-        assert_eq!(
-            Measurement::parse_type("mm.floor()"),
-            Ok((".floor()", "mm"))
-        );
-        assert_eq!(Measurement::parse_type(".floor()"), Ok((".floor()", "")));
+        assert_eq!(Scalar::parse_type("mm <"), Ok((" <", "mm")));
+        assert_eq!(Scalar::parse_type("mm.floor()"), Ok((".floor()", "mm")));
+        assert_eq!(Scalar::parse_type(".floor()"), Ok((".floor()", "")));
     }
 
     #[test]
     fn measurement() {
         assert_eq!(
-            Measurement::parse("22 m"),
+            Scalar::parse("22 m"),
             Ok((
                 "",
-                Measurement {
+                Scalar {
                     number: Number {
                         integer: Some("22"),
                         dot: None,
@@ -126,10 +120,10 @@ mod test {
         );
 
         assert_eq!(
-            Measurement::parse("22m"),
+            Scalar::parse("22m"),
             Ok((
                 "",
-                Measurement {
+                Scalar {
                     number: Number {
                         integer: Some("22"),
                         dot: None,
@@ -141,10 +135,10 @@ mod test {
         );
 
         assert_eq!(
-            Measurement::parse("22.44m"),
+            Scalar::parse("22.44m"),
             Ok((
                 "",
-                Measurement {
+                Scalar {
                     number: Number {
                         integer: Some("22"),
                         dot: Some("."),
@@ -159,10 +153,10 @@ mod test {
     #[test]
     fn number() {
         assert_eq!(
-            Measurement::parse("22"),
+            Scalar::parse("22"),
             Ok((
                 "",
-                Measurement {
+                Scalar {
                     number: Number {
                         integer: Some("22"),
                         dot: None,
@@ -174,10 +168,10 @@ mod test {
         );
 
         assert_eq!(
-            Measurement::parse("22.44"),
+            Scalar::parse("22.44"),
             Ok((
                 "",
-                Measurement {
+                Scalar {
                     number: Number {
                         integer: Some("22"),
                         dot: Some("."),
@@ -189,10 +183,10 @@ mod test {
         );
 
         assert_eq!(
-            Measurement::parse("22.44 <"),
+            Scalar::parse("22.44 <"),
             Ok((
                 "<",
-                Measurement {
+                Scalar {
                     number: Number {
                         integer: Some("22"),
                         dot: Some("."),
@@ -204,10 +198,10 @@ mod test {
         );
 
         assert_eq!(
-            Measurement::parse("22.44.floor()"),
+            Scalar::parse("22.44.floor()"),
             Ok((
                 ".floor()",
-                Measurement {
+                Scalar {
                     number: Number {
                         integer: Some("22"),
                         dot: Some("."),

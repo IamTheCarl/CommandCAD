@@ -37,12 +37,12 @@ use fj_core::algorithms::{
     approx::Tolerance, bounding_volume::BoundingVolume, triangulate::Triangulate,
 };
 use fj_export::{export_3mf, export_obj, export_stl};
-use fj_math::{Aabb, Point, Scalar};
+use fj_math::{Aabb, Point, Scalar as FornjotScalar};
 use script::{Failure, Runtime, SerializableValue};
 use tempfile::SpooledTempFile;
 use uom::si::{f64::Length, length::millimeter};
 
-use crate::script::{print_all_supported_units, Measurement};
+use crate::script::{print_all_supported_units, Scalar};
 
 fn main() {
     stderrlog::new()
@@ -128,7 +128,7 @@ fn form(form_args: arguments::FormArgs) {
         |solid, runtime| {
             let tolerance = match form_args.tolerance {
                 Some(tolerance) => {
-                    let tolerance = Measurement::from_str(&tolerance)?;
+                    let tolerance = Scalar::from_str(&tolerance)?;
                     let tolerance: Length = tolerance
                         .try_into()
                         .map_err(|_| anyhow!("Failed to parse tolerance as a length"))?;
@@ -137,21 +137,28 @@ fn form(form_args: arguments::FormArgs) {
                 }
                 None => {
                     // Compute a default tolerance derived from the bounding box.
-                    let aabb = solid.handle.deref().aabb().unwrap_or(Aabb {
-                        min: Point::origin(),
-                        max: Point::origin(),
-                    });
+                    let aabb = runtime
+                        .global_resources(|global_resources| {
+                            solid
+                                .handle
+                                .deref()
+                                .aabb(&global_resources.fornjot_core.layers.geometry)
+                        })
+                        .unwrap_or(Aabb {
+                            min: Point::origin(),
+                            max: Point::origin(),
+                        });
 
                     // Find the smallest face.
-                    let mut min_extent = Scalar::MAX;
+                    let mut min_extent = FornjotScalar::MAX;
                     for extent in aabb.size().components {
-                        if extent > Scalar::ZERO && extent < min_extent {
+                        if extent > FornjotScalar::ZERO && extent < min_extent {
                             min_extent = extent;
                         }
                     }
 
                     // Our smallest face will be divided into 1000 parts.
-                    let tolerance = min_extent / Scalar::from_f64(1000.0);
+                    let tolerance = min_extent / FornjotScalar::from_f64(1000.0);
                     Tolerance::from_scalar(tolerance)?
                 }
             };

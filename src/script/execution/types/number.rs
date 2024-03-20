@@ -20,7 +20,7 @@ use common_data_types::{FloatIsNan, Number};
 
 use crate::script::{execution::Failure, parsing, Span};
 
-use super::{Measurement, OperatorResult, Value};
+use super::{OperatorResult, Scalar, Value};
 
 pub trait UnwrapNotNan: Sized {
     fn unwrap_not_nan<S: Span>(self, span: &S) -> OperatorResult<S, Number>;
@@ -44,7 +44,7 @@ impl UnwrapNotNan for std::result::Result<Number, FloatIsNan> {
 
 impl<'a, S: Span> From<Number> for Value<'a, S> {
     fn from(value: Number) -> Self {
-        let measurement: Measurement = value.into();
+        let measurement: Scalar = value.into();
         measurement.into()
     }
 }

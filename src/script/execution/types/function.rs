@@ -167,14 +167,14 @@ fortuples! {
 	    
 	    #(let casey::lower!(#Member) = {
 		if let Some(value) = arguments.pop() {
-		    value.downcast(expression_iter.next().unwrap().get_span()).map_err(|f| f.from_function_call())?
+		    value.downcast(expression_iter.next().unwrap().get_span()).map_err(|f| f.make_from_function_call())?
 		} else {
-		    return Err(Failure::MissingArguments(_span.clone()).from_function_call());
+		    return Err(Failure::MissingArguments(_span.clone()).make_from_function_call());
 		}
 	    };)*
 
 	    if let Some(extra_expression) = expression_iter.next() {
-		Err(Failure::TooManyArguments(extra_expression.get_span().clone()).from_function_call())
+		Err(Failure::TooManyArguments(extra_expression.get_span().clone()).make_from_function_call())
 	    } else {
 		Ok((#(casey::lower!(#Member)),*))
 	    }
@@ -190,14 +190,14 @@ fortuples! {
 	    
 	    #(let casey::lower!(#Member) = {
 		if let Some(value) = arguments.pop() {
-		    value.downcast(expression_iter.next().unwrap().get_span()).map_err(|f| f.from_function_call())?
+		    value.downcast(expression_iter.next().unwrap().get_span()).map_err(|f| f.make_from_function_call())?
 		} else {
 		    Value::<'a, S>::from(NoneType).downcast(_span)?
 		}
 	    };)*
 
 	    if let Some(extra_expression) = expression_iter.next() {
-		Err(Failure::TooManyArguments(extra_expression.get_span().clone()).from_function_call())
+		Err(Failure::TooManyArguments(extra_expression.get_span().clone()).make_from_function_call())
 	    } else {
 		Ok((#(casey::lower!(#Member)),*))
 	    }

@@ -27,11 +27,10 @@ use crate::script::{
 };
 
 use super::{
-    structures::validate_assignment_type, DefaultValue, List, Measurement, Object, OperatorResult,
-    SString, Structure, Value,
+    structures::validate_assignment_type, DefaultValue, List, Object, OperatorResult, SString,
+    Scalar, Structure, Value,
 };
 
-// TODO add the ability to deserialize Default and Measurements. You should not be able to serialize these values.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum SerializableValue {
@@ -47,45 +46,13 @@ pub enum SerializableValue {
     },
     #[serde(untagged)]
     List(Vec<SerializableValue>),
-    #[serde(
-        untagged //,
-        // deserialize_with = "SerializableValue::parse_measurement",
-        // serialize_with = "SerializableValue::serialize_measurement"
-    )]
-    Measurement(Measurement),
+    #[serde(untagged)]
+    Scalar(Scalar),
     #[serde(untagged)]
     String(String),
 }
 
 impl SerializableValue {
-    // pub fn parse_measurement<'de, D>(deserializer: D) -> Result<Measurement, D::Error>
-    // where
-    //     D: Deserializer<'de>,
-    // {
-    //     use serde::de::Error;
-
-    // 	let n = deserializer.deserialize_any(visitor)
-
-    //      if let Ok(s) = String::deserialize(deserializer) {
-    //     //     Measurement::from_str(&s).map_err(|error| D::Error::custom(format!("{:?}", error)))
-    //     // } else {
-    //     //     let n = RawNumber::deserialize(deserializer)?;
-    //     //     let n = Number::new(n).map_err(|error| D::Error::custom(format!("{:?}", error)))?;
-
-    //     //     Ok(Measurement::from_number(n))
-    //     // }
-    // }
-
-    // pub fn serialize_measurement<S>(
-    //     measurement: &Measurement,
-    //     serializer: S,
-    // ) -> Result<S::Ok, S::Error>
-    // where
-    //     S: Serializer,
-    // {
-    //     todo!()
-    // }
-
     pub fn into_value_without_type_check<'a, S: Span>(
         self,
         context: &mut ExecutionContext<'a, S>,
@@ -147,7 +114,7 @@ impl SerializableValue {
                 Ok(List::from(collected_values).into())
             }
             Self::String(value) => Ok(SString::from(value).into()),
-            Self::Measurement(measurement) => Ok(measurement.into()),
+            Self::Scalar(measurement) => Ok(measurement.into()),
         }
     }
 
@@ -174,7 +141,7 @@ impl SerializableValue {
             (Self::Struct { ty: s_ty, .. }, VariableType::Struct(v_ty)) => v_ty.as_str() == s_ty,
             (Self::List(_), VariableType::List) => true,
             (Self::String(_), VariableType::String) => true,
-            (Self::Measurement(measurement), ty) => measurement.matches_type(ty),
+            (Self::Scalar(measurement), ty) => measurement.matches_type(ty),
             (Self::Default, _) => true,
             _ => false,
         }
@@ -187,8 +154,8 @@ impl SerializableValue {
             SerializableValue::Struct { ty, members: _ } => format!("struct {}", ty).into(),
             SerializableValue::List(_) => "List".into(),
             SerializableValue::String(_) => "String".into(),
-            SerializableValue::Measurement(measurement) => {
-                <Measurement as Object<&'static str>>::type_name(measurement)
+            SerializableValue::Scalar(measurement) => {
+                <Scalar as Object<&'static str>>::type_name(measurement)
             }
         }
     }
@@ -202,7 +169,7 @@ mod test {
     use crate::script::{
         execution::{
             expressions::run_expression,
-            types::{Measurement, Object, SString},
+            types::{Object, SString, Scalar},
             Module, ModuleScope,
         },
         parsing::Expression,
@@ -252,14 +219,14 @@ mod test {
         assert_eq!(
             serde_yaml::from_str::<SerializableValue>("42")
                 .unwrap()
-                .into_value(&mut context, &"", &VariableType::Measurement("Number")),
+                .into_value(&mut context, &"", &VariableType::Scalar("Number")),
             Ok(Number::new(42.0).unwrap().into())
         );
     }
 
     #[test]
     fn serialize_number() {
-        let value = SerializableValue::Measurement(Measurement::from(Number::new(42.0).unwrap()));
+        let value = SerializableValue::Scalar(Scalar::from(Number::new(42.0).unwrap()));
 
         assert_eq!(serde_yaml::to_string(&value).unwrap(), "42.0\n");
     }
@@ -374,7 +341,7 @@ mod test {
                 ty: "MyStruct".to_string(),
                 members: HashMap::from([(
                     "value".to_string(),
-                    SerializableValue::Measurement(Measurement::from(Number::new(42.0).unwrap()))
+                    SerializableValue::Scalar(Scalar::from(Number::new(42.0).unwrap()))
                 )])
             })
         );
@@ -415,7 +382,7 @@ mod test {
         assert_eq!(
             value.export(context.log, &""),
             Ok(SerializableValue::List(vec![
-                SerializableValue::Measurement(Measurement::from(Number::new(1.0).unwrap())),
+                SerializableValue::Scalar(Scalar::from(Number::new(1.0).unwrap())),
                 SerializableValue::Boolean(true),
                 SerializableValue::String("some text".to_string())
             ]))
@@ -452,8 +419,8 @@ mod test {
         assert_eq!(
             serde_yaml::from_str::<SerializableValue>("42mm")
                 .unwrap()
-                .into_value(&mut context, &"", &VariableType::Measurement("Length")),
-            Ok(Measurement::try_from(Length::new::<millimeter>(42.0))
+                .into_value(&mut context, &"", &VariableType::Scalar("Length")),
+            Ok(Scalar::try_from(Length::new::<millimeter>(42.0))
                 .unwrap()
                 .into())
         );
@@ -461,9 +428,8 @@ mod test {
 
     #[test]
     fn serialize_measurement() {
-        let value = SerializableValue::Measurement(
-            Measurement::try_from(Length::new::<millimeter>(42.0)).unwrap(),
-        );
+        let value =
+            SerializableValue::Scalar(Scalar::try_from(Length::new::<millimeter>(42.0)).unwrap());
 
         assert_eq!(serde_yaml::to_string(&value).unwrap(), "0.042 m\n");
     }
@@ -475,7 +441,7 @@ mod test {
         assert_eq!(
             serde_yaml::from_str::<SerializableValue>("default")
                 .unwrap()
-                .into_value(&mut context, &"", &VariableType::Measurement("Length")),
+                .into_value(&mut context, &"", &VariableType::Scalar("Length")),
             Ok(DefaultValue.into())
         );
     }

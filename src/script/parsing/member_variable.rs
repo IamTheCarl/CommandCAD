@@ -79,7 +79,7 @@ struct DisplayLitteral<'a, S: Span>(&'a Litteral<S>);
 impl<S: Span> Display for DisplayLitteral<'_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            Litteral::Measurement(measurement) => write!(f, "{}", measurement.ty.as_str()),
+            Litteral::Scalar(measurement) => write!(f, "{}", measurement.ty.as_str()),
             Litteral::String(string) => write!(f, "\"{}\"", string.value.as_str()),
             Litteral::List(_list) => write!(f, "[...]"),
             Litteral::Boolean(_span, value) => write!(f, "{}", value),
@@ -240,7 +240,7 @@ impl<S: Span> Display for MemberVariable<S> {
 
 #[cfg(test)]
 mod test {
-    use crate::script::parsing::{Measurement, Number};
+    use crate::script::parsing::{Number, Scalar};
 
     use super::*;
 
@@ -255,7 +255,7 @@ mod test {
             MemberVariableConstraint::parse("min(0)"),
             Ok((
                 "",
-                MemberVariableConstraint::Min(Litteral::Measurement(Measurement {
+                MemberVariableConstraint::Min(Litteral::Scalar(Scalar {
                     number: Number {
                         integer: Some("0"),
                         dot: None,
@@ -269,7 +269,7 @@ mod test {
             MemberVariableConstraint::parse("max(0)"),
             Ok((
                 "",
-                MemberVariableConstraint::Max(Litteral::Measurement(Measurement {
+                MemberVariableConstraint::Max(Litteral::Scalar(Scalar {
                     number: Number {
                         integer: Some("0"),
                         dot: None,
@@ -284,7 +284,7 @@ mod test {
             Ok((
                 "",
                 MemberVariableConstraint::Enum(vec![
-                    Litteral::Measurement(Measurement {
+                    Litteral::Scalar(Scalar {
                         number: Number {
                             integer: Some("0"),
                             dot: None,
@@ -292,7 +292,7 @@ mod test {
                         },
                         ty: ""
                     }),
-                    Litteral::Measurement(Measurement {
+                    Litteral::Scalar(Scalar {
                         number: Number {
                             integer: Some("1"),
                             dot: None,
@@ -300,7 +300,7 @@ mod test {
                         },
                         ty: ""
                     }),
-                    Litteral::Measurement(Measurement {
+                    Litteral::Scalar(Scalar {
                         number: Number {
                             integer: Some("2"),
                             dot: None,
@@ -372,7 +372,7 @@ mod test {
                 MemberVariable {
                     name: "variable",
                     ty: MemberVariableType {
-                        ty: VariableType::Measurement("Number"),
+                        ty: VariableType::Scalar("Number"),
                         constraints: None,
                         default_value: None
                     },
@@ -387,9 +387,9 @@ mod test {
                 MemberVariable {
                     name: "variable",
                     ty: MemberVariableType {
-                        ty: VariableType::Measurement("Number"),
+                        ty: VariableType::Scalar("Number"),
                         constraints: None,
-                        default_value: Some(Litteral::Measurement(Measurement {
+                        default_value: Some(Litteral::Scalar(Scalar {
                             number: Number {
                                 integer: Some("2"),
                                 dot: None,
@@ -409,11 +409,11 @@ mod test {
                 MemberVariable {
                     name: "variable",
                     ty: MemberVariableType {
-                        ty: VariableType::Measurement("Number"),
+                        ty: VariableType::Scalar("Number"),
                         constraints: Some(MemberVariableConstraintList {
                             constraints: vec![MemberVariableConstraint::Integer]
                         }),
-                        default_value: Some(Litteral::Measurement(Measurement {
+                        default_value: Some(Litteral::Scalar(Scalar {
                             number: Number {
                                 integer: Some("2"),
                                 dot: None,
@@ -434,7 +434,7 @@ mod test {
             Ok((
                 "",
                 MemberVariableType {
-                    ty: VariableType::Measurement("Number"),
+                    ty: VariableType::Scalar("Number"),
                     constraints: None,
                     default_value: None
                 },
@@ -446,9 +446,9 @@ mod test {
             Ok((
                 "",
                 MemberVariableType {
-                    ty: VariableType::Measurement("Number"),
+                    ty: VariableType::Scalar("Number"),
                     constraints: None,
-                    default_value: Some(Litteral::Measurement(Measurement {
+                    default_value: Some(Litteral::Scalar(Scalar {
                         number: Number {
                             integer: Some("2"),
                             dot: None,
@@ -465,11 +465,11 @@ mod test {
             Ok((
                 "",
                 MemberVariableType {
-                    ty: VariableType::Measurement("Number"),
+                    ty: VariableType::Scalar("Number"),
                     constraints: Some(MemberVariableConstraintList {
                         constraints: vec![MemberVariableConstraint::Integer]
                     }),
-                    default_value: Some(Litteral::Measurement(Measurement {
+                    default_value: Some(Litteral::Scalar(Scalar {
                         number: Number {
                             integer: Some("2"),
                             dot: None,

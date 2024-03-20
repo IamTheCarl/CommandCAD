@@ -25,13 +25,13 @@ use crate::script::{
     Span,
 };
 
-use super::{Measurement, NamedObject, Object, OperatorResult, Value};
+use super::{NamedObject, Object, OperatorResult, Scalar, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Range {
-    pub lower_bound: Option<Measurement>,
+    pub lower_bound: Option<Scalar>,
     pub upper_bound_is_inclusive: bool,
-    pub upper_bound: Option<Measurement>,
+    pub upper_bound: Option<Scalar>,
 }
 
 impl<'a, S: Span> Object<'a, S> for Range {

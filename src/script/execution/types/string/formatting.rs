@@ -35,7 +35,7 @@ use crate::script::{
         Failure,
     },
     logging::RuntimeLog,
-    Measurement, Span,
+    Scalar, Span,
 };
 
 pub type VResult<I, O> = IResult<I, O, nom::error::VerboseError<I>>;
@@ -249,7 +249,7 @@ impl Format {
                 Precision::Inline(precision) => Ok(Some(*precision)),
                 Precision::Referenced(index) => {
                     if let Some(argument) = arguments.get(*index as usize) {
-                        let precision = argument.downcast_ref::<Measurement>(span)?;
+                        let precision = argument.downcast_ref::<Scalar>(span)?;
                         let precision = precision.to_index(span)?;
 
                         if precision.is_positive() {

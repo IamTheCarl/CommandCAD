@@ -19,9 +19,9 @@
 use std::rc::Rc;
 
 use fj_core::{
-    objects::Region as FornjotRegion,
     operations::{build::BuildRegion, insert::Insert},
     storage::Handle,
+    topology::Region as FornjotRegion,
 };
 
 use crate::script::{

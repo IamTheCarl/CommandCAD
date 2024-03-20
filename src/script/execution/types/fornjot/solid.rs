@@ -19,9 +19,9 @@
 use std::ops::Deref;
 
 use fj_core::{
-    objects::Solid as FornjotSolid,
     operations::{insert::Insert, update::UpdateSolid},
-    storage::{Handle, HandleWrapper},
+    storage::Handle,
+    topology::Solid as FornjotSolid,
 };
 
 use crate::script::{
@@ -86,14 +86,14 @@ impl<'a, S: Span> Object<'a, S> for Solid {
                 let num_shells = new_shells.len();
                 let new_shells = new_shells
                     .unpack_dynamic_length::<Shell>(span)?
-                    .map(|shell| HandleWrapper::from(shell.handle));
+                    .map(|shell| shell.handle);
 
                 // Update shell will panic if we insert a duplicate, so deduplicate it.
                 let new_shells = check_for_duplicates(span, num_shells, new_shells)?;
 
                 let new_solid = self.handle.deref().update_shell(
                     &shell.handle,
-                    |_shell, _core| new_shells.into_iter().map(|h| h.0),
+                    |_shell, _core| new_shells.into_iter(),
                     &mut context.global_resources.fornjot_core,
                 );
 
@@ -112,15 +112,15 @@ impl<'a, S: Span> Object<'a, S> for Solid {
                     let num_shells = new_shells.len();
                     let new_shells = new_shells
                         .unpack_dynamic_length::<Shell>(span)?
-                        .map(|shell| HandleWrapper::from(shell.handle));
+                        .map(|shell| shell.handle);
 
                     // Update shell will panic if we insert a duplicate, so deduplicate it.
                     let new_shells = check_for_duplicates(span, num_shells, new_shells)?;
 
-                    let new_solid = self.handle.deref().add_shells(
-                        new_shells.into_iter().map(|h| h.0),
-                        &mut context.global_resources.fornjot_core,
-                    );
+                    let new_solid = self
+                        .handle
+                        .deref()
+                        .add_shells(new_shells, &mut context.global_resources.fornjot_core);
 
                     let new_solid =
                         Self::from(new_solid.insert(&mut context.global_resources.fornjot_core));

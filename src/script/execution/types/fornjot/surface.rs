@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{objects::Surface as FornjotSurface, storage::Handle};
+use fj_core::{storage::Handle, topology::Surface as FornjotSurface};
 
 use crate::script::{
     execution::{
@@ -38,7 +38,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                     .global_resources
                     .fornjot_core
                     .layers
-                    .objects
+                    .topology
                     .surfaces
                     .xy_plane(),
             )
@@ -56,7 +56,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                     .global_resources
                     .fornjot_core
                     .layers
-                    .objects
+                    .topology
                     .surfaces
                     .xz_plane(),
             )
@@ -74,7 +74,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                     .global_resources
                     .fornjot_core
                     .layers
-                    .objects
+                    .topology
                     .surfaces
                     .yz_plane(),
             )

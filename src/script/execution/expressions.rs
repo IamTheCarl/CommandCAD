@@ -208,7 +208,7 @@ mod test {
 
     use crate::script::{
         execution::{
-            types::{function::IntoBuiltinFunction, DefaultValue, List, Measurement, SString},
+            types::{function::IntoBuiltinFunction, DefaultValue, List, SString, Scalar},
             Module, ModuleScope,
         },
         parsing::Litteral,
@@ -327,14 +327,14 @@ mod test {
     fn value_from_litteral() {
         let mut context = ExecutionContext::default();
 
-        // Measurement
+        // Scalar
         assert_eq!(
             Value::from_litteral(
                 &mut context,
                 Box::leak(Box::new(Litteral::parse("22mm").unwrap().1))
             ),
             Ok(
-                Measurement::try_from(uom::si::f64::Length::new::<uom::si::length::millimeter>(
+                Scalar::try_from(uom::si::f64::Length::new::<uom::si::length::millimeter>(
                     22.0
                 ))
                 .unwrap()

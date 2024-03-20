@@ -17,7 +17,8 @@
  */
 use std::{borrow::Cow, cmp::Ordering, fmt, str::FromStr};
 
-use fj_math::Scalar;
+use fj_math::Scalar as FornjotScalar;
+use nalgebra::Const;
 use serde::{
     de::{self, Visitor},
     Deserialize, Serialize,
@@ -49,14 +50,14 @@ use super::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Measurement {
+pub struct Scalar {
     pub(super) dimension: Dimension,
     pub(super) value: Number,
 }
 
-impl<'a, S: Span> Object<'a, S> for Measurement {
+impl<'a, S: Span> Object<'a, S> for Scalar {
     fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        if let VariableType::Measurement(name) = ty {
+        if let VariableType::Scalar(name) = ty {
             name.as_str() == Object::<S>::type_name(self).as_ref()
         } else {
             false
@@ -218,7 +219,7 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
-        let rhs = rhs.downcast_ref::<Measurement>(span)?;
+        let rhs = rhs.downcast_ref::<Scalar>(span)?;
         self.multiply_by_measurement(span, rhs)
             .map(|rhs| rhs.into())
     }
@@ -228,7 +229,7 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
-        let rhs = rhs.downcast_ref::<Measurement>(span)?;
+        let rhs = rhs.downcast_ref::<Scalar>(span)?;
         self.divide_by_measurement(span, rhs).map(|rhs| rhs.into())
     }
     fn unary_plus(
@@ -309,7 +310,7 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
             .auto_call(context, span, arguments, expressions),
             "copysign" => |_context: &mut ExecutionContext<'a, S>,
                            span: &S,
-                           sign: Measurement|
+                           sign: Scalar|
              -> OperatorResult<S, Value<'a, S>> {
                 let sign = sign.to_index(span)?;
 
@@ -364,7 +365,7 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
             .auto_call(context, span, arguments, expressions),
             "pow" => |_context: &mut ExecutionContext<'a, S>,
                       _span: &S,
-                      exponent: Measurement|
+                      exponent: Scalar|
              -> OperatorResult<S, Value<'a, S>> {
                 let exponent = exponent.to_number(span)?;
 
@@ -380,7 +381,7 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
             .auto_call(context, span, arguments, expressions),
             "powi" => |_context: &mut ExecutionContext<'a, S>,
                        _span: &S,
-                       exponent: Measurement|
+                       exponent: Scalar|
              -> OperatorResult<S, Value<'a, S>> {
                 let exponent = exponent.to_index(span)? as i8;
 
@@ -628,12 +629,10 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
              -> OperatorResult<S, Value<'a, S>> {
                 self.check_trig_compatible(span)?;
                 let (sin, cos) = (self.value * consts::PI).sin_cos();
-                let sin = Number::new(sin).unwrap_not_nan(span)?;
-                let cos = Number::new(cos).unwrap_not_nan(span)?;
 
                 Ok(Vector2 {
                     dimension: Dimension::zero(),
-                    value: NVector::<2>::new(cos, sin),
+                    value: NVector::<Const<2>>::new(cos, sin),
                 }
                 .into())
             }
@@ -675,17 +674,17 @@ impl<'a, S: Span> Object<'a, S> for Measurement {
         _log: &mut dyn RuntimeLog<S>,
         _span: &S,
     ) -> OperatorResult<S, super::SerializableValue> {
-        Ok(SerializableValue::Measurement(self.clone()))
+        Ok(SerializableValue::Scalar(self.clone()))
     }
 }
 
-impl NamedObject for Measurement {
+impl NamedObject for Scalar {
     fn static_type_name() -> &'static str {
-        "Measurement"
+        "Scalar"
     }
 }
 
-impl Measurement {
+impl Scalar {
     pub fn multiply_by_measurement<S: Span>(
         &self,
         span: &S,
@@ -749,7 +748,7 @@ impl Measurement {
         span: &S,
         rhs: &'b Value<'_, S>,
     ) -> OperatorResult<S, &Self> {
-        if let Value::Measurement(rhs) = rhs {
+        if let Value::Scalar(rhs) = rhs {
             if self.dimension == rhs.dimension {
                 Ok(rhs)
             } else {
@@ -852,9 +851,7 @@ impl Measurement {
         }
     }
 
-    pub fn from_parsed_raw<S: Span>(
-        measurement: &parsing::Measurement<S>,
-    ) -> OperatorResult<S, Self> {
+    pub fn from_parsed_raw<S: Span>(measurement: &parsing::Scalar<S>) -> OperatorResult<S, Self> {
         if let Some(conversion_factor) = CONVERSION_FACTORS.get(measurement.ty.as_str()) {
             let value = unwrap_float(measurement.number.get_span().clone(), &measurement.number)?;
             let value = conversion_factor.convert_to_base_unit(value);
@@ -871,7 +868,7 @@ impl Measurement {
     }
 
     pub fn from_parsed<'a, S: Span>(
-        measurement: &parsing::Measurement<S>,
+        measurement: &parsing::Scalar<S>,
     ) -> OperatorResult<S, Value<'a, S>> {
         Self::from_parsed_raw(measurement).map(|measurement| measurement.into())
     }
@@ -904,17 +901,17 @@ impl Measurement {
         &self,
         context: &ExecutionContext<S>,
         span: &S,
-    ) -> OperatorResult<S, Scalar> {
+    ) -> OperatorResult<S, FornjotScalar> {
         let length = context
             .global_resources
             .fornjot_unit_conversion_factor
             .convert_from_measurement_to_number(span, self)?;
 
-        Ok(Scalar::from_f64(length.into_inner()))
+        Ok(FornjotScalar::from_f64(length.into_inner()))
     }
 }
 
-impl<D, U> TryFrom<Quantity<D, U, f64>> for Measurement
+impl<D, U> TryFrom<Quantity<D, U, f64>> for Scalar
 where
     D: UomDimension + ?Sized,
     D::L: ToInt<i8>,
@@ -957,7 +954,7 @@ where
     }
 }
 
-impl<D, U> TryInto<Quantity<D, U, f64>> for Measurement
+impl<D, U> TryInto<Quantity<D, U, f64>> for Scalar
 where
     D: UomDimension + ?Sized,
     D::L: ToInt<i8>,
@@ -995,11 +992,11 @@ where
     }
 }
 
-impl FromStr for Measurement {
+impl FromStr for Scalar {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (_leftover, measurement) = parsing::Measurement::parse(s)
+        let (_leftover, measurement) = parsing::Scalar::parse(s)
             .map_err(|error| anyhow::anyhow!("Failed to parse measurement: {}", error))?;
         let measurement = Self::from_parsed_raw(&measurement)
             .map_err(|failure| anyhow::anyhow!("{}", failure))?;
@@ -1008,7 +1005,7 @@ impl FromStr for Measurement {
     }
 }
 
-impl From<Number> for Measurement {
+impl From<Number> for Scalar {
     fn from(value: Number) -> Self {
         Self {
             dimension: Dimension {
@@ -1026,7 +1023,7 @@ impl From<Number> for Measurement {
     }
 }
 
-impl Serialize for Measurement {
+impl Serialize for Scalar {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -1044,19 +1041,19 @@ impl Serialize for Measurement {
     }
 }
 
-impl<'de> Deserialize<'de> for Measurement {
+impl<'de> Deserialize<'de> for Scalar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        deserializer.deserialize_any(MeasurementVisitor)
+        deserializer.deserialize_any(ScalarVisitor)
     }
 }
 
-struct MeasurementVisitor;
+struct ScalarVisitor;
 
-impl<'de> Visitor<'de> for MeasurementVisitor {
-    type Value = Measurement;
+impl<'de> Visitor<'de> for ScalarVisitor {
+    type Value = Scalar;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a measurement or number")
@@ -1081,14 +1078,14 @@ impl<'de> Visitor<'de> for MeasurementVisitor {
         E: de::Error,
     {
         let v = Number::new(v).map_err(|e| E::custom(e))?;
-        Ok(Measurement::from_number(v))
+        Ok(Scalar::from_number(v))
     }
 
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
     where
         E: de::Error,
     {
-        Measurement::from_str(v).map_err(|e| E::custom(e))
+        Scalar::from_str(v).map_err(|e| E::custom(e))
     }
 }
 
@@ -1111,11 +1108,11 @@ mod test {
 
         let a = si::Length::new::<meter>(3.0);
         let b = si::Length::new::<meter>(2.0);
-        let value_a: Value<&str> = Measurement::try_from(a).unwrap().into();
-        let value_b: Value<&str> = Measurement::try_from(b).unwrap().into();
+        let value_a: Value<&str> = Scalar::try_from(a).unwrap().into();
+        let value_b: Value<&str> = Scalar::try_from(b).unwrap().into();
         assert_eq!(
             value_a.addition(&mut log, &"span", &value_b),
-            Ok(Measurement::try_from(a + b).unwrap().into())
+            Ok(Scalar::try_from(a + b).unwrap().into())
         );
     }
 
@@ -1125,11 +1122,11 @@ mod test {
 
         let a = si::Length::new::<meter>(3.0);
         let b = si::Length::new::<meter>(2.0);
-        let value_a: Value<&str> = Measurement::try_from(a).unwrap().into();
-        let value_b: Value<&str> = Measurement::try_from(b).unwrap().into();
+        let value_a: Value<&str> = Scalar::try_from(a).unwrap().into();
+        let value_b: Value<&str> = Scalar::try_from(b).unwrap().into();
         assert_eq!(
             value_a.subtraction(&mut log, &"span", &value_b),
-            Ok(Measurement::try_from(a - b).unwrap().into())
+            Ok(Scalar::try_from(a - b).unwrap().into())
         );
     }
 
@@ -1140,16 +1137,16 @@ mod test {
         let a = si::Length::new::<meter>(3.0);
         let b = si::Length::new::<meter>(2.0);
         let c = a * b;
-        let value_a: Value<&str> = Measurement::try_from(a).unwrap().into();
-        let value_b: Value<&str> = Measurement::try_from(b).unwrap().into();
-        let value_c: Value<&str> = Measurement::try_from(c).unwrap().into();
+        let value_a: Value<&str> = Scalar::try_from(a).unwrap().into();
+        let value_b: Value<&str> = Scalar::try_from(b).unwrap().into();
+        let value_c: Value<&str> = Scalar::try_from(c).unwrap().into();
         assert_eq!(
             value_a.multiply(&mut log, &"span", &value_b),
-            Ok(Measurement::try_from(a * b).unwrap().into())
+            Ok(Scalar::try_from(a * b).unwrap().into())
         );
         assert_eq!(
             value_a.multiply(&mut log, &"span", &value_c),
-            Ok(Measurement::try_from(a * c).unwrap().into())
+            Ok(Scalar::try_from(a * c).unwrap().into())
         );
     }
 
@@ -1159,18 +1156,18 @@ mod test {
 
         let a = si::Length::new::<meter>(3.0);
         let b = si::Length::new::<meter>(2.0);
-        let value_a: Value<&str> = Measurement::try_from(a).unwrap().into();
-        let value_b: Value<&str> = Measurement::try_from(b).unwrap().into();
+        let value_a: Value<&str> = Scalar::try_from(a).unwrap().into();
+        let value_b: Value<&str> = Scalar::try_from(b).unwrap().into();
         assert_eq!(
             value_a.divide(&mut log, &"span", &value_b),
-            Ok(Measurement::try_from(a / b).unwrap().into())
+            Ok(Scalar::try_from(a / b).unwrap().into())
         );
 
         let c: si::Area = a * b;
-        let value_c: Value<&str> = Measurement::try_from(c).unwrap().into();
+        let value_c: Value<&str> = Scalar::try_from(c).unwrap().into();
         assert_eq!(
             value_c.divide(&mut log, &"span", &value_a),
-            Ok(Measurement::try_from(c / a).unwrap().into())
+            Ok(Scalar::try_from(c / a).unwrap().into())
         );
     }
 
@@ -1180,8 +1177,8 @@ mod test {
 
         let a = si::Length::new::<meter>(3.0);
         let b = si::Length::new::<meter>(2.0);
-        let value_a: Value<&str> = Measurement::try_from(a).unwrap().into();
-        let value_b: Value<&str> = Measurement::try_from(b).unwrap().into();
+        let value_a: Value<&str> = Scalar::try_from(a).unwrap().into();
+        let value_b: Value<&str> = Scalar::try_from(b).unwrap().into();
         assert_eq!(
             value_a.cmp(&mut log, &"span", &value_b),
             Ok(Ordering::Greater)

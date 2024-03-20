@@ -32,7 +32,7 @@ use crate::script::{
     parsing::FunctionSignature,
 };
 
-pub use crate::script::execution::types::{Measurement, SerializableValue};
+pub use crate::script::execution::types::{Scalar, SerializableValue};
 
 mod execution;
 pub use execution::print_all_supported_units;
@@ -55,6 +55,10 @@ pub struct Runtime {
 impl Runtime {
     pub fn global_resources_mut<R>(&mut self, f: impl FnOnce(&mut GlobalResources) -> R) -> R {
         self.with_context_mut(|context| f(&mut context.global_resources))
+    }
+
+    pub fn global_resources<R>(&self, f: impl FnOnce(&GlobalResources) -> R) -> R {
+        self.with_context(|context| f(&context.global_resources))
     }
 
     pub fn load(module: (impl Into<String>, impl Into<ImString>)) -> Result<Self> {
@@ -213,7 +217,7 @@ mod test {
         length::{meter, millimeter},
     };
 
-    use crate::script::execution::types::Measurement;
+    use crate::script::execution::types::Scalar;
 
     use super::*;
 
@@ -237,8 +241,8 @@ mod test {
         runtime
             .run_sketch(
                 "my_sketch",
-                vec![SerializableValue::Measurement(
-                    Measurement::try_from(Length::new::<meter>(10.0)).unwrap(),
+                vec![SerializableValue::Scalar(
+                    Scalar::try_from(Length::new::<meter>(10.0)).unwrap(),
                 )],
             )
             .unwrap();
@@ -276,8 +280,8 @@ mod test {
         runtime
             .run_solid(
                 "my_solid",
-                vec![SerializableValue::Measurement(
-                    Measurement::try_from(Length::new::<millimeter>(10.0)).unwrap(),
+                vec![SerializableValue::Scalar(
+                    Scalar::try_from(Length::new::<millimeter>(10.0)).unwrap(),
                 )],
             )
             .unwrap();
@@ -310,21 +314,15 @@ mod test {
 
         assert_eq!(
             runtime.run_task("my_task", vec![SerializableValue::Default]),
-            Ok(SerializableValue::Measurement(
-                Number::new(50.0).unwrap().into()
-            ))
+            Ok(SerializableValue::Scalar(Number::new(50.0).unwrap().into()))
         );
 
         assert_eq!(
             runtime.run_task(
                 "my_task",
-                vec![SerializableValue::Measurement(
-                    Number::new(22.0).unwrap().into()
-                )]
+                vec![SerializableValue::Scalar(Number::new(22.0).unwrap().into())]
             ),
-            Ok(SerializableValue::Measurement(
-                Number::new(22.0).unwrap().into()
-            ))
+            Ok(SerializableValue::Scalar(Number::new(22.0).unwrap().into()))
         );
 
         let mut runtime =

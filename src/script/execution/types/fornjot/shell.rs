@@ -19,13 +19,13 @@
 use std::ops::Deref;
 
 use fj_core::{
-    objects::Shell as FornjotShell,
     operations::{
         holes::{AddHole, HoleLocation},
         insert::Insert,
         update::UpdateShell,
     },
-    storage::{Handle, HandleWrapper},
+    storage::Handle,
+    topology::Shell as FornjotShell,
 };
 
 use crate::script::{
@@ -35,7 +35,7 @@ use crate::script::{
     },
     logging::RuntimeLog,
     parsing::{Expression, VariableType},
-    Measurement, Span,
+    Scalar, Span,
 };
 
 use super::{face::Face, handle_wrapper, object_set::check_for_duplicates};
@@ -79,7 +79,7 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                                  span: &S,
                                  face: Face,
                                  position: Vector2,
-                                 radius: Measurement,
+                                 radius: Scalar,
                                  path: Vector3|
              -> OperatorResult<S, Value<S>> {
                 if !self.handle.deref().faces().contains(&face.handle) {
@@ -116,7 +116,7 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                                    back_face: Face,
                                    back_position: Vector2,
 
-                                   radius: Measurement|
+                                   radius: Scalar|
              -> OperatorResult<S, Value<S>> {
                 let faces = self.handle.deref().faces();
                 if !faces.contains(&front_face.handle) || !faces.contains(&front_face.handle) {
@@ -167,14 +167,14 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                 let num_faces = new_faces.len();
                 let new_faces = new_faces
                     .unpack_dynamic_length::<Face>(span)?
-                    .map(|shell| HandleWrapper::from(shell.handle));
+                    .map(|shell| shell.handle);
 
                 // Update shell will panic if we insert a duplicate, so deduplicate it.
                 let new_faces = check_for_duplicates(span, num_faces, new_faces)?;
 
                 let new_shell = self.handle.deref().update_face(
                     &face.handle,
-                    |_face, _core| new_faces.into_iter().map(|h| h.0),
+                    |_face, _core| new_faces.into_iter(),
                     &mut context.global_resources.fornjot_core,
                 );
 
@@ -193,15 +193,15 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                     let num_faces = new_faces.len();
                     let new_faces = new_faces
                         .unpack_dynamic_length::<Face>(span)?
-                        .map(|shell| HandleWrapper::from(shell.handle));
+                        .map(|shell| shell.handle);
 
                     // Update shell will panic if we insert a duplicate, so deduplicate it.
                     let new_faces = check_for_duplicates(span, num_faces, new_faces)?;
 
-                    let new_shell = self.handle.deref().add_faces(
-                        new_faces.into_iter().map(|h| h.0),
-                        &mut context.global_resources.fornjot_core,
-                    );
+                    let new_shell = self
+                        .handle
+                        .deref()
+                        .add_faces(new_faces, &mut context.global_resources.fornjot_core);
 
                     let new_shell =
                         Self::from(new_shell.insert(&mut context.global_resources.fornjot_core));

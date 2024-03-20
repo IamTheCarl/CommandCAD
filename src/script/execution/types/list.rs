@@ -29,7 +29,7 @@ use crate::script::{
 
 use super::{
     function::AutoCall, number::UnwrapNotNan, serializable::SerializableValue,
-    string::formatting::Style, Measurement, NamedObject, Object, OperatorResult, Value,
+    string::formatting::Style, NamedObject, Object, OperatorResult, Scalar, Value,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -130,7 +130,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
         index: Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
         match index {
-            Value::Measurement(index) => {
+            Value::Scalar(index) => {
                 let index = index.to_index(span)?;
 
                 let localized_index = self.internalize_index(span, index)?;
@@ -259,7 +259,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
             }
             "insert" => |_context: &mut ExecutionContext<'a, S>,
                          span: &S,
-                         index: Measurement,
+                         index: Scalar,
                          value: Value<'a, S>|
              -> OperatorResult<S, Value<S>> {
                 let index = index.to_index(span)?;
@@ -302,7 +302,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
             .auto_call(context, span, arguments, expressions),
             "remove" => |_context: &mut ExecutionContext<'a, S>,
                          span: &S,
-                         index: Measurement|
+                         index: Scalar|
              -> OperatorResult<S, Value<S>> {
                 let index = index.to_index(span)?;
                 let index = self.internalize_index(span, index)?;
@@ -361,7 +361,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
             }
             "rotate_left" => |_context: &mut ExecutionContext<'a, S>,
                               span: &S,
-                              mid: Measurement|
+                              mid: Scalar|
              -> OperatorResult<S, Value<S>> {
                 let mid = mid.to_index(span)?;
                 if mid.is_positive() {
@@ -380,7 +380,7 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
             .auto_call(context, span, arguments, expressions),
             "rotate_right" => |_context: &mut ExecutionContext<'a, S>,
                                _span: &S,
-                               mid: Measurement|
+                               mid: Scalar|
              -> OperatorResult<S, Value<S>> {
                 let mid = mid.to_index(span)?;
                 if mid.is_positive() {
@@ -522,7 +522,7 @@ mod test {
                 Number::new(2.0).unwrap().into(),
                 Number::new(3.0).unwrap().into(),
             ])
-            .unpack_fixed_length::<Measurement, 3usize>(&"span",)
+            .unpack_fixed_length::<Scalar, 3usize>(&"span",)
             .map(|v| v.collect::<Vec<_>>()),
             Ok(vec![
                 Number::new(1.0).unwrap().into(),
@@ -538,7 +538,7 @@ mod test {
 
         assert_eq!(
             List::<'_, &'static str>::from(values)
-                .unpack_fixed_length::<Measurement, 3usize>(&"span",)
+                .unpack_fixed_length::<Scalar, 3usize>(&"span",)
                 .map(|v| v.collect::<Vec<_>>()),
             Err(Failure::ListWrongLength("span", 3, 2))
         );
@@ -547,14 +547,14 @@ mod test {
 
         assert_eq!(
             List::<'_, &'static str>::from(values)
-                .unpack_fixed_length::<Measurement, 2usize>(&"span")
+                .unpack_fixed_length::<Scalar, 2usize>(&"span")
                 .map(|v| v.collect::<Vec<_>>()),
             Err(Failure::ListElement(
                 "span",
                 1,
                 Box::new(Failure::ExpectedGot(
                     "span",
-                    "Measurement".into(),
+                    "Scalar".into(),
                     "Boolean".into()
                 ))
             ))

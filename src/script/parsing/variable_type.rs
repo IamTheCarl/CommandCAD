@@ -159,8 +159,10 @@ pub enum VariableType<S: Span> {
     Boolean,
     Range,
     Struct(S),
-    Measurement(S),
+    Scalar(S),
     Vector(u8, S),
+    Transform(u8),
+    Quaternion,
     Cycle,
     Region,
     Sketch,
@@ -224,31 +226,38 @@ impl<S: Span> VariableType<S> {
                     ),
                     |name| Self::Vector(4, name),
                 ),
+                map(tag("Transform2D"), |_| Self::Transform(2)),
+                map(tag("Transform3D"), |_| Self::Transform(3)),
+                map(tag("Quaternion"), |_| Self::Quaternion),
                 map(FunctionSignature::parse, Self::Function),
-                map(parse_name, Self::Measurement),
+                map(parse_name, Self::Scalar),
             )),
         )(input)
     }
 
     pub fn name(&self) -> Cow<'static, str> {
         match self {
-            VariableType::String => "String".into(),
-            VariableType::List => "List".into(),
-            VariableType::Boolean => "Boolean".into(),
-            VariableType::Range => "Range".into(),
-            VariableType::Struct(name) => format!("struct {}", name.as_str()).into(),
-            VariableType::Measurement(name) => name.to_string().into(),
-            VariableType::Vector(dimension, name) => {
+            Self::String => "String".into(),
+            Self::List => "List".into(),
+            Self::Boolean => "Boolean".into(),
+            Self::Range => "Range".into(),
+            Self::Struct(name) => format!("struct {}", name.as_str()).into(),
+            Self::Scalar(name) => name.to_string().into(),
+            Self::Vector(dimension, name) => {
                 format!("Vector{}<{}>", dimension, name.as_str()).into()
             }
-            VariableType::Cycle => "Cycle".into(),
-            VariableType::Region => "Region".into(),
-            VariableType::Sketch => "Sketch".into(),
-            VariableType::Surface => "Surface".into(),
-            VariableType::Solid => "Solid".into(),
-            VariableType::Shell => "Shell".into(),
-            VariableType::Face => "Face".into(),
-            VariableType::Function(function) => format!("{}", function).into(),
+            Self::Transform(2) => "Transform2D".into(),
+            Self::Transform(3) => "Transform3D".into(),
+            Self::Transform(_) => unreachable!(),
+            Self::Quaternion => "Quaternion".into(),
+            Self::Cycle => "Cycle".into(),
+            Self::Region => "Region".into(),
+            Self::Sketch => "Sketch".into(),
+            Self::Surface => "Surface".into(),
+            Self::Solid => "Solid".into(),
+            Self::Shell => "Shell".into(),
+            Self::Face => "Face".into(),
+            Self::Function(function) => format!("{}", function).into(),
         }
     }
 }
@@ -256,23 +265,27 @@ impl<S: Span> VariableType<S> {
 impl<S: Span> Display for VariableType<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VariableType::String => write!(f, "String"),
-            VariableType::List => write!(f, "List"),
-            VariableType::Boolean => write!(f, "Boolean"),
-            VariableType::Range => write!(f, "Range"),
-            VariableType::Struct(name) => write!(f, "struct {}", name.as_str()),
-            VariableType::Measurement(name) => write!(f, "{}", name.as_str()),
-            VariableType::Vector(dimension, name) => {
+            Self::String => write!(f, "String"),
+            Self::List => write!(f, "List"),
+            Self::Boolean => write!(f, "Boolean"),
+            Self::Range => write!(f, "Range"),
+            Self::Struct(name) => write!(f, "struct {}", name.as_str()),
+            Self::Scalar(name) => write!(f, "{}", name.as_str()),
+            Self::Vector(dimension, name) => {
                 write!(f, "Vector{}<{}>", dimension, name.as_str())
             }
-            VariableType::Cycle => write!(f, "Cycle"),
-            VariableType::Region => write!(f, "Region"),
-            VariableType::Sketch => write!(f, "Sketch"),
-            VariableType::Surface => write!(f, "Surface"),
-            VariableType::Solid => write!(f, "Solid"),
-            VariableType::Shell => write!(f, "Shell"),
-            VariableType::Face => write!(f, "Face"),
-            VariableType::Function(function) => write!(f, "{}", function),
+            Self::Transform(2) => write!(f, "Transform2D"),
+            Self::Transform(3) => write!(f, "Transform3D"),
+            Self::Transform(_) => unreachable!(),
+            Self::Quaternion => write!(f, "Quaternion"),
+            Self::Cycle => write!(f, "Cycle"),
+            Self::Region => write!(f, "Region"),
+            Self::Sketch => write!(f, "Sketch"),
+            Self::Surface => write!(f, "Surface"),
+            Self::Solid => write!(f, "Solid"),
+            Self::Shell => write!(f, "Shell"),
+            Self::Face => write!(f, "Face"),
+            Self::Function(function) => write!(f, "{}", function),
         }
     }
 }
@@ -285,11 +298,11 @@ mod test {
     fn variable_type() {
         assert_eq!(
             VariableType::parse("Length"),
-            Ok(("", VariableType::Measurement("Length")))
+            Ok(("", VariableType::Scalar("Length")))
         );
         assert_eq!(
             VariableType::parse("Angle"),
-            Ok(("", VariableType::Measurement("Angle")))
+            Ok(("", VariableType::Scalar("Angle")))
         );
         assert_eq!(
             VariableType::parse("Vector2<Length>"),
@@ -318,7 +331,7 @@ mod test {
             Ok((
                 "",
                 VariableType::Function(FunctionSignature::Function {
-                    return_type: Box::new(VariableType::Measurement("Number")),
+                    return_type: Box::new(VariableType::Scalar("Number")),
                     arguments: vec![]
                 })
             ))
@@ -329,7 +342,7 @@ mod test {
             Ok((
                 "",
                 VariableType::Function(FunctionSignature::Function {
-                    return_type: Box::new(VariableType::Measurement("Number")),
+                    return_type: Box::new(VariableType::Scalar("Number")),
                     arguments: vec![]
                 })
             ))

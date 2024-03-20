@@ -45,7 +45,7 @@ fn main() {
     let mut source_data = csv::ReaderBuilder::new()
         .flexible(false)
         .has_headers(true)
-        .from_path("src/script/execution/types/measurement/units.csv")
+        .from_path("src/script/execution/types/math/units.csv")
         .unwrap();
 
     let mut conversion_factors = ConversionFactorDatabase::new();
@@ -606,6 +606,6 @@ fn main() {
     uneval::to_out_dir(base_units, "base_units.rs").unwrap();
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/script/execution/types/measurement/units.csv");
+    println!("cargo:rerun-if-changed=src/script/execution/types/math/units.csv");
     println!("cargo:rerun-if-changed=crates/common_data_types/src/lib.rs");
 }

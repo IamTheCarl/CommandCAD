@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{objects::Face as FornjotFace, storage::Handle};
+use fj_core::{storage::Handle, topology::Face as FornjotFace};
 
 use crate::script::{
     execution::{types::Object, ExecutionContext},

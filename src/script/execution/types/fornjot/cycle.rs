@@ -31,9 +31,9 @@ use crate::script::{
 };
 
 use fj_core::{
-    objects::Cycle as FornjotCycle,
     operations::{build::BuildCycle, insert::Insert, reverse::Reverse},
     storage::Handle,
+    topology::Cycle as FornjotCycle,
 };
 
 use super::{circle::unwrap_circle, handle_wrapper, polygon::unwrap_polygon};

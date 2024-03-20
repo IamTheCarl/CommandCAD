@@ -80,8 +80,8 @@ pub use string::PString;
 mod number;
 pub use number::Number;
 
-mod measurement;
-pub use measurement::Measurement;
+mod scalar;
+pub use scalar::Scalar;
 
 mod closure;
 pub use closure::{CapturedVariable, Closure};

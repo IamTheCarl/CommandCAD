@@ -17,9 +17,9 @@
  */
 
 use fj_core::{
-    objects::{Region as FornjotRegion, Sketch as FornjotSketch},
     operations::{build::BuildRegion, insert::Insert, sweep::SweepSketch},
     storage::Handle,
+    topology::{Region as FornjotRegion, Sketch as FornjotSketch},
 };
 
 use crate::script::{

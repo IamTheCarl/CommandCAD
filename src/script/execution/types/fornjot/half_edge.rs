@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{objects::HalfEdge as FornjotHalfEdge, storage::Handle};
+use fj_core::{storage::Handle, topology::HalfEdge as FornjotHalfEdge};
 
 use crate::script::{
     execution::{types::Object, ExecutionContext},
