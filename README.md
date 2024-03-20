@@ -28,10 +28,16 @@ Command CAD's solution to this problem is to make dimension and unit a part of t
 let main_body: Length = 15cm;
 let nominal_angle_to_sun: Angle = 60deg;
 let solar_panel_size: Area = main_body * 1m; // A length * by a length gives an area.
-let nominal_power_output: Power = solar_panel_size * nominal_angle_to_sun.sin() * (30w/1m^2); // 30watts per meter multiplied by square meters results in watts.
+let nominal_power_output: Power = solar_panel_size * nominal_angle_to_sun.sin() * (30w/1m^2); // 30watts per square meter multiplied by square meters results in watts.
 ```
 Not only is the dimension of measurements tracked and verified for you (preventing common mathematical errors), but the units are automatically converted as well.
 If I were to do all my calculations using meters and then specify that my STL file should use millimeters, Command CAD will convert all of the final results to millimeters when exporting the STL file.
+
+Dimensional analysis also applies to linear algebra types.
+```
+vec3(1m, 2m, 3m) * 4 == vec3(4m, 8m, 12m)
+vec3(1m, 2m, 3m) * 4m == vec3(4m^2, 8m^2, 12m^2)
+```
 
 ## Design Goals
 
@@ -74,13 +80,14 @@ If I were to do all my calculations using meters and then specify that my STL fi
      * Lists
 	   * Lists of objects
 	   * Not all values in the list must be the same type
-	 * Number
-	   * Guaranteed to never be NaN (Dividing by zero produces a run time error)
-	 * Measurement
-	   * Guaranteed to never be NaN (Dividing by zero produces a run time error)
+	 * Measurements
+	   * Guaranteed to never be NaN
+	   * Dimensional analysis enforced through type safety
+	 * Vectors
+	   * Guaranteed to never be NaN
 	   * Dimensional analysis enforced through type safety
 	 * Automatic unit conversions
-	   * Unit conversions provided by the well tested [Units of Measurement](https://github.com/iliekturtles/uom) crate
+	   * Unit conversions provided by [a moderatly large CSV file](src/script/execution/types/measurement/units.csv)
 	 * Boolean
  * CAD Kernel
    * Built off the impressive [Fornjot](https://fornjot.app/) kernel, which is just as experimental as Command CAD is
