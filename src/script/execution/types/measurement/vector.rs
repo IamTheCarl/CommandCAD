@@ -21,7 +21,7 @@ use std::borrow::Cow;
 use arrayvec::ArrayVec;
 use common_data_types::{Dimension, Number};
 use enum_downcast::AsVariant;
-use fj_math::Scalar;
+use fj_math::Scalar as FornjotScalar;
 use nalgebra::{base::dimension::Const, ArrayStorage};
 
 use crate::script::{
@@ -34,7 +34,7 @@ use crate::script::{
     Span,
 };
 
-use super::{get_dimension_name, ConvertUnit, Measurement};
+use super::{get_dimension_name, ConvertUnit, Scalar};
 
 pub(super) type NVector<const D: usize> =
     nalgebra::Vector<Number, Const<D>, ArrayStorage<Number, D, 1>>;
@@ -105,7 +105,7 @@ where
         span: &S,
         index: Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
-        let index = index.downcast::<Measurement>(span)?;
+        let index = index.downcast::<Scalar>(span)?;
         let index = index.to_index(span)?;
 
         if let Some(component) = self.value.get(index as usize).copied() {
@@ -128,7 +128,7 @@ where
         match len {
             1 => {
                 let value = self.index_by_character(span, chars.next().unwrap())?;
-                Ok(Measurement {
+                Ok(Scalar {
                     dimension: self.dimension,
                     value,
                 }
@@ -209,7 +209,7 @@ where
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
-        let scalar = rhs.downcast_ref::<Measurement>(span)?;
+        let scalar = rhs.downcast_ref::<Scalar>(span)?;
 
         let dimension = self.dimension + scalar.dimension;
         let value = self.value * scalar.value;
@@ -222,7 +222,7 @@ where
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
-        let scalar = rhs.downcast_ref::<Measurement>(span)?;
+        let scalar = rhs.downcast_ref::<Scalar>(span)?;
 
         let dimension = self.dimension - scalar.dimension;
 
@@ -245,7 +245,7 @@ where
              -> OperatorResult<S, Value<S>> {
                 self.validate_dimensions_match(span, &rhs)?;
 
-                Ok(Measurement {
+                Ok(Scalar {
                     dimension: Dimension::zero(),
                     value: self.value.dot(&rhs.value),
                 }
@@ -338,7 +338,7 @@ impl<const D: usize> Vector<D> {
     fn splat<'a, S: Span>(
         _context: &mut ExecutionContext<'a, S>,
         _span: &S,
-        splat_value: Measurement,
+        splat_value: Scalar,
     ) -> OperatorResult<S, Value<'a, S>>
     where
         Value<'a, S>: From<Self>,
@@ -367,15 +367,14 @@ impl<const D: usize> Vector<D> {
             .ok_or(Failure::MissingArguments(span.clone()))?;
         let first_span = expression_iter.next().unwrap();
 
-        let first_argument: Measurement = first_argument.downcast(first_span.get_span())?;
+        let first_argument: Scalar = first_argument.downcast(first_span.get_span())?;
 
         let dimension = first_argument.dimension;
         components.push(first_argument.value);
 
         for _ in 1..D {
             if let Some(value) = argument_iter.next() {
-                let value: Measurement =
-                    value.downcast(expression_iter.next().unwrap().get_span())?;
+                let value: Scalar = value.downcast(expression_iter.next().unwrap().get_span())?;
 
                 if value.dimension == dimension {
                     components.push(value.value);
@@ -415,9 +414,9 @@ impl<const D: usize> Vector<D> {
             .fornjot_unit_conversion_factor
             .convert_from_vector_to_array(span, self)?;
 
-        let array: ArrayVec<Scalar, D> = number_array
+        let array: ArrayVec<FornjotScalar, D> = number_array
             .into_iter()
-            .map(|c| Scalar::from_f64(c.into_inner()))
+            .map(|c| FornjotScalar::from_f64(c.into_inner()))
             .collect();
 
         Ok(array.into_inner().unwrap().into())
@@ -642,14 +641,14 @@ mod test {
                 &mut context,
                 Box::leak(Box::new(Expression::parse("vec2(1, 2)[0]").unwrap().1))
             ),
-            Ok(Measurement::from_number(Number::new(1.0).unwrap()).into())
+            Ok(Scalar::from_number(Number::new(1.0).unwrap()).into())
         );
         assert_eq!(
             run_expression(
                 &mut context,
                 Box::leak(Box::new(Expression::parse("vec2(1, 2)[1]").unwrap().1))
             ),
-            Ok(Measurement::from_number(Number::new(2.0).unwrap()).into())
+            Ok(Scalar::from_number(Number::new(2.0).unwrap()).into())
         );
         assert_eq!(
             run_expression(

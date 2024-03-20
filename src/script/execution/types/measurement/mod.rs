@@ -30,7 +30,7 @@ use crate::script::{
 };
 
 mod scalar;
-pub use scalar::Measurement;
+pub use scalar::Scalar;
 
 mod vector;
 pub use vector::{Vector2, Vector3, Vector4};
@@ -53,7 +53,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
 
 fn format_dimension(dimension: &Dimension) -> Cow<'static, str> {
     format!(
-        "Measurement<L{}, M{}, T{}, I{}, Th{}, N{}, J{}>",
+        "Scalar<L{}, M{}, T{}, I{}, Th{}, N{}, J{}>",
         dimension.length,
         dimension.mass,
         dimension.time,
@@ -79,7 +79,7 @@ pub trait ConvertUnit {
     fn convert_from_measurement_to_number<S: Span>(
         &self,
         span: &S,
-        measurement: &Measurement,
+        measurement: &Scalar,
     ) -> OperatorResult<S, Number>;
     fn convert_from_vector_to_array<S: Span, const D: usize>(
         &self,
@@ -100,7 +100,7 @@ impl ConvertUnit for ConversionFactor {
     fn convert_from_measurement_to_number<S: Span>(
         &self,
         span: &S,
-        measurement: &Measurement,
+        measurement: &Scalar,
     ) -> OperatorResult<S, Number> {
         if measurement.dimension == self.dimension {
             Ok(self.convert_from_base_unit(measurement.value))

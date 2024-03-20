@@ -83,7 +83,7 @@ mod test {
                         }
                     },
                     signature: Rc::new(FunctionSignature::Task {
-                        return_type: Box::new(VariableType::Measurement("Length")),
+                        return_type: Box::new(VariableType::Scalar("Length")),
                         arguments: vec![],
                     })
                 }

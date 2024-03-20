@@ -159,7 +159,7 @@ pub enum VariableType<S: Span> {
     Boolean,
     Range,
     Struct(S),
-    Measurement(S),
+    Scalar(S),
     Vector(u8, S),
     Cycle,
     Region,
@@ -225,7 +225,7 @@ impl<S: Span> VariableType<S> {
                     |name| Self::Vector(4, name),
                 ),
                 map(FunctionSignature::parse, Self::Function),
-                map(parse_name, Self::Measurement),
+                map(parse_name, Self::Scalar),
             )),
         )(input)
     }
@@ -237,7 +237,7 @@ impl<S: Span> VariableType<S> {
             VariableType::Boolean => "Boolean".into(),
             VariableType::Range => "Range".into(),
             VariableType::Struct(name) => format!("struct {}", name.as_str()).into(),
-            VariableType::Measurement(name) => name.to_string().into(),
+            VariableType::Scalar(name) => name.to_string().into(),
             VariableType::Vector(dimension, name) => {
                 format!("Vector{}<{}>", dimension, name.as_str()).into()
             }
@@ -261,7 +261,7 @@ impl<S: Span> Display for VariableType<S> {
             VariableType::Boolean => write!(f, "Boolean"),
             VariableType::Range => write!(f, "Range"),
             VariableType::Struct(name) => write!(f, "struct {}", name.as_str()),
-            VariableType::Measurement(name) => write!(f, "{}", name.as_str()),
+            VariableType::Scalar(name) => write!(f, "{}", name.as_str()),
             VariableType::Vector(dimension, name) => {
                 write!(f, "Vector{}<{}>", dimension, name.as_str())
             }
@@ -285,11 +285,11 @@ mod test {
     fn variable_type() {
         assert_eq!(
             VariableType::parse("Length"),
-            Ok(("", VariableType::Measurement("Length")))
+            Ok(("", VariableType::Scalar("Length")))
         );
         assert_eq!(
             VariableType::parse("Angle"),
-            Ok(("", VariableType::Measurement("Angle")))
+            Ok(("", VariableType::Scalar("Angle")))
         );
         assert_eq!(
             VariableType::parse("Vector2<Length>"),
@@ -318,7 +318,7 @@ mod test {
             Ok((
                 "",
                 VariableType::Function(FunctionSignature::Function {
-                    return_type: Box::new(VariableType::Measurement("Number")),
+                    return_type: Box::new(VariableType::Scalar("Number")),
                     arguments: vec![]
                 })
             ))
@@ -329,7 +329,7 @@ mod test {
             Ok((
                 "",
                 VariableType::Function(FunctionSignature::Function {
-                    return_type: Box::new(VariableType::Measurement("Number")),
+                    return_type: Box::new(VariableType::Scalar("Number")),
                     arguments: vec![]
                 })
             ))

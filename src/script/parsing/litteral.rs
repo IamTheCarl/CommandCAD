@@ -17,11 +17,11 @@
  */
 use nom::{branch::alt, combinator::map};
 
-use super::{closure::Closure, take_keyword, List, Measurement, PString, Span, VResult};
+use super::{closure::Closure, take_keyword, List, PString, Scalar, Span, VResult};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Litteral<S: Span> {
-    Measurement(Measurement<S>),
+    Scalar(Scalar<S>),
     String(PString<S>),
     List(List<S>),
     Boolean(S, bool),
@@ -32,7 +32,7 @@ pub enum Litteral<S: Span> {
 impl<S: Span> Litteral<S> {
     pub fn parse(input: S) -> VResult<S, Self> {
         alt((
-            map(Measurement::parse, Self::Measurement),
+            map(Scalar::parse, Self::Scalar),
             map(PString::parse, Self::String),
             map(Closure::parse, Self::Closure),
             map(List::parse, Self::List),
@@ -44,7 +44,7 @@ impl<S: Span> Litteral<S> {
 
     pub fn get_span(&self) -> &S {
         match self {
-            Litteral::Measurement(spanable) => spanable.get_span(),
+            Litteral::Scalar(spanable) => spanable.get_span(),
             Litteral::String(spanable) => spanable.get_span(),
             Litteral::List(spanable) => spanable.get_span(),
             Litteral::Boolean(spanable, _) => spanable,
@@ -64,12 +64,12 @@ mod test {
 
     #[test]
     fn litteral() {
-        // Measurement(Measurement<S>),
+        // Scalar(Scalar<S>),
         assert_eq!(
             Litteral::parse("1234.5678m"),
             Ok((
                 "",
-                Litteral::Measurement(Measurement {
+                Litteral::Scalar(Scalar {
                     number: Number {
                         integer: Some("1234"),
                         dot: Some("."),
@@ -80,12 +80,12 @@ mod test {
             ))
         );
 
-        // Measurement, but it's just a number
+        // Scalar, but it's just a number
         assert_eq!(
             Litteral::parse("1234.5678"),
             Ok((
                 "",
-                Litteral::Measurement(Measurement {
+                Litteral::Scalar(Scalar {
                     number: Number {
                         integer: Some("1234"),
                         dot: Some("."),
@@ -144,7 +144,7 @@ mod test {
                         block: Block { statements: vec![] }
                     }),
                     signature: Rc::new(FunctionSignature::Function {
-                        return_type: Box::new(VariableType::Measurement("Number")),
+                        return_type: Box::new(VariableType::Scalar("Number")),
                         arguments: vec![]
                     })
                 })

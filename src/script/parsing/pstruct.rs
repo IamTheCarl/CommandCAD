@@ -87,7 +87,7 @@ mod test {
                     members: vec![MemberVariable {
                         name: "a",
                         ty: MemberVariableType {
-                            ty: VariableType::Measurement("Length"),
+                            ty: VariableType::Scalar("Length"),
                             constraints: None,
                             default_value: None
                         }
@@ -106,7 +106,7 @@ mod test {
                         MemberVariable {
                             name: "a",
                             ty: MemberVariableType {
-                                ty: VariableType::Measurement("Length"),
+                                ty: VariableType::Scalar("Length"),
                                 constraints: None,
                                 default_value: None
                             }
@@ -114,7 +114,7 @@ mod test {
                         MemberVariable {
                             name: "b",
                             ty: MemberVariableType {
-                                ty: VariableType::Measurement("Angle"),
+                                ty: VariableType::Scalar("Angle"),
                                 constraints: Some(MemberVariableConstraintList {
                                     constraints: vec![MemberVariableConstraint::Integer]
                                 }),
@@ -136,7 +136,7 @@ mod test {
                         MemberVariable {
                             name: "a",
                             ty: MemberVariableType {
-                                ty: VariableType::Measurement("Length"),
+                                ty: VariableType::Scalar("Length"),
                                 constraints: None,
                                 default_value: None
                             }
@@ -144,7 +144,7 @@ mod test {
                         MemberVariable {
                             name: "b",
                             ty: MemberVariableType {
-                                ty: VariableType::Measurement("Angle"),
+                                ty: VariableType::Scalar("Angle"),
                                 constraints: Some(MemberVariableConstraintList {
                                     constraints: vec![MemberVariableConstraint::Integer]
                                 }),

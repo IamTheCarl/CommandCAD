@@ -27,8 +27,8 @@ use crate::script::{
 };
 
 use super::{
-    function::AutoCall, number::UnwrapNotNan, serializable::SerializableValue, Measurement,
-    NamedObject, Object, OperatorResult, Range, Value,
+    function::AutoCall, number::UnwrapNotNan, serializable::SerializableValue, NamedObject, Object,
+    OperatorResult, Range, Scalar, Value,
 };
 
 pub mod formatting;
@@ -173,7 +173,7 @@ impl<'a, S: Span> Object<'a, S> for SString {
 
                 Ok(Self::from(string).into())
             }
-            Value::Measurement(rhs) => {
+            Value::Scalar(rhs) => {
                 // convert numbers to strings.
                 let rhs = rhs.to_number(span)?;
                 let mut string = self.unwrap_or_clone();
@@ -201,7 +201,7 @@ impl<'a, S: Span> Object<'a, S> for SString {
         match attribute.as_str() {
             "insert" => |_context: &mut ExecutionContext<'a, S>,
                          span: &S,
-                         index: Measurement,
+                         index: Scalar,
                          text: SString|
              -> OperatorResult<S, Value<S>> {
                 let mut string = self.unwrap_or_clone();

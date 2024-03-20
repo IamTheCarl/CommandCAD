@@ -18,12 +18,12 @@
 
 use std::rc::Rc;
 
-use fj_math::{Point, Scalar};
+use fj_math::{Point, Scalar as FornjotScalar};
 use parsing::Span;
 
 use crate::script::{
     execution::{
-        types::{Measurement, OperatorResult, StructDefinition, Structure, Vector2},
+        types::{OperatorResult, Scalar, StructDefinition, Structure, Vector2},
         ExecutionContext,
     },
     parsing::{self, MemberVariable, MemberVariableType, VariableType},
@@ -48,7 +48,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
                     MemberVariable {
                         name: S::from_str("radius"),
                         ty: MemberVariableType {
-                            ty: VariableType::Measurement(S::from_str("Length")),
+                            ty: VariableType::Scalar(S::from_str("Length")),
                             constraints: None,
                             default_value: None,
                         },
@@ -65,14 +65,14 @@ pub fn unwrap_circle<S: Span>(
     context: &ExecutionContext<S>,
     span: &S,
     circle: Structure<S>,
-) -> OperatorResult<S, (Point<2>, Scalar)> {
+) -> OperatorResult<S, (Point<2>, FornjotScalar)> {
     let mut members = Rc::unwrap_or_clone(circle.members);
     let center = members.remove("center").unwrap();
     let center = center.downcast::<Vector2>(span)?;
     let center = center.as_fornjot_point(context, span)?;
 
     let radius = members.remove("radius").unwrap();
-    let radius = radius.downcast::<Measurement>(span)?;
+    let radius = radius.downcast::<Scalar>(span)?;
     let radius = radius.as_scalar(context, span)?;
 
     Ok((center, radius))

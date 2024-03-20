@@ -169,7 +169,7 @@ mod test {
         member_variable::{
             MemberVariableConstraint, MemberVariableConstraintList, MemberVariableType,
         },
-        Assign, Assignable, AssignableVariable, Break, Litteral, Loop, Measurement, Number, Return,
+        Assign, Assignable, AssignableVariable, Break, Litteral, Loop, Number, Return, Scalar,
     };
 
     use super::*;
@@ -321,7 +321,7 @@ mod test {
                         parameters: vec![MemberVariable {
                             name: "one",
                             ty: MemberVariableType {
-                                ty: VariableType::Measurement("Length"),
+                                ty: VariableType::Scalar("Length"),
                                 constraints: None,
                                 default_value: None
                             }
@@ -344,7 +344,7 @@ mod test {
                             MemberVariable {
                                 name: "one",
                                 ty: MemberVariableType {
-                                    ty: VariableType::Measurement("Length"),
+                                    ty: VariableType::Scalar("Length"),
                                     constraints: None,
                                     default_value: None
                                 }
@@ -352,9 +352,9 @@ mod test {
                             MemberVariable {
                                 name: "two",
                                 ty: MemberVariableType {
-                                    ty: VariableType::Measurement("Angle"),
+                                    ty: VariableType::Scalar("Angle"),
                                     constraints: None,
-                                    default_value: Some(Litteral::Measurement(Measurement {
+                                    default_value: Some(Litteral::Scalar(Scalar {
                                         number: Number {
                                             integer: Some("2"),
                                             dot: None,
@@ -383,7 +383,7 @@ mod test {
                             MemberVariable {
                                 name: "one",
                                 ty: MemberVariableType {
-                                    ty: VariableType::Measurement("Length"),
+                                    ty: VariableType::Scalar("Length"),
                                     constraints: None,
                                     default_value: None
                                 }
@@ -391,9 +391,9 @@ mod test {
                             MemberVariable {
                                 name: "two",
                                 ty: MemberVariableType {
-                                    ty: VariableType::Measurement("Angle"),
+                                    ty: VariableType::Scalar("Angle"),
                                     constraints: None,
-                                    default_value: Some(Litteral::Measurement(Measurement {
+                                    default_value: Some(Litteral::Scalar(Scalar {
                                         number: Number {
                                             integer: Some("2"),
                                             dot: None,
@@ -406,7 +406,7 @@ mod test {
                             MemberVariable {
                                 name: "three",
                                 ty: MemberVariableType {
-                                    ty: VariableType::Measurement("Number"),
+                                    ty: VariableType::Scalar("Number"),
                                     constraints: Some(MemberVariableConstraintList {
                                         constraints: vec![MemberVariableConstraint::Integer]
                                     }),

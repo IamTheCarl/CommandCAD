@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::script::execution::types::NoneType;
 
-use self::types::{validate_assignment_type, Measurement, OperatorResult};
+use self::types::{validate_assignment_type, OperatorResult, Scalar};
 
 use super::{
     logging::{self, RuntimeLog, StandardLog, UnpackValidationWarnings},
@@ -375,7 +375,7 @@ pub struct GlobalResources {
 impl Default for GlobalResources {
     fn default() -> Self {
         Self {
-            fornjot_unit_conversion_factor: Measurement::get_conversion_factor("mm").unwrap(),
+            fornjot_unit_conversion_factor: Scalar::get_conversion_factor("mm").unwrap(),
             fornjot_core: Default::default(),
         }
     }
@@ -398,7 +398,7 @@ impl<'a, S: Span> Default for ExecutionContext<'a, S> {
         // FIXME this registers the global functions as part of the module,
         // which is not actually global. This is a bad way to do this because
         // other modules won't have access to the global functions.
-        // TODO add constants: std::constants::PI, Angle::HALF_TURN, Angle::FULL_TURN, Measurement::ZERO for all measurement types, SolidAngle::SPHERE.
+        // TODO add constants: std::constants::PI, Angle::HALF_TURN, Angle::FULL_TURN, Scalar::ZERO for all measurement types, SolidAngle::SPHERE.
         types::register_globals(&mut context);
 
         context

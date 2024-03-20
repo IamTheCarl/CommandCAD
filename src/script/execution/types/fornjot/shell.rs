@@ -35,7 +35,7 @@ use crate::script::{
     },
     logging::RuntimeLog,
     parsing::{Expression, VariableType},
-    Measurement, Span,
+    Scalar, Span,
 };
 
 use super::{face::Face, handle_wrapper, object_set::check_for_duplicates};
@@ -79,7 +79,7 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                                  span: &S,
                                  face: Face,
                                  position: Vector2,
-                                 radius: Measurement,
+                                 radius: Scalar,
                                  path: Vector3|
              -> OperatorResult<S, Value<S>> {
                 if !self.handle.deref().faces().contains(&face.handle) {
@@ -116,7 +116,7 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                                    back_face: Face,
                                    back_position: Vector2,
 
-                                   radius: Measurement|
+                                   radius: Scalar|
              -> OperatorResult<S, Value<S>> {
                 let faces = self.handle.deref().faces();
                 if !faces.contains(&front_face.handle) || !faces.contains(&front_face.handle) {
