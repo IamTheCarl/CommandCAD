@@ -137,10 +137,17 @@ fn form(form_args: arguments::FormArgs) {
                 }
                 None => {
                     // Compute a default tolerance derived from the bounding box.
-                    let aabb = solid.handle.deref().aabb().unwrap_or(Aabb {
-                        min: Point::origin(),
-                        max: Point::origin(),
-                    });
+                    let aabb = runtime
+                        .global_resources(|global_resources| {
+                            solid
+                                .handle
+                                .deref()
+                                .aabb(&global_resources.fornjot_core.layers.geometry)
+                        })
+                        .unwrap_or(Aabb {
+                            min: Point::origin(),
+                            max: Point::origin(),
+                        });
 
                     // Find the smallest face.
                     let mut min_extent = Scalar::MAX;

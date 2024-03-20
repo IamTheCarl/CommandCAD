@@ -16,7 +16,10 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{objects::Surface as FornjotSurface, storage::Handle};
+use fj_core::{
+    objects::Surface as FornjotSurface,
+    storage::{Handle, HandleWrapper},
+};
 
 use crate::script::{
     execution::{
@@ -89,7 +92,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
 
 #[derive(Clone)]
 pub struct Surface {
-    pub handle: Handle<FornjotSurface>,
+    pub handle: HandleWrapper<FornjotSurface>,
 }
 
 impl<'a, S: Span> Object<'a, S> for Surface {

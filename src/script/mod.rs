@@ -57,6 +57,10 @@ impl Runtime {
         self.with_context_mut(|context| f(&mut context.global_resources))
     }
 
+    pub fn global_resources<R>(&self, f: impl FnOnce(&GlobalResources) -> R) -> R {
+        self.with_context(|context| f(&context.global_resources))
+    }
+
     pub fn load(module: (impl Into<String>, impl Into<ImString>)) -> Result<Self> {
         let mut log = Vec::new();
 

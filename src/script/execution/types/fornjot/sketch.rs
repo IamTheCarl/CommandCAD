@@ -139,7 +139,11 @@ impl<'a, S: Span> Object<'a, S> for Sketch {
 
                 let solid = self
                     .handle
-                    .sweep_sketch(surface, path, &mut context.global_resources.fornjot_core)
+                    .sweep_sketch(
+                        surface.into(),
+                        path,
+                        &mut context.global_resources.fornjot_core,
+                    )
                     .insert(&mut context.global_resources.fornjot_core);
                 context.unpack_validation_warnings(span);
 
