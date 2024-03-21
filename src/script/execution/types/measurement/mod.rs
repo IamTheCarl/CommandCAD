@@ -123,7 +123,7 @@ impl ConvertUnit for ConversionFactor {
                 .value
                 .iter()
                 .copied()
-                .map(|c| self.convert_from_base_unit(c))
+                .map(|c| self.convert_from_base_unit(Number::new(c).unwrap()))
                 .collect();
 
             Ok(array.into_inner().unwrap())

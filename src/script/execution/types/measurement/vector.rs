@@ -19,14 +19,17 @@
 use std::borrow::Cow;
 
 use arrayvec::ArrayVec;
-use common_data_types::{Dimension, Number};
+use common_data_types::{Dimension, Number, RawNumber};
 use enum_downcast::AsVariant;
 use fj_math::Scalar as FornjotScalar;
 use nalgebra::{base::dimension::Const, ArrayStorage};
 
 use crate::script::{
     execution::{
-        types::{function::AutoCall, BuiltinFunction, NamedObject, Object, OperatorResult, Value},
+        types::{
+            function::AutoCall, number::UnwrapNotNan, BuiltinFunction, NamedObject, Object,
+            OperatorResult, Value,
+        },
         ExecutionContext, Failure,
     },
     logging::RuntimeLog,
@@ -37,7 +40,21 @@ use crate::script::{
 use super::{get_dimension_name, ConvertUnit, Scalar};
 
 pub(super) type NVector<const D: usize> =
-    nalgebra::Vector<Number, Const<D>, ArrayStorage<Number, D, 1>>;
+    nalgebra::Vector<RawNumber, Const<D>, ArrayStorage<RawNumber, D, 1>>;
+
+trait CheckNan {
+    fn check_nan<S: Span>(self, span: &S) -> OperatorResult<S, ()>;
+}
+
+impl<const D: usize> CheckNan for NVector<D> {
+    fn check_nan<S: Span>(self, span: &S) -> OperatorResult<S, ()> {
+        if !self.iter().any(|c| c.is_nan()) {
+            Ok(())
+        } else {
+            Err(Failure::ResultIsNan(span.clone()))
+        }
+    }
+}
 
 pub type Vector2 = Vector<2>;
 pub type Vector3 = Vector<3>;
@@ -109,7 +126,7 @@ where
         let index = index.to_index(span)?;
 
         if let Some(component) = self.value.get(index as usize).copied() {
-            Ok(component.into())
+            Ok(Number::new(component).unwrap().into())
         } else {
             Err(Failure::IndexOutOfRange(span.clone(), index))
         }
@@ -135,8 +152,12 @@ where
                 .into())
             }
             2 => {
-                let x = self.index_by_character(span, chars.next().unwrap())?;
-                let y = self.index_by_character(span, chars.next().unwrap())?;
+                let x = self
+                    .index_by_character(span, chars.next().unwrap())?
+                    .into_inner();
+                let y = self
+                    .index_by_character(span, chars.next().unwrap())?
+                    .into_inner();
 
                 Ok(Vector::<2> {
                     dimension: self.dimension,
@@ -145,9 +166,15 @@ where
                 .into())
             }
             3 => {
-                let x = self.index_by_character(span, chars.next().unwrap())?;
-                let y = self.index_by_character(span, chars.next().unwrap())?;
-                let z = self.index_by_character(span, chars.next().unwrap())?;
+                let x = self
+                    .index_by_character(span, chars.next().unwrap())?
+                    .into_inner();
+                let y = self
+                    .index_by_character(span, chars.next().unwrap())?
+                    .into_inner();
+                let z = self
+                    .index_by_character(span, chars.next().unwrap())?
+                    .into_inner();
 
                 Ok(Vector::<3> {
                     dimension: self.dimension,
@@ -156,10 +183,18 @@ where
                 .into())
             }
             4 => {
-                let x = self.index_by_character(span, chars.next().unwrap())?;
-                let y = self.index_by_character(span, chars.next().unwrap())?;
-                let z = self.index_by_character(span, chars.next().unwrap())?;
-                let w = self.index_by_character(span, chars.next().unwrap())?;
+                let x = self
+                    .index_by_character(span, chars.next().unwrap())?
+                    .into_inner();
+                let y = self
+                    .index_by_character(span, chars.next().unwrap())?
+                    .into_inner();
+                let z = self
+                    .index_by_character(span, chars.next().unwrap())?
+                    .into_inner();
+                let w = self
+                    .index_by_character(span, chars.next().unwrap())?
+                    .into_inner();
 
                 Ok(Vector::<4> {
                     dimension: self.dimension,
@@ -180,6 +215,7 @@ where
         let rhs = self.unpack_for_addition_or_subtraction(span, rhs)?;
 
         let value = self.value + rhs.value;
+        value.check_nan(span)?;
 
         Ok(Self {
             dimension: self.dimension,
@@ -196,6 +232,7 @@ where
         let rhs = self.unpack_for_addition_or_subtraction(span, rhs)?;
 
         let value = self.value - rhs.value;
+        value.check_nan(span)?;
 
         Ok(Self {
             dimension: self.dimension,
@@ -212,7 +249,8 @@ where
         let scalar = rhs.downcast_ref::<Scalar>(span)?;
 
         let dimension = self.dimension + scalar.dimension;
-        let value = self.value * scalar.value;
+        let value = self.value * scalar.value.into_inner();
+        value.check_nan(span)?;
 
         Ok(Self { dimension, value }.into())
     }
@@ -225,8 +263,8 @@ where
         let scalar = rhs.downcast_ref::<Scalar>(span)?;
 
         let dimension = self.dimension - scalar.dimension;
-
-        let value = self.value / scalar.value;
+        let value = self.value / scalar.value.into_inner();
+        value.check_nan(span)?;
 
         Ok(Self { dimension, value }.into())
     }
@@ -247,7 +285,7 @@ where
 
                 Ok(Scalar {
                     dimension: Dimension::zero(),
-                    value: self.value.dot(&rhs.value),
+                    value: Number::new(self.value.dot(&rhs.value)).unwrap_not_nan(span)?,
                 }
                 .into())
             }
@@ -257,10 +295,12 @@ where
                         rhs: Vector<D>|
              -> OperatorResult<S, Value<S>> {
                 self.validate_dimensions_match(span, &rhs)?;
+                let value = self.value.cross(&rhs.value);
+                value.check_nan(span)?;
 
                 Ok(Self {
                     dimension: self.dimension,
-                    value: self.value.cross(&rhs.value),
+                    value,
                 }
                 .into())
             }
@@ -329,7 +369,7 @@ impl<const D: usize> Vector<D> {
         };
 
         if let Some(component) = self.value.get(index).copied() {
-            Ok(component)
+            Ok(Number::new(component).unwrap())
         } else {
             Err(Failure::CharacterNotInVector(span.clone(), c))
         }
@@ -344,7 +384,7 @@ impl<const D: usize> Vector<D> {
         Value<'a, S>: From<Self>,
     {
         let dimension = splat_value.dimension;
-        let value = NVector::repeat(splat_value.value);
+        let value = NVector::repeat(*splat_value.value);
 
         Ok(Vector { dimension, value }.into())
     }
@@ -360,7 +400,7 @@ impl<const D: usize> Vector<D> {
     {
         let mut expression_iter = expressions.iter();
         let mut argument_iter = arguments.into_iter();
-        let mut components = ArrayVec::<Number, D>::new();
+        let mut components = ArrayVec::<RawNumber, D>::new();
 
         let first_argument = argument_iter
             .next()
@@ -370,14 +410,14 @@ impl<const D: usize> Vector<D> {
         let first_argument: Scalar = first_argument.downcast(first_span.get_span())?;
 
         let dimension = first_argument.dimension;
-        components.push(first_argument.value);
+        components.push(*first_argument.value);
 
         for _ in 1..D {
             if let Some(value) = argument_iter.next() {
                 let value: Scalar = value.downcast(expression_iter.next().unwrap().get_span())?;
 
                 if value.dimension == dimension {
-                    components.push(value.value);
+                    components.push(*value.value);
                 } else {
                     return Err(Failure::ExpectedGot(
                         span.clone(),
@@ -454,7 +494,7 @@ mod test {
             ),
             Ok(Vector {
                 dimension: Dimension::zero(),
-                value: NVector::<2>::new(Number::new(1.0).unwrap(), Number::new(1.0).unwrap(),),
+                value: NVector::<2>::new(1.0, 1.0),
             }
             .into())
         );
@@ -465,7 +505,7 @@ mod test {
             ),
             Ok(Vector {
                 dimension: Dimension::zero(),
-                value: NVector::<2>::new(Number::new(1.0).unwrap(), Number::new(2.0).unwrap(),),
+                value: NVector::<2>::new(1.0, 2.0),
             }
             .into())
         );
@@ -491,11 +531,7 @@ mod test {
                     luminous_intensity: 0,
                     ratio_type_hint: RatioTypeHint(0),
                 },
-                value: NVector::<3>::new(
-                    Number::new(1.0).unwrap(),
-                    Number::new(1.0).unwrap(),
-                    Number::new(1.0).unwrap()
-                ),
+                value: NVector::<3>::new(1.0, 1.0, 1.0),
             }
             .into())
         );
@@ -515,11 +551,7 @@ mod test {
                     luminous_intensity: 0,
                     ratio_type_hint: RatioTypeHint(0),
                 },
-                value: NVector::<3>::new(
-                    Number::new(1.0).unwrap(),
-                    Number::new(2.0).unwrap(),
-                    Number::new(3.0).unwrap()
-                ),
+                value: NVector::<3>::new(1.0, 2.0, 3.0),
             }
             .into())
         );
@@ -545,12 +577,7 @@ mod test {
                     luminous_intensity: 0,
                     ratio_type_hint: RatioTypeHint(0),
                 },
-                value: NVector::<4>::new(
-                    Number::new(1.0).unwrap(),
-                    Number::new(1.0).unwrap(),
-                    Number::new(1.0).unwrap(),
-                    Number::new(1.0).unwrap()
-                ),
+                value: NVector::<4>::new(1.0, 1.0, 1.0, 1.0),
             }
             .into())
         );
@@ -570,12 +597,7 @@ mod test {
                     luminous_intensity: 0,
                     ratio_type_hint: RatioTypeHint(0),
                 },
-                value: NVector::<4>::new(
-                    Number::new(1.0).unwrap(),
-                    Number::new(2.0).unwrap(),
-                    Number::new(3.0).unwrap(),
-                    Number::new(4.0).unwrap()
-                ),
+                value: NVector::<4>::new(1.0, 2.0, 3.0, 4.0),
             }
             .into())
         );
@@ -746,7 +768,7 @@ mod test {
                     luminous_intensity: 0,
                     ratio_type_hint: RatioTypeHint(0),
                 },
-                value: NVector::<2>::new(Number::new(1.0).unwrap(), Number::new(2.0).unwrap(),),
+                value: NVector::<2>::new(1.0, 2.0),
             }
             .into())
         );
@@ -768,11 +790,7 @@ mod test {
                     luminous_intensity: 0,
                     ratio_type_hint: RatioTypeHint(0),
                 },
-                value: NVector::<3>::new(
-                    Number::new(1.0).unwrap(),
-                    Number::new(2.0).unwrap(),
-                    Number::new(3.0).unwrap(),
-                ),
+                value: NVector::<3>::new(1.0, 2.0, 3.0,),
             }
             .into())
         );
@@ -794,12 +812,7 @@ mod test {
                     luminous_intensity: 0,
                     ratio_type_hint: RatioTypeHint(0),
                 },
-                value: NVector::<4>::new(
-                    Number::new(1.0).unwrap(),
-                    Number::new(2.0).unwrap(),
-                    Number::new(3.0).unwrap(),
-                    Number::new(4.0).unwrap(),
-                ),
+                value: NVector::<4>::new(1.0, 2.0, 3.0, 4.0,),
             }
             .into())
         );
@@ -818,7 +831,7 @@ mod test {
             ),
             Ok(Vector {
                 dimension: Dimension::zero(),
-                value: NVector::<2>::new(Number::new(4.0).unwrap(), Number::new(6.0).unwrap(),),
+                value: NVector::<2>::new(4.0, 6.0),
             }
             .into())
         );
@@ -837,7 +850,7 @@ mod test {
             ),
             Ok(Vector {
                 dimension: Dimension::zero(),
-                value: NVector::<2>::new(Number::new(-2.0).unwrap(), Number::new(-2.0).unwrap(),),
+                value: NVector::<2>::new(-2.0, -2.0),
             }
             .into())
         );
@@ -854,7 +867,7 @@ mod test {
             ),
             Ok(Vector {
                 dimension: Dimension::zero(),
-                value: NVector::<2>::new(Number::new(4.0).unwrap(), Number::new(8.0).unwrap(),),
+                value: NVector::<2>::new(4.0, 8.0),
             }
             .into())
         );
@@ -871,7 +884,7 @@ mod test {
             ),
             Ok(Vector {
                 dimension: Dimension::zero(),
-                value: NVector::<2>::new(Number::new(0.5).unwrap(), Number::new(1.0).unwrap(),),
+                value: NVector::<2>::new(0.5, 1.0),
             }
             .into())
         );
@@ -882,12 +895,36 @@ mod test {
             ),
             Ok(Vector {
                 dimension: Dimension::zero(),
-                value: NVector::<2>::new(
-                    Number::new(RawNumber::INFINITY).unwrap(),
-                    Number::new(RawNumber::INFINITY).unwrap(),
-                ),
+                value: NVector::<2>::new(RawNumber::INFINITY, RawNumber::INFINITY,),
             }
             .into())
+        );
+    }
+
+    #[test]
+    fn nan_check() {
+        assert_eq!(NVector::<2>::new(1.0, 1.0).check_nan(&"nan"), Ok(()));
+        assert_eq!(
+            NVector::<2>::new(RawNumber::NAN, 1.0).check_nan(&"nan"),
+            Err(Failure::ResultIsNan("nan")),
+        );
+        assert_eq!(
+            NVector::<2>::new(1.0, RawNumber::NAN).check_nan(&"nan"),
+            Err(Failure::ResultIsNan("nan")),
+        );
+
+        assert_eq!(NVector::<3>::new(1.0, 1.0, 1.0).check_nan(&"nan"), Ok(()));
+        assert_eq!(
+            NVector::<3>::new(RawNumber::NAN, 1.0, 1.0).check_nan(&"nan"),
+            Err(Failure::ResultIsNan("nan")),
+        );
+        assert_eq!(
+            NVector::<3>::new(1.0, RawNumber::NAN, 1.0).check_nan(&"nan"),
+            Err(Failure::ResultIsNan("nan")),
+        );
+        assert_eq!(
+            NVector::<3>::new(1.0, 1.0, RawNumber::NAN).check_nan(&"nan"),
+            Err(Failure::ResultIsNan("nan")),
         );
     }
 }

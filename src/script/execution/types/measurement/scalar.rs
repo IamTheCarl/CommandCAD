@@ -628,8 +628,6 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
              -> OperatorResult<S, Value<'a, S>> {
                 self.check_trig_compatible(span)?;
                 let (sin, cos) = (self.value * consts::PI).sin_cos();
-                let sin = Number::new(sin).unwrap_not_nan(span)?;
-                let cos = Number::new(cos).unwrap_not_nan(span)?;
 
                 Ok(Vector2 {
                     dimension: Dimension::zero(),
