@@ -19,7 +19,7 @@
 use std::borrow::Cow;
 
 use arrayvec::ArrayVec;
-use common_data_types::{Dimension, Number, RawNumber};
+use common_data_types::{consts, Dimension, Number, RawNumber};
 use enum_downcast::AsVariant;
 use fj_math::Scalar as FornjotScalar;
 use nalgebra::{base::dimension::Const, ArrayStorage};
@@ -305,6 +305,99 @@ where
                 .into())
             }
             .auto_call(context, span, arguments, expressions),
+            "abs" => {
+                |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(Self {
+                        dimension: self.dimension,
+                        value: self.value.abs(),
+                    }
+                    .into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "add_scalar" => |_context: &mut ExecutionContext<'a, S>,
+                             span: &S,
+                             scalar: Scalar|
+             -> OperatorResult<S, Value<S>> {
+                if self.dimension == scalar.dimension {
+                    Ok(Self {
+                        dimension: self.dimension,
+                        value: self.value.add_scalar(*scalar.value),
+                    }
+                    .into())
+                } else {
+                    Err(Failure::ExpectedGot(
+                        span.clone(),
+                        <Self as Object<S>>::type_name(self),
+                        Object::<S>::type_name(&scalar),
+                    ))
+                }
+            }
+            .auto_call(context, span, arguments, expressions),
+            "sub_scalar" => |_context: &mut ExecutionContext<'a, S>,
+                             span: &S,
+                             scalar: Scalar|
+             -> OperatorResult<S, Value<S>> {
+                if self.dimension == scalar.dimension {
+                    Ok(Self {
+                        dimension: self.dimension,
+                        value: self.value.add_scalar(-*scalar.value),
+                    }
+                    .into())
+                } else {
+                    Err(Failure::ExpectedGot(
+                        span.clone(),
+                        <Self as Object<S>>::type_name(self),
+                        Object::<S>::type_name(&scalar),
+                    ))
+                }
+            }
+            .auto_call(context, span, arguments, expressions),
+            "angle" => |_context: &mut ExecutionContext<'a, S>,
+                        span: &S,
+                        rhs: Vector<D>|
+             -> OperatorResult<S, Value<S>> {
+                // In Radians
+                let value = self.value.angle(&rhs.value) / consts::PI;
+                let value = Number::new(value).unwrap_not_nan(span)?;
+                let dimension = Dimension::angle();
+
+                Ok(Scalar { dimension, value }.into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "norm" => {
+                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(Scalar {
+                        dimension: self.dimension,
+                        value: Number::new(self.value.norm()).unwrap_not_nan(span)?,
+                    }
+                    .into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "norm_squared" => {
+                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(Scalar {
+                        dimension: self.dimension,
+                        value: Number::new(self.value.norm_squared()).unwrap_not_nan(span)?,
+                    }
+                    .into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "normalize" => {
+                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    let value = self.value.normalize();
+                    value.check_nan(span)?;
+
+                    Ok(Self {
+                        dimension: Dimension::zero(),
+                        value,
+                    }
+                    .into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
     }
@@ -925,6 +1018,25 @@ mod test {
         assert_eq!(
             NVector::<3>::new(1.0, 1.0, RawNumber::NAN).check_nan(&"nan"),
             Err(Failure::ResultIsNan("nan")),
+        );
+    }
+
+    #[test]
+    fn angle() {
+        let mut context = ExecutionContext::default();
+
+        assert_eq!(
+            run_expression(
+                &mut context,
+                Box::leak(Box::new(
+                    Expression::parse("vec2(0, 1).angle(vec2(1, 0))").unwrap().1
+                ))
+            ),
+            Ok(Scalar {
+                dimension: Dimension::angle(),
+                value: Number::new(0.5).unwrap(),
+            }
+            .into())
         );
     }
 }
