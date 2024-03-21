@@ -55,8 +55,8 @@ pub use string::{
     SString,
 };
 
-mod measurement;
-pub use self::measurement::{print_all_supported_units, Scalar, Vector2, Vector3, Vector4};
+mod math;
+pub use self::math::{print_all_supported_units, Scalar, Vector2, Vector3, Vector4};
 
 mod range;
 pub use range::Range;
@@ -74,7 +74,7 @@ pub use fornjot::{
 };
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
-    measurement::register_globals(context);
+    math::register_globals(context);
     fornjot::register_globals(context);
 }
 
@@ -338,7 +338,7 @@ impl<'a, S: Span> Value<'a, S> {
         value: &'a Litteral<S>,
     ) -> OperatorResult<S, Self> {
         match value {
-            Litteral::Scalar(measurement) => Scalar::from_parsed(measurement),
+            Litteral::Scalar(scalar) => Scalar::from_parsed(scalar),
             Litteral::String(string) => SString::from_parsed(string),
             Litteral::List(list) => List::from_parsed(context, list),
             Litteral::Boolean(_span, value) => Ok(Self::Boolean(*value)),
