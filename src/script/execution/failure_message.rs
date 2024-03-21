@@ -78,7 +78,7 @@ pub enum Failure<S> {
 }
 
 impl<S: Span> Failure<S> {
-    pub fn from_function_call(self) -> Self {
+    pub fn make_from_function_call(self) -> Self {
         Self::FunctionCall(Box::new(self))
     }
 }
