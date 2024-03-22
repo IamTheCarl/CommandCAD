@@ -56,7 +56,9 @@ pub use string::{
 };
 
 mod math;
-pub use self::math::{print_all_supported_units, Scalar, Vector2, Vector3, Vector4};
+pub use self::math::{
+    print_all_supported_units, Scalar, Transform2D, Transform3D, Vector2, Vector3, Vector4,
+};
 
 mod range;
 pub use range::Range;
@@ -270,6 +272,8 @@ pub enum Value<'a, S: Span> {
     Vector2(Vector2),
     Vector3(Vector3),
     Vector4(Vector4),
+    Transform2D,
+    Transform3D,
     Cycle,
     Region,
     Sketch,

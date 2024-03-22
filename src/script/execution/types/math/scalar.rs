@@ -18,6 +18,7 @@
 use std::{borrow::Cow, cmp::Ordering, fmt, str::FromStr};
 
 use fj_math::Scalar as FornjotScalar;
+use nalgebra::Const;
 use serde::{
     de::{self, Visitor},
     Deserialize, Serialize,
@@ -631,7 +632,7 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
 
                 Ok(Vector2 {
                     dimension: Dimension::zero(),
-                    value: NVector::<2>::new(cos, sin),
+                    value: NVector::<Const<2>>::new(cos, sin),
                 }
                 .into())
             }

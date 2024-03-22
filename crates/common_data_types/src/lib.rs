@@ -225,6 +225,19 @@ impl Dimension {
         }
     }
 
+    pub fn length() -> Self {
+        Self {
+            length: 1,
+            mass: 0,
+            time: 0,
+            electric_current: 0,
+            thermodynamic_temprature: 0,
+            amount_of_substance: 0,
+            luminous_intensity: 0,
+            ratio_type_hint: RatioTypeHint(0),
+        }
+    }
+
     pub fn is_zero_dimension(&self) -> bool {
         self.length == 0
             && self.mass == 0

@@ -161,6 +161,7 @@ pub enum VariableType<S: Span> {
     Struct(S),
     Scalar(S),
     Vector(u8, S),
+    Transform(u8),
     Cycle,
     Region,
     Sketch,
@@ -224,6 +225,8 @@ impl<S: Span> VariableType<S> {
                     ),
                     |name| Self::Vector(4, name),
                 ),
+                map(tag("Transform2D"), |_| Self::Transform(2)),
+                map(tag("Transform3D"), |_| Self::Transform(3)),
                 map(FunctionSignature::parse, Self::Function),
                 map(parse_name, Self::Scalar),
             )),
@@ -241,6 +244,9 @@ impl<S: Span> VariableType<S> {
             VariableType::Vector(dimension, name) => {
                 format!("Vector{}<{}>", dimension, name.as_str()).into()
             }
+            Self::Transform(2) => "Transform2D".into(),
+            Self::Transform(3) => "Transform3D".into(),
+            Self::Transform(_) => unreachable!(),
             VariableType::Cycle => "Cycle".into(),
             VariableType::Region => "Region".into(),
             VariableType::Sketch => "Sketch".into(),
@@ -265,6 +271,9 @@ impl<S: Span> Display for VariableType<S> {
             VariableType::Vector(dimension, name) => {
                 write!(f, "Vector{}<{}>", dimension, name.as_str())
             }
+            Self::Transform(2) => write!(f, "Transform2D"),
+            Self::Transform(3) => write!(f, "Transform3D"),
+            Self::Transform(_) => unreachable!(),
             VariableType::Cycle => write!(f, "Cycle"),
             VariableType::Region => write!(f, "Region"),
             VariableType::Sketch => write!(f, "Sketch"),

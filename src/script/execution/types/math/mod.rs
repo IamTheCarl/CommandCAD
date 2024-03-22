@@ -18,11 +18,11 @@
 
 use std::{borrow::Cow, io};
 
-use arrayvec::ArrayVec;
 use common_data_types::{
     BaseUnits, ConversionFactor, ConversionFactorDatabase, Dimension, DimensionNameDatabase,
-    Number, RatioTypeHint, UnitDescription, UnitList,
+    Number, RatioTypeHint, RawNumber, UnitDescription, UnitList,
 };
+use nalgebra::{DefaultAllocator, DimName};
 
 use crate::script::{
     execution::{ExecutionContext, Failure},
@@ -34,6 +34,9 @@ pub use scalar::Scalar;
 
 mod vector;
 pub use vector::{Vector2, Vector3, Vector4};
+
+mod transform;
+pub use transform::{Transform2D, Transform3D};
 
 use self::vector::Vector;
 
@@ -49,6 +52,26 @@ lazy_static::lazy_static! {
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     // TODO this would be a good point call into scalar and create some global constants.
     vector::register_globals(context);
+    transform::register_globals(context);
+}
+
+trait CheckNan {
+    fn check_nan<S: Span>(self, span: &S) -> OperatorResult<S, ()>;
+}
+
+impl<
+        R: nalgebra::base::Dim,
+        C: nalgebra::base::Dim,
+        S: nalgebra::base::storage::RawStorage<RawNumber, R, C>,
+    > CheckNan for nalgebra::Matrix<RawNumber, R, C, S>
+{
+    fn check_nan<SP: Span>(self, span: &SP) -> OperatorResult<SP, ()> {
+        if !self.iter().any(|c| c.is_nan()) {
+            Ok(())
+        } else {
+            Err(Failure::ResultIsNan(span.clone()))
+        }
+    }
 }
 
 fn format_dimension(dimension: &Dimension) -> Cow<'static, str> {
@@ -81,11 +104,13 @@ pub trait ConvertUnit {
         span: &S,
         measurement: &Scalar,
     ) -> OperatorResult<S, Number>;
-    fn convert_from_vector_to_array<S: Span, const D: usize>(
+    fn convert_from_vector_to_iter<S: Span, D: DimName>(
         &self,
         span: &S,
         vector: &Vector<D>,
-    ) -> OperatorResult<S, [Number; D]>;
+    ) -> OperatorResult<S, impl Iterator<Item = Number>>
+    where
+        DefaultAllocator: nalgebra::allocator::Allocator<f64, D>;
 }
 
 impl ConvertUnit for ConversionFactor {
@@ -113,20 +138,20 @@ impl ConvertUnit for ConversionFactor {
         }
     }
 
-    fn convert_from_vector_to_array<S: Span, const D: usize>(
+    fn convert_from_vector_to_iter<S: Span, D: DimName>(
         &self,
         span: &S,
         vector: &Vector<D>,
-    ) -> OperatorResult<S, [Number; D]> {
+    ) -> OperatorResult<S, impl Iterator<Item = Number>>
+    where
+        DefaultAllocator: nalgebra::allocator::Allocator<f64, D>,
+    {
         if vector.dimension == self.dimension {
-            let array: ArrayVec<Number, D> = vector
+            Ok(vector
                 .value
                 .iter()
                 .copied()
-                .map(|c| self.convert_from_base_unit(Number::new(c).unwrap()))
-                .collect();
-
-            Ok(array.into_inner().unwrap())
+                .map(|c| self.convert_from_base_unit(Number::new(c).unwrap())))
         } else {
             Err(Failure::ExpectedGot(
                 span.clone(),
