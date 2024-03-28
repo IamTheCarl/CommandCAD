@@ -16,10 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{
-    objects::Curve as FornjotCurve,
-    storage::{Handle, HandleWrapper},
-};
+use fj_core::{storage::Handle, topology::Curve as FornjotCurve};
 
 use crate::script::{
     execution::{types::Object, ExecutionContext},
@@ -35,7 +32,7 @@ pub fn register_globals<S: Span>(_context: &mut ExecutionContext<S>) {
 
 #[derive(Clone)]
 pub struct Curve {
-    pub handle: HandleWrapper<FornjotCurve>,
+    pub handle: Handle<FornjotCurve>,
 }
 
 impl<'a, S: Span> Object<'a, S> for Curve {

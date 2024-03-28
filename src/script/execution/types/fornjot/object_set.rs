@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{objects::ObjectSet, storage::Handle};
+use fj_core::{storage::Handle, topology::ObjectSet};
 
 use crate::script::{
     execution::{

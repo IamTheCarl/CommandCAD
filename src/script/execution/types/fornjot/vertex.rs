@@ -16,10 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{
-    objects::Vertex as FornjotVertex,
-    storage::{Handle, HandleWrapper},
-};
+use fj_core::{storage::Handle, topology::Vertex as FornjotVertex};
 
 use crate::script::{
     execution::{types::Object, ExecutionContext},
@@ -35,7 +32,7 @@ pub fn register_globals<S: Span>(_context: &mut ExecutionContext<S>) {
 
 #[derive(Clone)]
 pub struct Vertex {
-    pub handle: HandleWrapper<FornjotVertex>,
+    pub handle: Handle<FornjotVertex>,
 }
 
 impl<'a, S: Span> Object<'a, S> for Vertex {
