@@ -419,6 +419,36 @@ impl<D: DimName> Vector<D>
 where
     DefaultAllocator: Allocator<RawNumber, D>,
 {
+    pub(super) fn check_dimension<S: Span>(
+        &self,
+        span: &S,
+        dimension: Dimension,
+    ) -> OperatorResult<S, ()> {
+        if self.dimension == dimension {
+            Ok(())
+        } else {
+            Err(Failure::ExpectedGot(
+                span.clone(),
+                get_dimension_name(&dimension),
+                get_dimension_name(&self.dimension),
+            ))
+        }
+    }
+
+    pub(super) fn from_value_ref<'a, 'b, S: Span>(
+        span: &S,
+        value: &'b Value<'a, S>,
+        dimension: Dimension,
+    ) -> OperatorResult<S, &'b Self>
+    where
+        Self: NamedObject,
+        Value<'a, S>: AsVariant<Self>,
+    {
+        let value = value.downcast_ref::<Self>(span)?;
+        value.check_dimension(span, dimension)?;
+
+        Ok(value)
+    }
     fn validate_dimensions_match<'a, S: Span>(&self, span: &S, rhs: &Self) -> OperatorResult<S, ()>
     where
         Vector<D>: NamedObject + Object<'a, S>,

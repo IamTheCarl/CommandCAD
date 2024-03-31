@@ -24,14 +24,14 @@ use nalgebra::Unit;
 use crate::script::{
     execution::{
         types::{function::IntoBuiltinFunction, NamedObject, Object, OperatorResult, Value},
-        ExecutionContext, Failure,
+        ExecutionContext,
     },
     logging::RuntimeLog,
     parsing::VariableType,
     Span,
 };
 
-use super::{get_dimension_name, Scalar, Vector3};
+use super::{Scalar, Vector3};
 
 pub type Quaternion = nalgebra::UnitQuaternion<RawNumber>;
 
@@ -51,15 +51,8 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
          span: &S,
          axis: Vector3|
          -> OperatorResult<S, Value<'a, S>> {
-            if axis.dimension == Dimension::zero() {
-                Ok(Quaternion::new(axis.value).into())
-            } else {
-                Err(Failure::ExpectedGot(
-                    span.clone(),
-                    "Normalized vector".into(),
-                    get_dimension_name(&axis.dimension),
-                ))
-            }
+            axis.check_dimension(span, Dimension::zero())?;
+            Ok(Quaternion::new(axis.value).into())
         }
         .into_builtin_function()
         .into(),
@@ -72,29 +65,12 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
          axis: Vector3,
          angle: Scalar|
          -> OperatorResult<S, Value<'a, S>> {
-            if axis.dimension == Dimension::zero() {
-                // We only support translating by lengths.
-                if angle.dimension == Dimension::angle() {
-                    let angle = angle.value;
+            axis.check_dimension(span, Dimension::zero())?;
+            angle.check_dimension(span, Dimension::angle())?;
 
-                    Ok(
-                        Quaternion::from_axis_angle(&Unit::new_normalize(axis.value), *angle)
-                            .into(),
-                    )
-                } else {
-                    Err(Failure::ExpectedGot(
-                        span.clone(),
-                        "Angle".into(),
-                        get_dimension_name(&angle.dimension),
-                    ))
-                }
-            } else {
-                Err(Failure::ExpectedGot(
-                    span.clone(),
-                    "Normalized vector".into(),
-                    get_dimension_name(&axis.dimension),
-                ))
-            }
+            let angle = angle.value;
+
+            Ok(Quaternion::from_axis_angle(&Unit::new_normalize(axis.value), *angle).into())
         }
         .into_builtin_function()
         .into(),

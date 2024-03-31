@@ -220,8 +220,7 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
         let rhs = rhs.downcast_ref::<Scalar>(span)?;
-        self.multiply_by_measurement(span, rhs)
-            .map(|rhs| rhs.into())
+        self.multiply_by_scalar(span, rhs).map(|rhs| rhs.into())
     }
     fn divide(
         &self,
@@ -685,34 +684,34 @@ impl NamedObject for Scalar {
 }
 
 impl Scalar {
-    pub fn multiply_by_measurement<S: Span>(
+    pub(super) fn check_dimension<S: Span>(
         &self,
         span: &S,
-        rhs: &Self,
-    ) -> OperatorResult<S, Self> {
+        dimension: Dimension,
+    ) -> OperatorResult<S, ()> {
+        if self.dimension == dimension {
+            Ok(())
+        } else {
+            Err(Failure::ExpectedGot(
+                span.clone(),
+                get_dimension_name(&dimension),
+                get_dimension_name(&self.dimension),
+            ))
+        }
+    }
+
+    fn multiply_by_scalar<S: Span>(&self, span: &S, rhs: &Self) -> OperatorResult<S, Self> {
         let value = Number::new(*self.value * *rhs.value).unwrap_not_nan(span)?;
         let dimension = self.dimension + rhs.dimension;
 
         Ok(Self { dimension, value })
     }
 
-    pub fn multiply_by_number<S: Span>(&self, span: &S, rhs: &Number) -> OperatorResult<S, Self> {
-        let value = Number::new(*self.value * **rhs).unwrap_not_nan(span)?;
-
-        Ok(Self { value, ..*self })
-    }
-
-    pub fn divide_by_measurement<S: Span>(&self, span: &S, rhs: &Self) -> OperatorResult<S, Self> {
+    fn divide_by_measurement<S: Span>(&self, span: &S, rhs: &Self) -> OperatorResult<S, Self> {
         let value = Number::new(*self.value / *rhs.value).unwrap_not_nan(span)?;
         let dimension = self.dimension - rhs.dimension;
 
         Ok(Self { dimension, value })
-    }
-
-    pub fn divide_by_number<S: Span>(&self, span: &S, rhs: &Number) -> OperatorResult<S, Self> {
-        let value = Number::new(*self.value / **rhs).unwrap_not_nan(span)?;
-
-        Ok(Self { value, ..*self })
     }
 
     fn check_is_zero_dimension<S: Span>(&self, span: &S) -> OperatorResult<S, ()> {

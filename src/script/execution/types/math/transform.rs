@@ -111,21 +111,12 @@ where
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
-        let translation = rhs.downcast_ref::<Vector<DimNameDiff<D, U1>>>(span)?;
+        let translation =
+            Vector::<DimNameDiff<D, U1>>::from_value_ref(span, rhs, Dimension::length())?;
+        let translation = &translation.value;
+        let translation = Self::new_translation(translation);
 
-        // We only support translating by lengths.
-        if translation.dimension == Dimension::length() {
-            let translation = &translation.value;
-            let translation = Self::new_translation(translation);
-
-            Ok((self * translation).into())
-        } else {
-            Err(Failure::ExpectedGot(
-                span.clone(),
-                "Length".into(),
-                get_dimension_name(&translation.dimension),
-            ))
-        }
+        Ok((self * translation).into())
     }
     fn subtraction(
         &self,
@@ -133,21 +124,13 @@ where
         span: &S,
         rhs: &Value<'a, S>,
     ) -> OperatorResult<S, Value<'a, S>> {
-        let translation = rhs.downcast_ref::<Vector<DimNameDiff<D, U1>>>(span)?;
+        let translation =
+            Vector::<DimNameDiff<D, U1>>::from_value_ref(span, rhs, Dimension::length())?;
 
-        // We only support translating by lengths.
-        if translation.dimension == Dimension::length() {
-            let translation = &translation.value;
-            let translation = Self::new_translation(&-translation);
+        let translation = &translation.value;
+        let translation = Self::new_translation(&-translation);
 
-            Ok((self * translation).into())
-        } else {
-            Err(Failure::ExpectedGot(
-                span.clone(),
-                "Length".into(),
-                get_dimension_name(&translation.dimension),
-            ))
-        }
+        Ok((self * translation).into())
     }
     fn multiply(
         &self,
@@ -170,20 +153,14 @@ where
                                   span: &S,
                                   vector: Vector<DimNameDiff<D, U1>>|
              -> OperatorResult<S, Value<'a, S>> {
-                if vector.dimension == Dimension::length() {
-                    let value = self.transform_point(&vector.value);
-                    Ok(Vector::<DimNameDiff<D, U1>> {
-                        dimension: Dimension::length(),
-                        value,
-                    }
-                    .into())
-                } else {
-                    Err(Failure::ExpectedGot(
-                        span.clone(),
-                        "Length".into(),
-                        get_dimension_name(&vector.dimension),
-                    ))
+                vector.check_dimension(span, Dimension::length())?;
+
+                let value = self.transform_point(&vector.value);
+                Ok(Vector::<DimNameDiff<D, U1>> {
+                    dimension: Dimension::length(),
+                    value,
                 }
+                .into())
             }
             .auto_call(context, span, arguments, expressions),
             "rotate" => self.rotate(context, span, arguments, expressions),
@@ -226,19 +203,12 @@ impl Rotate for Transform2D {
          span: &S,
          angle: Scalar|
          -> OperatorResult<S, Value<'a, S>> {
-            // We only support translating by lengths.
-            if angle.dimension == Dimension::angle() {
-                let angle = angle.value;
-                let angle = Self::new_rotation(*angle);
+            angle.check_dimension(span, Dimension::angle())?;
 
-                Ok((self * angle).into())
-            } else {
-                Err(Failure::ExpectedGot(
-                    span.clone(),
-                    "Angle".into(),
-                    get_dimension_name(&angle.dimension),
-                ))
-            }
+            let angle = angle.value;
+            let angle = Self::new_rotation(*angle);
+
+            Ok((self * angle).into())
         }
         .auto_call(context, span, arguments, expressions)
     }
@@ -257,27 +227,13 @@ impl Rotate for Transform3D {
          axis: Vector<Const<3>>,
          angle: Scalar|
          -> OperatorResult<S, Value<'a, S>> {
-            if axis.dimension == Dimension::zero() {
-                // We only support translating by lengths.
-                if angle.dimension == Dimension::angle() {
-                    let angle = angle.value;
-                    let rotation = Self::new_rotation(*angle * axis.value);
+            axis.check_dimension(span, Dimension::zero())?;
+            angle.check_dimension(span, Dimension::angle())?;
 
-                    Ok((self * rotation).into())
-                } else {
-                    Err(Failure::ExpectedGot(
-                        span.clone(),
-                        "Angle".into(),
-                        get_dimension_name(&angle.dimension),
-                    ))
-                }
-            } else {
-                Err(Failure::ExpectedGot(
-                    span.clone(),
-                    "Normalized vector".into(),
-                    get_dimension_name(&axis.dimension),
-                ))
-            }
+            let angle = angle.value;
+            let rotation = Self::new_rotation(*angle * axis.value);
+
+            Ok((self * rotation).into())
         }
         .auto_call(context, span, arguments, expressions)
     }
