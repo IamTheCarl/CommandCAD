@@ -27,8 +27,8 @@ use fj_core::{
 use crate::script::{
     execution::{
         types::{
-            fornjot::cycle::Cycle, function::IntoBuiltinFunction, List, Object, OperatorResult,
-            StructDefinition, Structure,
+            function::IntoBuiltinFunction, List, Object, OperatorResult, StructDefinition,
+            Structure,
         },
         ExecutionContext, Failure,
     },
@@ -36,7 +36,7 @@ use crate::script::{
     Span,
 };
 
-use super::{circle::unwrap_circle, handle_wrapper, polygon::unwrap_polygon};
+use super::{circle::unwrap_circle, cycle::Cycle, handle_wrapper, polygon::unwrap_polygon};
 
 pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
     context.stack.new_variable_str(

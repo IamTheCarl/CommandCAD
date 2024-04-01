@@ -70,15 +70,15 @@ pub use closure::Closure;
 mod serializable;
 pub use serializable::SerializableValue;
 
-mod fornjot;
-pub use fornjot::{
+mod modeling;
+pub use modeling::{
     curve::Curve, cycle::Cycle, face::Face, half_edge::HalfEdge, region::Region, shell::Shell,
     sketch::Sketch, solid::Solid, surface::Surface, vertex::Vertex,
 };
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     math::register_globals(context);
-    fornjot::register_globals(context);
+    modeling::register_globals(context);
 }
 
 pub type OperatorResult<S, R> = std::result::Result<R, Failure<S>>;

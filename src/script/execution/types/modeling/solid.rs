@@ -26,7 +26,7 @@ use fj_core::{
 
 use crate::script::{
     execution::{
-        types::{fornjot::shell::Shell, function::AutoCall, List, Object, OperatorResult, Value},
+        types::{function::AutoCall, List, Object, OperatorResult, Value},
         ExecutionContext, Failure,
     },
     logging::RuntimeLog,
@@ -34,7 +34,7 @@ use crate::script::{
     Span,
 };
 
-use super::{handle_wrapper, object_set::check_for_duplicates};
+use super::{handle_wrapper, object_set::check_for_duplicates, shell::Shell};
 
 pub fn register_globals<S: Span>(_context: &mut ExecutionContext<'_, S>) {}
 
