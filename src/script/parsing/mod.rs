@@ -39,7 +39,7 @@ mod span;
 pub use span::Span;
 
 mod root;
-pub use root::{FileAST, Import, RootElement, Sketch, Solid, Task};
+pub use root::{FileAST, Import, RootElement};
 
 mod pstruct;
 pub use pstruct::StructDefinition;

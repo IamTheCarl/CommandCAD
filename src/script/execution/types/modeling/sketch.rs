@@ -30,6 +30,7 @@ use crate::script::{
         },
         ExecutionContext, Failure,
     },
+    logging::RuntimeLog,
     parsing::{self, VariableType},
     Span,
 };
@@ -39,13 +40,13 @@ use super::{
     surface::Surface,
 };
 
-pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
         "new_sketch",
-        (|context: &mut ExecutionContext<'a, S>,
+        (|context: &mut ExecutionContext<S>,
           span: &S,
-          argument: Value<'a, S>|
-         -> OperatorResult<S, Value<'a, S>> {
+          argument: Value<S>|
+         -> OperatorResult<S, Value<S>> {
             match argument {
                 Value::List(regions) => {
                     let regions = regions
@@ -115,21 +116,26 @@ pub struct Sketch {
     pub handle: Handle<FornjotSketch>,
 }
 
-impl<'a, S: Span> Object<'a, S> for Sketch {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Sketch)
+impl<S: Span> Object<S> for Sketch {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Sketch))
     }
 
     fn method_call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         attribute: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         spans: &[parsing::Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "sweep" => |context: &mut ExecutionContext<'a, S>,
+            "sweep" => |context: &mut ExecutionContext<S>,
                         span: &S,
                         surface: Surface,
                         path: Vector3|
@@ -155,83 +161,77 @@ handle_wrapper!(Sketch, FornjotSketch);
 
 #[cfg(test)]
 mod test {
-    use crate::script::{execution::expressions::run_expression, parsing::Expression};
+    use crate::script::{execution::expressions::run_expression, parsing::Expression, Runtime};
 
     use super::*;
 
     #[test]
     fn construct_circle() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
+                run_expression(
+                    context,
+                    &Expression::parse(
                         "new_sketch(Circle { center = vec2(1mm, 2mm), radius = 3mm })"
                     )
                     .unwrap()
                     .1
-                )),
-            ),
-            Ok(Value::Sketch(_))
-        ));
+                ),
+                Ok(Value::Sketch(_))
+            ));
+        });
     }
 
     #[test]
     fn construct_polygon() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
+		run_expression(
+                    context,
+                    &Expression::parse(
                         "new_sketch(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)] })"
                     )
                     .unwrap()
                     .1
-                )),
-            ),
-            Ok(Value::Sketch(_))
-        ));
+		),
+		Ok(Value::Sketch(_))
+            ));
+        });
     }
 
     #[test]
     fn construct_from_regions() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
+                run_expression(
+                    context,
+                    &Expression::parse(
                         "new_sketch([new_region(Circle { center = vec2(1mm, 2mm), radius = 3mm }),
 new_region(Circle { center = vec2(4mm, 2mm), radius = 3mm })])"
                     )
                     .unwrap()
                     .1
-                )),
-            ),
-            Ok(Value::Sketch(_))
-        ));
+                ),
+                Ok(Value::Sketch(_))
+            ));
+        });
     }
 
     #[test]
     fn sweep() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse(
-                    "new_sketch(Circle { center = vec2(1mm, 2mm), radius = 3mm }).sweep(global_xz_plane(), vec3(0cm, 1cm, 0cm))"
-                )
-                .unwrap()
-                .1)),
-            ),
-            Ok(Value::Solid(_))
-        ));
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
+		run_expression(
+                    context,
+                    &Expression::parse(
+			"new_sketch(Circle { center = vec2(1mm, 2mm), radius = 3mm }).sweep(global_xz_plane(), vec3(0cm, 1cm, 0cm))"
+                    )
+		    .unwrap()
+		    .1,
+		),
+		Ok(Value::Solid(_))
+            ));
+        });
     }
 
     // TODO validation failure test (Fornjot failure validation should result in a Failure type when constructing an invalid region)

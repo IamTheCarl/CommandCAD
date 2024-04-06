@@ -49,10 +49,10 @@ pub type Transform<D> = nalgebra::OMatrix<RawNumber, D, D>;
 pub type Transform2D = Transform<Const<3>>;
 pub type Transform3D = Transform<Const<4>>;
 
-pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
         "new_transform2D",
-        |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<'a, S>> {
+        |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
             Ok(Transform2D::identity().into())
         }
         .into_builtin_function()
@@ -60,7 +60,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
     );
     context.stack.new_variable_str(
         "new_transform3D",
-        |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<'a, S>> {
+        |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
             Ok(Transform3D::identity().into())
         }
         .into_builtin_function()
@@ -68,10 +68,10 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
     );
 }
 
-impl<'a, S, D> Object<'a, S> for Transform<D>
+impl<S, D> Object<S> for Transform<D>
 where
     D: DimName + DimNameSub<U1>,
-    S: Span + 'a,
+    S: Span,
     DefaultAllocator: Allocator<RawNumber, D>
         + Allocator<RawNumber, <D as DimNameSub<U1>>::Output, <D as DimNameSub<U1>>::Output>
         + Allocator<RawNumber, D, D>
@@ -80,37 +80,38 @@ where
         + TransformPoint<<D as DimNameSub<U1>>::Output>
         + Rotate
         + CustomMultiply<<D as DimNameSub<U1>>::Output>,
-    Vector<D>: Into<Value<'a, S>>,
-    Vector<<D as DimNameSub<U1>>::Output>: NamedObject + Into<Value<'a, S>>,
-    Value<'a, S>: From<Self>
+    Vector<D>: Into<Value<S>>,
+    Vector<<D as DimNameSub<U1>>::Output>: NamedObject + Into<Value<S>>,
+    Value<S>: From<Self>
         + AsVariant<Vector<<D as DimNameSub<U1>>::Output>>
         + TryInto<Vector<<D as DimNameSub<U1>>::Output>>,
 {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        if let VariableType::Transform(dimension) = ty {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(if let VariableType::Transform(dimension) = ty {
             *dimension as usize == D::USIZE
         } else {
             false
-        }
+        })
     }
 
     fn type_name(&self) -> Cow<'static, str> {
         Self::static_type_name().into()
     }
 
-    fn unary_minus(
-        &self,
-        _log: &mut dyn RuntimeLog<S>,
-        _span: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    fn unary_minus(&self, _log: &mut dyn RuntimeLog<S>, _span: &S) -> OperatorResult<S, Value<S>> {
         Ok((-self.clone()).into())
     }
     fn addition(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let translation =
             Vector::<DimNameDiff<D, U1>>::from_value_ref(span, rhs, Dimension::length())?;
         let translation = &translation.value;
@@ -122,8 +123,8 @@ where
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let translation =
             Vector::<DimNameDiff<D, U1>>::from_value_ref(span, rhs, Dimension::length())?;
 
@@ -136,23 +137,23 @@ where
         &self,
         log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         self.custom_multiply(log, span, rhs)
     }
     fn method_call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         attribute: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         expressions: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "apply_to_vector" => |_context: &mut ExecutionContext<'a, S>,
+            "apply_to_vector" => |_context: &mut ExecutionContext<S>,
                                   span: &S,
                                   vector: Vector<DimNameDiff<D, U1>>|
-             -> OperatorResult<S, Value<'a, S>> {
+             -> OperatorResult<S, Value<S>> {
                 vector.check_dimension(span, Dimension::length())?;
 
                 let value = self.transform_point(&vector.value);
@@ -182,27 +183,27 @@ impl NamedObject for Transform3D {
 }
 
 trait Rotate {
-    fn rotate<'a, S: Span>(
+    fn rotate<S: Span>(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         expressions: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>>;
+    ) -> OperatorResult<S, Value<S>>;
 }
 
 impl Rotate for Transform2D {
-    fn rotate<'a, S: Span>(
+    fn rotate<S: Span>(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         expressions: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
-        |_context: &mut ExecutionContext<'a, S>,
+    ) -> OperatorResult<S, Value<S>> {
+        |_context: &mut ExecutionContext<S>,
          span: &S,
          angle: Scalar|
-         -> OperatorResult<S, Value<'a, S>> {
+         -> OperatorResult<S, Value<S>> {
             angle.check_dimension(span, Dimension::angle())?;
 
             let angle = angle.value;
@@ -215,18 +216,18 @@ impl Rotate for Transform2D {
 }
 
 impl Rotate for Transform3D {
-    fn rotate<'a, S: Span>(
+    fn rotate<S: Span>(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         expressions: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
-        |_context: &mut ExecutionContext<'a, S>,
+    ) -> OperatorResult<S, Value<S>> {
+        |_context: &mut ExecutionContext<S>,
          span: &S,
          axis: Vector<Const<3>>,
          angle: Scalar|
-         -> OperatorResult<S, Value<'a, S>> {
+         -> OperatorResult<S, Value<S>> {
             axis.check_dimension(span, Dimension::zero())?;
             angle.check_dimension(span, Dimension::angle())?;
 
@@ -243,21 +244,21 @@ trait CustomMultiply<D>
 where
     D: Dim,
 {
-    fn custom_multiply<'a, S: Span>(
+    fn custom_multiply<S: Span>(
         &self,
         log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>>;
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>>;
 }
 
 impl CustomMultiply<Const<2>> for Transform2D {
-    fn custom_multiply<'a, S: Span>(
+    fn custom_multiply<S: Span>(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let scale = rhs.downcast_ref::<Vector2>(span)?;
         if scale.dimension.is_zero_dimension() {
             let scale = Self::new_nonuniform_scaling(&scale.value);
@@ -273,12 +274,12 @@ impl CustomMultiply<Const<2>> for Transform2D {
 }
 
 impl CustomMultiply<Const<3>> for Transform3D {
-    fn custom_multiply<'a, S: Span>(
+    fn custom_multiply<S: Span>(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         match rhs {
             Value::Vector3(scale) => {
                 if scale.dimension.is_zero_dimension() {
@@ -333,145 +334,136 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::script::execution::{expressions::run_expression, types::math::vector::NVector};
+    use crate::script::{
+        execution::{expressions::run_expression, types::math::vector::NVector},
+        Runtime,
+    };
 
     use super::*;
 
     #[test]
     fn translate() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse(
                         "(new_transform2D() + vec2(1m, 2m)).apply_to_vector(vec2(0m, 0m))"
                     )
                     .unwrap()
                     .1
-                ))
-            ),
-            Ok(Vector {
-                dimension: Dimension::length(),
-                value: NVector::<Const<2>>::new(1.0, 2.0),
-            }
-            .into())
-        );
+                ),
+                Ok(Vector {
+                    dimension: Dimension::length(),
+                    value: NVector::<Const<2>>::new(1.0, 2.0),
+                }
+                .into())
+            );
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse(
                         "(new_transform2D() - vec2(1m, 2m)).apply_to_vector(vec2(0m, 0m))"
                     )
                     .unwrap()
                     .1
-                ))
-            ),
-            Ok(Vector {
-                dimension: Dimension::length(),
-                value: NVector::<Const<2>>::new(-1.0, -2.0),
-            }
-            .into())
-        );
+                ),
+                Ok(Vector {
+                    dimension: Dimension::length(),
+                    value: NVector::<Const<2>>::new(-1.0, -2.0),
+                }
+                .into())
+            );
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse(
                         "(new_transform2D() + vec2(1m, 2m)).apply_to_vector(vec2(1m, 2m))"
                     )
                     .unwrap()
                     .1
-                ))
-            ),
-            Ok(Vector {
-                dimension: Dimension::length(),
-                value: NVector::<Const<2>>::new(2.0, 4.0),
-            }
-            .into())
-        );
+                ),
+                Ok(Vector {
+                    dimension: Dimension::length(),
+                    value: NVector::<Const<2>>::new(2.0, 4.0),
+                }
+                .into())
+            );
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse(
                         "(new_transform2D() - vec2(1m, 2m)).apply_to_vector(vec2(2m, 3m))"
                     )
                     .unwrap()
                     .1
-                ))
-            ),
-            Ok(Vector {
-                dimension: Dimension::length(),
-                value: NVector::<Const<2>>::new(1.0, 1.0),
-            }
-            .into())
-        );
+                ),
+                Ok(Vector {
+                    dimension: Dimension::length(),
+                    value: NVector::<Const<2>>::new(1.0, 1.0),
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
     fn scale() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse(
                         "(new_transform2D() * vec2(1, 2)).apply_to_vector(vec2(2m, 2m))"
                     )
                     .unwrap()
                     .1
-                ))
-            ),
-            Ok(Vector {
-                dimension: Dimension::length(),
-                value: NVector::<Const<2>>::new(2.0, 4.0),
-            }
-            .into())
-        );
+                ),
+                Ok(Vector {
+                    dimension: Dimension::length(),
+                    value: NVector::<Const<2>>::new(2.0, 4.0),
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
     fn rotate_2d() {
-        let mut context = ExecutionContext::default();
-        let result = run_expression(
-            &mut context,
-            Box::leak(Box::new(
-                Expression::parse(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            let result = run_expression(
+                context,
+                &Expression::parse(
                     "(new_transform2D().rotate(90deg)).apply_to_vector(vec2(1m, 0m))",
                 )
                 .unwrap()
                 .1,
-            )),
-        )
-        .unwrap();
-        let vector = result.downcast::<Vector<Const<2>>>(&"").unwrap();
+            )
+            .unwrap();
+            let vector = result.downcast::<Vector<Const<2>>>(&"").unwrap();
 
-        assert!((vector.value - NVector::<Const<2>>::new(0.0, 1.0)).norm() < 0.01);
+            assert!((vector.value - NVector::<Const<2>>::new(0.0, 1.0)).norm() < 0.01);
+        });
     }
 
     #[test]
     fn rotate_3d() {
-        let mut context = ExecutionContext::default();
-        let result = run_expression(
-            &mut context,
-            Box::leak(Box::new(
-                Expression::parse(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            let result = run_expression(
+            context,
+        &        Expression::parse(
                     "(new_transform3D().rotate(vec3(0, 0, 1), 90deg)).apply_to_vector(vec3(1m, 0m, 0m))",
                 )
                 .unwrap()
                 .1,
-            )),
         )
         .unwrap();
-        let vector = result.downcast::<Vector<Const<3>>>(&"").unwrap();
+            let vector = result.downcast::<Vector<Const<3>>>(&"").unwrap();
 
-        assert!((vector.value - NVector::<Const<3>>::new(0.0, 1.0, 0.0)).norm() < 0.01);
+            assert!((vector.value - NVector::<Const<3>>::new(0.0, 1.0, 0.0)).norm() < 0.01);
+        });
     }
 }

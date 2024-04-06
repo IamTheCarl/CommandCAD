@@ -21,15 +21,13 @@ use std::{borrow::Cow, collections::HashMap};
 use serde::{Deserialize, Serialize};
 
 use crate::script::{
-    execution::{types::StructDefinition, ExecutionContext, Failure},
+    execution::{types::StructDefinition, validate_assignment_type, ExecutionContext, Failure},
+    logging::RuntimeLog,
     parsing::VariableType,
     Span,
 };
 
-use super::{
-    structures::validate_assignment_type, DefaultValue, List, Object, OperatorResult, SString,
-    Scalar, Structure, Value,
-};
+use super::{DefaultValue, List, Object, OperatorResult, SString, Scalar, Structure, Value};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -53,11 +51,11 @@ pub enum SerializableValue {
 }
 
 impl SerializableValue {
-    pub fn into_value_without_type_check<'a, S: Span>(
+    pub fn into_value_without_type_check<S: Span>(
         self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match self {
             Self::Default => Ok(DefaultValue.into()),
             Self::Boolean(value) => Ok((value).into()),
@@ -68,8 +66,9 @@ impl SerializableValue {
                 let initalizer = context
                     .stack
                     .get_variable_str(span, ty.as_ref())?
-                    .downcast_ref::<StructDefinition<'a, S>>(span)?
-                    .definition;
+                    .downcast_ref::<StructDefinition<S>>(span)?
+                    .definition
+                    .clone();
 
                 let mut failures = Vec::new();
                 let mut table = HashMap::with_capacity(initalizer.members.len());
@@ -78,7 +77,7 @@ impl SerializableValue {
                     if let Some(value) = values.remove(member.name.as_str()) {
                         match value.into_value(context, span, &member.ty.ty) {
                             Ok(value) => {
-                                match validate_assignment_type(context, member, span, value) {
+                                match validate_assignment_type(context, member, span, value, span) {
                                     Ok(value) => {
                                         table.insert(member.name.to_string(), value);
                                     }
@@ -104,7 +103,7 @@ impl SerializableValue {
                 }
             }
             Self::List(values) => {
-                let mut collected_values: Vec<Value<'a, S>> = Vec::with_capacity(values.len());
+                let mut collected_values: Vec<Value<S>> = Vec::with_capacity(values.len());
 
                 for value in values {
                     let value = value.into_value_without_type_check(context, span)?;
@@ -118,13 +117,13 @@ impl SerializableValue {
         }
     }
 
-    pub fn into_value<'a, S: Span>(
+    pub fn into_value<S: Span>(
         self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         ty: &VariableType<S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
-        if self.matches_type(ty) {
+    ) -> OperatorResult<S, Value<S>> {
+        if self.matches_type(ty, context.log, span)? {
             self.into_value_without_type_check(context, span)
         } else {
             Err(Failure::CannotConvertFromTo(
@@ -135,16 +134,23 @@ impl SerializableValue {
         }
     }
 
-    fn matches_type<S: Span>(&self, ty: &VariableType<S>) -> bool {
-        match (self, ty) {
+    fn matches_type<S: Span>(
+        &self,
+        ty: &VariableType<S>,
+        log: &mut dyn RuntimeLog<S>,
+        variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(match (self, ty) {
             (Self::Boolean(_), VariableType::Boolean) => true,
             (Self::Struct { ty: s_ty, .. }, VariableType::Struct(v_ty)) => v_ty.as_str() == s_ty,
             (Self::List(_), VariableType::List) => true,
             (Self::String(_), VariableType::String) => true,
-            (Self::Scalar(measurement), ty) => measurement.matches_type(ty),
+            (Self::Scalar(measurement), ty) => {
+                measurement.matches_type(ty, log, variable_name_span)?
+            }
             (Self::Default, _) => true,
             _ => false,
-        }
+        })
     }
 
     fn type_name(&self) -> Cow<'static, str> {
@@ -170,58 +176,59 @@ mod test {
         execution::{
             expressions::run_expression,
             types::{Object, SString, Scalar},
-            Module, ModuleScope,
+            Module,
         },
         parsing::Expression,
+        Runtime,
     };
 
     use super::*;
 
     #[test]
     fn deserialize_boolean() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            serde_yaml::from_str::<SerializableValue>("true")
-                .unwrap()
-                .into_value(&mut context, &"", &VariableType::Boolean),
-            Ok(true.into())
-        );
-        assert_eq!(
-            serde_yaml::from_str::<SerializableValue>("false")
-                .unwrap()
-                .into_value(&mut context, &"", &VariableType::Boolean),
-            Ok(false.into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                serde_yaml::from_str::<SerializableValue>("true")
+                    .unwrap()
+                    .into_value(context, &"", &VariableType::Boolean),
+                Ok(true.into())
+            );
+            assert_eq!(
+                serde_yaml::from_str::<SerializableValue>("false")
+                    .unwrap()
+                    .into_value(context, &"", &VariableType::Boolean),
+                Ok(false.into())
+            );
+        });
     }
 
     #[test]
     fn serialize_boolean() {
-        let context = ExecutionContext::default();
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            let boolean: Value<&'static str> = true.into();
+            assert_eq!(
+                boolean.export(context.log, &""),
+                Ok(SerializableValue::Boolean(true))
+            );
 
-        let boolean: Value<&'static str> = true.into();
-        assert_eq!(
-            boolean.export(context.log, &""),
-            Ok(SerializableValue::Boolean(true))
-        );
-
-        let boolean: Value<&'static str> = false.into();
-        assert_eq!(
-            boolean.export(context.log, &""),
-            Ok(SerializableValue::Boolean(false))
-        );
+            let boolean: Value<&'static str> = false.into();
+            assert_eq!(
+                boolean.export(context.log, &""),
+                Ok(SerializableValue::Boolean(false))
+            );
+        });
     }
 
     #[test]
     fn deserialize_number() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            serde_yaml::from_str::<SerializableValue>("42")
-                .unwrap()
-                .into_value(&mut context, &"", &VariableType::Scalar("Number")),
-            Ok(Number::new(42.0).unwrap().into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                serde_yaml::from_str::<SerializableValue>("42")
+                    .unwrap()
+                    .into_value(context, &"", &VariableType::Scalar("Number")),
+                Ok(Number::new(42.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
@@ -244,71 +251,66 @@ mod test {
 
         assert!(log.is_empty());
 
-        let module_scope = ModuleScope::new(&module);
-        let mut context = ExecutionContext::new(module_scope);
-
-        let struct_def = r#"
+        ExecutionContext::new(&mut Runtime::from(module), |context| {
+            let struct_def = r#"
                    type: MyStruct
                    members:
                      value: 42"#;
 
-        let structure = serde_yaml::from_str::<SerializableValue>(struct_def)
-            .unwrap()
-            .into_value(&mut context, &"", &VariableType::Struct("MyStruct"));
+            let structure = serde_yaml::from_str::<SerializableValue>(struct_def)
+                .unwrap()
+                .into_value(context, &"", &VariableType::Struct("MyStruct"));
 
-        assert_eq!(
-            structure.unwrap(),
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("MyStruct { value = 42 }").unwrap().1
-                ))
-            )
-            .unwrap()
-        );
+            assert_eq!(
+                structure.unwrap(),
+                run_expression(
+                    context,
+                    &Expression::parse("MyStruct { value = 42 }").unwrap().1
+                )
+                .unwrap()
+            );
 
-        let struct_def = r#"
+            let struct_def = r#"
                    type: MyStruct
                    members:
                      value: default"#;
 
-        let structure = serde_yaml::from_str::<SerializableValue>(struct_def)
-            .unwrap()
-            .into_value(&mut context, &"", &VariableType::Struct("MyStruct"));
+            let structure = serde_yaml::from_str::<SerializableValue>(struct_def)
+                .unwrap()
+                .into_value(context, &"", &VariableType::Struct("MyStruct"));
 
-        assert_eq!(
-            structure.unwrap(),
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("MyStruct { ..default }").unwrap().1
-                ))
-            )
-            .unwrap()
-        );
+            assert_eq!(
+                structure.unwrap(),
+                run_expression(
+                    context,
+                    &Expression::parse("MyStruct { ..default }").unwrap().1
+                )
+                .unwrap()
+            );
 
-        assert!(serde_yaml::from_str::<SerializableValue>(struct_def)
-            .unwrap()
-            .into_value(&mut context, &"", &VariableType::Struct("OtherStruct"))
-            .is_err());
+            assert!(serde_yaml::from_str::<SerializableValue>(struct_def)
+                .unwrap()
+                .into_value(context, &"", &VariableType::Struct("OtherStruct"))
+                .is_err());
 
-        let struct_def = r#"
+            let struct_def = r#"
                    type: MyStruct
                    members:
                      wrong_value: 42"#;
-        assert!(serde_yaml::from_str::<SerializableValue>(struct_def)
-            .unwrap()
-            .into_value(&mut context, &"", &VariableType::Struct("MyStruct"))
-            .is_err());
+            assert!(serde_yaml::from_str::<SerializableValue>(struct_def)
+                .unwrap()
+                .into_value(context, &"", &VariableType::Struct("MyStruct"))
+                .is_err());
 
-        let struct_def = r#"
+            let struct_def = r#"
                    type: MyStruct
                    members:
                      value: true"#;
-        assert!(serde_yaml::from_str::<SerializableValue>(struct_def)
-            .unwrap()
-            .into_value(&mut context, &"", &VariableType::Struct("MyStruct"))
-            .is_err());
+            assert!(serde_yaml::from_str::<SerializableValue>(struct_def)
+                .unwrap()
+                .into_value(context, &"", &VariableType::Struct("MyStruct"))
+                .is_err());
+        });
     }
 
     #[test]
@@ -324,106 +326,101 @@ mod test {
 
         assert!(log.is_empty());
 
-        let module_scope = ModuleScope::new(&module);
-        let mut context = ExecutionContext::new(module_scope);
+        ExecutionContext::new(&mut Runtime::from(module), |context| {
+            let value: Value<&'static str> = run_expression(
+                context,
+                &Expression::parse("MyStruct { value = 42 }").unwrap().1,
+            )
+            .unwrap();
 
-        let value: Value<&'static str> = run_expression(
-            &mut context,
-            Box::leak(Box::new(
-                Expression::parse("MyStruct { value = 42 }").unwrap().1,
-            )),
-        )
-        .unwrap();
-
-        assert_eq!(
-            value.export(context.log, &""),
-            Ok(SerializableValue::Struct {
-                ty: "MyStruct".to_string(),
-                members: HashMap::from([(
-                    "value".to_string(),
-                    SerializableValue::Scalar(Scalar::from(Number::new(42.0).unwrap()))
-                )])
-            })
-        );
+            assert_eq!(
+                value.export(context.log, &""),
+                Ok(SerializableValue::Struct {
+                    ty: "MyStruct".to_string(),
+                    members: HashMap::from([(
+                        "value".to_string(),
+                        SerializableValue::Scalar(Scalar::from(Number::new(42.0).unwrap()))
+                    )])
+                })
+            );
+        });
     }
 
     #[test]
     fn deserialize_list() {
         let list_def = r#"[1, true, "some text"]"#;
 
-        let mut context = ExecutionContext::default();
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            let list = serde_yaml::from_str::<SerializableValue>(list_def).unwrap();
 
-        let list = serde_yaml::from_str::<SerializableValue>(list_def).unwrap();
+            let list = list.into_value(context, &"", &VariableType::List);
 
-        let list = list.into_value(&mut context, &"", &VariableType::List);
-
-        assert_eq!(
-            list.unwrap(),
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("[1, true, \"some text\"]").unwrap().1
-                ))
-            )
-            .unwrap()
-        );
+            assert_eq!(
+                list.unwrap(),
+                run_expression(
+                    context,
+                    &Expression::parse("[1, true, \"some text\"]").unwrap().1
+                )
+                .unwrap()
+            );
+        });
     }
 
     #[test]
     fn serialize_list() {
-        let context = ExecutionContext::default();
-
-        let value: Value<&'static str> = List::from([
-            Number::new(1.0).unwrap().into(),
-            true.into(),
-            SString::from("some text".to_string()).into(),
-        ])
-        .into();
-        assert_eq!(
-            value.export(context.log, &""),
-            Ok(SerializableValue::List(vec![
-                SerializableValue::Scalar(Scalar::from(Number::new(1.0).unwrap())),
-                SerializableValue::Boolean(true),
-                SerializableValue::String("some text".to_string())
-            ]))
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            let value: Value<&'static str> = List::from([
+                Number::new(1.0).unwrap().into(),
+                true.into(),
+                SString::from("some text".to_string()).into(),
+            ])
+            .into();
+            assert_eq!(
+                value.export(context.log, &""),
+                Ok(SerializableValue::List(vec![
+                    SerializableValue::Scalar(Scalar::from(Number::new(1.0).unwrap())),
+                    SerializableValue::Boolean(true),
+                    SerializableValue::String("some text".to_string())
+                ]))
+            );
+        });
     }
 
     #[test]
     fn deserialize_string() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            serde_yaml::from_str::<SerializableValue>("text")
-                .unwrap()
-                .into_value(&mut context, &"", &VariableType::String),
-            Ok(SString::from("text").into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                serde_yaml::from_str::<SerializableValue>("text")
+                    .unwrap()
+                    .into_value(context, &"", &VariableType::String),
+                Ok(SString::from("text").into())
+            );
+        });
     }
 
     #[test]
     fn serialize_string() {
-        let context = ExecutionContext::default();
-
-        let value: Value<&'static str> = SString::from("This is a test".to_string()).into();
-        assert_eq!(
-            value.export(context.log, &""),
-            Ok(SerializableValue::String("This is a test".to_string()))
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            let value: Value<&'static str> = SString::from("This is a test".to_string()).into();
+            assert_eq!(
+                value.export(context.log, &""),
+                Ok(SerializableValue::String("This is a test".to_string()))
+            );
+        });
     }
 
     #[test]
     fn deserialize_measurement() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            serde_yaml::from_str::<SerializableValue>("42mm")
-                .unwrap()
-                .into_value(&mut context, &"", &VariableType::Scalar("Length")),
-            Ok(Scalar::try_from(Length::new::<millimeter>(42.0))
-                .unwrap()
-                .into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                serde_yaml::from_str::<SerializableValue>("42mm")
+                    .unwrap()
+                    .into_value(context, &"", &VariableType::Scalar("Length")),
+                Ok(Scalar::try_from(Length::new::<millimeter>(42.0))
+                    .unwrap()
+                    .into())
+            );
+        });
     }
 
     #[test]
@@ -436,14 +433,14 @@ mod test {
 
     #[test]
     fn deserialize_default() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            serde_yaml::from_str::<SerializableValue>("default")
-                .unwrap()
-                .into_value(&mut context, &"", &VariableType::Scalar("Length")),
-            Ok(DefaultValue.into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                serde_yaml::from_str::<SerializableValue>("default")
+                    .unwrap()
+                    .into_value(context, &"", &VariableType::Scalar("Length")),
+                Ok(DefaultValue.into())
+            );
+        });
     }
 
     #[test]

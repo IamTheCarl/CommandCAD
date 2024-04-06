@@ -42,7 +42,7 @@ impl UnwrapNotNan for std::result::Result<Number, FloatIsNan> {
     }
 }
 
-impl<'a, S: Span> From<Number> for Value<'a, S> {
+impl<S: Span> From<Number> for Value<S> {
     fn from(value: Number) -> Self {
         let measurement: Scalar = value.into();
         measurement.into()

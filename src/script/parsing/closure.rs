@@ -16,8 +16,6 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::rc::Rc;
-
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -47,12 +45,12 @@ impl<S: Span> CapturedVariable<S> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Closure<S: Span> {
     pub starting_span: S,
     pub captured_variables: Vec<CapturedVariable<S>>,
-    pub callable: Rc<CallableBlock<S>>,
-    pub signature: Rc<FunctionSignature<S>>,
+    pub callable: CallableBlock<S>,
+    pub signature: FunctionSignature<S>,
 }
 
 impl<S: Span> Closure<S> {
@@ -72,13 +70,13 @@ impl<S: Span> Closure<S> {
                 CallableBlock::parse_with_return_type,
             ),
             |((starting_span, captured_variables), (callable, return_type))| Self {
-                signature: Rc::new(FunctionSignature::Function {
+                signature: FunctionSignature::Function {
                     return_type: Box::new(return_type),
                     arguments: callable.parameters.iter().map(|p| p.ty.clone()).collect(),
-                }),
+                },
                 starting_span,
                 captured_variables,
-                callable: Rc::new(callable),
+                callable,
             },
         )(input)
     }
@@ -115,15 +113,15 @@ mod test {
                 Closure {
                     starting_span: "[",
                     captured_variables: vec![],
-                    callable: Rc::new(CallableBlock {
+                    callable: CallableBlock {
                         parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
-                    }),
-                    signature: Rc::new(FunctionSignature::Function {
+                    },
+                    signature: FunctionSignature::Function {
                         return_type: Box::new(VariableType::Scalar("Number")),
                         arguments: vec![]
-                    })
+                    }
                 }
             ))
         );
@@ -135,15 +133,15 @@ mod test {
                 Closure {
                     starting_span: "[",
                     captured_variables: vec![CapturedVariable::Copy("a")],
-                    callable: Rc::new(CallableBlock {
+                    callable: CallableBlock {
                         parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
-                    }),
-                    signature: Rc::new(FunctionSignature::Function {
+                    },
+                    signature: FunctionSignature::Function {
                         return_type: Box::new(VariableType::Scalar("Number")),
                         arguments: vec![]
-                    })
+                    }
                 }
             ))
         );
@@ -158,15 +156,15 @@ mod test {
                         CapturedVariable::Copy("a"),
                         CapturedVariable::Reference("b")
                     ],
-                    callable: Rc::new(CallableBlock {
+                    callable: CallableBlock {
                         parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
-                    }),
-                    signature: Rc::new(FunctionSignature::Function {
+                    },
+                    signature: FunctionSignature::Function {
                         return_type: Box::new(VariableType::Scalar("Number")),
                         arguments: vec![]
-                    })
+                    }
                 }
             ))
         );

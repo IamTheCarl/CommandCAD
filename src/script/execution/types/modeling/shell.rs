@@ -49,9 +49,14 @@ pub struct Shell {
     pub handle: Handle<FornjotShell>,
 }
 
-impl<'a, S: Span> Object<'a, S> for Shell {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Shell)
+impl<S: Span> Object<S> for Shell {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Shell))
     }
 
     fn attribute(
@@ -59,23 +64,23 @@ impl<'a, S: Span> Object<'a, S> for Shell {
         _log: &mut dyn RuntimeLog<S>,
         _span: &S,
         attribute: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "faces" => Ok(self.handle.faces().into()),
+            "faces" => Ok(Value::from_object_set(self.handle.faces())),
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
     }
 
     fn method_call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         attribute: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         spans: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "add_blind_hole" => |context: &mut ExecutionContext<'a, S>,
+            "add_blind_hole" => |context: &mut ExecutionContext<S>,
                                  span: &S,
                                  face: Face,
                                  position: Vector2,
@@ -108,7 +113,7 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                 Ok(new_shell.into())
             }
             .auto_call(context, span, arguments, spans),
-            "add_through_hole" => |context: &mut ExecutionContext<'a, S>,
+            "add_through_hole" => |context: &mut ExecutionContext<S>,
                                    span: &S,
                                    front_face: Face,
                                    front_position: Vector2,
@@ -150,10 +155,10 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                 Ok(new_shell.into())
             }
             .auto_call(context, span, arguments, spans),
-            "update_face" => |context: &mut ExecutionContext<'a, S>,
+            "update_face" => |context: &mut ExecutionContext<S>,
                               span: &S,
                               face: Face,
-                              update: Value<'a, S>|
+                              update: Value<S>|
              -> OperatorResult<S, Value<S>> {
                 // Update shell will panic if the shell isn't found in the solid, so check that it's in there.
                 if !self.handle.deref().faces().contains(&face.handle) {
@@ -164,7 +169,7 @@ impl<'a, S: Span> Object<'a, S> for Shell {
                 // the update function.
                 let new_faces = update.call(context, span, vec![face.clone().into()], &[])?;
                 let new_faces = new_faces.downcast::<List<S>>(span)?;
-                let num_faces = new_faces.len();
+                let num_faces = new_faces.len(span)?;
                 let new_faces = new_faces
                     .unpack_dynamic_length::<Face>(span)?
                     .map(|shell| shell.handle);
@@ -186,11 +191,11 @@ impl<'a, S: Span> Object<'a, S> for Shell {
             }
             .auto_call(context, span, arguments, spans),
             "add_faces" => {
-                |context: &mut ExecutionContext<'a, S>,
+                |context: &mut ExecutionContext<S>,
                  span: &S,
-                 new_faces: List<'a, S>|
+                 new_faces: List<S>|
                  -> OperatorResult<S, Value<S>> {
-                    let num_faces = new_faces.len();
+                    let num_faces = new_faces.len(span)?;
                     let new_faces = new_faces
                         .unpack_dynamic_length::<Face>(span)?
                         .map(|shell| shell.handle);

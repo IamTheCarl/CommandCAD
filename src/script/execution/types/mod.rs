@@ -44,7 +44,7 @@ pub mod function;
 pub use function::{BuiltinFunction, UserFunction};
 
 mod structures;
-pub use structures::{validate_assignment_type, StructDefinition, Structure};
+pub use structures::{StructDefinition, Structure};
 
 mod list;
 pub use list::List;
@@ -56,6 +56,7 @@ pub use string::{
 };
 
 mod math;
+use self::function::BuiltinFunctionRef;
 pub use self::math::{
     print_all_supported_units, Quaternion, Scalar, Transform2D, Transform3D, Vector2, Vector3,
     Vector4,
@@ -81,9 +82,10 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     modeling::register_globals(context);
 }
 
+// TODO this should probably be moved to failure_message.rs
 pub type OperatorResult<S, R> = std::result::Result<R, Failure<S>>;
 
-fn unsupported_operation_message<'a, S: Span, R, O: Object<'a, S>>(
+fn unsupported_operation_message<S: Span, R, O: Object<S> + ?Sized>(
     object: &O,
     span: &S,
     operation_name: &'static str,
@@ -100,8 +102,13 @@ pub trait NamedObject {
 }
 
 #[enum_dispatch]
-pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool;
+pub trait Object<S: Span>: NamedObject {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        log: &mut dyn RuntimeLog<S>,
+        variable_name_span: &S,
+    ) -> OperatorResult<S, bool>;
 
     fn format(
         &self,
@@ -122,64 +129,59 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        _rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        _rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "and")
     }
     fn or(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        _rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        _rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "or")
     }
     fn cmp(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        _rhs: &Value<'a, S>,
+        _rhs: &Value<S>,
     ) -> OperatorResult<S, Ordering> {
         unsupported_operation_message(self, span, "compare")
     }
-    fn eq(
-        &self,
-        log: &mut dyn RuntimeLog<S>,
-        span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, bool> {
+    fn eq(&self, log: &mut dyn RuntimeLog<S>, span: &S, rhs: &Value<S>) -> OperatorResult<S, bool> {
         Ok(matches!(self.cmp(log, span, rhs)?, Ordering::Equal))
     }
     fn addition(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        _rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        _rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "addition")
     }
     fn subtraction(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        _rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        _rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "subtraction")
     }
     fn multiply(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        _rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        _rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "multiply")
     }
     fn divide(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        _rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        _rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "divide")
     }
     fn attribute(
@@ -187,62 +189,54 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
         _log: &mut dyn RuntimeLog<S>,
         _span: &S,
         attribute: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         Err(Failure::UnknownAttribute(attribute.clone()))
     }
     fn call(
         &self,
-        _context: &mut ExecutionContext<'a, S>,
+        _context: &mut ExecutionContext<S>,
         span: &S,
-        _arguments: Vec<Value<'a, S>>,
+        _arguments: Vec<Value<S>>,
         _spans: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "call")
     }
     fn method_call(
         &self,
-        _context: &mut ExecutionContext<'a, S>,
+        _context: &mut ExecutionContext<S>,
         _span: &S,
         attribute: &S,
-        _arguments: Vec<Value<'a, S>>,
+        _arguments: Vec<Value<S>>,
         _spans: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         Err(Failure::UnknownAttribute(attribute.clone()))
     }
     fn index(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        _index: Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        _index: Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "index")
     }
     fn iterate(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-    ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
+    ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<S>>>> {
         unsupported_operation_message(self, span, "iterate")
     }
-    fn unary_plus(
-        &self,
-        _log: &mut dyn RuntimeLog<S>,
-        span: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    fn unary_plus(&self, _log: &mut dyn RuntimeLog<S>, span: &S) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "unary plus")
     }
-    fn unary_minus(
-        &self,
-        _log: &mut dyn RuntimeLog<S>,
-        span: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    fn unary_minus(&self, _log: &mut dyn RuntimeLog<S>, span: &S) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "unary minus")
     }
     fn unary_logical_not(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         unsupported_operation_message(self, span, "unary logical not")
     }
 
@@ -255,20 +249,36 @@ pub trait Object<'a, S: Span>: Sized + Clone + NamedObject {
     }
 }
 
-#[enum_dispatch(Object<S>, FormatArgument)]
-#[derive(Debug, Clone, PartialEq, EnumDowncast)]
-pub enum Value<'a, S: Span> {
+trait UnwrapBorrowFailure<T> {
+    fn unwrap_borrow_failure<S: Span>(self, span: &S) -> Result<T, Failure<S>>;
+}
+
+impl<T> UnwrapBorrowFailure<T> for Result<T, std::cell::BorrowError> {
+    fn unwrap_borrow_failure<S: Span>(self, span: &S) -> Result<T, Failure<S>> {
+        self.map_err(|_error| Failure::CannotBorrowImmutably(span.clone(), span.clone()))
+    }
+}
+
+impl<T> UnwrapBorrowFailure<T> for Result<T, std::cell::BorrowMutError> {
+    fn unwrap_borrow_failure<S: Span>(self, span: &S) -> Result<T, Failure<S>> {
+        self.map_err(|_error| Failure::CannotBorrowMutably(span.clone(), span.clone()))
+    }
+}
+
+#[enum_dispatch(Object<S>, ObjectClone<S>, FormatArgument)]
+#[derive(Debug, PartialEq, EnumDowncast, Clone)]
+pub enum Value<S: Span> {
     NoneType,
     Default(DefaultValue),
     Boolean,
-    BuiltinFunction(BuiltinFunction<'a, S>),
-    UserFunction(UserFunction<'a, S>),
-    Structure(Structure<'a, S>),
-    StructDefinition(StructDefinition<'a, S>),
-    List(List<'a, S>),
+    BuiltinFunction(BuiltinFunctionRef<S>),
+    UserFunction(UserFunction<S>),
+    Structure(Structure<S>),
+    StructDefinition(StructDefinition<S>),
+    List(List<S>),
     String(SString),
     Range(Range),
-    Closure(Closure<'a, S>),
+    Closure(Closure<S>),
     Scalar,
     Vector2(Vector2),
     Vector3(Vector3),
@@ -288,13 +298,13 @@ pub enum Value<'a, S: Span> {
     Vertex,
 }
 
-impl<'a, S: Span> NamedObject for Value<'a, S> {
+impl<S: Span> NamedObject for Value<S> {
     fn static_type_name() -> &'static str {
         "Value"
     }
 }
 
-impl<'a, S: Span> Value<'a, S> {
+impl<S: Span> Value<S> {
     pub fn downcast_ref<T>(&self, span: &S) -> OperatorResult<S, &T>
     where
         T: NamedObject,
@@ -340,8 +350,8 @@ impl<'a, S: Span> Value<'a, S> {
     }
 
     pub fn from_litteral(
-        context: &mut ExecutionContext<'a, S>,
-        value: &'a Litteral<S>,
+        context: &mut ExecutionContext<S>,
+        value: &Litteral<S>,
     ) -> OperatorResult<S, Self> {
         match value {
             Litteral::Scalar(scalar) => Scalar::from_parsed(scalar),

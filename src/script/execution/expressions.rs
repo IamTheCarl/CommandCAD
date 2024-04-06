@@ -31,10 +31,10 @@ use super::{
 type Result<S, R> = std::result::Result<R, Failure<S>>;
 
 // TODO this should not be returning a control flow.
-pub fn run_expression<'a, S: Span>(
-    context: &mut ExecutionContext<'a, S>,
-    expression: &'a Expression<S>,
-) -> Result<S, Value<'a, S>> {
+pub fn run_expression<S: Span>(
+    context: &mut ExecutionContext<S>,
+    expression: &Expression<S>,
+) -> Result<S, Value<S>> {
     match expression {
         Expression::And(a, b) => {
             let a_value = run_expression(context, a)?;
@@ -52,14 +52,14 @@ pub fn run_expression<'a, S: Span>(
     }
 }
 
-pub fn run_comparison<'a, S: Span>(
-    context: &mut ExecutionContext<'a, S>,
-    comparison: &'a Comparison<S>,
-) -> Result<S, Value<'a, S>> {
-    fn cmp<'a, S: Span>(
-        context: &mut ExecutionContext<'a, S>,
-        a: &'a Comparison<S>,
-        b: &'a ArithmeticExpression<S>,
+pub fn run_comparison<S: Span>(
+    context: &mut ExecutionContext<S>,
+    comparison: &Comparison<S>,
+) -> Result<S, Value<S>> {
+    fn cmp<S: Span>(
+        context: &mut ExecutionContext<S>,
+        a: &Comparison<S>,
+        b: &ArithmeticExpression<S>,
     ) -> Result<S, Ordering> {
         let value_a = run_comparison(context, a)?;
         let value_b = run_arithmetic_expression(context, b)?;
@@ -84,10 +84,10 @@ pub fn run_comparison<'a, S: Span>(
     }
 }
 
-pub fn run_arithmetic_expression<'a, S: Span>(
-    context: &mut ExecutionContext<'a, S>,
-    expression: &'a ArithmeticExpression<S>,
-) -> Result<S, Value<'a, S>> {
+pub fn run_arithmetic_expression<S: Span>(
+    context: &mut ExecutionContext<S>,
+    expression: &ArithmeticExpression<S>,
+) -> Result<S, Value<S>> {
     match expression {
         ArithmeticExpression::Addition(a, b) => {
             let value_a = run_arithmetic_expression(context, a)?;
@@ -105,10 +105,7 @@ pub fn run_arithmetic_expression<'a, S: Span>(
     }
 }
 
-pub fn run_term<'a, S: Span>(
-    context: &mut ExecutionContext<'a, S>,
-    term: &'a Term<S>,
-) -> Result<S, Value<'a, S>> {
+pub fn run_term<S: Span>(context: &mut ExecutionContext<S>, term: &Term<S>) -> Result<S, Value<S>> {
     match term {
         Term::Multiply(a, b) => {
             let a_value = run_term(context, a)?;
@@ -127,10 +124,10 @@ pub fn run_term<'a, S: Span>(
     }
 }
 
-pub fn run_trailer<'a, S: Span>(
-    context: &mut ExecutionContext<'a, S>,
-    trailer: &'a Trailer<S>,
-) -> Result<S, Value<'a, S>> {
+pub fn run_trailer<S: Span>(
+    context: &mut ExecutionContext<S>,
+    trailer: &Trailer<S>,
+) -> Result<S, Value<S>> {
     match trailer {
         Trailer::None(factor) => run_factor(context, factor),
         Trailer::Attribute(trailer, attribute) => {
@@ -180,13 +177,13 @@ pub fn run_trailer<'a, S: Span>(
     }
 }
 
-pub fn run_factor<'a, S: Span>(
-    context: &mut ExecutionContext<'a, S>,
-    factor: &'a Factor<S>,
-) -> Result<S, Value<'a, S>> {
+pub fn run_factor<S: Span>(
+    context: &mut ExecutionContext<S>,
+    factor: &Factor<S>,
+) -> Result<S, Value<S>> {
     match factor {
         Factor::Litteral(litteral) => Value::from_litteral(context, litteral),
-        Factor::Variable(variable) => context.stack.get_variable(variable).cloned(),
+        Factor::Variable(variable) => Ok(context.stack.get_variable(variable)?.clone()),
         Factor::Parenthesis(expression) => run_expression(context, expression),
         Factor::UnaryPlus(factor) => {
             run_factor(context, factor)?.unary_plus(context.log, factor.get_span())
@@ -209,261 +206,194 @@ mod test {
     use crate::script::{
         execution::{
             types::{function::IntoBuiltinFunction, DefaultValue, List, SString, Scalar},
-            Module, ModuleScope,
+            Module,
         },
         parsing::Litteral,
+        Runtime,
     };
 
     #[test]
     fn expression_straight_number() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("24").unwrap().1))
-            ),
-            Ok(Number::new(24.0).unwrap().into())
-        );
-    }
-
-    #[test]
-    fn expression_logical_operators() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("true").unwrap().1))
-            ),
-            Ok(Value::Boolean(true))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("false").unwrap().1))
-            ),
-            Ok(Value::Boolean(false))
-        );
-
-        // Not
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("!true").unwrap().1))
-            ),
-            Ok(Value::Boolean(false))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("!false").unwrap().1))
-            ),
-            Ok(Value::Boolean(true))
-        );
-
-        // And
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("false && false").unwrap().1))
-            ),
-            Ok(Value::Boolean(false))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("true && false").unwrap().1))
-            ),
-            Ok(Value::Boolean(false))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("false && true").unwrap().1))
-            ),
-            Ok(Value::Boolean(false))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("true && true").unwrap().1))
-            ),
-            Ok(Value::Boolean(true))
-        );
-
-        // Or
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("false || false").unwrap().1))
-            ),
-            Ok(Value::Boolean(false))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("true || false").unwrap().1))
-            ),
-            Ok(Value::Boolean(true))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("false || true").unwrap().1))
-            ),
-            Ok(Value::Boolean(true))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("true || true").unwrap().1))
-            ),
-            Ok(Value::Boolean(true))
-        );
-    }
-
-    #[test]
-    fn value_from_litteral() {
-        let mut context = ExecutionContext::default();
-
-        // Scalar
-        assert_eq!(
-            Value::from_litteral(
-                &mut context,
-                Box::leak(Box::new(Litteral::parse("22mm").unwrap().1))
-            ),
-            Ok(
-                Scalar::try_from(uom::si::f64::Length::new::<uom::si::length::millimeter>(
-                    22.0
-                ))
-                .unwrap()
-                .into()
-            )
-        );
-        // Number
-        assert_eq!(
-            Value::from_litteral(
-                &mut context,
-                Box::leak(Box::new(Litteral::parse("22").unwrap().1))
-            ),
-            Ok(Number::new(22.0).unwrap().into())
-        );
-        // String
-        assert_eq!(
-            Value::from_litteral(
-                &mut context,
-                Box::leak(Box::new(Litteral::parse("\"test\"").unwrap().1))
-            ),
-            Ok(SString::from("test").into())
-        );
-        // List
-        assert_eq!(
-            Value::from_litteral(
-                &mut context,
-                Box::leak(Box::new(Litteral::parse("[1, 2, 3]").unwrap().1))
-            ),
-            Ok(List::from([
-                Number::new(1.0).unwrap().into(),
-                Number::new(2.0).unwrap().into(),
-                Number::new(3.0).unwrap().into()
-            ])
-            .into())
-        );
-        // Boolean
-        assert_eq!(
-            Value::from_litteral(
-                &mut context,
-                Box::leak(Box::new(Litteral::parse("true").unwrap().1))
-            ),
-            Ok(true.into())
-        );
-        assert_eq!(
-            Value::from_litteral(
-                &mut context,
-                Box::leak(Box::new(Litteral::parse("false").unwrap().1))
-            ),
-            Ok(false.into())
-        );
-        // Default
-        assert_eq!(
-            Value::from_litteral(
-                &mut context,
-                Box::leak(Box::new(Litteral::parse("default").unwrap().1))
-            ),
-            Ok(DefaultValue.into())
-        );
-    }
-
-    #[test]
-    fn variable_access() {
-        let mut context = ExecutionContext::default();
-        context.stack.new_variable(&"global_scope", true.into());
-
-        context.new_scope(|context| {
-            context.stack.new_variable(&"sub_scope", false.into());
-
+        ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
-                run_expression(
-                    context,
-                    Box::leak(Box::new(Expression::parse("sub_scope").unwrap().1))
-                ),
-                Ok(Value::Boolean(false))
-            );
-
-            assert_eq!(
-                run_expression(
-                    context,
-                    Box::leak(Box::new(Expression::parse("global_scope").unwrap().1))
-                ),
-                Ok(Value::Boolean(true))
-            );
-
-            assert_eq!(
-                run_expression(
-                    context,
-                    Box::leak(Box::new(Expression::parse("non_existant_scope").unwrap().1))
-                ),
-                Err(Failure::VariableNotInScope(
-                    "non_existant_scope",
-                    "non_existant_scope".into()
-                ))
+                run_expression(context, &Expression::parse("24").unwrap().1),
+                Ok(Number::new(24.0).unwrap().into())
             );
         });
     }
 
     #[test]
+    fn expression_logical_operators() {
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("true").unwrap().1),
+                Ok(Value::Boolean(true))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("false").unwrap().1),
+                Ok(Value::Boolean(false))
+            );
+
+            // Not
+            assert_eq!(
+                run_expression(context, &Expression::parse("!true").unwrap().1),
+                Ok(Value::Boolean(false))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("!false").unwrap().1),
+                Ok(Value::Boolean(true))
+            );
+
+            // And
+            assert_eq!(
+                run_expression(context, &Expression::parse("false && false").unwrap().1),
+                Ok(Value::Boolean(false))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("true && false").unwrap().1),
+                Ok(Value::Boolean(false))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("false && true").unwrap().1),
+                Ok(Value::Boolean(false))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("true && true").unwrap().1),
+                Ok(Value::Boolean(true))
+            );
+
+            // Or
+            assert_eq!(
+                run_expression(context, &Expression::parse("false || false").unwrap().1),
+                Ok(Value::Boolean(false))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("true || false").unwrap().1),
+                Ok(Value::Boolean(true))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("false || true").unwrap().1),
+                Ok(Value::Boolean(true))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("true || true").unwrap().1),
+                Ok(Value::Boolean(true))
+            );
+        });
+    }
+
+    #[test]
+    fn value_from_litteral() {
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            // Scalar
+            assert_eq!(
+                Value::from_litteral(context, &Litteral::parse("22mm").unwrap().1),
+                Ok(
+                    Scalar::try_from(uom::si::f64::Length::new::<uom::si::length::millimeter>(
+                        22.0
+                    ))
+                    .unwrap()
+                    .into()
+                )
+            );
+            // Number
+            assert_eq!(
+                Value::from_litteral(context, &Litteral::parse("22").unwrap().1),
+                Ok(Number::new(22.0).unwrap().into())
+            );
+            // String
+            assert_eq!(
+                Value::from_litteral(context, &Litteral::parse("\"test\"").unwrap().1),
+                Ok(SString::from("test").into())
+            );
+            // List
+            assert_eq!(
+                Value::from_litteral(context, &Litteral::parse("[1, 2, 3]").unwrap().1),
+                Ok(List::from([
+                    Number::new(1.0).unwrap().into(),
+                    Number::new(2.0).unwrap().into(),
+                    Number::new(3.0).unwrap().into()
+                ])
+                .into())
+            );
+            // Boolean
+            assert_eq!(
+                Value::from_litteral(context, &Litteral::parse("true").unwrap().1),
+                Ok(true.into())
+            );
+            assert_eq!(
+                Value::from_litteral(context, &Litteral::parse("false").unwrap().1),
+                Ok(false.into())
+            );
+            // Default
+            assert_eq!(
+                Value::from_litteral(context, &Litteral::parse("default").unwrap().1),
+                Ok(DefaultValue.into())
+            );
+        });
+    }
+
+    #[test]
+    fn variable_access() {
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            context.stack.new_variable(&"global_scope", true.into());
+
+            context.new_scope(|context| {
+                context.stack.new_variable(&"sub_scope", false.into());
+
+                assert_eq!(
+                    run_expression(
+                        context,
+                        Box::leak(Box::new(Expression::parse("sub_scope").unwrap().1))
+                    ),
+                    Ok(Value::Boolean(false))
+                );
+
+                assert_eq!(
+                    run_expression(
+                        context,
+                        Box::leak(Box::new(Expression::parse("global_scope").unwrap().1))
+                    ),
+                    Ok(Value::Boolean(true))
+                );
+
+                assert_eq!(
+                    run_expression(
+                        context,
+                        Box::leak(Box::new(Expression::parse("non_existant_scope").unwrap().1))
+                    ),
+                    Err(Failure::VariableNotInScope(
+                        "non_existant_scope",
+                        "non_existant_scope".into()
+                    ))
+                );
+            });
+        });
+    }
+
+    #[test]
     fn unary_operators() {
-        let mut context = ExecutionContext::default();
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("+15").unwrap().1),
+                Ok(Number::new(15.0).unwrap().into())
+            );
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("+15").unwrap().1))
-            ),
-            Ok(Number::new(15.0).unwrap().into())
-        );
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("-15").unwrap().1))
-            ),
-            Ok(Number::new(-15.0).unwrap().into())
-        );
+            assert_eq!(
+                run_expression(context, &Expression::parse("-15").unwrap().1),
+                Ok(Number::new(-15.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
     fn parenthasis() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("(1 + 2) * 3").unwrap().1))
-            ),
-            Ok(Number::new(9.0).unwrap().into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("(1 + 2) * 3").unwrap().1),
+                Ok(Number::new(9.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
@@ -479,304 +409,220 @@ mod test {
 
         assert!(log.is_empty());
 
-        let module_scope = ModuleScope::new(&module);
-
-        let mut context = ExecutionContext::new(module_scope);
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("DefaultStruct { ..default }.value")
+        ExecutionContext::new(&mut module.into(), |context| {
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse("DefaultStruct { ..default }.value")
                         .unwrap()
                         .1
-                ))
-            ),
-            Ok(Number::new(42.0).unwrap().into())
-        );
+                ),
+                Ok(Number::new(42.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
     fn method_call() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("24.25.floor()").unwrap().1))
-            ),
-            Ok(Number::new(24.0).unwrap().into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("24.25.floor()").unwrap().1),
+                Ok(Number::new(24.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
     fn call() {
-        let mut context = ExecutionContext::default();
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            fn my_function<S: Span>(
+                _context: &mut ExecutionContext<S>,
+                _span: &S,
+            ) -> Result<S, Value<S>> {
+                Ok(Number::new(42.0).unwrap().into())
+            }
 
-        fn my_function<'a, S: Span>(
-            _context: &mut ExecutionContext<'a, S>,
-            _span: &S,
-        ) -> Result<S, Value<'a, S>> {
-            Ok(Number::new(42.0).unwrap().into())
-        }
+            let my_function = my_function::<&'static str>.into_builtin_function();
 
-        context.stack.new_variable(
-            &"my_function",
-            my_function::<&str>.into_builtin_function().into(),
-        );
+            context
+                .stack
+                .new_variable(&"my_function", my_function.into());
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("my_function()").unwrap().1))
-            ),
-            Ok(Number::new(42.0).unwrap().into())
-        );
+            assert_eq!(
+                run_expression(context, &Expression::parse("my_function()").unwrap().1),
+                Ok(Number::new(42.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
     fn index() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("[1, 2, 3][0]").unwrap().1))
-            ),
-            Ok(Number::new(1.0).unwrap().into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("[1, 2, 3][0]").unwrap().1),
+                Ok(Number::new(1.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
     fn multiply() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("1 + 2 * 3").unwrap().1))
-            ),
-            Ok(Number::new(7.0).unwrap().into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("1 + 2 * 3").unwrap().1),
+                Ok(Number::new(7.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
     fn divide() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("9 / 3").unwrap().1))
-            ),
-            Ok(Number::new(3.0).unwrap().into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("9 / 3").unwrap().1),
+                Ok(Number::new(3.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
     fn range() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("..").unwrap().1))
-            ),
-            Ok(Range {
-                lower_bound: None,
-                upper_bound_is_inclusive: false,
-                upper_bound: None
-            }
-            .into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("..=").unwrap().1))
-            ),
-            Err(Failure::MissingUpperBound("..="))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("5..").unwrap().1))
-            ),
-            Ok(Range {
-                lower_bound: Some(Number::new(5.0).unwrap().into()),
-                upper_bound_is_inclusive: false,
-                upper_bound: None
-            }
-            .into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("..5").unwrap().1))
-            ),
-            Ok(Range {
-                lower_bound: None,
-                upper_bound_is_inclusive: false,
-                upper_bound: Some(Number::new(5.0).unwrap().into())
-            }
-            .into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("..=5").unwrap().1))
-            ),
-            Ok(Range {
-                lower_bound: None,
-                upper_bound_is_inclusive: true,
-                upper_bound: Some(Number::new(5.0).unwrap().into())
-            }
-            .into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("..").unwrap().1),
+                Ok(Range {
+                    lower_bound: None,
+                    upper_bound_is_inclusive: false,
+                    upper_bound: None
+                }
+                .into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("..=").unwrap().1),
+                Err(Failure::MissingUpperBound("..="))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("5..").unwrap().1),
+                Ok(Range {
+                    lower_bound: Some(Number::new(5.0).unwrap().into()),
+                    upper_bound_is_inclusive: false,
+                    upper_bound: None
+                }
+                .into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("..5").unwrap().1),
+                Ok(Range {
+                    lower_bound: None,
+                    upper_bound_is_inclusive: false,
+                    upper_bound: Some(Number::new(5.0).unwrap().into())
+                }
+                .into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("..=5").unwrap().1),
+                Ok(Range {
+                    lower_bound: None,
+                    upper_bound_is_inclusive: true,
+                    upper_bound: Some(Number::new(5.0).unwrap().into())
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
     fn addition() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("1 + 2").unwrap().1))
-            ),
-            Ok(Number::new(3.0).unwrap().into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("1 + 2").unwrap().1),
+                Ok(Number::new(3.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
     fn subtraction() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("1 + 2").unwrap().1))
-            ),
-            Ok(Number::new(3.0).unwrap().into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("1 + 2").unwrap().1),
+                Ok(Number::new(3.0).unwrap().into())
+            );
+        });
     }
 
     #[test]
     fn comparisions() {
-        let mut context = ExecutionContext::default();
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            // LessThan(_, _)
+            assert_eq!(
+                run_expression(context, &Expression::parse("1 < 2").unwrap().1),
+                Ok(true.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2 < 2").unwrap().1),
+                Ok(false.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2 < 1").unwrap().1),
+                Ok(false.into())
+            );
 
-        // LessThan(_, _)
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("1 < 2").unwrap().1))
-            ),
-            Ok(true.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2 < 2").unwrap().1))
-            ),
-            Ok(false.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2 < 1").unwrap().1))
-            ),
-            Ok(false.into())
-        );
+            // LessThanEqual(_, _)
+            assert_eq!(
+                run_expression(context, &Expression::parse("1 <= 2").unwrap().1),
+                Ok(true.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2 <= 2").unwrap().1),
+                Ok(true.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2 <= 1").unwrap().1),
+                Ok(false.into())
+            );
 
-        // LessThanEqual(_, _)
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("1 <= 2").unwrap().1))
-            ),
-            Ok(true.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2 <= 2").unwrap().1))
-            ),
-            Ok(true.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2 <= 1").unwrap().1))
-            ),
-            Ok(false.into())
-        );
+            // Equal(_, _)
+            assert_eq!(
+                run_expression(context, &Expression::parse("1 == 2").unwrap().1),
+                Ok(false.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2 == 2").unwrap().1),
+                Ok(true.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2 == 1").unwrap().1),
+                Ok(false.into())
+            );
 
-        // Equal(_, _)
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("1 == 2").unwrap().1))
-            ),
-            Ok(false.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2 == 2").unwrap().1))
-            ),
-            Ok(true.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2 == 1").unwrap().1))
-            ),
-            Ok(false.into())
-        );
+            // GreaterThanEqual(_, _)
+            assert_eq!(
+                run_expression(context, &Expression::parse("1 >= 2").unwrap().1),
+                Ok(false.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2 >= 2").unwrap().1),
+                Ok(true.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2 >= 1").unwrap().1),
+                Ok(true.into())
+            );
 
-        // GreaterThanEqual(_, _)
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("1 >= 2").unwrap().1))
-            ),
-            Ok(false.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2 >= 2").unwrap().1))
-            ),
-            Ok(true.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2 >= 1").unwrap().1))
-            ),
-            Ok(true.into())
-        );
-
-        // GreaterThan(_, _)
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("1 > 2").unwrap().1))
-            ),
-            Ok(false.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2 > 2").unwrap().1))
-            ),
-            Ok(false.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2 > 1").unwrap().1))
-            ),
-            Ok(true.into())
-        );
+            // GreaterThan(_, _)
+            assert_eq!(
+                run_expression(context, &Expression::parse("1 > 2").unwrap().1),
+                Ok(false.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2 > 2").unwrap().1),
+                Ok(false.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2 > 1").unwrap().1),
+                Ok(true.into())
+            );
+        });
     }
 }

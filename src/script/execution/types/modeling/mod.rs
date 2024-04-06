@@ -51,7 +51,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
 
 macro_rules! handle_wrapper {
     ($name:ident, $handle:ident) => {
-        impl<'a, S: Span> From<Handle<$handle>> for crate::script::execution::types::Value<'a, S> {
+        impl<S: Span> From<Handle<$handle>> for crate::script::execution::types::Value<S> {
             fn from(handle: Handle<$handle>) -> Self {
                 $name::from(handle).into()
             }
@@ -68,13 +68,11 @@ macro_rules! handle_wrapper {
             }
         }
 
-        impl<'a, S: Span> TryFrom<crate::script::execution::types::Value<'a, S>>
-            for Handle<$handle>
-        {
-            type Error = crate::script::execution::types::Value<'a, S>;
+        impl<S: Span> TryFrom<crate::script::execution::types::Value<S>> for Handle<$handle> {
+            type Error = crate::script::execution::types::Value<S>;
 
             fn try_from(
-                value: crate::script::execution::types::Value<'a, S>,
+                value: crate::script::execution::types::Value<S>,
             ) -> Result<Self, Self::Error> {
                 use enum_downcast::EnumDowncast;
                 let value = value.enum_downcast::<$name>()?;

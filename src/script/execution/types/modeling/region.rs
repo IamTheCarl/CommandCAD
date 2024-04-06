@@ -32,18 +32,19 @@ use crate::script::{
         },
         ExecutionContext, Failure,
     },
+    logging::RuntimeLog,
     parsing::{self, MemberVariable, MemberVariableType, VariableType},
     Span,
 };
 
 use super::{circle::unwrap_circle, cycle::Cycle, handle_wrapper, polygon::unwrap_polygon};
 
-pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
         "RawRegion",
         StructDefinition {
             // TODO replace box leak with lazy static.
-            definition: Box::leak(Box::new(parsing::StructDefinition {
+            definition: Rc::new(parsing::StructDefinition {
                 name: S::from_str("RawRegion"),
                 members: vec![
                     MemberVariable {
@@ -63,14 +64,14 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                         },
                     },
                 ],
-            })),
+            }),
         }
         .into(),
     );
 
     context.stack.new_variable_str(
         "new_region",
-        (|context: &mut ExecutionContext<'a, S>, span: &S, configuration: Structure<'a, S>| {
+        (|context: &mut ExecutionContext<S>, span: &S, configuration: Structure<S>| {
             match configuration.name() {
                 "Circle" => {
                     let (center, radius) = unwrap_circle(context, span, configuration)?;
@@ -123,10 +124,10 @@ pub struct Region {
 }
 
 impl Region {
-    fn build_raw<'a, S: Span>(
-        context: &mut ExecutionContext<'a, S>,
+    fn build_raw<S: Span>(
+        context: &mut ExecutionContext<S>,
         span: &S,
-        configuration: Structure<'a, S>,
+        configuration: Structure<S>,
     ) -> OperatorResult<S, Self> {
         let mut members = Rc::unwrap_or_clone(configuration.members);
 
@@ -157,9 +158,14 @@ impl Region {
     }
 }
 
-impl<'a, S: Span> Object<'a, S> for Region {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Region)
+impl<S: Span> Object<S> for Region {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Region))
     }
 }
 
@@ -170,64 +176,61 @@ mod test {
     use crate::script::{
         execution::{expressions::run_expression, types::Value},
         parsing::Expression,
+        Runtime,
     };
 
     use super::*;
 
     #[test]
     fn construct_circle() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
+                run_expression(
+                    context,
+                    &Expression::parse(
                         "new_region(Circle { center = vec2(1mm, 2mm), radius = 3mm })"
                     )
                     .unwrap()
                     .1
-                ))
-            ),
-            Ok(Value::Region(_))
-        ));
+                ),
+                Ok(Value::Region(_))
+            ));
+        });
     }
 
     #[test]
     fn construct_polygon() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
             run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+                context,
+                    &Expression::parse(
                         "new_region(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)] })"
                     )
                     .unwrap()
                     .1
-                )),
             ),
             Ok(Value::Region(_))
         ));
+        });
     }
 
     #[test]
     fn construct_raw() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
             run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse(
+                context,
+                &Expression::parse(
                     "new_region(RawRegion { exterior = new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm }),
                      interiors = [new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm / 2 })] })"
                 )
                 .unwrap()
-                .1)),
+                .1,
             ),
             Ok(Value::Region(_))
         ));
+        });
     }
 
     // TODO validation failure test (Fornjot failure validation should result in a Failure type when constructing an invalid region)

@@ -42,7 +42,7 @@ pub use transform::{Transform2D, Transform3D};
 mod quaternion;
 pub use quaternion::Quaternion;
 
-use super::{OperatorResult, SerializableValue};
+use super::OperatorResult;
 
 lazy_static::lazy_static! {
     static ref CONVERSION_FACTORS: ConversionFactorDatabase = include!(concat!(env!("OUT_DIR"), "/conversion_factors.rs"));

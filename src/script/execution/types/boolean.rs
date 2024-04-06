@@ -28,14 +28,19 @@ use super::{
 
 pub type Boolean = bool;
 
-impl<'a, S: Span> Object<'a, S> for Boolean {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Boolean)
+impl<S: Span> Object<S> for Boolean {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Boolean))
     }
 
     fn format(
         &self,
-        _log: &mut dyn RuntimeLog<S>,
+        _context: &mut dyn RuntimeLog<S>,
         span: &S,
         f: &mut dyn Write,
         style: Style,
@@ -58,7 +63,7 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
+        rhs: &Value<S>,
     ) -> OperatorResult<S, bool> {
         let rhs = rhs.downcast_ref::<Boolean>(span)?;
         Ok(*self == *rhs)
@@ -68,8 +73,8 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let rhs = rhs.downcast_ref(span)?;
         Ok((*self && *rhs).into())
     }
@@ -78,8 +83,8 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let rhs = rhs.downcast_ref(span)?;
         Ok((*self || *rhs).into())
     }
@@ -88,8 +93,8 @@ impl<'a, S: Span> Object<'a, S> for Boolean {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         _span: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
-        Ok((!(*self)).into())
+    ) -> OperatorResult<S, Value<S>> {
+        Ok((!self).into())
     }
 
     fn export(

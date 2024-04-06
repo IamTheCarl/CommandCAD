@@ -18,6 +18,7 @@
 use std::{borrow::Cow, cmp::Ordering, fmt, str::FromStr};
 
 use fj_math::Scalar as FornjotScalar;
+use imstr::ImString;
 use nalgebra::Const;
 use serde::{
     de::{self, Visitor},
@@ -35,13 +36,14 @@ use crate::script::{
         types::{
             function::AutoCall,
             number::{unwrap_float, UnwrapNotNan},
-            NamedObject, Object, OperatorResult, SString, Style, UnwrapFormattingResult, Value,
+            NamedObject, Object, OperatorResult, SString, SerializableValue, Style,
+            UnwrapFormattingResult, Value,
         },
         ExecutionContext, Failure,
     },
     logging::{LogMessage, RuntimeLog},
     parsing::{self, Expression, VariableType},
-    SerializableValue, Span,
+    Span,
 };
 
 use super::{
@@ -55,13 +57,18 @@ pub struct Scalar {
     pub(super) value: Number,
 }
 
-impl<'a, S: Span> Object<'a, S> for Scalar {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        if let VariableType::Scalar(name) = ty {
+impl<S: Span> Object<S> for Scalar {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(if let VariableType::Scalar(name) = ty {
             name.as_str() == Object::<S>::type_name(self).as_ref()
         } else {
             false
-        }
+        })
     }
 
     fn type_name(&self) -> Cow<'static, str> {
@@ -193,32 +200,40 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let rhs = self.unpack_for_addition_or_subtraction(span, rhs)?;
 
         let value = Number::new(*self.value + *rhs.value).unwrap_not_nan(span)?;
 
-        Ok(Self { value, ..*self }.into())
+        Ok(Self {
+            value,
+            ..self.clone()
+        }
+        .into())
     }
     fn subtraction(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let rhs = self.unpack_for_addition_or_subtraction(span, rhs)?;
 
         let value = Number::new(*self.value - *rhs.value).unwrap_not_nan(span)?;
 
-        Ok(Self { value, ..*self }.into())
+        Ok(Self {
+            value,
+            ..self.clone()
+        }
+        .into())
     }
     fn multiply(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let rhs = rhs.downcast_ref::<Scalar>(span)?;
         self.multiply_by_scalar(span, rhs).map(|rhs| rhs.into())
     }
@@ -226,23 +241,15 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let rhs = rhs.downcast_ref::<Scalar>(span)?;
         self.divide_by_measurement(span, rhs).map(|rhs| rhs.into())
     }
-    fn unary_plus(
-        &self,
-        _log: &mut dyn RuntimeLog<S>,
-        _span: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    fn unary_plus(&self, _log: &mut dyn RuntimeLog<S>, _span: &S) -> OperatorResult<S, Value<S>> {
         Ok(self.clone().into())
     }
-    fn unary_minus(
-        &self,
-        _log: &mut dyn RuntimeLog<S>,
-        _span: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    fn unary_minus(&self, _log: &mut dyn RuntimeLog<S>, _span: &S) -> OperatorResult<S, Value<S>> {
         Ok(Self {
             value: -self.value,
             ..self.clone()
@@ -253,7 +260,7 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
+        rhs: &Value<S>,
     ) -> OperatorResult<S, Ordering> {
         let rhs = rhs.downcast_ref::<Self>(span)?;
         if self.dimension == rhs.dimension {
@@ -268,35 +275,35 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
     }
     fn method_call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         attribute: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         expressions: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "to_number" => |_context: &mut ExecutionContext<'a, S>,
+            "to_number" => |_context: &mut ExecutionContext<S>,
                             span: &S,
                             ty: SString|
              -> OperatorResult<S, Value<S>> {
-                self.convert_to_number(span, ty.as_str())
+                self.convert_to_number(span, &ty.as_str(span)?)
             }
             .auto_call(context, span, arguments, expressions),
-            "abs" => |_context: &mut ExecutionContext<'a, S>,
-                      span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                Ok(Self {
-                    value: Number::new(self.value.abs()).unwrap_not_nan(span)?,
-                    ..self.clone()
+            "abs" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(Self {
+                        value: Number::new(self.value.abs()).unwrap_not_nan(span)?,
+                        ..self.clone()
+                    }
+                    .into())
                 }
-                .into())
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(context, span, arguments, expressions),
-            "clamp" => |_context: &mut ExecutionContext<'a, S>,
+            "clamp" => |_context: &mut ExecutionContext<S>,
                         span: &S,
-                        min: Value<'a, S>,
-                        max: Value<'a, S>|
-             -> OperatorResult<S, Value<'a, S>> {
+                        min: Value<S>,
+                        max: Value<S>|
+             -> OperatorResult<S, Value<S>> {
                 let min = self.unpack_for_addition_or_subtraction(span, &min)?;
                 let max = self.unpack_for_addition_or_subtraction(span, &max)?;
 
@@ -307,10 +314,10 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
                 .into())
             }
             .auto_call(context, span, arguments, expressions),
-            "copysign" => |_context: &mut ExecutionContext<'a, S>,
+            "copysign" => |_context: &mut ExecutionContext<S>,
                            span: &S,
                            sign: Scalar|
-             -> OperatorResult<S, Value<'a, S>> {
+             -> OperatorResult<S, Value<S>> {
                 let sign = sign.to_index(span)?;
 
                 Ok(Self {
@@ -321,10 +328,10 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
                 .into())
             }
             .auto_call(context, span, arguments, expressions),
-            "hypot" => |_context: &mut ExecutionContext<'a, S>,
+            "hypot" => |_context: &mut ExecutionContext<S>,
                         span: &S,
-                        other: Value<'a, S>|
-             -> OperatorResult<S, Value<'a, S>> {
+                        other: Value<S>|
+             -> OperatorResult<S, Value<S>> {
                 let other = self.unpack_for_addition_or_subtraction(span, &other)?;
 
                 Ok(Self {
@@ -334,38 +341,38 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
                 .into())
             }
             .auto_call(context, span, arguments, expressions),
-            "is_finite" => |_context: &mut ExecutionContext<'a, S>,
-                            _span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                Ok(self.value.is_finite().into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "is_infinite" => |_context: &mut ExecutionContext<'a, S>,
-                              _span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                Ok(self.value.is_infinite().into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "is_normal" => |_context: &mut ExecutionContext<'a, S>,
-                            _span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                Ok(self.value.is_normal().into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "cbrt" => |_context: &mut ExecutionContext<'a, S>,
-                       span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                Ok(Self {
-                    dimension: self.dimension / 3,
-                    value: Number::new(self.value.cbrt()).unwrap_not_nan(span)?,
+            "is_finite" => {
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(self.value.is_finite().into())
                 }
-                .into())
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(context, span, arguments, expressions),
-            "pow" => |_context: &mut ExecutionContext<'a, S>,
+            "is_infinite" => {
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(self.value.is_infinite().into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "is_normal" => {
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(self.value.is_normal().into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "cbrt" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(Self {
+                        dimension: self.dimension / 3,
+                        value: Number::new(self.value.cbrt()).unwrap_not_nan(span)?,
+                    }
+                    .into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "pow" => |_context: &mut ExecutionContext<S>,
                       _span: &S,
                       exponent: Scalar|
-             -> OperatorResult<S, Value<'a, S>> {
+             -> OperatorResult<S, Value<S>> {
                 let exponent = exponent.to_number(span)?;
 
                 self.check_is_zero_dimension(span)?;
@@ -378,10 +385,10 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
                 .into())
             }
             .auto_call(context, span, arguments, expressions),
-            "powi" => |_context: &mut ExecutionContext<'a, S>,
+            "powi" => |_context: &mut ExecutionContext<S>,
                        _span: &S,
                        exponent: Scalar|
-             -> OperatorResult<S, Value<'a, S>> {
+             -> OperatorResult<S, Value<S>> {
                 let exponent = exponent.to_index(span)? as i8;
 
                 Ok(Self {
@@ -391,42 +398,42 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
                 .into())
             }
             .auto_call(context, span, arguments, expressions),
-            "sqrt" => |_context: &mut ExecutionContext<'a, S>,
-                       _span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                Ok(Self {
-                    dimension: self.dimension / 2,
-                    value: Number::new(self.value.sqrt()).unwrap_not_nan(span)?,
+            "sqrt" => {
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(Self {
+                        dimension: self.dimension / 2,
+                        value: Number::new(self.value.sqrt()).unwrap_not_nan(span)?,
+                    }
+                    .into())
                 }
-                .into())
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(context, span, arguments, expressions),
-            "is_sign_negative" => |_context: &mut ExecutionContext<'a, S>,
-                                   _span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                Ok(self.value.is_sign_negative().into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "is_sign_positive" => |_context: &mut ExecutionContext<'a, S>,
-                                   _span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                Ok(self.value.is_sign_positive().into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "recip" => |_context: &mut ExecutionContext<'a, S>,
-                        _span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                Ok(Self {
-                    dimension: -self.dimension,
-                    value: Number::new(1.0 / self.value.into_inner()).unwrap_not_nan(span)?,
+            "is_sign_negative" => {
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(self.value.is_sign_negative().into())
                 }
-                .into())
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(context, span, arguments, expressions),
-            "round" => |_context: &mut ExecutionContext<'a, S>,
+            "is_sign_positive" => {
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(self.value.is_sign_positive().into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "recip" => {
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(Self {
+                        dimension: -self.dimension,
+                        value: Number::new(1.0 / self.value.into_inner()).unwrap_not_nan(span)?,
+                    }
+                    .into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "round" => |_context: &mut ExecutionContext<S>,
                         span: &S,
-                        unit: Value<'a, S>|
-             -> OperatorResult<S, Value<'a, S>> {
+                        unit: Value<S>|
+             -> OperatorResult<S, Value<S>> {
                 let conversion_factor = Self::get_operation_conversion_factor(span, unit)?;
 
                 let value = conversion_factor.convert_from_measurement_to_number(span, self)?;
@@ -439,13 +446,13 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
                 .into())
             }
             .auto_call_optional(context, span, arguments, expressions),
-            "trunc" => |_context: &mut ExecutionContext<'a, S>,
+            "trunc" => |_context: &mut ExecutionContext<S>,
                         span: &S,
-                        unit: Value<'a, S>|
-             -> OperatorResult<S, Value<'a, S>> {
+                        unit: Value<S>|
+             -> OperatorResult<S, Value<S>> {
                 let conversion_factor = Self::get_operation_conversion_factor(span, unit)?;
 
-                let value = conversion_factor.convert_from_measurement_to_number(span, self)?;
+                let value = conversion_factor.convert_from_measurement_to_number(span, &self)?;
                 let value = Number::new(value.trunc()).unwrap_not_nan(span)?;
 
                 Ok(Self {
@@ -455,13 +462,13 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
                 .into())
             }
             .auto_call_optional(context, span, arguments, expressions),
-            "fract" => |_context: &mut ExecutionContext<'a, S>,
+            "fract" => |_context: &mut ExecutionContext<S>,
                         span: &S,
-                        unit: Value<'a, S>|
-             -> OperatorResult<S, Value<'a, S>> {
+                        unit: Value<S>|
+             -> OperatorResult<S, Value<S>> {
                 let conversion_factor = Self::get_operation_conversion_factor(span, unit)?;
 
-                let value = conversion_factor.convert_from_measurement_to_number(span, self)?;
+                let value = conversion_factor.convert_from_measurement_to_number(span, &self)?;
                 let value = Number::new(value.fract()).unwrap_not_nan(span)?;
 
                 Ok(Self {
@@ -471,13 +478,13 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
                 .into())
             }
             .auto_call_optional(context, span, arguments, expressions),
-            "floor" => |_context: &mut ExecutionContext<'a, S>,
+            "floor" => |_context: &mut ExecutionContext<S>,
                         span: &S,
-                        unit: Value<'a, S>|
-             -> OperatorResult<S, Value<'a, S>> {
+                        unit: Value<S>|
+             -> OperatorResult<S, Value<S>> {
                 let conversion_factor = Self::get_operation_conversion_factor(span, unit)?;
 
-                let value = conversion_factor.convert_from_measurement_to_number(span, self)?;
+                let value = conversion_factor.convert_from_measurement_to_number(span, &self)?;
                 let value = Number::new(value.floor()).unwrap_not_nan(span)?;
 
                 Ok(Self {
@@ -487,13 +494,13 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
                 .into())
             }
             .auto_call_optional(context, span, arguments, expressions),
-            "ceil" => |_context: &mut ExecutionContext<'a, S>,
+            "ceil" => |_context: &mut ExecutionContext<S>,
                        span: &S,
-                       unit: Value<'a, S>|
-             -> OperatorResult<S, Value<'a, S>> {
+                       unit: Value<S>|
+             -> OperatorResult<S, Value<S>> {
                 let conversion_factor = Self::get_operation_conversion_factor(span, unit)?;
 
-                let value = conversion_factor.convert_from_measurement_to_number(span, self)?;
+                let value = conversion_factor.convert_from_measurement_to_number(span, &self)?;
                 let value = Number::new(value.ceil()).unwrap_not_nan(span)?;
 
                 Ok(Self {
@@ -503,166 +510,166 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
                 .into())
             }
             .auto_call_optional(context, span, arguments, expressions),
-            "max" => |_context: &mut ExecutionContext<'a, S>,
+            "max" => |_context: &mut ExecutionContext<S>,
                       _span: &S,
-                      other: Value<'a, S>|
-             -> OperatorResult<S, Value<'a, S>> {
+                      other: Value<S>|
+             -> OperatorResult<S, Value<S>> {
                 let other = self.unpack_for_addition_or_subtraction(span, &other)?;
                 Ok(Number::new(*self.value.max(other.value))
                     .unwrap_not_nan(span)?
                     .into())
             }
             .auto_call(context, span, arguments, expressions),
-            "min" => |_context: &mut ExecutionContext<'a, S>,
+            "min" => |_context: &mut ExecutionContext<S>,
                       _span: &S,
-                      other: Value<'a, S>|
-             -> OperatorResult<S, Value<'a, S>> {
+                      other: Value<S>|
+             -> OperatorResult<S, Value<S>> {
                 let other = self.unpack_for_addition_or_subtraction(span, &other)?;
                 Ok(Number::new(*self.value.min(other.value))
                     .unwrap_not_nan(span)?
                     .into())
             }
             .auto_call(context, span, arguments, expressions),
-            "mul_add" => |context: &mut ExecutionContext<'a, S>,
+            "mul_add" => |context: &mut ExecutionContext<S>,
                           span: &S,
-                          a: Value<'a, S>,
-                          b: Value<'a, S>|
-             -> OperatorResult<S, Value<'a, S>> {
+                          a: Value<S>,
+                          b: Value<S>|
+             -> OperatorResult<S, Value<S>> {
                 let multiply_result = self.multiply(context.log, span, &b)?;
                 let add_result = multiply_result.addition(context.log, span, &a)?;
 
                 Ok(add_result)
             }
             .auto_call(context, span, arguments, expressions),
-            "signum" => |_context: &mut ExecutionContext<'a, S>,
-                         span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                Number::new(self.value.signum())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "acos" => |_context: &mut ExecutionContext<'a, S>,
-                       span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_inverse_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).acos())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "acosh" => |_context: &mut ExecutionContext<'a, S>,
-                        span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_inverse_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).acosh())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "asin" => |_context: &mut ExecutionContext<'a, S>,
-                       span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_inverse_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).asin())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "asinh" => |_context: &mut ExecutionContext<'a, S>,
-                        span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_inverse_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).asinh())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "atan" => |_context: &mut ExecutionContext<'a, S>,
-                       span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_inverse_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).atan())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "atanh" => |_context: &mut ExecutionContext<'a, S>,
-                        span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_inverse_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).atanh())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "cos" => |_context: &mut ExecutionContext<'a, S>,
-                      span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).cos())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "cosh" => |_context: &mut ExecutionContext<'a, S>,
-                       span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).cosh())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "sin" => |_context: &mut ExecutionContext<'a, S>,
-                      span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).sin())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
-            }
-            .auto_call(context, span, arguments, expressions),
-            "sin_cos" => |_context: &mut ExecutionContext<'a, S>,
-                          _span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_trig_compatible(span)?;
-                let (sin, cos) = (self.value * consts::PI).sin_cos();
-
-                Ok(Vector2 {
-                    dimension: Dimension::zero(),
-                    value: NVector::<Const<2>>::new(cos, sin),
+            "signum" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Number::new(self.value.signum())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
                 }
-                .into())
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(context, span, arguments, expressions),
-            "sinh" => |_context: &mut ExecutionContext<'a, S>,
-                       span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).sinh())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
+            "acos" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_inverse_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).acos())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(context, span, arguments, expressions),
-            "tan" => |_context: &mut ExecutionContext<'a, S>,
-                      span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).tan())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
+            "acosh" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_inverse_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).acosh())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(context, span, arguments, expressions),
-            "tanh" => |_context: &mut ExecutionContext<'a, S>,
-                       span: &S|
-             -> OperatorResult<S, Value<'a, S>> {
-                self.check_trig_compatible(span)?;
-                Number::new((self.value * consts::PI).tanh())
-                    .unwrap_not_nan(span)
-                    .map(|n| n.into())
+            "asin" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_inverse_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).asin())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
             }
-            .auto_call(context, span, arguments, expressions),
+            "asinh" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_inverse_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).asinh())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "atan" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_inverse_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).atan())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "atanh" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_inverse_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).atanh())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "cos" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).cos())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "cosh" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).cosh())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "sin" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).sin())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "sin_cos" => {
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_trig_compatible(span)?;
+                    let (sin, cos) = (self.value * consts::PI).sin_cos();
+
+                    Ok(Vector2 {
+                        dimension: Dimension::zero(),
+                        value: NVector::<Const<2>>::new(cos, sin),
+                    }
+                    .into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "sinh" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).sinh())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "tan" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).tan())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
+            "tanh" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.check_trig_compatible(span)?;
+                    Number::new((self.value * consts::PI).tanh())
+                        .unwrap_not_nan(span)
+                        .map(|n| n.into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
             // TODO we need functions to convert zero dimensional types to: Angles, Constitute Concentration, Information, Solid Angle, and Temperature.
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
@@ -672,7 +679,7 @@ impl<'a, S: Span> Object<'a, S> for Scalar {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         _span: &S,
-    ) -> OperatorResult<S, super::SerializableValue> {
+    ) -> OperatorResult<S, SerializableValue> {
         Ok(SerializableValue::Scalar(self.clone()))
     }
 }
@@ -745,7 +752,7 @@ impl Scalar {
     fn unpack_for_addition_or_subtraction<'b, S: Span>(
         &'b self,
         span: &S,
-        rhs: &'b Value<'_, S>,
+        rhs: &'b Value<S>,
     ) -> OperatorResult<S, &Self> {
         if let Value::Scalar(rhs) = rhs {
             if self.dimension == rhs.dimension {
@@ -766,29 +773,25 @@ impl Scalar {
         }
     }
 
-    pub fn convert_from_number<'a, S: Span>(
-        span: &S,
-        value: Number,
-        ty: SString,
-    ) -> OperatorResult<S, Value<'a, S>> {
-        if let Some(conversion_factor) = CONVERSION_FACTORS.get(ty.as_str()) {
-            let value = conversion_factor.convert_to_base_unit(value);
-            let dimension = conversion_factor.dimension;
+    // pub fn convert_from_number<S: Span>(
+    //     span: &S,
+    //     value: Number,
+    //     ty: SString,
+    // ) -> OperatorResult<S, Value<S>> {
+    //     if let Some(conversion_factor) = CONVERSION_FACTORS.get(ty.as_str()) {
+    //         let value = conversion_factor.convert_to_base_unit(value);
+    //         let dimension = conversion_factor.dimension;
 
-            Ok(Self { dimension, value }.into())
-        } else {
-            Err(Failure::UnknownUnitType(
-                span.clone(),
-                ty.into_string().into(),
-            ))
-        }
-    }
+    //         Ok(Self { dimension, value }.into())
+    //     } else {
+    //         Err(Failure::UnknownUnitType(
+    //             span.clone(),
+    //             ty.into_string().into(),
+    //         ))
+    //     }
+    // }
 
-    pub fn convert_to_number<'a, S: Span>(
-        &self,
-        span: &S,
-        ty: &str,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    pub fn convert_to_number<S: Span>(&self, span: &S, ty: &str) -> OperatorResult<S, Value<S>> {
         if let Some(conversion_factor) = CONVERSION_FACTORS.get(ty) {
             if self.dimension == conversion_factor.dimension {
                 Ok(conversion_factor.convert_from_base_unit(self.value).into())
@@ -866,9 +869,7 @@ impl Scalar {
         }
     }
 
-    pub fn from_parsed<'a, S: Span>(
-        measurement: &parsing::Scalar<S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    pub fn from_parsed<S: Span>(measurement: &parsing::Scalar<S>) -> OperatorResult<S, Value<S>> {
         Self::from_parsed_raw(measurement).map(|measurement| measurement.into())
     }
 
@@ -884,10 +885,11 @@ impl Scalar {
     ) -> OperatorResult<S, &'static ConversionFactor> {
         let unit_specification = unit
             .downcast_optional::<SString>(span)?
-            .map(|s| s.into_string());
+            .map(|s| s.to_string(span));
 
         Ok(match unit_specification {
             Some(unit_specification) => {
+                let unit_specification = unit_specification?;
                 Self::get_conversion_factor(unit_specification.as_ref()).ok_or(
                     Failure::UnknownUnitType(span.clone(), unit_specification.into()),
                 )?
@@ -995,7 +997,7 @@ impl FromStr for Scalar {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (_leftover, measurement) = parsing::Scalar::parse(s)
+        let (_leftover, measurement) = parsing::Scalar::parse(ImString::from(s))
             .map_err(|error| anyhow::anyhow!("Failed to parse measurement: {}", error))?;
         let measurement = Self::from_parsed_raw(&measurement)
             .map_err(|failure| anyhow::anyhow!("{}", failure))?;
@@ -1095,6 +1097,7 @@ mod test {
     use crate::script::{
         execution::{expressions::run_expression, ExecutionContext},
         logging::StandardLog,
+        Runtime,
     };
 
     use super::*;
@@ -1140,7 +1143,7 @@ mod test {
         let value_b: Value<&str> = Scalar::try_from(b).unwrap().into();
         let value_c: Value<&str> = Scalar::try_from(c).unwrap().into();
         assert_eq!(
-            value_a.multiply(&mut log, &"span", &value_b),
+            value_a.clone().multiply(&mut log, &"span", &value_b),
             Ok(Scalar::try_from(a * b).unwrap().into())
         );
         assert_eq!(
@@ -1157,8 +1160,9 @@ mod test {
         let b = si::Length::new::<meter>(2.0);
         let value_a: Value<&str> = Scalar::try_from(a).unwrap().into();
         let value_b: Value<&str> = Scalar::try_from(b).unwrap().into();
+
         assert_eq!(
-            value_a.divide(&mut log, &"span", &value_b),
+            value_a.clone().divide(&mut log, &"span", &value_b),
             Ok(Scalar::try_from(a / b).unwrap().into())
         );
 
@@ -1191,32 +1195,24 @@ mod test {
 
     #[test]
     fn conversions() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("1m + 100cm == 2m").unwrap().1))
-            ),
-            Ok(true.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("2m * 2m == 4m^2").unwrap().1))
-            ),
-            Ok(true.into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("(2m).to_number(\"cm\") == 200")
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("1m + 100cm == 2m").unwrap().1),
+                Ok(true.into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("2m * 2m == 4m^2").unwrap().1),
+                Ok(true.into())
+            );
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse("(2m).to_number(\"cm\") == 200")
                         .unwrap()
                         .1
-                ))
-            ),
-            { Ok(true.into()) }
-        );
+                ),
+                { Ok(true.into()) }
+            );
+        });
     }
 }

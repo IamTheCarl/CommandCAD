@@ -52,7 +52,7 @@ pub enum Style {
 }
 
 impl Style {
-    fn parse<S: Span>(input: S) -> VResult<S, Self> {
+    fn parse(input: &str) -> VResult<&str, Self> {
         alt((
             value(Self::Debug, nom_char('?')),
             value(Self::Octal, nom_char('o')),
@@ -65,7 +65,7 @@ impl Style {
 }
 
 impl UnsupportedMessage for Style {
-    fn unsupported_message<'a, S: Span, O: Object<'a, S>>(
+    fn unsupported_message<S: Span, O: Object<S>>(
         &self,
         object: &O,
         span: &S,
@@ -110,7 +110,7 @@ enum Precision {
 }
 
 impl Precision {
-    fn parse<S: Span>(input: S) -> VResult<S, Self> {
+    fn parse(input: &str) -> VResult<&str, Self> {
         preceded(
             nom_char('.'),
             alt((
@@ -124,7 +124,7 @@ impl Precision {
 // We don't directly pass the precision information to objects when formatting, rather
 // we dereference it (when applicable) before hand and pass them the final result.
 impl UnsupportedMessage for Option<u8> {
-    fn unsupported_message<'a, S: Span, O: Object<'a, S>>(
+    fn unsupported_message<S: Span, O: Object<S>>(
         &self,
         object: &O,
         span: &S,
@@ -150,7 +150,7 @@ struct Parameter {
 }
 
 impl Parameter {
-    fn parse<S: Span>(input: S) -> VResult<S, Self> {
+    fn parse(input: &str) -> VResult<&str, Self> {
         delimited(
             nom_char('{'),
             cut(map(
@@ -185,19 +185,17 @@ enum Component {
 }
 
 impl Component {
-    fn parse<S: Span>(input: S) -> VResult<S, Self> {
+    fn parse(input: &str) -> VResult<&str, Self> {
         alt((Self::parse_litteral, map(Parameter::parse, Self::Parameter)))(input)
     }
 
-    fn parse_litteral<S: Span>(input: S) -> VResult<S, Self> {
+    fn parse_litteral(input: &str) -> VResult<&str, Self> {
         map(
             verify(
                 fold_many0(
                     alt((take_while1(|c| c != '{'), tag("{{"), tag("}}"))),
                     String::default,
-                    |mut accum, item: S| {
-                        let item = item.as_str();
-
+                    |mut accum, item: &str| {
                         match item {
                             "{{" => accum.push('{'),
                             "}}" => accum.push('}'),
@@ -222,11 +220,10 @@ pub struct Format {
 }
 
 impl Format {
-    pub fn parse<S: Span>(input: S) -> VResult<S, Self> {
-        map(
-            all_consuming(many0(|input: S| Component::parse(input))),
-            |components| Self { components },
-        )(input)
+    pub fn parse(input: &str) -> VResult<&str, Self> {
+        map(all_consuming(many0(Component::parse)), |components| Self {
+            components,
+        })(input)
     }
 
     pub fn format<S: Span>(
@@ -234,7 +231,7 @@ impl Format {
         log: &mut dyn RuntimeLog<S>,
         span: &S,
         f: &mut dyn Write,
-        arguments: &[Value<'_, S>],
+        arguments: &[Value<S>],
     ) -> OperatorResult<S, ()> {
         let mut next_argument_index = 0;
 
@@ -242,7 +239,7 @@ impl Format {
             span: &S,
 
             precision: &Precision,
-            arguments: &[Value<'_, S>],
+            arguments: &[Value<S>],
         ) -> OperatorResult<S, Option<u8>> {
             match precision {
                 Precision::Default => Ok(None),
@@ -314,9 +311,9 @@ impl Format {
     }
 }
 
-fn number<S: Span>(input: S) -> VResult<S, u8> {
-    map(take_while1(|c| "0123456789".contains(c)), |digits: S| {
-        digits.as_str().parse::<u8>().unwrap()
+fn number(input: &str) -> VResult<&str, u8> {
+    map(take_while1(|c| "0123456789".contains(c)), |digits: &str| {
+        digits.parse::<u8>().unwrap()
     })(input)
 }
 
@@ -334,7 +331,7 @@ impl<R> UnwrapFormattingResult<R> for std::result::Result<R, std::fmt::Error> {
 }
 
 pub trait UnsupportedMessage {
-    fn unsupported_message<'a, S: Span, O: Object<'a, S>>(
+    fn unsupported_message<S: Span, O: Object<S>>(
         &self,
         object: &O,
         span: &S,

@@ -26,6 +26,7 @@ use crate::script::{
         },
         ExecutionContext, Failure,
     },
+    logging::RuntimeLog,
     parsing::VariableType,
     Span,
 };
@@ -38,10 +39,10 @@ use fj_core::{
 
 use super::{circle::unwrap_circle, handle_wrapper, polygon::unwrap_polygon};
 
-pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
         "new_cycle",
-        (|context: &mut ExecutionContext<'a, S>, span: &S, configuration: Structure<'a, S>| {
+        (|context: &mut ExecutionContext<S>, span: &S, configuration: Structure<S>| {
             match configuration.name() {
                 "Circle" => {
                     let (center, radius) = unwrap_circle(context, span, configuration)?;
@@ -86,22 +87,27 @@ pub struct Cycle {
     pub handle: Handle<FornjotCycle>,
 }
 
-impl<'a, S: Span> Object<'a, S> for Cycle {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Cycle)
+impl<S: Span> Object<S> for Cycle {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Cycle))
     }
 
     fn method_call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         attribute: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         spans: &[crate::script::parsing::Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
             "reverse" => {
-                |context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                |context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
                     let reversed = self
                         .handle
                         .deref()
@@ -126,45 +132,42 @@ mod test {
     use crate::script::{
         execution::{expressions::run_expression, types::Value},
         parsing::Expression,
+        Runtime,
     };
 
     use super::*;
 
     #[test]
     fn construct_circle() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
+                run_expression(
+                    context,
+                    &Expression::parse(
                         "new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm })"
                     )
                     .unwrap()
                     .1
-                )),
-            ),
-            Ok(Value::Cycle(_))
-        ));
+                ),
+                Ok(Value::Cycle(_))
+            ));
+        });
     }
 
     #[test]
     fn construct_polygon() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
             run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
+                context,
+                    &Expression::parse(
                         "new_cycle(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)] })"
                     )
                     .unwrap()
                     .1
-                ))
             ),
             Ok(Value::Cycle(_))
         ));
+        });
     }
 }

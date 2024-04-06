@@ -25,7 +25,7 @@ use nom::{
 
 use super::{parse_name, space0, take_keyword, MemberVariable, Span, VResult};
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct StructDefinition<S: Span> {
     pub name: S,
     pub members: Vec<MemberVariable<S>>,

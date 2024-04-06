@@ -33,8 +33,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     context.stack.new_variable_str(
         "Circle",
         StructDefinition {
-            // FIXME replace box leak with lazy static.
-            definition: Box::leak(Box::new(parsing::StructDefinition {
+            definition: Rc::new(parsing::StructDefinition {
                 name: S::from_str("Circle"),
                 members: vec![
                     MemberVariable {
@@ -54,7 +53,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
                         },
                     },
                 ],
-            })),
+            }),
         }
         .into(),
     );

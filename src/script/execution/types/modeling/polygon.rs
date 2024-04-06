@@ -33,8 +33,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     context.stack.new_variable_str(
         "Polygon",
         StructDefinition {
-            // TODO replace box leak with lazy static.
-            definition: Box::leak(Box::new(parsing::StructDefinition {
+            definition: Rc::new(parsing::StructDefinition {
                 name: S::from_str("Polygon"),
                 members: vec![MemberVariable {
                     name: S::from_str("points"),
@@ -44,7 +43,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
                         default_value: None,
                     },
                 }],
-            })),
+            }),
         }
         .into(),
     );
@@ -61,7 +60,7 @@ pub fn unwrap_polygon<S: Span>(
         .remove("points")
         .unwrap()
         .downcast::<List<S>>(span)?;
-    let mut fornjot_points = Vec::with_capacity(provided_points.len());
+    let mut fornjot_points = Vec::with_capacity(provided_points.len(span)?);
 
     for point in provided_points.unpack_dynamic_length::<Vector2>(span)? {
         let point = point.as_fornjot_point(context, span)?;

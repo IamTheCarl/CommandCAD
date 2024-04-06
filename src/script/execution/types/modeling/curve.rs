@@ -19,7 +19,11 @@
 use fj_core::{storage::Handle, topology::Curve as FornjotCurve};
 
 use crate::script::{
-    execution::{types::Object, ExecutionContext},
+    execution::{
+        types::{Object, OperatorResult},
+        ExecutionContext,
+    },
+    logging::RuntimeLog,
     parsing::VariableType,
     Span,
 };
@@ -35,9 +39,14 @@ pub struct Curve {
     pub handle: Handle<FornjotCurve>,
 }
 
-impl<'a, S: Span> Object<'a, S> for Curve {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Face)
+impl<S: Span> Object<S> for Curve {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Face))
     }
 }
 

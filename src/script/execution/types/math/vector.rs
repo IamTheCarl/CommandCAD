@@ -29,8 +29,9 @@ use nalgebra::{
 use crate::script::{
     execution::{
         types::{
-            function::AutoCall, number::UnwrapNotNan, BuiltinFunction, NamedObject, Object,
-            OperatorResult, Value,
+            function::{AutoCall, BuiltinFunctionRef},
+            number::UnwrapNotNan,
+            BuiltinFunction, NamedObject, Object, OperatorResult, Value,
         },
         ExecutionContext, Failure,
     },
@@ -48,17 +49,19 @@ pub type Vector3 = Vector<Const<3>>;
 pub type Vector4 = Vector<Const<4>>;
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
-    fn build_constructor<'a, S: Span, D: DimName>() -> BuiltinFunction<'a, S>
+    fn build_constructor<S: Span, D: DimName>() -> BuiltinFunctionRef<S>
     where
         DefaultAllocator: Allocator<RawNumber, D>,
-        Value<'a, S>: From<Vector<D>>,
+        Value<S>: From<Vector<D>>,
     {
-        BuiltinFunction::new(
-            |context: &mut ExecutionContext<'a, S>,
+        let closure: Box<BuiltinFunction<S>> = Box::new(
+            |context: &mut ExecutionContext<S>,
              span: &S,
-             arguments: Vec<Value<'a, S>>,
+             arguments: Vec<Value<S>>,
              expressions: &[Expression<S>]| {
-                match Vector::<D>::splat.auto_call(context, span, arguments.clone(), expressions) {
+                let splat_arguments = arguments.iter().cloned().collect();
+
+                match Vector::<D>::splat.auto_call(context, span, splat_arguments, expressions) {
                     Ok(vector) => Ok(vector),
                     Err(Failure::FunctionCall(_call_failure)) => {
                         Vector::<D>::from_components(context, span, arguments, expressions)
@@ -66,7 +69,8 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
                     Err(failure) => Err(failure),
                 }
             },
-        )
+        );
+        BuiltinFunctionRef::from(closure)
     }
 
     context
@@ -89,33 +93,40 @@ where
     pub(super) value: NVector<D>,
 }
 
-impl<'a, S, D: DimName> Object<'a, S> for Vector<D>
+impl<S, D: DimName> Object<S> for Vector<D>
 where
-    S: Span + 'a,
+    S: Span,
     DefaultAllocator: Allocator<RawNumber, D>,
-    Vector<D>: NamedObject + Into<Value<'a, S>>,
-    Value<'a, S>: AsVariant<Vector<D>> + TryInto<Vector<D>>,
+    Vector<D>: NamedObject + Into<Value<S>>,
+    Value<S>: AsVariant<Vector<D>> + TryInto<Vector<D>>,
     NVector<D>: Copy,
 {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        if let VariableType::Vector(dimension, name) = ty {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(if let VariableType::Vector(dimension, name) = ty {
             *dimension as usize == D::USIZE
                 && name.as_str() == Object::<S>::type_name(self).as_ref()
         } else {
             false
-        }
+        })
     }
 
     fn type_name(&self) -> Cow<'static, str> {
         get_dimension_name(&self.dimension)
     }
 
+    // TODO add formatting support.
+
     fn index(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        index: Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        index: Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let index = index.downcast::<Scalar>(span)?;
         let index = index.to_index(span)?;
 
@@ -131,7 +142,7 @@ where
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
         attribute: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         let swizzle = attribute.as_str();
         let len = swizzle.len();
         let mut chars = swizzle.chars();
@@ -204,8 +215,8 @@ where
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let rhs = self.unpack_for_addition_or_subtraction(span, rhs)?;
 
         let value = self.value + rhs.value;
@@ -221,8 +232,8 @@ where
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let rhs = self.unpack_for_addition_or_subtraction(span, rhs)?;
 
         let value = self.value - rhs.value;
@@ -238,8 +249,8 @@ where
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let scalar = rhs.downcast_ref::<Scalar>(span)?;
 
         let dimension = self.dimension + scalar.dimension;
@@ -252,8 +263,8 @@ where
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let scalar = rhs.downcast_ref::<Scalar>(span)?;
 
         let dimension = self.dimension - scalar.dimension;
@@ -264,14 +275,14 @@ where
     }
     fn method_call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         attribute: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         expressions: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "dot" => |_context: &mut ExecutionContext<'a, S>,
+            "dot" => |_context: &mut ExecutionContext<S>,
                       span: &S,
                       rhs: Vector<D>|
              -> OperatorResult<S, Value<S>> {
@@ -284,7 +295,7 @@ where
                 .into())
             }
             .auto_call(context, span, arguments, expressions),
-            "cross" => |_context: &mut ExecutionContext<'a, S>,
+            "cross" => |_context: &mut ExecutionContext<S>,
                         span: &S,
                         rhs: Vector<D>|
              -> OperatorResult<S, Value<S>> {
@@ -300,7 +311,7 @@ where
             }
             .auto_call(context, span, arguments, expressions),
             "abs" => {
-                |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
                     Ok(Self {
                         dimension: self.dimension,
                         value: self.value.abs(),
@@ -309,7 +320,7 @@ where
                 }
                 .auto_call(context, span, arguments, expressions)
             }
-            "add_scalar" => |_context: &mut ExecutionContext<'a, S>,
+            "add_scalar" => |_context: &mut ExecutionContext<S>,
                              span: &S,
                              scalar: Scalar|
              -> OperatorResult<S, Value<S>> {
@@ -322,13 +333,13 @@ where
                 } else {
                     Err(Failure::ExpectedGot(
                         span.clone(),
-                        <Self as Object<S>>::type_name(self),
+                        <Self as Object<S>>::type_name(&self),
                         Object::<S>::type_name(&scalar),
                     ))
                 }
             }
             .auto_call(context, span, arguments, expressions),
-            "sub_scalar" => |_context: &mut ExecutionContext<'a, S>,
+            "sub_scalar" => |_context: &mut ExecutionContext<S>,
                              span: &S,
                              scalar: Scalar|
              -> OperatorResult<S, Value<S>> {
@@ -341,13 +352,13 @@ where
                 } else {
                     Err(Failure::ExpectedGot(
                         span.clone(),
-                        <Self as Object<S>>::type_name(self),
+                        <Self as Object<S>>::type_name(&self),
                         Object::<S>::type_name(&scalar),
                     ))
                 }
             }
             .auto_call(context, span, arguments, expressions),
-            "angle" => |_context: &mut ExecutionContext<'a, S>,
+            "angle" => |_context: &mut ExecutionContext<S>,
                         span: &S,
                         rhs: Vector<D>|
              -> OperatorResult<S, Value<S>> {
@@ -360,7 +371,7 @@ where
             }
             .auto_call(context, span, arguments, expressions),
             "norm" => {
-                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     Ok(Scalar {
                         dimension: self.dimension,
                         value: Number::new(self.value.norm()).unwrap_not_nan(span)?,
@@ -370,7 +381,7 @@ where
                 .auto_call(context, span, arguments, expressions)
             }
             "norm_squared" => {
-                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     Ok(Scalar {
                         dimension: self.dimension,
                         value: Number::new(self.value.norm_squared()).unwrap_not_nan(span)?,
@@ -380,7 +391,7 @@ where
                 .auto_call(context, span, arguments, expressions)
             }
             "normalize" => {
-                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     let value = self.value.normalize();
                     value.check_nan(span)?;
 
@@ -435,23 +446,23 @@ where
         }
     }
 
-    pub(super) fn from_value_ref<'a, 'b, S: Span>(
+    pub(super) fn from_value_ref<'b, S: Span>(
         span: &S,
-        value: &'b Value<'a, S>,
+        value: &'b Value<S>,
         dimension: Dimension,
     ) -> OperatorResult<S, &'b Self>
     where
         Self: NamedObject,
-        Value<'a, S>: AsVariant<Self>,
+        Value<S>: AsVariant<Self>,
     {
         let value = value.downcast_ref::<Self>(span)?;
         value.check_dimension(span, dimension)?;
 
         Ok(value)
     }
-    fn validate_dimensions_match<'a, S: Span>(&self, span: &S, rhs: &Self) -> OperatorResult<S, ()>
+    fn validate_dimensions_match<S: Span>(&self, span: &S, rhs: &Self) -> OperatorResult<S, ()>
     where
-        Vector<D>: NamedObject + Object<'a, S>,
+        Vector<D>: NamedObject + Object<S>,
     {
         if self.dimension == rhs.dimension {
             Ok(())
@@ -464,14 +475,14 @@ where
         }
     }
 
-    fn unpack_for_addition_or_subtraction<'a, 'b, S: Span>(
+    fn unpack_for_addition_or_subtraction<'b, S: Span>(
         &'b self,
         span: &S,
-        rhs: &'b Value<'a, S>,
+        rhs: &'b Value<S>,
     ) -> OperatorResult<S, &Self>
     where
-        Vector<D>: NamedObject + Object<'a, S>,
-        Value<'a, S>: AsVariant<Vector<D>>,
+        Vector<D>: NamedObject + Object<S>,
+        Value<S>: AsVariant<Vector<D>>,
     {
         let rhs = rhs.downcast_ref::<Vector<D>>(span)?;
         self.validate_dimensions_match(span, rhs)?;
@@ -495,13 +506,13 @@ where
         }
     }
 
-    fn splat<'a, S: Span>(
-        _context: &mut ExecutionContext<'a, S>,
+    fn splat<S: Span>(
+        _context: &mut ExecutionContext<S>,
         _span: &S,
         splat_value: Scalar,
-    ) -> OperatorResult<S, Value<'a, S>>
+    ) -> OperatorResult<S, Value<S>>
     where
-        Value<'a, S>: From<Self>,
+        Value<S>: From<Self>,
     {
         let dimension = splat_value.dimension;
         let value = NVector::repeat(*splat_value.value);
@@ -509,14 +520,14 @@ where
         Ok(Vector { dimension, value }.into())
     }
 
-    fn from_components<'a, S: Span>(
-        _context: &mut ExecutionContext<'a, S>,
+    fn from_components<S: Span>(
+        _context: &mut ExecutionContext<S>,
         span: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         expressions: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>>
+    ) -> OperatorResult<S, Value<S>>
     where
-        Value<'a, S>: From<Self>,
+        Value<S>: From<Self>,
     {
         let mut expression_iter = expressions.iter();
         let mut argument_iter = arguments.into_iter();
@@ -608,424 +619,343 @@ mod test {
     use crate::script::{
         execution::{expressions::run_expression, ExecutionContext},
         parsing::Expression,
+        Runtime,
     };
 
     #[test]
     fn construct_vec2() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1)").unwrap().1))
-            ),
-            Ok(Vector {
-                dimension: Dimension::zero(),
-                value: NVector::<Const<2>>::new(1.0, 1.0),
-            }
-            .into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1, 2)").unwrap().1))
-            ),
-            Ok(Vector {
-                dimension: Dimension::zero(),
-                value: NVector::<Const<2>>::new(1.0, 2.0),
-            }
-            .into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1)").unwrap().1),
+                Ok(Vector {
+                    dimension: Dimension::zero(),
+                    value: NVector::<Const<2>>::new(1.0, 1.0),
+                }
+                .into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1, 2)").unwrap().1),
+                Ok(Vector {
+                    dimension: Dimension::zero(),
+                    value: NVector::<Const<2>>::new(1.0, 2.0),
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
     fn construct_vec3() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec3(1)").unwrap().1))
-            ),
-            Ok(Vector {
-                dimension: Dimension {
-                    length: 0,
-                    mass: 0,
-                    time: 0,
-                    electric_current: 0,
-                    thermodynamic_temprature: 0,
-                    amount_of_substance: 0,
-                    luminous_intensity: 0,
-                    ratio_type_hint: RatioTypeHint(0),
-                },
-                value: NVector::<Const<3>>::new(1.0, 1.0, 1.0),
-            }
-            .into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec3(1, 2, 3)").unwrap().1))
-            ),
-            Ok(Vector {
-                dimension: Dimension {
-                    length: 0,
-                    mass: 0,
-                    time: 0,
-                    electric_current: 0,
-                    thermodynamic_temprature: 0,
-                    amount_of_substance: 0,
-                    luminous_intensity: 0,
-                    ratio_type_hint: RatioTypeHint(0),
-                },
-                value: NVector::<Const<3>>::new(1.0, 2.0, 3.0),
-            }
-            .into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec3(1)").unwrap().1),
+                Ok(Vector {
+                    dimension: Dimension {
+                        length: 0,
+                        mass: 0,
+                        time: 0,
+                        electric_current: 0,
+                        thermodynamic_temprature: 0,
+                        amount_of_substance: 0,
+                        luminous_intensity: 0,
+                        ratio_type_hint: RatioTypeHint(0),
+                    },
+                    value: NVector::<Const<3>>::new(1.0, 1.0, 1.0),
+                }
+                .into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec3(1, 2, 3)").unwrap().1),
+                Ok(Vector {
+                    dimension: Dimension {
+                        length: 0,
+                        mass: 0,
+                        time: 0,
+                        electric_current: 0,
+                        thermodynamic_temprature: 0,
+                        amount_of_substance: 0,
+                        luminous_intensity: 0,
+                        ratio_type_hint: RatioTypeHint(0),
+                    },
+                    value: NVector::<Const<3>>::new(1.0, 2.0, 3.0),
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
     fn construct_vec4() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec4(1)").unwrap().1))
-            ),
-            Ok(Vector {
-                dimension: Dimension {
-                    length: 0,
-                    mass: 0,
-                    time: 0,
-                    electric_current: 0,
-                    thermodynamic_temprature: 0,
-                    amount_of_substance: 0,
-                    luminous_intensity: 0,
-                    ratio_type_hint: RatioTypeHint(0),
-                },
-                value: NVector::<Const<4>>::new(1.0, 1.0, 1.0, 1.0),
-            }
-            .into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec4(1, 2, 3, 4)").unwrap().1))
-            ),
-            Ok(Vector {
-                dimension: Dimension {
-                    length: 0,
-                    mass: 0,
-                    time: 0,
-                    electric_current: 0,
-                    thermodynamic_temprature: 0,
-                    amount_of_substance: 0,
-                    luminous_intensity: 0,
-                    ratio_type_hint: RatioTypeHint(0),
-                },
-                value: NVector::<Const<4>>::new(1.0, 2.0, 3.0, 4.0),
-            }
-            .into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec4(1)").unwrap().1),
+                Ok(Vector {
+                    dimension: Dimension {
+                        length: 0,
+                        mass: 0,
+                        time: 0,
+                        electric_current: 0,
+                        thermodynamic_temprature: 0,
+                        amount_of_substance: 0,
+                        luminous_intensity: 0,
+                        ratio_type_hint: RatioTypeHint(0),
+                    },
+                    value: NVector::<Const<4>>::new(1.0, 1.0, 1.0, 1.0),
+                }
+                .into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec4(1, 2, 3, 4)").unwrap().1),
+                Ok(Vector {
+                    dimension: Dimension {
+                        length: 0,
+                        mass: 0,
+                        time: 0,
+                        electric_current: 0,
+                        thermodynamic_temprature: 0,
+                        amount_of_substance: 0,
+                        luminous_intensity: 0,
+                        ratio_type_hint: RatioTypeHint(0),
+                    },
+                    value: NVector::<Const<4>>::new(1.0, 2.0, 3.0, 4.0),
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
     fn to_fornjot_vector() {
-        let mut context = ExecutionContext::default();
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1mm, 2mm)").unwrap().1)
+                    .unwrap()
+                    .downcast::<Vector::<Const<2>>>(&"")
+                    .unwrap()
+                    .as_fornjot_vector(&context, &""),
+                Ok(fj_math::Vector::<2> {
+                    components: [1.0.into(), 2.0.into()]
+                })
+            );
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1mm, 2mm)").unwrap().1))
-            )
-            .unwrap()
-            .downcast::<Vector::<Const<2>>>(&"")
-            .unwrap()
-            .as_fornjot_vector(&context, &""),
-            Ok(fj_math::Vector::<2> {
-                components: [1.0.into(), 2.0.into()]
-            })
-        );
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1rad, 2rad)").unwrap().1))
-            )
-            .unwrap()
-            .downcast::<Vector::<Const<2>>>(&"")
-            .unwrap()
-            .as_fornjot_vector::<_, 2>(&context, &""),
-            Err(Failure::ExpectedGot("", "Length".into(), "Angle".into()))
-        );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1rad, 2rad)").unwrap().1)
+                    .unwrap()
+                    .downcast::<Vector::<Const<2>>>(&"")
+                    .unwrap()
+                    .as_fornjot_vector::<_, 2>(&context, &""),
+                Err(Failure::ExpectedGot("", "Length".into(), "Angle".into()))
+            );
+        });
     }
     #[test]
     fn to_fornjot_point() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1mm, 2mm)").unwrap().1))
-            )
-            .unwrap()
-            .downcast::<Vector::<Const<2>>>(&"")
-            .unwrap()
-            .as_fornjot_point(&context, &""),
-            Ok(fj_math::Point::<2> {
-                coords: fj_math::Vector::<2> {
-                    components: [1.0.into(), 2.0.into()]
-                }
-            })
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1mm, 2mm)").unwrap().1)
+                    .unwrap()
+                    .downcast::<Vector::<Const<2>>>(&"")
+                    .unwrap()
+                    .as_fornjot_point(&context, &""),
+                Ok(fj_math::Point::<2> {
+                    coords: fj_math::Vector::<2> {
+                        components: [1.0.into(), 2.0.into()]
+                    }
+                })
+            );
+        });
     }
 
     #[test]
     fn index() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1, 2)[0]").unwrap().1))
-            ),
-            Ok(Scalar::from_number(Number::new(1.0).unwrap()).into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1, 2)[1]").unwrap().1))
-            ),
-            Ok(Scalar::from_number(Number::new(2.0).unwrap()).into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1, 2)[2]").unwrap().1))
-            ),
-            Err(Failure::IndexOutOfRange("vec2", 2))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1, 2)[-1]").unwrap().1))
-            ),
-            Err(Failure::IndexOutOfRange("vec2", -1))
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1, 2)[0]").unwrap().1),
+                Ok(Scalar::from_number(Number::new(1.0).unwrap()).into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1, 2)[1]").unwrap().1),
+                Ok(Scalar::from_number(Number::new(2.0).unwrap()).into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1, 2)[2]").unwrap().1),
+                Err(Failure::IndexOutOfRange("vec2", 2))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1, 2)[-1]").unwrap().1),
+                Err(Failure::IndexOutOfRange("vec2", -1))
+            );
+        });
     }
 
     #[test]
     fn swizzle() {
-        let mut context = ExecutionContext::default();
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).x").unwrap().1),
+                Ok(Number::new(1.0).unwrap().into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).y").unwrap().1),
+                Ok(Number::new(2.0).unwrap().into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).z").unwrap().1),
+                Ok(Number::new(3.0).unwrap().into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).w").unwrap().1),
+                Ok(Number::new(4.0).unwrap().into())
+            );
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec4(1, 2, 3, 4).x").unwrap().1))
-            ),
-            Ok(Number::new(1.0).unwrap().into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec4(1, 2, 3, 4).y").unwrap().1))
-            ),
-            Ok(Number::new(2.0).unwrap().into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec4(1, 2, 3, 4).z").unwrap().1))
-            ),
-            Ok(Number::new(3.0).unwrap().into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec4(1, 2, 3, 4).w").unwrap().1))
-            ),
-            Ok(Number::new(4.0).unwrap().into())
-        );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).r").unwrap().1),
+                Ok(Number::new(1.0).unwrap().into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).g").unwrap().1),
+                Ok(Number::new(2.0).unwrap().into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).b").unwrap().1),
+                Ok(Number::new(3.0).unwrap().into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).a").unwrap().1),
+                Ok(Number::new(4.0).unwrap().into())
+            );
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec4(1, 2, 3, 4).r").unwrap().1))
-            ),
-            Ok(Number::new(1.0).unwrap().into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec4(1, 2, 3, 4).g").unwrap().1))
-            ),
-            Ok(Number::new(2.0).unwrap().into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec4(1, 2, 3, 4).b").unwrap().1))
-            ),
-            Ok(Number::new(3.0).unwrap().into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec4(1, 2, 3, 4).a").unwrap().1))
-            ),
-            Ok(Number::new(4.0).unwrap().into())
-        );
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("vec4(1, 2, 3, 4).xy").unwrap().1
-                ))
-            ),
-            Ok(Vector {
-                dimension: Dimension {
-                    length: 0,
-                    mass: 0,
-                    time: 0,
-                    electric_current: 0,
-                    thermodynamic_temprature: 0,
-                    amount_of_substance: 0,
-                    luminous_intensity: 0,
-                    ratio_type_hint: RatioTypeHint(0),
-                },
-                value: NVector::<Const<2>>::new(1.0, 2.0),
-            }
-            .into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("vec4(1, 2, 3, 4).xyz").unwrap().1
-                ))
-            ),
-            Ok(Vector {
-                dimension: Dimension {
-                    length: 0,
-                    mass: 0,
-                    time: 0,
-                    electric_current: 0,
-                    thermodynamic_temprature: 0,
-                    amount_of_substance: 0,
-                    luminous_intensity: 0,
-                    ratio_type_hint: RatioTypeHint(0),
-                },
-                value: NVector::<Const<3>>::new(1.0, 2.0, 3.0,),
-            }
-            .into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("vec4(1, 2, 3, 4).xyzw").unwrap().1
-                ))
-            ),
-            Ok(Vector {
-                dimension: Dimension {
-                    length: 0,
-                    mass: 0,
-                    time: 0,
-                    electric_current: 0,
-                    thermodynamic_temprature: 0,
-                    amount_of_substance: 0,
-                    luminous_intensity: 0,
-                    ratio_type_hint: RatioTypeHint(0),
-                },
-                value: NVector::<Const<4>>::new(1.0, 2.0, 3.0, 4.0,),
-            }
-            .into())
-        );
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse("vec4(1, 2, 3, 4).xy").unwrap().1
+                ),
+                Ok(Vector {
+                    dimension: Dimension {
+                        length: 0,
+                        mass: 0,
+                        time: 0,
+                        electric_current: 0,
+                        thermodynamic_temprature: 0,
+                        amount_of_substance: 0,
+                        luminous_intensity: 0,
+                        ratio_type_hint: RatioTypeHint(0),
+                    },
+                    value: NVector::<Const<2>>::new(1.0, 2.0),
+                }
+                .into())
+            );
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse("vec4(1, 2, 3, 4).xyz").unwrap().1
+                ),
+                Ok(Vector {
+                    dimension: Dimension {
+                        length: 0,
+                        mass: 0,
+                        time: 0,
+                        electric_current: 0,
+                        thermodynamic_temprature: 0,
+                        amount_of_substance: 0,
+                        luminous_intensity: 0,
+                        ratio_type_hint: RatioTypeHint(0),
+                    },
+                    value: NVector::<Const<3>>::new(1.0, 2.0, 3.0,),
+                }
+                .into())
+            );
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse("vec4(1, 2, 3, 4).xyzw").unwrap().1
+                ),
+                Ok(Vector {
+                    dimension: Dimension {
+                        length: 0,
+                        mass: 0,
+                        time: 0,
+                        electric_current: 0,
+                        thermodynamic_temprature: 0,
+                        amount_of_substance: 0,
+                        luminous_intensity: 0,
+                        ratio_type_hint: RatioTypeHint(0),
+                    },
+                    value: NVector::<Const<4>>::new(1.0, 2.0, 3.0, 4.0,),
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
     fn addition() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("vec2(1, 2) + vec2(3, 4)").unwrap().1
-                ))
-            ),
-            Ok(Vector {
-                dimension: Dimension::zero(),
-                value: NVector::<Const<2>>::new(4.0, 6.0),
-            }
-            .into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse("vec2(1, 2) + vec2(3, 4)").unwrap().1
+                ),
+                Ok(Vector {
+                    dimension: Dimension::zero(),
+                    value: NVector::<Const<2>>::new(4.0, 6.0),
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
     fn subtraction() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("vec2(1, 2) - vec2(3, 4)").unwrap().1
-                ))
-            ),
-            Ok(Vector {
-                dimension: Dimension::zero(),
-                value: NVector::<Const<2>>::new(-2.0, -2.0),
-            }
-            .into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse("vec2(1, 2) - vec2(3, 4)").unwrap().1
+                ),
+                Ok(Vector {
+                    dimension: Dimension::zero(),
+                    value: NVector::<Const<2>>::new(-2.0, -2.0),
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
     fn scalar_multiplication() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1, 2) * 4").unwrap().1))
-            ),
-            Ok(Vector {
-                dimension: Dimension::zero(),
-                value: NVector::<Const<2>>::new(4.0, 8.0),
-            }
-            .into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1, 2) * 4").unwrap().1),
+                Ok(Vector {
+                    dimension: Dimension::zero(),
+                    value: NVector::<Const<2>>::new(4.0, 8.0),
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
     fn scalar_division() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1, 2) / 2").unwrap().1))
-            ),
-            Ok(Vector {
-                dimension: Dimension::zero(),
-                value: NVector::<Const<2>>::new(0.5, 1.0),
-            }
-            .into())
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("vec2(1, 2) / 0").unwrap().1))
-            ),
-            Ok(Vector {
-                dimension: Dimension::zero(),
-                value: NVector::<Const<2>>::new(RawNumber::INFINITY, RawNumber::INFINITY,),
-            }
-            .into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1, 2) / 2").unwrap().1),
+                Ok(Vector {
+                    dimension: Dimension::zero(),
+                    value: NVector::<Const<2>>::new(0.5, 1.0),
+                }
+                .into())
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("vec2(1, 2) / 0").unwrap().1),
+                Ok(Vector {
+                    dimension: Dimension::zero(),
+                    value: NVector::<Const<2>>::new(RawNumber::INFINITY, RawNumber::INFINITY,),
+                }
+                .into())
+            );
+        });
     }
 
     #[test]
@@ -1060,20 +990,18 @@ mod test {
 
     #[test]
     fn angle() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("vec2(0, 1).angle(vec2(1, 0))").unwrap().1
-                ))
-            ),
-            Ok(Scalar {
-                dimension: Dimension::angle(),
-                value: Number::new(0.5).unwrap(),
-            }
-            .into())
-        );
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse("vec2(0, 1).angle(vec2(1, 0))").unwrap().1
+                ),
+                Ok(Scalar {
+                    dimension: Dimension::angle(),
+                    value: Number::new(0.5).unwrap(),
+                }
+                .into())
+            );
+        });
     }
 }

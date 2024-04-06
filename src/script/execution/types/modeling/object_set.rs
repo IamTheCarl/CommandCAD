@@ -26,12 +26,14 @@ use crate::script::{
     Span,
 };
 
-impl<'a, S, T> From<&ObjectSet<T>> for Value<'a, S>
+impl<S> Value<S>
 where
     S: Span,
-    Value<'a, S>: From<Handle<T>>,
 {
-    fn from(object_set: &ObjectSet<T>) -> Self {
+    pub fn from_object_set<T>(object_set: &ObjectSet<T>) -> Self
+    where
+        Value<S>: From<Handle<T>>,
+    {
         List::from(object_set.iter().map(|handle| Value::from(handle.clone()))).into()
     }
 }

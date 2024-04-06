@@ -19,9 +19,6 @@
 use anyhow::{bail, Result};
 
 mod parsing;
-use imstr::ImString;
-use nom_locate::LocatedSpan;
-use ouroboros::self_referencing;
 pub use parsing::Span;
 
 use crate::script::{
@@ -35,83 +32,76 @@ use crate::script::{
 pub use crate::script::execution::types::{Scalar, SerializableValue};
 
 mod execution;
-pub use execution::print_all_supported_units;
-use execution::{types::Object, types::Sketch, ExecutionContext, GlobalResources, ModuleScope};
+pub use execution::{print_all_supported_units, Failure};
+use execution::{
+    types::{Object, Sketch},
+    GlobalResources,
+};
+
+use self::execution::{ExecutionContext, Stack};
 
 pub mod logging;
 
-type RuntimeSpan = LocatedSpan<ImString>;
-pub type Failure = self::execution::Failure<RuntimeSpan>;
-
-#[self_referencing]
-pub struct Runtime {
-    code: RuntimeSpan,
-    module: Module<RuntimeSpan>,
-    #[borrows(module)]
-    #[not_covariant]
-    context: ExecutionContext<'this, RuntimeSpan>,
+#[derive(Default)]
+pub struct Runtime<S: Span> {
+    pub global_resources: GlobalResources,
+    pub stack: Stack<S>,
+    pub root_span: S,
 }
 
-impl Runtime {
-    pub fn global_resources_mut<R>(&mut self, f: impl FnOnce(&mut GlobalResources) -> R) -> R {
-        self.with_context_mut(|context| f(&mut context.global_resources))
+impl<S: Span> From<Module<S>> for Runtime<S> {
+    fn from(module: Module<S>) -> Self {
+        let root_span = module.get_span().clone();
+        let stack = Stack::new(module);
+
+        Runtime {
+            global_resources: GlobalResources::default(),
+            stack,
+            root_span,
+        }
     }
+}
 
-    pub fn global_resources<R>(&self, f: impl FnOnce(&GlobalResources) -> R) -> R {
-        self.with_context(|context| f(&context.global_resources))
-    }
+impl<S: Span> Runtime<S> {
+    pub fn load(file_name: impl Into<String>, code: S) -> Result<Self> {
+        let mut validation_log = Vec::new();
 
-    pub fn load(module: (impl Into<String>, impl Into<ImString>)) -> Result<Self> {
-        let mut log = Vec::new();
+        let file_name = file_name.into();
+        let module = Module::load(&mut validation_log, file_name, code)?;
 
-        let file_name = module.0.into();
-        let code = LocatedSpan::new(module.1.into());
-        let module = Module::load(&mut log, file_name, code.clone())?;
-
-        if !log.is_empty() {
+        if !validation_log.is_empty() {
             // TODO there's got to be a better way to present validation errors.
-            bail!("Module failed validation: {:?}", log);
+            bail!("Module failed validation: {:?}", validation_log);
         }
 
-        Ok(RuntimeBuilder {
-            code,
-            module,
-            context_builder: |module| {
-                let module_scope = ModuleScope::new(module);
-
-                ExecutionContext::new(module_scope)
-            },
-        }
-        .build())
+        Ok(Self::from(module))
     }
 
     pub fn run_sketch(
         &mut self,
         name: &str,
         arguments: Vec<SerializableValue>,
-    ) -> std::result::Result<(), Failure> {
-        self.with_mut(|runtime| {
+    ) -> std::result::Result<(), Failure<S>> {
+        let root_span = self.root_span.clone();
+        ExecutionContext::new(self, |context| {
             let mut argument_values = Vec::with_capacity(arguments.len());
             for argument in arguments {
-                let value =
-                    argument.into_value_without_type_check(runtime.context, runtime.code)?;
+                let value = argument.into_value_without_type_check(context, &root_span)?;
                 argument_values.push(value);
             }
 
-            let sketch = runtime.context.stack.get_variable_str(runtime.code, name)?;
+            let sketch = context.stack.get_variable_str(&root_span, name)?;
 
-            let sketch = sketch
-                .downcast_ref::<UserFunction<RuntimeSpan>>(runtime.code)?
-                .clone();
+            let sketch = sketch.downcast_ref::<UserFunction<S>>(&root_span)?.clone();
 
             if matches!(
-                *sketch.signature,
+                sketch.source.signature,
                 FunctionSignature::Sketch { arguments: _ }
             ) {
                 // TODO attaching a span to a user function would be useful for debug purposes.
-                let result = sketch.call(runtime.context, runtime.code, argument_values, &[])?;
+                let result = sketch.call(context, &root_span, argument_values, &[])?;
 
-                result.downcast::<Sketch>(runtime.code)?;
+                result.downcast::<Sketch>(&root_span)?;
 
                 log::warn!(
                     "Sketches currently cannot be serialized, so no output will be provied."
@@ -120,9 +110,9 @@ impl Runtime {
                 Ok(())
             } else {
                 Err(Failure::ExpectedGot(
-                    runtime.code.clone(),
+                    root_span.clone(),
                     "sketch".into(),
-                    sketch.signature.to_string().into(),
+                    sketch.source.signature.to_string().into(),
                 ))
             }
         })
@@ -132,33 +122,33 @@ impl Runtime {
         &mut self,
         name: &str,
         arguments: Vec<SerializableValue>,
-    ) -> std::result::Result<Solid, Failure> {
-        self.with_mut(|runtime| {
+    ) -> std::result::Result<Solid, Failure<S>> {
+        let root_span = self.root_span.clone();
+        ExecutionContext::new(self, |context| {
             let mut argument_values = Vec::with_capacity(arguments.len());
             for argument in arguments {
-                let value =
-                    argument.into_value_without_type_check(runtime.context, runtime.code)?;
+                let value = argument.into_value_without_type_check(context, &root_span)?;
                 argument_values.push(value);
             }
 
-            let solid = runtime.context.stack.get_variable_str(runtime.code, name)?;
+            let solid = context.stack.get_variable_str(&root_span, name)?;
 
-            let solid = solid
-                .downcast_ref::<UserFunction<RuntimeSpan>>(runtime.code)?
-                .clone();
+            let solid = solid.downcast_ref::<UserFunction<S>>(&root_span)?.clone();
 
-            if matches!(*solid.signature, FunctionSignature::Solid { arguments: _ }) {
+            if matches!(
+                solid.source.signature,
+                FunctionSignature::Solid { arguments: _ }
+            ) {
                 // TODO attaching a span to a user function would be useful for debug purposes.
-                let result = solid.call(runtime.context, runtime.code, argument_values, &[])?;
+                let result = solid.call(context, &root_span, argument_values, &[])?;
 
-                let solid = result.downcast::<Solid>(runtime.code)?;
-
+                let solid = result.downcast::<Solid>(&root_span)?;
                 Ok(solid)
             } else {
                 Err(Failure::ExpectedGot(
-                    runtime.code.clone(),
+                    root_span.clone(),
                     "solid".into(),
-                    solid.signature.to_string().into(),
+                    solid.source.signature.to_string().into(),
                 ))
             }
         })
@@ -168,39 +158,37 @@ impl Runtime {
         &mut self,
         name: &str,
         arguments: Vec<SerializableValue>,
-    ) -> std::result::Result<SerializableValue, Failure> {
-        self.with_mut(|runtime| {
+    ) -> std::result::Result<SerializableValue, Failure<S>> {
+        let root_span = self.root_span.clone();
+        ExecutionContext::new(self, |context| {
             let mut argument_values = Vec::with_capacity(arguments.len());
             for argument in arguments {
-                let value =
-                    argument.into_value_without_type_check(runtime.context, runtime.code)?;
+                let value = argument.into_value_without_type_check(context, &root_span)?;
                 argument_values.push(value);
             }
 
-            let task = runtime.context.stack.get_variable_str(runtime.code, name)?;
+            let task = context.stack.get_variable_str(&root_span, name)?;
 
-            let task = task
-                .downcast_ref::<UserFunction<RuntimeSpan>>(runtime.code)?
-                .clone();
+            let task = task.downcast_ref::<UserFunction<S>>(&root_span)?.clone();
 
             if matches!(
-                *task.signature,
+                task.source.signature,
                 FunctionSignature::Task {
                     return_type: _,
                     arguments: _
                 }
             ) {
                 // TODO attaching a span to a user function would be useful for debug purposes.
-                let result = task.call(runtime.context, runtime.code, argument_values, &[])?;
+                let result = task.call(context, &root_span, argument_values, &[])?;
 
-                let result = result.export(runtime.context.log, runtime.code)?;
+                let result = result.export(context.log, &root_span)?;
 
                 Ok(result)
             } else {
                 Err(Failure::ExpectedGot(
-                    runtime.code.clone(),
+                    root_span.clone(),
                     "task".into(),
-                    task.signature.to_string().into(),
+                    task.source.signature.to_string().into(),
                 ))
             }
         })
@@ -223,10 +211,10 @@ mod test {
 
     #[test]
     fn run_sketch() {
-        let mut runtime = Runtime::load((
+        let mut runtime = Runtime::load(
             "root_module",
             "sketch my_sketch(input: Length = 50m) { new_sketch([]) }",
-        ))
+        )
         .unwrap();
 
         assert!(matches!(
@@ -248,7 +236,7 @@ mod test {
             .unwrap();
 
         let mut runtime =
-            Runtime::load(("root_module", "function my_sketch() -> Number { 2 }")).unwrap();
+            Runtime::load("root_module", "function my_sketch() -> Number { 2 }").unwrap();
 
         assert!(matches!(
             runtime.run_sketch("my_sketch", vec![]),
@@ -262,10 +250,10 @@ mod test {
 
     #[test]
     fn run_solid() {
-        let mut runtime = Runtime::load((
+        let mut runtime = Runtime::load(
             "root_module",
             "solid my_solid(input: Length = 1cm) { new_sketch(Circle { center = vec2(0m, 0m), radius = input }).sweep(global_xy_plane(), vec3(0cm, 0cm, 1cm)) }",
-        ))
+        )
         .unwrap();
 
         assert!(matches!(
@@ -287,7 +275,7 @@ mod test {
             .unwrap();
 
         let mut runtime =
-            Runtime::load(("root_module", "function my_solid() -> Number { 2 }")).unwrap();
+            Runtime::load("root_module", "function my_solid() -> Number { 2 }").unwrap();
 
         assert!(matches!(
             runtime.run_solid("my_solid", vec![]),
@@ -301,10 +289,10 @@ mod test {
 
     #[test]
     fn run_task() {
-        let mut runtime = Runtime::load((
+        let mut runtime = Runtime::load(
             "root_module",
             "task my_task(input: Number = 50) -> Number { input }",
-        ))
+        )
         .unwrap();
 
         assert!(matches!(
@@ -326,7 +314,7 @@ mod test {
         );
 
         let mut runtime =
-            Runtime::load(("root_module", "sketch my_sketch() { new_sketch([]) }")).unwrap();
+            Runtime::load("root_module", "sketch my_sketch() { new_sketch([]) }").unwrap();
 
         assert!(matches!(
             runtime.run_task("my_sketch", vec![]),

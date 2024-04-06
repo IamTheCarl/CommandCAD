@@ -16,8 +16,6 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::rc::Rc;
-
 use nom::{
     combinator::{cut, map},
     sequence::{pair, terminated},
@@ -29,11 +27,11 @@ use super::{space1, take_keyword, FunctionSignature, NamedBlock, Span, VResult};
 pub struct Function<S: Span> {
     pub starting_span: S,
     pub named_block: NamedBlock<S>,
-    pub signature: Rc<FunctionSignature<S>>,
+    pub signature: FunctionSignature<S>,
 }
 
 impl<S: Span> Function<S> {
-    pub fn parse(input: S) -> VResult<S, Self> {
+    pub fn parse_as_function(input: S) -> VResult<S, Self> {
         map(
             pair(
                 terminated(take_keyword("function"), space1),
@@ -41,7 +39,7 @@ impl<S: Span> Function<S> {
             ),
             |(starting_span, (named_block, return_type))| Self {
                 starting_span,
-                signature: Rc::new(FunctionSignature::Function {
+                signature: FunctionSignature::Function {
                     return_type: Box::new(return_type),
                     arguments: named_block
                         .callable
@@ -49,7 +47,71 @@ impl<S: Span> Function<S> {
                         .iter()
                         .map(|p| p.ty.clone())
                         .collect(),
-                }),
+                },
+                named_block,
+            },
+        )(input)
+    }
+
+    pub fn parse_as_sketch(input: S) -> VResult<S, Self> {
+        map(
+            pair(
+                terminated(take_keyword("sketch"), space1),
+                cut(NamedBlock::parse),
+            ),
+            |(starting_span, named_block)| Self {
+                starting_span,
+                signature: FunctionSignature::Sketch {
+                    arguments: named_block
+                        .callable
+                        .parameters
+                        .iter()
+                        .map(|p| p.ty.clone())
+                        .collect(),
+                },
+                named_block,
+            },
+        )(input)
+    }
+
+    pub fn parse_as_solid(input: S) -> VResult<S, Self> {
+        map(
+            pair(
+                terminated(take_keyword("solid"), space1),
+                cut(NamedBlock::parse),
+            ),
+            |(starting_span, named_block)| Self {
+                starting_span,
+                signature: FunctionSignature::Solid {
+                    arguments: named_block
+                        .callable
+                        .parameters
+                        .iter()
+                        .map(|p| p.ty.clone())
+                        .collect(),
+                },
+                named_block,
+            },
+        )(input)
+    }
+
+    pub fn parse_as_task(input: S) -> VResult<S, Self> {
+        map(
+            pair(
+                terminated(take_keyword("task"), space1),
+                cut(NamedBlock::parse_with_return_type),
+            ),
+            |(starting_span, (named_block, return_type))| Self {
+                starting_span,
+                signature: FunctionSignature::Task {
+                    return_type: Box::new(return_type),
+                    arguments: named_block
+                        .callable
+                        .parameters
+                        .iter()
+                        .map(|p| p.ty.clone())
+                        .collect(),
+                },
                 named_block,
             },
         )(input)
@@ -68,9 +130,9 @@ mod test {
 
     #[test]
     fn function() {
-        assert!(Function::parse("function my_function() {}").is_err());
+        assert!(Function::parse_as_function("function my_function() {}").is_err());
         assert_eq!(
-            Function::parse("function my_function() -> Length {}"),
+            Function::parse_as_function("function my_function() -> Length {}"),
             Ok((
                 "",
                 Function {
@@ -83,10 +145,10 @@ mod test {
                             block: Block { statements: vec![] }
                         }
                     },
-                    signature: Rc::new(FunctionSignature::Function {
+                    signature: FunctionSignature::Function {
                         return_type: Box::new(VariableType::Scalar("Length")),
                         arguments: vec![],
-                    })
+                    }
                 }
             ))
         );

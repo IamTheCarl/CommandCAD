@@ -75,6 +75,8 @@ pub enum Failure<S> {
     FunctionCall(Box<Failure<S>>),
     CharacterNotInVector(S, char),
     SwizzleTooLong(S, usize),
+    CannotBorrowImmutably(S, S),
+    CannotBorrowMutably(S, S),
 }
 
 impl<S: Span> Failure<S> {
@@ -431,6 +433,22 @@ impl<S: Span> std::fmt::Display for Failure<S> {
                     "{}: A swizzle of {} is too long. It must be 4 components or less",
                     span.format_span(),
                     length
+                )
+            }
+            Self::CannotBorrowImmutably(span, name) => {
+                write!(
+                    f,
+                    "{}: Failed to immutably borrow `{}`, because it currently has an exclusively mutable borrow on it",
+                    span.format_span(),
+                    name.as_str()
+                )
+            }
+            Self::CannotBorrowMutably(span, name) => {
+                write!(
+                    f,
+                    "{}: Failed to get an exclusively mutable borrow on `{}`, because it already has another borrow on it",
+                    span.format_span(),
+                    name.as_str()
                 )
             }
         }

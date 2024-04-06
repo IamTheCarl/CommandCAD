@@ -16,350 +16,55 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::{HashMap, HashSet};
-
 use crate::script::execution::types::NoneType;
 
-use self::types::{validate_assignment_type, OperatorResult, Scalar};
+use self::{
+    stack::ScopeType,
+    types::{Object, OperatorResult, Scalar},
+};
 
 use super::{
     logging::{self, RuntimeLog, StandardLog, UnpackValidationWarnings},
-    parsing::{self, Block, CallableBlock},
-    Span,
+    parsing::{self, Block, CallableBlock, MemberVariable},
+    Runtime, Span,
 };
 
 pub mod types;
 use common_data_types::ConversionFactor;
-use compact_str::CompactString;
 use fj_core::Core;
 pub use types::print_all_supported_units;
-use types::{StructDefinition, UserFunction, Value};
+use types::Value;
 
 mod expressions;
 mod failure_message;
 mod module;
+mod stack;
 pub mod statements;
 pub use module::Module;
 
 pub use failure_message::Failure;
+pub use stack::Stack;
 
-#[derive(Debug)]
-enum ScopeType {
-    Inherited,
-    Isolated,
-    Module,
-    Closure {
-        references: HashSet<compact_str::CompactString>,
-    },
-}
-
-impl Default for ScopeType {
-    fn default() -> Self {
-        Self::Inherited
-    }
-}
-
-#[derive(Debug)]
-struct Scope<'a, S: Span> {
-    ty: ScopeType,
-    variables: HashMap<compact_str::CompactString, Value<'a, S>>,
-}
-
-impl<'a, S: Span> Default for Scope<'a, S> {
-    fn default() -> Self {
-        Self {
-            ty: ScopeType::Module,
-            variables: Default::default(),
-        }
-    }
-}
-
-macro_rules! optionally_mut_ref {
-    (mutable $l:lifetime $ty:ty) => {
-        & $l mut $ty
-    };
-    (immutable $l:lifetime $ty:ty) => {
-        & $l $ty
-    };
-}
-
-macro_rules! generate_variable_getter {
-    ($self:ident, $span:ident, $name:ident, $iter:ident, $get:ident, $mutable:ident) => {
-	{
-            fn check_module_scope<'a, 'b, S: Span>(
-                mut scope_iterator: impl Iterator<Item = optionally_mut_ref!($mutable 'b Scope<'a, S>)>,
-                name: &str,
-            ) -> Option<optionally_mut_ref!($mutable 'b Value<'a, S>)> {
-                if let Some(value) = scope_iterator
-                    .find(|scope| matches!(&scope.ty, ScopeType::Module))
-                    .and_then(|scope| scope.variables.$get(name))
-                {
-                    Some(value)
-                } else {
-                    None
-                }
-            }
-
-            // TODO we should refuse to provide module level scopes when doing an immutable access, since those need to be fully immutable.
-            let mut scope_iterator = $self.scopes[..=$self.active_scope].$iter().rev();
-
-            for scope in &mut scope_iterator {
-                if let Some(value) = scope.variables.$get($name) {
-                    return Ok(value);
-                }
-
-                match &scope.ty {
-                    // This is the scope of a closure. If the variable we are looking for is referenced, keep searching up the stack for it.
-                    ScopeType::Closure { references } => {
-                        if references.contains($name) {
-                            continue;
-                        } else {
-                            // Oh, well then let's skip to the module scope.
-                            if let Some(value) = check_module_scope(scope_iterator, $name) {
-                                return Ok(value);
-                            }
-                        }
-                        break;
-                    }
-                    // If this scope is isolated, then we should skip to the module scope.
-                    ScopeType::Isolated => {
-                        if let Some(value) = check_module_scope(scope_iterator, $name) {
-                            return Ok(value);
-                        }
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-
-            Err(Failure::VariableNotInScope(
-                $span.clone(),
-                $name.to_string().into(),
-            ))
-	}
-    };
-}
-
-// TODO do we want to implement a stack limit?
-#[derive(Debug)]
-pub struct Stack<'a, S: Span> {
-    scopes: Vec<Scope<'a, S>>,
-    active_scope: usize,
-}
-
-impl<'a, S: Span> Default for Stack<'a, S> {
-    fn default() -> Self {
-        Self {
-            scopes: vec![Scope {
-                ty: ScopeType::Module,
-                ..Default::default()
-            }],
-            active_scope: 0,
-        }
-    }
-}
-
-impl<'a, S: Span> Stack<'a, S> {
-    pub fn new(module_scope: ModuleScope<'a, S>) -> Self {
-        let mut root_scope = Scope {
-            ty: ScopeType::Module,
-            ..Default::default()
-        };
-
-        for (name, definition) in module_scope.structs {
-            root_scope
-                .variables
-                .insert(name.into(), StructDefinition { definition }.into());
-        }
-
-        for (name, function) in module_scope.functions {
-            root_scope.variables.insert(
-                name.into(),
-                UserFunction {
-                    block: &function.named_block,
-                    signature: function.signature.clone(),
-                }
-                .into(),
-            );
-        }
-
-        for (name, task) in module_scope.tasks {
-            root_scope.variables.insert(
-                name.into(),
-                UserFunction {
-                    block: &task.named_block,
-                    signature: task.signature.clone(),
-                }
-                .into(),
-            );
-        }
-
-        for (name, sketch) in module_scope.sketches {
-            root_scope.variables.insert(
-                name.into(),
-                UserFunction {
-                    block: &sketch.named_block,
-                    signature: sketch.signature.clone(),
-                }
-                .into(),
-            );
-        }
-
-        for (name, solid) in module_scope.solids {
-            root_scope.variables.insert(
-                name.into(),
-                UserFunction {
-                    block: &solid.named_block,
-                    signature: solid.signature.clone(),
-                }
-                .into(),
-            );
-        }
-
-        Self {
-            scopes: vec![root_scope],
-            active_scope: 0,
-        }
-    }
-
-    fn push_scope(
-        &mut self,
-        variables_to_copy: impl Iterator<Item = &'a S>,
-        mode: ScopeType,
-    ) -> OperatorResult<S, ()> {
-        let next_scope_index = self.active_scope + 1;
-        if next_scope_index >= self.scopes.len() {
-            self.scopes.push(Scope::default());
-        }
-
-        self.scopes[next_scope_index].ty = mode;
-
-        for variable in variables_to_copy {
-            let value = self.get_variable(variable)?.clone();
-            self.scopes[next_scope_index]
-                .variables
-                .insert(variable.as_str().into(), value);
-        }
-
-        self.active_scope = next_scope_index;
-
-        Ok(())
-    }
-
-    fn pop_scope(&mut self) {
-        self.scopes[self.active_scope].variables.clear();
-        self.active_scope -= 1;
-    }
-
-    // TODO Recommending similar named variables would help users to notice typos.
-    pub fn get_variable(&self, name: &S) -> std::result::Result<&Value<'a, S>, Failure<S>> {
-        self.get_variable_str(name, name.as_str())
-    }
-
-    pub fn get_variable_mut(&mut self, name: &S) -> Result<&mut Value<'a, S>, Failure<S>> {
-        self.get_variable_str_mut(name, name.as_str())
-    }
-
-    pub fn get_variable_str(&self, span: &S, name: &str) -> Result<&Value<'a, S>, Failure<S>> {
-        generate_variable_getter!(self, span, name, iter, get, immutable)
-    }
-    pub fn get_variable_str_mut(
-        &mut self,
-        span: &S,
-        name: &str,
-    ) -> Result<&mut Value<'a, S>, Failure<S>> {
-        generate_variable_getter!(self, span, name, iter_mut, get_mut, mutable)
-    }
-
-    pub fn new_variable(&mut self, name: &S, value: Value<'a, S>) {
-        self.new_variable_str(name.as_str(), value)
-    }
-
-    pub fn new_variable_str(&mut self, name: impl Into<CompactString>, value: Value<'a, S>) {
-        let current_scope = &mut self.scopes[self.active_scope];
-
-        current_scope.variables.insert(name.into(), value);
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct ModuleScope<'a, S: Span> {
-    structs: HashMap<String, &'a parsing::StructDefinition<S>>,
-    functions: HashMap<String, &'a parsing::Function<S>>,
-    tasks: HashMap<String, &'a parsing::Task<S>>,
-    sketches: HashMap<String, &'a parsing::Sketch<S>>,
-    solids: HashMap<String, &'a parsing::Solid<S>>,
-}
-
-impl<'a, S: Span> ModuleScope<'a, S> {
-    pub fn new(
-        module: &'a Module<S>, /* TODO I want to take in the Runtime at some point so we can resolve imports */
-    ) -> Self {
-        let structs = module
-            .root_elements
-            .structs
-            .iter()
-            .map(|structure| (structure.name.to_string(), structure))
-            .collect();
-
-        let functions = module
-            .root_elements
-            .functions
-            .iter()
-            .map(|function| (function.named_block.name.to_string(), function))
-            .collect();
-
-        let tasks = module
-            .root_elements
-            .tasks
-            .iter()
-            .map(|task| (task.named_block.name.to_string(), task))
-            .collect();
-
-        let sketches = module
-            .root_elements
-            .sketches
-            .iter()
-            .map(|sketch| (sketch.named_block.name.to_string(), sketch))
-            .collect();
-
-        let solids = module
-            .root_elements
-            .solids
-            .iter()
-            .map(|wolid| (wolid.named_block.name.to_string(), wolid))
-            .collect();
-
-        Self {
-            structs,
-            functions,
-            tasks,
-            sketches,
-            solids,
-        }
-    }
-}
-
-pub type ExecutionResult<'a, S, V> = std::result::Result<V, ControlFlow<'a, S>>;
+pub type ExecutionResult<S, V> = std::result::Result<V, ControlFlow<S>>;
 
 #[derive(Debug, PartialEq)]
-pub enum ControlFlow<'a, S: Span> {
+pub enum ControlFlow<S: Span> {
     Failure(Failure<S>),
     Break {
         span: S,
         label: Option<S>,
-        value: Value<'a, S>,
+        value: Value<S>,
     },
     Continue {
         span: S,
         label: Option<S>,
     },
     Return {
-        value: Value<'a, S>,
+        value: Value<S>,
     },
 }
 
-impl<S: Span> From<Failure<S>> for ControlFlow<'_, S> {
+impl<S: Span> From<Failure<S>> for ControlFlow<S> {
     fn from(value: Failure<S>) -> Self {
         Self::Failure(value)
     }
@@ -367,8 +72,6 @@ impl<S: Span> From<Failure<S>> for ControlFlow<'_, S> {
 
 pub struct GlobalResources {
     pub fornjot_unit_conversion_factor: &'static ConversionFactor,
-
-    // FIXME we need to unwind the validation messages, otherwise this panics on drop.
     pub fornjot_core: Core,
 }
 
@@ -382,17 +85,17 @@ impl Default for GlobalResources {
 }
 
 pub struct ExecutionContext<'a, S: Span> {
-    pub global_resources: GlobalResources,
-    pub log: &'a mut dyn RuntimeLog<'a, S>,
-    pub stack: Stack<'a, S>,
+    pub global_resources: &'a mut GlobalResources,
+    pub log: &'a mut dyn RuntimeLog<S>,
+    pub stack: &'a mut Stack<S>,
 }
 
-impl<'a, S: Span> Default for ExecutionContext<'a, S> {
-    fn default() -> Self {
+impl<'a, S: Span> ExecutionContext<'a, S> {
+    pub fn new<R>(runtime: &'a mut Runtime<S>, run: impl FnOnce(&mut Self) -> R) -> R {
         let mut context = Self {
-            global_resources: Default::default(),
+            global_resources: &mut runtime.global_resources,
             log: StandardLog::global(),
-            stack: Default::default(),
+            stack: &mut runtime.stack,
         };
 
         // FIXME this registers the global functions as part of the module,
@@ -400,26 +103,9 @@ impl<'a, S: Span> Default for ExecutionContext<'a, S> {
         // other modules won't have access to the global functions.
         // TODO add constants: std::constants::PI, Angle::HALF_TURN, Angle::FULL_TURN, Scalar::ZERO for all measurement types, SolidAngle::SPHERE.
         types::register_globals(&mut context);
-
-        context
-    }
-}
-
-impl<'a, S: Span> ExecutionContext<'a, S> {
-    pub fn new(module_scope: ModuleScope<'a, S>) -> Self {
-        let mut context = Self {
-            global_resources: GlobalResources::default(),
-            log: StandardLog::global(),
-            stack: Stack::new(module_scope),
-        };
-
-        // FIXME this registers the global functions as part of the module,
-        // which is not actually global. This is a bad way to do this because
-        // other modules won't have access to the global functions.
-        types::register_globals(&mut context);
         logging::register_globals(&mut context);
 
-        context
+        run(&mut context)
     }
 
     pub fn unpack_validation_warnings(&mut self, span: &S) {
@@ -449,10 +135,10 @@ impl<'a, S: Span> ExecutionContext<'a, S> {
         result
     }
 
-    pub fn new_closure_scope<R>(
+    pub fn new_closure_scope<'s, R>(
         &mut self,
         references: impl Iterator<Item = impl Into<compact_str::CompactString>>,
-        copies: impl Iterator<Item = &'a S>,
+        copies: impl Iterator<Item = &'s S>,
         scope: impl FnOnce(&mut Self) -> R,
     ) -> OperatorResult<S, R> {
         self.stack.push_scope(
@@ -468,10 +154,44 @@ impl<'a, S: Span> ExecutionContext<'a, S> {
     }
 }
 
-fn run_block<'a, S: Span>(
-    context: &mut ExecutionContext<'a, S>,
-    block: &'a Block<S>,
-) -> ExecutionResult<'a, S, Value<'a, S>> {
+pub fn validate_assignment_type<S: Span>(
+    context: &mut ExecutionContext<S>,
+    member: &MemberVariable<S>,
+    variable_assignment: &S,
+    value: Value<S>,
+    value_name: &S,
+) -> OperatorResult<S, Value<S>> {
+    match value {
+        Value::Default(_) => {
+            // They want to use a default value.
+            if let Some(default) = member.ty.default_value.as_ref() {
+                Value::from_litteral(context, default)
+            } else {
+                Err(Failure::NoDefault(
+                    variable_assignment.clone(),
+                    variable_assignment.clone(),
+                ))
+            }
+        }
+        // No request for default. Check the type.
+        value => {
+            if value.matches_type(&member.ty.ty, context.log, value_name)? {
+                Ok(value)
+            } else {
+                Err(Failure::ExpectedGot(
+                    variable_assignment.clone(),
+                    member.ty.ty.name(),
+                    value.type_name(),
+                ))
+            }
+        }
+    }
+}
+
+fn run_block<S: Span>(
+    context: &mut ExecutionContext<S>,
+    block: &Block<S>,
+) -> ExecutionResult<S, Value<S>> {
     let mut result = NoneType.into();
 
     for statement in block.statements.iter() {
@@ -483,13 +203,13 @@ fn run_block<'a, S: Span>(
     Ok(result)
 }
 
-fn run_callable_block<'a, S: Span>(
-    context: &mut ExecutionContext<'a, S>,
-    block: &'a CallableBlock<S>,
-    arguments: Vec<Value<'a, S>>,
+fn run_callable_block<S: Span>(
+    context: &mut ExecutionContext<S>,
+    block: &CallableBlock<S>,
+    arguments: Vec<Value<S>>,
     spans: &[parsing::Expression<S>],
     default_span: &S,
-) -> Result<Value<'a, S>, Failure<S>> {
+) -> Result<Value<S>, Failure<S>> {
     // We do not return a ControlFlow because control flow does not
     // pass through named blocks (we can't continue or break a for loop outside of this named block)
     match arguments.len().cmp(&block.parameters.len()) {
@@ -503,7 +223,8 @@ fn run_callable_block<'a, S: Span>(
                 .chain(std::iter::repeat(default_span))
                 .zip(arguments.into_iter().zip(&block.parameters))
             {
-                match validate_assignment_type(context, parameter, span, argument) {
+                match validate_assignment_type(context, parameter, span, argument, &parameter.name)
+                {
                     Ok(value) => {
                         context.stack.new_variable(&parameter.name, value);
                     }
@@ -553,7 +274,7 @@ mod test {
     use super::*;
 
     use crate::script::{
-        execution::{expressions::run_expression, run_block, ExecutionContext, ModuleScope},
+        execution::{expressions::run_expression, run_block, ExecutionContext},
         parsing::Expression,
     };
     use common_data_types::Number;
@@ -571,13 +292,12 @@ mod test {
 
         assert!(log.is_empty());
 
-        let module_scope = ModuleScope::new(&module);
+        ExecutionContext::new(&mut module.into(), |context| {
+            let block = parsing::Block::parse("{ my_function(5) }").unwrap().1;
 
-        let mut context = ExecutionContext::new(module_scope);
-        let block = parsing::Block::parse("{ my_function(5) }").unwrap().1;
-
-        let result = run_block(&mut context, Box::leak(Box::new(block)));
-        assert_eq!(result, Ok(Number::new(5.0).unwrap().into()));
+            let result = run_block(context, Box::leak(Box::new(block)));
+            assert_eq!(result, Ok(Number::new(5.0).unwrap().into()));
+        });
     }
 
     #[test]
@@ -593,13 +313,12 @@ mod test {
 
         assert!(log.is_empty());
 
-        let module_scope = ModuleScope::new(&module);
+        ExecutionContext::new(&mut module.into(), |context| {
+            let block = parsing::Block::parse("{ my_function(default) }").unwrap().1;
 
-        let mut context = ExecutionContext::new(module_scope);
-        let block = parsing::Block::parse("{ my_function(default) }").unwrap().1;
-
-        let result = run_block(&mut context, Box::leak(Box::new(block)));
-        assert_eq!(result, Ok(Number::new(5.0).unwrap().into()));
+            let result = run_block(context, Box::leak(Box::new(block)));
+            assert_eq!(result, Ok(Number::new(5.0).unwrap().into()));
+        });
     }
 
     #[test]
@@ -615,21 +334,21 @@ mod test {
 
         assert!(log.is_empty());
 
-        let module_scope = ModuleScope::new(&module);
+        ExecutionContext::new(&mut module.into(), |context| {
+            let block = parsing::Block::parse("{ let value = 0; my_function(5); value }")
+                .unwrap()
+                .1;
 
-        let mut context = ExecutionContext::new(module_scope);
-        let block = parsing::Block::parse("{ let value = 0; my_function(5); value }")
-            .unwrap()
-            .1;
-
-        let result = context.new_scope(|context| run_block(context, Box::leak(Box::new(block))));
-        assert_eq!(
-            result,
-            Err(ControlFlow::Failure(Failure::VariableNotInScope(
-                "value",
-                "value".into()
-            )))
-        );
+            let result =
+                context.new_scope(|context| run_block(context, Box::leak(Box::new(block))));
+            assert_eq!(
+                result,
+                Err(ControlFlow::Failure(Failure::VariableNotInScope(
+                    "value",
+                    "value".into()
+                )))
+            );
+        });
     }
 
     #[test]
@@ -645,19 +364,19 @@ mod test {
 
         assert!(log.is_empty());
 
-        let module_scope = ModuleScope::new(&module);
+        ExecutionContext::new(&mut module.into(), |context| {
+            let block = parsing::Block::parse("{ my_function() }").unwrap().1;
 
-        let mut context = ExecutionContext::new(module_scope);
-        let block = parsing::Block::parse("{ my_function() }").unwrap().1;
-
-        let result = context.new_scope(|context| run_block(context, Box::leak(Box::new(block))));
-        assert_eq!(
-            result.unwrap(),
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("MyStruct {}").unwrap().1))
-            )
-            .unwrap()
-        );
+            let result =
+                context.new_scope(|context| run_block(context, Box::leak(Box::new(block))));
+            assert_eq!(
+                result.unwrap(),
+                run_expression(
+                    context,
+                    Box::leak(Box::new(Expression::parse("MyStruct {}").unwrap().1))
+                )
+                .unwrap()
+            );
+        });
     }
 }
