@@ -18,7 +18,7 @@
 
 use std::{
     fs::{self, File},
-    io::{Seek, Write},
+    io::{IsTerminal, Seek, Write},
     ops::Deref,
     path::PathBuf,
     str::FromStr,
@@ -26,7 +26,6 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Result};
 use arguments::{ListUnitsArgs, OutputTarget, SolidOutputFormat, TaskOutputFormat};
-use atty::Stream;
 use clap::Parser;
 
 mod arguments;
@@ -178,7 +177,7 @@ fn form(form_args: arguments::FormArgs) {
                         SolidOutputFormat::Obj => false,
                     };
 
-                    if is_binary_format && atty::is(Stream::Stdout) {
+                    if is_binary_format && output.is_terminal() {
                         bail!("Refusing to output binary data to terminal.");
                     }
 
