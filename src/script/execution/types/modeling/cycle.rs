@@ -45,11 +45,12 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
         (|context: &mut ExecutionContext<S>, span: &S, configuration: Structure<S>| {
             match configuration.name() {
                 "Circle" => {
-                    let (center, radius) = unwrap_circle(context, span, configuration)?;
+                    let (center, radius, surface) = unwrap_circle(context, span, configuration)?;
 
                     let circle = FornjotCycle::circle(
                         center,
                         radius,
+                        surface.handle,
                         &mut context.global_resources.fornjot_core,
                     );
                     let circle = circle.insert(&mut context.global_resources.fornjot_core);
@@ -58,10 +59,13 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
                     Ok(Cycle { handle: circle }.into())
                 }
                 "Polygon" => {
-                    let points = unwrap_polygon(context, span, configuration)?;
+                    let (points, surface) = unwrap_polygon(context, span, configuration)?;
 
-                    let polygone =
-                        FornjotCycle::polygon(points, &mut context.global_resources.fornjot_core);
+                    let polygone = FornjotCycle::polygon(
+                        points,
+                        surface.handle,
+                        &mut context.global_resources.fornjot_core,
+                    );
                     let polygon = polygone.insert(&mut context.global_resources.fornjot_core);
                     context.unpack_validation_warnings(span);
 
@@ -144,7 +148,7 @@ mod test {
                 run_expression(
                     context,
                     &Expression::parse(
-                        "new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm })"
+                        "new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm, surface = global_xy_plane() })"
                     )
                     .unwrap()
                     .1
@@ -161,7 +165,7 @@ mod test {
             run_expression(
                 context,
                     &Expression::parse(
-                        "new_cycle(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)] })"
+                        "new_cycle(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)], surface = global_xy_plane() })"
                     )
                     .unwrap()
                     .1

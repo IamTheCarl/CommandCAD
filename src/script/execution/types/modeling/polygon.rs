@@ -29,20 +29,32 @@ use crate::script::{
     parsing::{self, MemberVariable, MemberVariableType, VariableType},
 };
 
+use super::surface::Surface;
+
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     context.stack.new_variable_str(
         "Polygon",
         StructDefinition {
             definition: Rc::new(parsing::StructDefinition {
                 name: S::from_str("Polygon"),
-                members: vec![MemberVariable {
-                    name: S::from_str("points"),
-                    ty: MemberVariableType {
-                        ty: VariableType::List,
-                        constraints: None,
-                        default_value: None,
+                members: vec![
+                    MemberVariable {
+                        name: S::from_str("points"),
+                        ty: MemberVariableType {
+                            ty: VariableType::List,
+                            constraints: None,
+                            default_value: None,
+                        },
                     },
-                }],
+                    MemberVariable {
+                        name: S::from_str("surface"),
+                        ty: MemberVariableType {
+                            ty: VariableType::Surface,
+                            constraints: None,
+                            default_value: None,
+                        },
+                    },
+                ],
             }),
         }
         .into(),
@@ -54,7 +66,7 @@ pub fn unwrap_polygon<S: Span>(
     context: &ExecutionContext<S>,
     span: &S,
     polygon: Structure<S>,
-) -> OperatorResult<S, Vec<Point<2>>> {
+) -> OperatorResult<S, (Vec<Point<2>>, Surface)> {
     let mut members = Rc::unwrap_or_clone(polygon.members);
     let provided_points = members
         .remove("points")
@@ -68,5 +80,8 @@ pub fn unwrap_polygon<S: Span>(
         fornjot_points.push(point);
     }
 
-    Ok(fornjot_points)
+    let surface = members.remove("surface").unwrap();
+    let surface = surface.downcast::<Surface>(span)?;
+
+    Ok((fornjot_points, surface))
 }

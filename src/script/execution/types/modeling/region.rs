@@ -74,12 +74,13 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
         (|context: &mut ExecutionContext<S>, span: &S, configuration: Structure<S>| {
             match configuration.name() {
                 "Circle" => {
-                    let (center, radius) = unwrap_circle(context, span, configuration)?;
+                    let (center, radius, surface) = unwrap_circle(context, span, configuration)?;
 
                     let region = Region::from(
                         FornjotRegion::circle(
                             center,
                             radius,
+                            surface.handle,
                             &mut context.global_resources.fornjot_core,
                         )
                         .insert(&mut context.global_resources.fornjot_core),
@@ -90,11 +91,15 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
                     Ok(region.into())
                 }
                 "Polygon" => {
-                    let points = unwrap_polygon(context, span, configuration)?;
+                    let (points, surface) = unwrap_polygon(context, span, configuration)?;
 
                     let region = Region::from(
-                        FornjotRegion::polygon(points, &mut context.global_resources.fornjot_core)
-                            .insert(&mut context.global_resources.fornjot_core),
+                        FornjotRegion::polygon(
+                            points,
+                            surface.handle,
+                            &mut context.global_resources.fornjot_core,
+                        )
+                        .insert(&mut context.global_resources.fornjot_core),
                     );
 
                     context.unpack_validation_warnings(span);
@@ -188,7 +193,7 @@ mod test {
                 run_expression(
                     context,
                     &Expression::parse(
-                        "new_region(Circle { center = vec2(1mm, 2mm), radius = 3mm })"
+                        "new_region(Circle { center = vec2(1mm, 2mm), radius = 3mm, surface = global_xy_plane() })"
                     )
                     .unwrap()
                     .1
@@ -205,7 +210,7 @@ mod test {
             run_expression(
                 context,
                     &Expression::parse(
-                        "new_region(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)] })"
+                        "new_region(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)], surface = global_xy_plane() })"
                     )
                     .unwrap()
                     .1
@@ -222,8 +227,8 @@ mod test {
             run_expression(
                 context,
                 &Expression::parse(
-                    "new_region(RawRegion { exterior = new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm }),
-                     interiors = [new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm / 2 })] })"
+                    "new_region(RawRegion { exterior = new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm, surface = global_xy_plane() }),
+                     interiors = [new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm / 2, surface = global_xy_plane() })] })"
                 )
                 .unwrap()
                 .1,

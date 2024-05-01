@@ -29,6 +29,8 @@ use crate::script::{
     parsing::{self, MemberVariable, MemberVariableType, VariableType},
 };
 
+use super::surface::Surface;
+
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
     context.stack.new_variable_str(
         "Circle",
@@ -52,6 +54,14 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
                             default_value: None,
                         },
                     },
+                    MemberVariable {
+                        name: S::from_str("surface"),
+                        ty: MemberVariableType {
+                            ty: VariableType::Surface,
+                            constraints: None,
+                            default_value: None,
+                        },
+                    },
                 ],
             }),
         }
@@ -64,7 +74,7 @@ pub fn unwrap_circle<S: Span>(
     context: &ExecutionContext<S>,
     span: &S,
     circle: Structure<S>,
-) -> OperatorResult<S, (Point<2>, FornjotScalar)> {
+) -> OperatorResult<S, (Point<2>, FornjotScalar, Surface)> {
     let mut members = Rc::unwrap_or_clone(circle.members);
     let center = members.remove("center").unwrap();
     let center = center.downcast::<Vector2>(span)?;
@@ -74,5 +84,8 @@ pub fn unwrap_circle<S: Span>(
     let radius = radius.downcast::<Scalar>(span)?;
     let radius = radius.as_scalar(context, span)?;
 
-    Ok((center, radius))
+    let surface = members.remove("surface").unwrap();
+    let surface = surface.downcast::<Surface>(span)?;
+
+    Ok((center, radius, surface))
 }

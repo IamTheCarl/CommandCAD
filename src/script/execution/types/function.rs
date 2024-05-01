@@ -302,6 +302,7 @@ fortuples! {
 
 pub trait IntoBuiltinFunction<S: Span, T>: AutoCall<S, T> {
     fn into_builtin_function(self) -> BuiltinFunctionRef<S>;
+    fn into_builtin_function_optional(self) -> BuiltinFunctionRef<S>;
 }
 
 #[rustfmt::skip]
@@ -316,6 +317,14 @@ pub trait IntoBuiltinFunction<S: Span, T>: AutoCall<S, T> {
  	 fn into_builtin_function(self) -> BuiltinFunctionRef<S> {
 	     let function: Box<BuiltinFunction<S>> = Box::new(move |context: &mut ExecutionContext<S>, span: &S, arguments: Vec<Value<S>>, expressions: &[Expression<S>]| -> OperatorResult<S, Value<S>> {
  		 self.clone().auto_call(context, span, arguments, expressions)
+ 	     });
+	     
+	     BuiltinFunctionRef::from(function)
+ 	 }
+	 
+ 	 fn into_builtin_function_optional(self) -> BuiltinFunctionRef<S> {
+	     let function: Box<BuiltinFunction<S>> = Box::new(move |context: &mut ExecutionContext<S>, span: &S, arguments: Vec<Value<S>>, expressions: &[Expression<S>]| -> OperatorResult<S, Value<S>> {
+ 		 self.clone().auto_call_optional(context, span, arguments, expressions)
  	     });
 	     
 	     BuiltinFunctionRef::from(function)

@@ -45,48 +45,53 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
         "new_sketch",
         (|context: &mut ExecutionContext<S>,
           span: &S,
-          argument: Value<S>|
+          argument1: Value<S>,
+          argument2: Value<S>|
          -> OperatorResult<S, Value<S>> {
-            match argument {
-                Value::List(regions) => {
+            match (argument1, argument2) {
+                (Value::Surface(surface), Value::List(regions)) => {
                     let regions = regions
                         .unpack_dynamic_length::<Region>(span)?
                         .map(|region| region.handle);
-                    let handle = FornjotSketch::new(regions)
+                    let handle = FornjotSketch::new(surface.handle, regions)
                         .insert(&mut context.global_resources.fornjot_core);
                     context.unpack_validation_warnings(span);
 
                     Ok(Sketch { handle }.into())
                 }
-                Value::Structure(configuration) => match configuration.name() {
+                (Value::Structure(configuration), Value::NoneType(_)) => match configuration.name()
+                {
                     "Circle" => {
-                        let (center, radius) = unwrap_circle(context, span, configuration)?;
+                        let (center, radius, surface) =
+                            unwrap_circle(context, span, configuration)?;
                         let region = FornjotRegion::circle(
                             center,
                             radius,
+                            surface.handle.clone(),
                             &mut context.global_resources.fornjot_core,
                         )
                         .insert(&mut context.global_resources.fornjot_core);
                         context.unpack_validation_warnings(span);
 
-                        let handle = FornjotSketch::new([region])
+                        let handle = FornjotSketch::new(surface.handle, [region])
                             .insert(&mut context.global_resources.fornjot_core);
                         context.unpack_validation_warnings(span);
 
                         Ok(Sketch { handle }.into())
                     }
                     "Polygon" => {
-                        let points = unwrap_polygon(context, span, configuration)?;
+                        let (points, surface) = unwrap_polygon(context, span, configuration)?;
 
                         let polygon = FornjotRegion::polygon(
                             points,
+                            surface.handle.clone(),
                             &mut context.global_resources.fornjot_core,
                         );
                         let polygon = polygon;
                         let region = polygon.insert(&mut context.global_resources.fornjot_core);
                         context.unpack_validation_warnings(span);
 
-                        let handle = FornjotSketch::new([region])
+                        let handle = FornjotSketch::new(surface.handle, [region])
                             .insert(&mut context.global_resources.fornjot_core);
                         context.unpack_validation_warnings(span);
 
@@ -99,14 +104,14 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
                         configuration.name().to_string().into(),
                     )),
                 },
-                value => Err(Failure::ExpectedGot(
+                (value_a, _value_b) => Err(Failure::ExpectedGot(
                     span.clone(),
-                    "Circle, Polygon, or a List of regions".into(),
-                    value.type_name(),
+                    "Circle, Polygon, or a surface followed by a List of regions".into(),
+                    value_a.type_name(),
                 )),
             }
         })
-        .into_builtin_function()
+        .into_builtin_function_optional()
         .into(),
     )
 }
@@ -172,7 +177,7 @@ mod test {
                 run_expression(
                     context,
                     &Expression::parse(
-                        "new_sketch(Circle { center = vec2(1mm, 2mm), radius = 3mm })"
+                        "new_sketch(Circle { center = vec2(1mm, 2mm), radius = 3mm, surface = global_xy_plane() })"
                     )
                     .unwrap()
                     .1
@@ -189,7 +194,7 @@ mod test {
 		run_expression(
                     context,
                     &Expression::parse(
-                        "new_sketch(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)] })"
+                        "new_sketch(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)], surface = global_xy_plane() })"
                     )
                     .unwrap()
                     .1
@@ -206,8 +211,8 @@ mod test {
                 run_expression(
                     context,
                     &Expression::parse(
-                        "new_sketch([new_region(Circle { center = vec2(1mm, 2mm), radius = 3mm }),
-new_region(Circle { center = vec2(4mm, 2mm), radius = 3mm })])"
+                        "new_sketch(global_xy_plane(), [new_region(Circle { center = vec2(1mm, 2mm), radius = 3mm, surface = global_xy_plane() }),
+new_region(Circle { center = vec2(4mm, 2mm), radius = 3mm, surface = global_xy_plane() })])"
                     )
                     .unwrap()
                     .1
@@ -224,7 +229,7 @@ new_region(Circle { center = vec2(4mm, 2mm), radius = 3mm })])"
 		run_expression(
                     context,
                     &Expression::parse(
-			"new_sketch(Circle { center = vec2(1mm, 2mm), radius = 3mm }).sweep(global_xz_plane(), vec3(0cm, 1cm, 0cm))"
+			"new_sketch(Circle { center = vec2(1mm, 2mm), radius = 3mm, surface = global_xy_plane() }).sweep(global_xz_plane(), vec3(0cm, 1cm, 0cm))"
                     )
 		    .unwrap()
 		    .1,

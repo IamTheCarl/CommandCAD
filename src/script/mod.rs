@@ -213,7 +213,7 @@ mod test {
     fn run_sketch() {
         let mut runtime = Runtime::load(
             "root_module",
-            "sketch my_sketch(input: Length = 50m) { new_sketch([]) }",
+            "sketch my_sketch(input: Length = 50m) { new_sketch(global_xy_plane(), []) }",
         )
         .unwrap();
 
@@ -252,7 +252,7 @@ mod test {
     fn run_solid() {
         let mut runtime = Runtime::load(
             "root_module",
-            "solid my_solid(input: Length = 1cm) { new_sketch(Circle { center = vec2(0m, 0m), radius = input }).sweep(global_xy_plane(), vec3(0cm, 0cm, 1cm)) }",
+            "solid my_solid(input: Length = 1cm) { new_sketch(Circle { center = vec2(0m, 0m), radius = input, surface = global_xy_plane() }).sweep(global_xy_plane(), vec3(0cm, 0cm, 1cm)) }",
         )
         .unwrap();
 
