@@ -26,7 +26,8 @@ use crate::script::{
     execution::{
         types::{
             function::{AutoCall, IntoBuiltinFunction},
-            Object, OperatorResult, Value, Vector3,
+            math::LengthVector3,
+            Object, OperatorResult, Value,
         },
         ExecutionContext, Failure,
     },
@@ -36,7 +37,7 @@ use crate::script::{
 };
 
 use super::{
-    circle::unwrap_circle, handle_wrapper, polygon::unwrap_polygon, region::Region, solid::Solid,
+    circle::Circle, handle_wrapper, polygon::Polygon, region::Region, solid::Solid,
     surface::Surface,
 };
 
@@ -62,32 +63,33 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
                 (Value::Structure(configuration), Value::NoneType(_)) => match configuration.name()
                 {
                     "Circle" => {
-                        let (center, radius, surface) =
-                            unwrap_circle(context, span, configuration)?;
+                        let circle = Circle::unpack_struct(span, configuration)?;
                         let region = FornjotRegion::circle(
-                            center,
-                            radius,
-                            surface.handle.clone(),
+                            circle.center.as_fornjot_point(context),
+                            circle.radius.as_fornjot_scalar(context),
+                            circle.surface.handle.clone(),
                             &mut context.global_resources.fornjot_core,
                         )
                         .insert(&mut context.global_resources.fornjot_core);
                         context.unpack_validation_warnings(span);
 
-                        let handle = FornjotSketch::new(surface.handle, [region])
+                        let handle = FornjotSketch::new(circle.surface.handle, [region])
                             .insert(&mut context.global_resources.fornjot_core);
                         context.unpack_validation_warnings(span);
 
                         Ok(Sketch { handle }.into())
                     }
                     "Polygon" => {
-                        let (points, surface) = unwrap_polygon(context, span, configuration)?;
+                        let polygon = Polygon::unpack_struct(span, configuration)?;
+
+                        let points = polygon.points(context, span)?;
+                        let surface = polygon.surface;
 
                         let polygon = FornjotRegion::polygon(
                             points,
                             surface.handle.clone(),
                             &mut context.global_resources.fornjot_core,
                         );
-                        let polygon = polygon;
                         let region = polygon.insert(&mut context.global_resources.fornjot_core);
                         context.unpack_validation_warnings(span);
 
@@ -143,10 +145,10 @@ impl<S: Span> Object<S> for Sketch {
             "sweep" => |context: &mut ExecutionContext<S>,
                         span: &S,
                         surface: Surface,
-                        path: Vector3|
+                        path: LengthVector3|
              -> OperatorResult<S, Value<S>> {
                 let surface = surface.handle;
-                let path = path.as_fornjot_vector(context, span)?;
+                let path = path.as_fornjot_vector(context);
 
                 let solid = self
                     .handle
@@ -226,14 +228,14 @@ new_region(Circle { center = vec2(4mm, 2mm), radius = 3mm, surface = global_xy_p
     fn sweep() {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert!(matches!(
-		run_expression(
+		dbg!(run_expression(
                     context,
                     &Expression::parse(
 			"new_sketch(Circle { center = vec2(1mm, 2mm), radius = 3mm, surface = global_xy_plane() }).sweep(global_xz_plane(), vec3(0cm, 1cm, 0cm))"
                     )
 		    .unwrap()
 		    .1,
-		),
+		)),
 		Ok(Value::Solid(_))
             ));
         });

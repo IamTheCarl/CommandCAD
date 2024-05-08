@@ -31,7 +31,7 @@ use crate::script::{
         types::{
             function::{AutoCall, BuiltinFunctionRef},
             number::UnwrapNotNan,
-            BuiltinFunction, NamedObject, Object, OperatorResult, Value,
+            BuiltinFunction, NamedObject, Object, OperatorResult, TypedObject, Value,
         },
         ExecutionContext, Failure,
     },
@@ -48,8 +48,11 @@ pub type Vector2 = Vector<Const<2>>;
 pub type Vector3 = Vector<Const<3>>;
 pub type Vector4 = Vector<Const<4>>;
 
+pub type LengthVector2 = LengthVector<Const<2>>;
+pub type LengthVector3 = LengthVector<Const<3>>;
+
 macro_rules! define_fixed_dimension_vector {
-    ($name:ident, $dimension:expr) => {
+    ($name:ident, $dimension_name:literal, $dimension:expr) => {
         #[derive(Debug, Clone, PartialEq)]
         pub struct $name<D: DimName>
         where
@@ -89,7 +92,7 @@ macro_rules! define_fixed_dimension_vector {
 
             fn try_from(value: Value<S>) -> Result<Self, ()> {
                 let vector: Vector<D> = value.enum_downcast().map_err(|_| ())?;
-                Self::try_from(vector)
+                Self::try_from(vector).map_err(|_| ())
             }
         }
 
@@ -97,13 +100,13 @@ macro_rules! define_fixed_dimension_vector {
         where
             DefaultAllocator: Allocator<RawFloat, D>,
         {
-            type Error = ();
+            type Error = Vector<D>;
 
-            fn try_from(value: Vector<D>) -> Result<Self, ()> {
+            fn try_from(value: Vector<D>) -> Result<Self, Self::Error> {
                 if value.dimension == $dimension {
                     Ok(Self { value: value.value })
                 } else {
-                    Err(())
+                    Err(value)
                 }
             }
         }
@@ -112,16 +115,25 @@ macro_rules! define_fixed_dimension_vector {
         where
             DefaultAllocator: Allocator<RawFloat, D>,
         {
-            type Error = ();
+            type Error = &'a Vector<D>;
 
-            fn try_from(value: &'a Vector<D>) -> Result<Self, ()> {
+            fn try_from(value: &'a Vector<D>) -> Result<Self, Self::Error> {
                 if value.dimension == $dimension {
                     Ok(Self {
                         value: value.value.clone(),
                     })
                 } else {
-                    Err(())
+                    Err(value)
                 }
+            }
+        }
+
+        impl<D: DimName> TypedObject for $name<D>
+        where
+            DefaultAllocator: Allocator<RawFloat, D>,
+        {
+            fn get_type<S: Span>() -> VariableType<S> {
+                VariableType::Vector(D::USIZE as u8, S::from_str($dimension_name))
             }
         }
 
@@ -137,7 +149,42 @@ macro_rules! define_fixed_dimension_vector {
     };
 }
 
-define_fixed_dimension_vector!(LengthVector, Dimension::length());
+define_fixed_dimension_vector!(LengthVector, "Length", Dimension::length());
+
+impl<D: DimName> LengthVector<D>
+where
+    DefaultAllocator: Allocator<RawFloat, D>,
+{
+    pub fn as_fornjot_vector<S: Span, const FD: usize>(
+        &self,
+        context: &ExecutionContext<S>,
+    ) -> fj_math::Vector<FD>
+    where
+        Const<FD>: ToTypenum,
+    {
+        let mut number_array = context
+            .global_resources
+            .fornjot_unit_conversion_factor
+            .convert_from_vector_to_iter_without_dimension_check(&self.value)
+            .map(|c| FornjotScalar::from_f64(c.into_inner()));
+
+        let components = std::array::from_fn(|_| number_array.next().unwrap());
+
+        fj_math::Vector { components }
+    }
+
+    pub fn as_fornjot_point<S: Span, const FD: usize>(
+        &self,
+        context: &ExecutionContext<S>,
+    ) -> fj_math::Point<FD>
+    where
+        Const<FD>: ToTypenum,
+    {
+        fj_math::Point {
+            coords: self.as_fornjot_vector(context),
+        }
+    }
+}
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     fn build_constructor<S: Span, D: DimName>() -> BuiltinFunctionRef<S>
@@ -673,40 +720,6 @@ where
             .into())
         }
     }
-
-    pub fn as_fornjot_vector<S: Span, const FD: usize>(
-        &self,
-        context: &ExecutionContext<S>,
-        span: &S,
-    ) -> OperatorResult<S, fj_math::Vector<FD>>
-    where
-        Const<FD>: ToTypenum,
-    {
-        let mut number_array = context
-            .global_resources
-            .fornjot_unit_conversion_factor
-            .convert_from_vector_to_iter(span, self)?
-            .map(|c| FornjotScalar::from_f64(c.into_inner()));
-
-        let components = std::array::from_fn(|_| number_array.next().unwrap());
-
-        let vector = fj_math::Vector { components };
-
-        Ok(vector)
-    }
-
-    pub fn as_fornjot_point<S: Span, const FD: usize>(
-        &self,
-        context: &ExecutionContext<S>,
-        span: &S,
-    ) -> OperatorResult<S, fj_math::Point<FD>>
-    where
-        Const<FD>: ToTypenum,
-    {
-        Ok(fj_math::Point {
-            coords: self.as_fornjot_vector(context, span)?,
-        })
-    }
 }
 
 #[cfg(test)]
@@ -829,20 +842,12 @@ mod test {
                 run_expression(context, &Expression::parse("vec2(1mm, 2mm)").unwrap().1)
                     .unwrap()
                     .downcast::<Vector::<Const<2>>>(&"")
+                    .map(|v| -> LengthVector2 { v.try_into().unwrap() })
                     .unwrap()
-                    .as_fornjot_vector(context, &""),
-                Ok(fj_math::Vector::<2> {
+                    .as_fornjot_vector(context),
+                fj_math::Vector::<2> {
                     components: [1.0.into(), 2.0.into()]
-                })
-            );
-
-            assert_eq!(
-                run_expression(context, &Expression::parse("vec2(1rad, 2rad)").unwrap().1)
-                    .unwrap()
-                    .downcast::<Vector::<Const<2>>>(&"")
-                    .unwrap()
-                    .as_fornjot_vector::<_, 2>(context, &""),
-                Err(Failure::ExpectedGot("", "Length".into(), "Angle".into()))
+                }
             );
         });
     }
@@ -853,13 +858,14 @@ mod test {
                 run_expression(context, &Expression::parse("vec2(1mm, 2mm)").unwrap().1)
                     .unwrap()
                     .downcast::<Vector::<Const<2>>>(&"")
+                    .map(|v| -> LengthVector2 { v.try_into().unwrap() })
                     .unwrap()
-                    .as_fornjot_point(context, &""),
-                Ok(fj_math::Point::<2> {
+                    .as_fornjot_point(context),
+                fj_math::Point::<2> {
                     coords: fj_math::Vector::<2> {
                         components: [1.0.into(), 2.0.into()]
                     }
-                })
+                }
             );
         });
     }

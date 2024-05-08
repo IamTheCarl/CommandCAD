@@ -22,7 +22,7 @@ use crate::script::{
     execution::{
         types::{
             function::{AutoCall, IntoBuiltinFunction},
-            Object, OperatorResult, Structure, Value,
+            Object, OperatorResult, Value,
         },
         ExecutionContext, Failure,
     },
@@ -37,20 +37,21 @@ use fj_core::{
     topology::Cycle as FornjotCycle,
 };
 
-use super::{circle::unwrap_circle, handle_wrapper, polygon::unwrap_polygon};
+use super::{circle::Circle, handle_wrapper, polygon::Polygon};
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
         "new_cycle",
-        (|context: &mut ExecutionContext<S>, span: &S, configuration: Structure<S>| {
-            match configuration.name() {
+        (|context: &mut ExecutionContext<S>, span: &S, configuration: Value<S>| match configuration
+        {
+            Value::Structure(configuration) => match configuration.name() {
                 "Circle" => {
-                    let (center, radius, surface) = unwrap_circle(context, span, configuration)?;
+                    let circle = Circle::unpack_struct(span, configuration)?;
 
                     let circle = FornjotCycle::circle(
-                        center,
-                        radius,
-                        surface.handle,
+                        circle.center.as_fornjot_point(context),
+                        circle.radius.as_fornjot_scalar(context),
+                        circle.surface.handle,
                         &mut context.global_resources.fornjot_core,
                     );
                     let circle = circle.insert(&mut context.global_resources.fornjot_core);
@@ -59,11 +60,11 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
                     Ok(Cycle { handle: circle }.into())
                 }
                 "Polygon" => {
-                    let (points, surface) = unwrap_polygon(context, span, configuration)?;
+                    let polygon = Polygon::unpack_struct(span, configuration)?;
 
                     let polygone = FornjotCycle::polygon(
-                        points,
-                        surface.handle,
+                        polygon.points(context, span)?,
+                        polygon.surface.handle,
                         &mut context.global_resources.fornjot_core,
                     );
                     let polygon = polygone.insert(&mut context.global_resources.fornjot_core);
@@ -71,15 +72,18 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
 
                     Ok(Cycle { handle: polygon }.into())
                 }
-                // "RawCycle" => {
-                //     todo!() // TODO I want to be able to build a region from half-edges.
-                // }
                 _ => Err(Failure::ExpectedGot(
                     span.clone(),
-                    "Empty, Circle, or Polygon".into(),
+                    "Empty, Circle, Polygon, or list of edges".into(),
                     configuration.name().to_string().into(),
                 )),
-            }
+            },
+            Value::List(edges) => todo!(),
+            configuration => Err(Failure::ExpectedGot(
+                span.clone(),
+                "Empty, Circle, Polygon, or list of edges".into(),
+                configuration.type_name(),
+            )),
         })
         .into_builtin_function()
         .into(),

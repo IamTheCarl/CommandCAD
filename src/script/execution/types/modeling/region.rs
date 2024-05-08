@@ -37,7 +37,7 @@ use crate::script::{
     Span,
 };
 
-use super::{circle::unwrap_circle, cycle::Cycle, handle_wrapper, polygon::unwrap_polygon};
+use super::{circle::Circle, cycle::Cycle, handle_wrapper, polygon::Polygon};
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
@@ -74,13 +74,13 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
         (|context: &mut ExecutionContext<S>, span: &S, configuration: Structure<S>| {
             match configuration.name() {
                 "Circle" => {
-                    let (center, radius, surface) = unwrap_circle(context, span, configuration)?;
+                    let circle = Circle::unpack_struct(span, configuration)?;
 
                     let region = Region::from(
                         FornjotRegion::circle(
-                            center,
-                            radius,
-                            surface.handle,
+                            circle.center.as_fornjot_point(context),
+                            circle.radius.as_fornjot_scalar(context),
+                            circle.surface.handle,
                             &mut context.global_resources.fornjot_core,
                         )
                         .insert(&mut context.global_resources.fornjot_core),
@@ -91,12 +91,12 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
                     Ok(region.into())
                 }
                 "Polygon" => {
-                    let (points, surface) = unwrap_polygon(context, span, configuration)?;
+                    let polygon = Polygon::unpack_struct(span, configuration)?;
 
                     let region = Region::from(
                         FornjotRegion::polygon(
-                            points,
-                            surface.handle,
+                            polygon.points(context, span)?,
+                            polygon.surface.handle,
                             &mut context.global_resources.fornjot_core,
                         )
                         .insert(&mut context.global_resources.fornjot_core),

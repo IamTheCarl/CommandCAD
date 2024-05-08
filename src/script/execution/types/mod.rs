@@ -58,8 +58,8 @@ pub use string::{
 mod math;
 use self::function::BuiltinFunctionRef;
 pub use self::math::{
-    print_all_supported_units, Quaternion, Scalar, Transform2D, Transform3D, Vector2, Vector3,
-    Vector4,
+    print_all_supported_units, Length, LengthVector2, Quaternion, Scalar, Transform2D, Transform3D,
+    Vector2, Vector3, Vector4,
 };
 
 mod range;
@@ -95,6 +95,10 @@ fn unsupported_operation_message<S: Span, R, O: Object<S> + ?Sized>(
         object.type_name(),
         operation_name,
     ))
+}
+
+pub trait TypedObject {
+    fn get_type<S: Span>() -> VariableType<S>;
 }
 
 pub trait NamedObject {

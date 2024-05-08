@@ -37,7 +37,7 @@ use crate::script::{
         types::{
             function::AutoCall,
             number::{unwrap_float, UnwrapNotNan},
-            NamedObject, Object, OperatorResult, SString, SerializableValue, Style,
+            NamedObject, Object, OperatorResult, SString, SerializableValue, Style, TypedObject,
             UnwrapFormattingResult, Value,
         },
         ExecutionContext, Failure,
@@ -79,31 +79,37 @@ macro_rules! define_fixed_dimension_scalar {
 
             fn try_from(value: Value<S>) -> Result<Self, ()> {
                 let scalar: Scalar = value.enum_downcast().map_err(|_| ())?;
-                Self::try_from(scalar)
+                Self::try_from(scalar).map_err(|_| ())
             }
         }
 
         impl TryFrom<Scalar> for $name {
-            type Error = ();
+            type Error = Scalar;
 
-            fn try_from(value: Scalar) -> Result<Self, ()> {
+            fn try_from(value: Scalar) -> Result<Self, Self::Error> {
                 if value.dimension == $dimension {
                     Ok(Self { value: value.value })
                 } else {
-                    Err(())
+                    Err(value)
                 }
             }
         }
 
         impl<'a> TryFrom<&'a Scalar> for $name {
-            type Error = ();
+            type Error = &'a Scalar;
 
-            fn try_from(value: &'a Scalar) -> Result<Self, ()> {
+            fn try_from(value: &'a Scalar) -> Result<Self, Self::Error> {
                 if value.dimension == $dimension {
                     Ok(Self { value: value.value })
                 } else {
-                    Err(())
+                    Err(value)
                 }
+            }
+        }
+
+        impl TypedObject for $name {
+            fn get_type<S: Span>() -> VariableType<S> {
+                VariableType::Scalar(S::from_str(stringify!($name)))
             }
         }
 
@@ -116,6 +122,18 @@ macro_rules! define_fixed_dimension_scalar {
 }
 
 define_fixed_dimension_scalar!(Length, Dimension::length());
+
+impl Length {
+    pub fn as_fornjot_scalar<S: Span>(&self, context: &ExecutionContext<S>) -> FornjotScalar {
+        let length = context
+            .global_resources
+            .fornjot_unit_conversion_factor
+            .convert_from_base_unit(self.value);
+
+        FornjotScalar::from_f64(length.into_inner())
+    }
+}
+
 define_fixed_dimension_scalar!(Angle, Dimension::angle());
 define_fixed_dimension_scalar!(Number, Dimension::zero());
 
@@ -771,22 +789,6 @@ impl NamedObject for Scalar {
 }
 
 impl Scalar {
-    pub(super) fn check_dimension<S: Span>(
-        &self,
-        span: &S,
-        dimension: Dimension,
-    ) -> OperatorResult<S, ()> {
-        if self.dimension == dimension {
-            Ok(())
-        } else {
-            Err(Failure::ExpectedGot(
-                span.clone(),
-                get_dimension_name(&dimension),
-                get_dimension_name(&self.dimension),
-            ))
-        }
-    }
-
     fn multiply_by_scalar<S: Span>(&self, span: &S, rhs: &Self) -> OperatorResult<S, Self> {
         let value = Float::new(*self.value * *rhs.value).unwrap_not_nan(span)?;
         let dimension = self.dimension + rhs.dimension;
@@ -962,19 +964,6 @@ impl Scalar {
             }
             None => Self::get_conversion_factor("").unwrap(),
         })
-    }
-
-    pub fn as_scalar<S: Span>(
-        &self,
-        context: &ExecutionContext<S>,
-        span: &S,
-    ) -> OperatorResult<S, FornjotScalar> {
-        let length = context
-            .global_resources
-            .fornjot_unit_conversion_factor
-            .convert_from_measurement_to_number(span, self)?;
-
-        Ok(FornjotScalar::from_f64(length.into_inner()))
     }
 }
 

@@ -1,4 +1,4 @@
-workspace = { members = ["crates/common_data_types"] }
+workspace = { members = ["crates/common_data_types", "crates/macros"] }
 [package]
 name = "command_cad"
 version = "0.6.0"
@@ -37,6 +37,8 @@ common_data_types = { path = "crates/common_data_types" }
 nalgebra = "0.32"
 arrayvec = "0.7.4"
 ouroboros = "0.18.3"
+bezier-rs = "=0.4.0"
+macros = { path = "crates/macros" }
 
 [build-dependencies]
 csv = "1.3.0"

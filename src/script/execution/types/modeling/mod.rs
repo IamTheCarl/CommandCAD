@@ -94,6 +94,12 @@ macro_rules! handle_wrapper {
             }
         }
 
+        impl crate::script::execution::types::TypedObject for $name {
+            fn get_type<S: Span>() -> VariableType<S> {
+                VariableType::$name
+            }
+        }
+
         impl crate::script::execution::types::NamedObject for $name {
             fn static_type_name() -> &'static str {
                 stringify!($name)

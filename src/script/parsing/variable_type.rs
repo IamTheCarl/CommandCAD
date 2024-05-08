@@ -170,6 +170,9 @@ pub enum VariableType<S: Span> {
     Solid,
     Shell,
     Face,
+    Curve,
+    HalfEdge,
+    Vertex,
     Function(FunctionSignature<S>),
 }
 
@@ -178,17 +181,22 @@ impl<S: Span> VariableType<S> {
         context(
             "Invalid type",
             alt((
-                map(tag("String"), |_| Self::String),
-                map(tag("List"), |_| Self::List),
-                map(tag("Boolean"), |_| Self::Boolean),
-                map(tag("Range"), |_| Self::Range),
-                map(tag("Cycle"), |_| Self::Cycle),
-                map(tag("Region"), |_| Self::Region),
-                map(tag("Sketch"), |_| Self::Sketch),
-                map(tag("Surface"), |_| Self::Surface),
-                map(tag("Solid"), |_| Self::Solid),
-                map(tag("Shell"), |_| Self::Shell),
-                map(tag("Face"), |_| Self::Face),
+                alt((
+                    map(tag("String"), |_| Self::String),
+                    map(tag("List"), |_| Self::List),
+                    map(tag("Boolean"), |_| Self::Boolean),
+                    map(tag("Range"), |_| Self::Range),
+                    map(tag("Cycle"), |_| Self::Cycle),
+                    map(tag("Region"), |_| Self::Region),
+                    map(tag("Sketch"), |_| Self::Sketch),
+                    map(tag("Surface"), |_| Self::Surface),
+                    map(tag("Solid"), |_| Self::Solid),
+                    map(tag("Shell"), |_| Self::Shell),
+                    map(tag("Face"), |_| Self::Face),
+                    map(tag("Curve"), |_| Self::Curve),
+                    map(tag("HalfEdge"), |_| Self::HalfEdge),
+                    map(tag("Vertex"), |_| Self::Vertex),
+                )),
                 map(
                     preceded(pair(take_keyword("struct"), space0), parse_name),
                     Self::Struct,
@@ -257,6 +265,9 @@ impl<S: Span> VariableType<S> {
             Self::Solid => "Solid".into(),
             Self::Shell => "Shell".into(),
             Self::Face => "Face".into(),
+            Self::Curve => "Curve".into(),
+            Self::HalfEdge => "HalfEdge".into(),
+            Self::Vertex => "Vertex".into(),
             Self::Function(function) => format!("{}", function).into(),
         }
     }
@@ -285,6 +296,9 @@ impl<S: Span> Display for VariableType<S> {
             Self::Solid => write!(f, "Solid"),
             Self::Shell => write!(f, "Shell"),
             Self::Face => write!(f, "Face"),
+            Self::Curve => write!(f, "Curve"),
+            Self::HalfEdge => write!(f, "HalfEdge"),
+            Self::Vertex => write!(f, "Vertex"),
             Self::Function(function) => write!(f, "{}", function),
         }
     }

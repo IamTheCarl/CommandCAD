@@ -18,74 +18,26 @@
 
 use std::rc::Rc;
 
-use fj_math::{Point, Scalar as FornjotScalar};
+use macros::Struct;
 use parsing::Span;
 
 use crate::script::{
     execution::{
-        types::{OperatorResult, Scalar, StructDefinition, Structure, Vector2},
+        types::{Length, LengthVector2, StructDefinition},
         ExecutionContext,
     },
-    parsing::{self, MemberVariable, MemberVariableType, VariableType},
+    parsing::{self, MemberVariable, MemberVariableType},
 };
 
 use super::surface::Surface;
 
-pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
-    context.stack.new_variable_str(
-        "Circle",
-        StructDefinition {
-            definition: Rc::new(parsing::StructDefinition {
-                name: S::from_str("Circle"),
-                members: vec![
-                    MemberVariable {
-                        name: S::from_str("center"),
-                        ty: MemberVariableType {
-                            ty: VariableType::Vector(2, S::from_str("Length")),
-                            constraints: None,
-                            default_value: None,
-                        },
-                    },
-                    MemberVariable {
-                        name: S::from_str("radius"),
-                        ty: MemberVariableType {
-                            ty: VariableType::Scalar(S::from_str("Length")),
-                            constraints: None,
-                            default_value: None,
-                        },
-                    },
-                    MemberVariable {
-                        name: S::from_str("surface"),
-                        ty: MemberVariableType {
-                            ty: VariableType::Surface,
-                            constraints: None,
-                            default_value: None,
-                        },
-                    },
-                ],
-            }),
-        }
-        .into(),
-    );
+#[derive(Struct)]
+pub struct Circle {
+    pub center: LengthVector2,
+    pub radius: Length,
+    pub surface: Surface,
 }
 
-/// Unwraps a structure to be made into a circle (assumes you have already checked that the structure is a circle type)
-pub fn unwrap_circle<S: Span>(
-    context: &ExecutionContext<S>,
-    span: &S,
-    circle: Structure<S>,
-) -> OperatorResult<S, (Point<2>, FornjotScalar, Surface)> {
-    let mut members = Rc::unwrap_or_clone(circle.members);
-    let center = members.remove("center").unwrap();
-    let center = center.downcast::<Vector2>(span)?;
-    let center = center.as_fornjot_point(context, span)?;
-
-    let radius = members.remove("radius").unwrap();
-    let radius = radius.downcast::<Scalar>(span)?;
-    let radius = radius.as_scalar(context, span)?;
-
-    let surface = members.remove("surface").unwrap();
-    let surface = surface.downcast::<Surface>(span)?;
-
-    Ok((center, radius, surface))
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
+    Circle::define_struct(context);
 }

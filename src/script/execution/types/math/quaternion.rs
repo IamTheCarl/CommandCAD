@@ -31,7 +31,7 @@ use crate::script::{
     Span,
 };
 
-use super::{Angle, Scalar, Vector3};
+use super::{Angle, Vector3};
 
 pub type Quaternion = nalgebra::UnitQuaternion<RawFloat>;
 
@@ -187,7 +187,7 @@ mod test {
         .unwrap();
             let vector = result.downcast::<Vector<Const<3>>>(&"").unwrap();
 
-            assert!((dbg!(vector.value) - NVector::<Const<3>>::new(1.0, 0.0, 0.0)).norm() < 0.01);
+            assert!((vector.value - NVector::<Const<3>>::new(1.0, 0.0, 0.0)).norm() < 0.01);
         });
     }
 }

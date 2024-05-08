@@ -34,7 +34,7 @@ pub use scalar::{Angle, Length, Number, Scalar};
 
 mod vector;
 use self::vector::Vector;
-pub use vector::{Vector2, Vector3, Vector4};
+pub use vector::{LengthVector2, LengthVector3, Vector2, Vector3, Vector4};
 
 mod transform;
 pub use transform::{Transform2D, Transform3D};
@@ -114,6 +114,12 @@ pub trait ConvertUnit {
     ) -> OperatorResult<S, impl Iterator<Item = Float>>
     where
         DefaultAllocator: nalgebra::allocator::Allocator<f64, D>;
+    fn convert_from_vector_to_iter_without_dimension_check<D: DimName>(
+        &self,
+        vector: &vector::NVector<D>,
+    ) -> impl Iterator<Item = Float>
+    where
+        DefaultAllocator: nalgebra::allocator::Allocator<f64, D>;
 }
 
 impl ConvertUnit for ConversionFactor {
@@ -139,6 +145,19 @@ impl ConvertUnit for ConversionFactor {
                 get_dimension_name(&measurement.dimension),
             ))
         }
+    }
+
+    fn convert_from_vector_to_iter_without_dimension_check<D: DimName>(
+        &self,
+        vector: &vector::NVector<D>,
+    ) -> impl Iterator<Item = Float>
+    where
+        DefaultAllocator: nalgebra::allocator::Allocator<f64, D>,
+    {
+        vector
+            .iter()
+            .copied()
+            .map(|c| self.convert_from_base_unit(Float::new(c).unwrap()))
     }
 
     fn convert_from_vector_to_iter<S: Span, D: DimName>(

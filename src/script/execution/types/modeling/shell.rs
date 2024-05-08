@@ -30,12 +30,15 @@ use fj_core::{
 
 use crate::script::{
     execution::{
-        types::{function::AutoCall, List, Object, OperatorResult, Value, Vector2, Vector3},
+        types::{
+            function::AutoCall, math::LengthVector3, Length, LengthVector2, List, Object,
+            OperatorResult, Value,
+        },
         ExecutionContext, Failure,
     },
     logging::RuntimeLog,
     parsing::{Expression, VariableType},
-    Scalar, Span,
+    Span,
 };
 
 use super::{face::Face, handle_wrapper, object_set::check_for_duplicates};
@@ -83,18 +86,17 @@ impl<S: Span> Object<S> for Shell {
             "add_blind_hole" => |context: &mut ExecutionContext<S>,
                                  span: &S,
                                  face: Face,
-                                 position: Vector2,
-                                 radius: Scalar,
-                                 path: Vector3|
+                                 position: LengthVector2,
+                                 radius: Length,
+                                 path: LengthVector3|
              -> OperatorResult<S, Value<S>> {
                 if !self.handle.deref().faces().contains(&face.handle) {
                     return Err(Failure::FaceNotInShell(span.clone()));
                 }
 
-                let position = position.as_fornjot_point(context, span)?;
-                let radius = radius.as_scalar(context, span)?;
-
-                let path = path.as_fornjot_vector(context, span)?;
+                let position = position.as_fornjot_point(context);
+                let radius = radius.as_fornjot_scalar(context);
+                let path = path.as_fornjot_vector(context);
 
                 let new_shell = self.handle.deref().add_blind_hole(
                     HoleLocation {
@@ -116,22 +118,22 @@ impl<S: Span> Object<S> for Shell {
             "add_through_hole" => |context: &mut ExecutionContext<S>,
                                    span: &S,
                                    front_face: Face,
-                                   front_position: Vector2,
+                                   front_position: LengthVector2,
 
                                    back_face: Face,
-                                   back_position: Vector2,
+                                   back_position: LengthVector2,
 
-                                   radius: Scalar|
+                                   radius: Length|
              -> OperatorResult<S, Value<S>> {
                 let faces = self.handle.deref().faces();
                 if !faces.contains(&front_face.handle) || !faces.contains(&front_face.handle) {
                     return Err(Failure::FaceNotInShell(span.clone()));
                 }
 
-                let front_position = front_position.as_fornjot_point(context, span)?;
-                let back_position = back_position.as_fornjot_point(context, span)?;
+                let front_position = front_position.as_fornjot_point(context);
+                let back_position = back_position.as_fornjot_point(context);
 
-                let radius = radius.as_scalar(context, span)?;
+                let radius = radius.as_fornjot_scalar(context);
 
                 let new_shell = self.handle.deref().add_through_hole(
                     [

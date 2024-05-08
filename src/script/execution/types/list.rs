@@ -30,7 +30,7 @@ use crate::script::{
 
 use super::{
     function::AutoCall, math::Number, number::UnwrapNotNan, serializable::SerializableValue,
-    string::formatting::Style, NamedObject, NoneType, Object, OperatorResult, Scalar,
+    string::formatting::Style, NamedObject, NoneType, Object, OperatorResult, Scalar, TypedObject,
     UnwrapBorrowFailure, Value,
 };
 
@@ -460,6 +460,12 @@ impl<S: Span> Object<S> for List<S> {
         }
 
         Ok(SerializableValue::List(list))
+    }
+}
+
+impl<S: Span> TypedObject for List<S> {
+    fn get_type<LS: Span>() -> VariableType<LS> {
+        VariableType::List
     }
 }
 

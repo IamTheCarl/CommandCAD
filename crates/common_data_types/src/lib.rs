@@ -199,7 +199,7 @@ impl std::ops::Div<i8> for Dimension {
 }
 
 impl Dimension {
-    pub fn zero() -> Self {
+    pub const fn zero() -> Self {
         Self {
             length: 0,
             mass: 0,
@@ -212,10 +212,7 @@ impl Dimension {
         }
     }
 
-    pub fn angle() -> Self {
-        let mut ratio_type_hint = RatioTypeHint(0);
-        ratio_type_hint.set_is_angle(true);
-
+    pub const fn angle() -> Self {
         Self {
             length: 0,
             mass: 0,
@@ -224,11 +221,11 @@ impl Dimension {
             thermodynamic_temprature: 0,
             amount_of_substance: 0,
             luminous_intensity: 0,
-            ratio_type_hint,
+            ratio_type_hint: RatioTypeHint(RatioTypeHint::ANGLE_KIND_MASK),
         }
     }
 
-    pub fn length() -> Self {
+    pub const fn length() -> Self {
         Self {
             length: 1,
             mass: 0,

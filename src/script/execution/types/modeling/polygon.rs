@@ -18,70 +18,53 @@
 
 use std::rc::Rc;
 
-use fj_math::Point;
 use parsing::Span;
 
 use crate::script::{
     execution::{
-        types::{List, OperatorResult, StructDefinition, Structure, Vector2},
+        types::{
+            LengthVector2, List, NamedObject, Object, OperatorResult, StructDefinition, Vector2,
+        },
         ExecutionContext,
     },
-    parsing::{self, MemberVariable, MemberVariableType, VariableType},
+    parsing::{self, MemberVariable, MemberVariableType},
+    Failure,
 };
 
 use super::surface::Surface;
 
-pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
-    context.stack.new_variable_str(
-        "Polygon",
-        StructDefinition {
-            definition: Rc::new(parsing::StructDefinition {
-                name: S::from_str("Polygon"),
-                members: vec![
-                    MemberVariable {
-                        name: S::from_str("points"),
-                        ty: MemberVariableType {
-                            ty: VariableType::List,
-                            constraints: None,
-                            default_value: None,
-                        },
-                    },
-                    MemberVariable {
-                        name: S::from_str("surface"),
-                        ty: MemberVariableType {
-                            ty: VariableType::Surface,
-                            constraints: None,
-                            default_value: None,
-                        },
-                    },
-                ],
-            }),
-        }
-        .into(),
-    );
+use macros::Struct;
+
+#[derive(Struct)]
+pub struct Polygon<S: Span> {
+    pub points: List<S>,
+    pub surface: Surface,
 }
 
-/// Unwraps a structure to be made into a polygon (assumes you have already checked that the structure is a polygon type)
-pub fn unwrap_polygon<S: Span>(
-    context: &ExecutionContext<S>,
-    span: &S,
-    polygon: Structure<S>,
-) -> OperatorResult<S, (Vec<Point<2>>, Surface)> {
-    let mut members = Rc::unwrap_or_clone(polygon.members);
-    let provided_points = members
-        .remove("points")
-        .unwrap()
-        .downcast::<List<S>>(span)?;
-    let mut fornjot_points = Vec::with_capacity(provided_points.len(span)?);
+impl<S: Span> Polygon<S> {
+    pub fn points(
+        &self,
+        context: &ExecutionContext<S>,
+        span: &S,
+    ) -> OperatorResult<S, Vec<fj_math::Point<2>>> {
+        let mut fornjot_points = Vec::with_capacity(self.points.len(span)?);
+        for point in self.points.clone().unpack_dynamic_length::<Vector2>(span)? {
+            let point = LengthVector2::try_from(point).map_err(|point| {
+                Failure::ExpectedGot(
+                    span.clone(),
+                    LengthVector2::static_type_name().into(),
+                    <Vector2 as Object<S>>::type_name(&point),
+                )
+            })?;
+            let point = point.as_fornjot_point(context);
 
-    for point in provided_points.unpack_dynamic_length::<Vector2>(span)? {
-        let point = point.as_fornjot_point(context, span)?;
+            fornjot_points.push(point);
+        }
 
-        fornjot_points.push(point);
+        Ok(fornjot_points)
     }
+}
 
-    let surface = members.remove("surface").unwrap();
-    let surface = surface.downcast::<Surface>(span)?;
-
-    Ok((fornjot_points, surface))
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
+    Polygon::define_struct(context);
 }
