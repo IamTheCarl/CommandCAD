@@ -277,7 +277,7 @@ mod test {
         execution::{expressions::run_expression, run_block, ExecutionContext},
         parsing::Expression,
     };
-    use common_data_types::Number;
+    use common_data_types::Float;
 
     #[test]
     fn functions() {
@@ -296,7 +296,7 @@ mod test {
             let block = parsing::Block::parse("{ my_function(5) }").unwrap().1;
 
             let result = run_block(context, Box::leak(Box::new(block)));
-            assert_eq!(result, Ok(Number::new(5.0).unwrap().into()));
+            assert_eq!(result, Ok(Float::new(5.0).unwrap().into()));
         });
     }
 
@@ -317,7 +317,7 @@ mod test {
             let block = parsing::Block::parse("{ my_function(default) }").unwrap().1;
 
             let result = run_block(context, Box::leak(Box::new(block)));
-            assert_eq!(result, Ok(Number::new(5.0).unwrap().into()));
+            assert_eq!(result, Ok(Float::new(5.0).unwrap().into()));
         });
     }
 

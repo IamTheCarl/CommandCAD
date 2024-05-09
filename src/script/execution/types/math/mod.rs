@@ -19,8 +19,8 @@
 use std::{borrow::Cow, io};
 
 use common_data_types::{
-    BaseUnits, ConversionFactor, ConversionFactorDatabase, Dimension, DimensionNameDatabase,
-    Number, RatioTypeHint, RawNumber, UnitDescription, UnitList,
+    BaseUnits, ConversionFactor, ConversionFactorDatabase, Dimension, DimensionNameDatabase, Float,
+    RatioTypeHint, RawFloat, UnitDescription, UnitList,
 };
 use nalgebra::{DefaultAllocator, DimName};
 
@@ -30,7 +30,7 @@ use crate::script::{
 };
 
 mod scalar;
-pub use scalar::Scalar;
+pub use scalar::{Angle, Length, Number, Scalar};
 
 mod vector;
 use self::vector::Vector;
@@ -65,8 +65,8 @@ trait CheckNan {
 impl<
         R: nalgebra::base::Dim,
         C: nalgebra::base::Dim,
-        S: nalgebra::base::storage::RawStorage<RawNumber, R, C>,
-    > CheckNan for nalgebra::Matrix<RawNumber, R, C, S>
+        S: nalgebra::base::storage::RawStorage<RawFloat, R, C>,
+    > CheckNan for nalgebra::Matrix<RawFloat, R, C, S>
 {
     fn check_nan<SP: Span>(self, span: &SP) -> OperatorResult<SP, ()> {
         if !self.iter().any(|c| c.is_nan()) {
@@ -100,28 +100,28 @@ fn get_dimension_name(dimension: &Dimension) -> Cow<'static, str> {
 }
 
 pub trait ConvertUnit {
-    fn convert_to_base_unit(&self, input: Number) -> Number;
-    fn convert_from_base_unit(&self, input: Number) -> Number;
+    fn convert_to_base_unit(&self, input: Float) -> Float;
+    fn convert_from_base_unit(&self, input: Float) -> Float;
     fn convert_from_measurement_to_number<S: Span>(
         &self,
         span: &S,
         measurement: &Scalar,
-    ) -> OperatorResult<S, Number>;
+    ) -> OperatorResult<S, Float>;
     fn convert_from_vector_to_iter<S: Span, D: DimName>(
         &self,
         span: &S,
         vector: &Vector<D>,
-    ) -> OperatorResult<S, impl Iterator<Item = Number>>
+    ) -> OperatorResult<S, impl Iterator<Item = Float>>
     where
         DefaultAllocator: nalgebra::allocator::Allocator<f64, D>;
 }
 
 impl ConvertUnit for ConversionFactor {
-    fn convert_to_base_unit(&self, input: Number) -> Number {
+    fn convert_to_base_unit(&self, input: Float) -> Float {
         input * self.coefficient + self.constant
     }
 
-    fn convert_from_base_unit(&self, input: Number) -> Number {
+    fn convert_from_base_unit(&self, input: Float) -> Float {
         (input - self.constant) / self.coefficient
     }
 
@@ -129,7 +129,7 @@ impl ConvertUnit for ConversionFactor {
         &self,
         span: &S,
         measurement: &Scalar,
-    ) -> OperatorResult<S, Number> {
+    ) -> OperatorResult<S, Float> {
         if measurement.dimension == self.dimension {
             Ok(self.convert_from_base_unit(measurement.value))
         } else {
@@ -145,7 +145,7 @@ impl ConvertUnit for ConversionFactor {
         &self,
         span: &S,
         vector: &Vector<D>,
-    ) -> OperatorResult<S, impl Iterator<Item = Number>>
+    ) -> OperatorResult<S, impl Iterator<Item = Float>>
     where
         DefaultAllocator: nalgebra::allocator::Allocator<f64, D>,
     {
@@ -154,7 +154,7 @@ impl ConvertUnit for ConversionFactor {
                 .value
                 .iter()
                 .copied()
-                .map(|c| self.convert_from_base_unit(Number::new(c).unwrap())))
+                .map(|c| self.convert_from_base_unit(Float::new(c).unwrap())))
         } else {
             Err(Failure::ExpectedGot(
                 span.clone(),

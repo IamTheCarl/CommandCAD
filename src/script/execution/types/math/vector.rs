@@ -19,8 +19,8 @@
 use std::borrow::Cow;
 
 use arrayvec::ArrayVec;
-use common_data_types::{consts, Dimension, Number, RawNumber};
-use enum_downcast::AsVariant;
+use common_data_types::{consts, Dimension, Float, RawFloat};
+use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
 use fj_math::Scalar as FornjotScalar;
 use nalgebra::{
     allocator::Allocator, base::dimension::Const, DefaultAllocator, DimName, ToTypenum,
@@ -40,18 +40,109 @@ use crate::script::{
     Span,
 };
 
-use super::{get_dimension_name, CheckNan, ConvertUnit, Scalar};
+use super::{get_dimension_name, CheckNan, ConvertUnit, Number, Scalar};
 
-pub(super) type NVector<D> = nalgebra::OVector<RawNumber, D>;
+pub(super) type NVector<D> = nalgebra::OVector<RawFloat, D>;
 
 pub type Vector2 = Vector<Const<2>>;
 pub type Vector3 = Vector<Const<3>>;
 pub type Vector4 = Vector<Const<4>>;
 
+macro_rules! define_fixed_dimension_vector {
+    ($name:ident, $dimension:expr) => {
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct $name<D: DimName>
+        where
+            DefaultAllocator: Allocator<RawFloat, D>,
+        {
+            pub(super) value: NVector<D>,
+        }
+
+        impl<D: DimName> From<$name<D>> for Vector<D>
+        where
+            DefaultAllocator: Allocator<RawFloat, D>,
+        {
+            fn from(value: $name<D>) -> Vector<D> {
+                Vector {
+                    dimension: $dimension,
+                    value: value.value,
+                }
+            }
+        }
+
+        impl<S: Span, D: DimName> From<$name<D>> for Value<S>
+        where
+            DefaultAllocator: Allocator<RawFloat, D>,
+            Value<S>: From<Vector<D>>,
+        {
+            fn from(value: $name<D>) -> Value<S> {
+                Value::from(Vector::from(value))
+            }
+        }
+
+        impl<S: Span, D: DimName> TryFrom<Value<S>> for $name<D>
+        where
+            DefaultAllocator: Allocator<RawFloat, D>,
+            Value<S>: IntoVariant<Vector<D>>,
+        {
+            type Error = ();
+
+            fn try_from(value: Value<S>) -> Result<Self, ()> {
+                let vector: Vector<D> = value.enum_downcast().map_err(|_| ())?;
+                Self::try_from(vector)
+            }
+        }
+
+        impl<D: DimName> TryFrom<Vector<D>> for $name<D>
+        where
+            DefaultAllocator: Allocator<RawFloat, D>,
+        {
+            type Error = ();
+
+            fn try_from(value: Vector<D>) -> Result<Self, ()> {
+                if value.dimension == $dimension {
+                    Ok(Self { value: value.value })
+                } else {
+                    Err(())
+                }
+            }
+        }
+
+        impl<'a, D: DimName> TryFrom<&'a Vector<D>> for $name<D>
+        where
+            DefaultAllocator: Allocator<RawFloat, D>,
+        {
+            type Error = ();
+
+            fn try_from(value: &'a Vector<D>) -> Result<Self, ()> {
+                if value.dimension == $dimension {
+                    Ok(Self {
+                        value: value.value.clone(),
+                    })
+                } else {
+                    Err(())
+                }
+            }
+        }
+
+        impl<D: DimName> NamedObject for $name<D>
+        where
+            Vector<D>: NamedObject,
+            DefaultAllocator: Allocator<RawFloat, D>,
+        {
+            fn static_type_name() -> &'static str {
+                Vector::<D>::static_type_name()
+            }
+        }
+    };
+}
+
+define_fixed_dimension_vector!(LengthVector, Dimension::length());
+
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     fn build_constructor<S: Span, D: DimName>() -> BuiltinFunctionRef<S>
     where
-        DefaultAllocator: Allocator<RawNumber, D>,
+        DefaultAllocator: Allocator<RawFloat, D>,
         Value<S>: From<Vector<D>>,
     {
         let closure: Box<BuiltinFunction<S>> = Box::new(
@@ -59,7 +150,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
              span: &S,
              arguments: Vec<Value<S>>,
              expressions: &[Expression<S>]| {
-                let splat_arguments = arguments.iter().cloned().collect();
+                let splat_arguments = arguments.to_vec();
 
                 match Vector::<D>::splat.auto_call(context, span, splat_arguments, expressions) {
                     Ok(vector) => Ok(vector),
@@ -87,7 +178,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Vector<D: DimName>
 where
-    DefaultAllocator: Allocator<RawNumber, D>,
+    DefaultAllocator: Allocator<RawFloat, D>,
 {
     pub(super) dimension: Dimension,
     pub(super) value: NVector<D>,
@@ -96,7 +187,7 @@ where
 impl<S, D: DimName> Object<S> for Vector<D>
 where
     S: Span,
-    DefaultAllocator: Allocator<RawNumber, D>,
+    DefaultAllocator: Allocator<RawFloat, D>,
     Vector<D>: NamedObject + Into<Value<S>>,
     Value<S>: AsVariant<Vector<D>> + TryInto<Vector<D>>,
     NVector<D>: Copy,
@@ -128,10 +219,17 @@ where
         index: Value<S>,
     ) -> OperatorResult<S, Value<S>> {
         let index = index.downcast::<Scalar>(span)?;
-        let index = index.to_index(span)?;
+        let index = Number::try_from(index.clone()).map_err(|_| {
+            Failure::ExpectedGot(
+                span.clone(),
+                Number::static_type_name().into(),
+                <Scalar as Object<S>>::type_name(&index),
+            )
+        })?;
+        let index = index.to_index();
 
         if let Some(component) = self.value.get(index as usize).copied() {
-            Ok(Number::new(component).unwrap().into())
+            Ok(Float::new(component).unwrap().into())
         } else {
             Err(Failure::IndexOutOfRange(span.clone(), index))
         }
@@ -290,7 +388,7 @@ where
 
                 Ok(Scalar {
                     dimension: Dimension::zero(),
-                    value: Number::new(self.value.dot(&rhs.value)).unwrap_not_nan(span)?,
+                    value: Float::new(self.value.dot(&rhs.value)).unwrap_not_nan(span)?,
                 }
                 .into())
             }
@@ -333,7 +431,7 @@ where
                 } else {
                     Err(Failure::ExpectedGot(
                         span.clone(),
-                        <Self as Object<S>>::type_name(&self),
+                        <Self as Object<S>>::type_name(self),
                         Object::<S>::type_name(&scalar),
                     ))
                 }
@@ -352,7 +450,7 @@ where
                 } else {
                     Err(Failure::ExpectedGot(
                         span.clone(),
-                        <Self as Object<S>>::type_name(&self),
+                        <Self as Object<S>>::type_name(self),
                         Object::<S>::type_name(&scalar),
                     ))
                 }
@@ -364,7 +462,7 @@ where
              -> OperatorResult<S, Value<S>> {
                 // In Radians
                 let value = self.value.angle(&rhs.value) / consts::PI;
-                let value = Number::new(value).unwrap_not_nan(span)?;
+                let value = Float::new(value).unwrap_not_nan(span)?;
                 let dimension = Dimension::angle();
 
                 Ok(Scalar { dimension, value }.into())
@@ -374,7 +472,7 @@ where
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     Ok(Scalar {
                         dimension: self.dimension,
-                        value: Number::new(self.value.norm()).unwrap_not_nan(span)?,
+                        value: Float::new(self.value.norm()).unwrap_not_nan(span)?,
                     }
                     .into())
                 }
@@ -384,7 +482,7 @@ where
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     Ok(Scalar {
                         dimension: self.dimension,
-                        value: Number::new(self.value.norm_squared()).unwrap_not_nan(span)?,
+                        value: Float::new(self.value.norm_squared()).unwrap_not_nan(span)?,
                     }
                     .into())
                 }
@@ -428,7 +526,7 @@ impl NamedObject for Vector<Const<4>> {
 
 impl<D: DimName> Vector<D>
 where
-    DefaultAllocator: Allocator<RawNumber, D>,
+    DefaultAllocator: Allocator<RawFloat, D>,
 {
     pub(super) fn check_dimension<S: Span>(
         &self,
@@ -490,7 +588,7 @@ where
         Ok(rhs)
     }
 
-    fn index_by_character<S: Span>(&self, span: &S, c: char) -> OperatorResult<S, Number> {
+    fn index_by_character<S: Span>(&self, span: &S, c: char) -> OperatorResult<S, Float> {
         let index = match c {
             'x' | 'r' => 0,
             'y' | 'g' => 1,
@@ -500,7 +598,7 @@ where
         };
 
         if let Some(component) = self.value.get(index).copied() {
-            Ok(Number::new(component).unwrap())
+            Ok(Float::new(component).unwrap())
         } else {
             Err(Failure::CharacterNotInVector(span.clone(), c))
         }
@@ -532,7 +630,7 @@ where
         let mut expression_iter = expressions.iter();
         let mut argument_iter = arguments.into_iter();
 
-        let mut components = ArrayVec::<RawNumber, 4>::new();
+        let mut components = ArrayVec::<RawFloat, 4>::new();
 
         let first_argument = argument_iter
             .next()
@@ -614,7 +712,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use common_data_types::{Dimension, RatioTypeHint, RawNumber};
+    use common_data_types::{Dimension, RatioTypeHint, RawFloat};
 
     use crate::script::{
         execution::{expressions::run_expression, ExecutionContext},
@@ -732,7 +830,7 @@ mod test {
                     .unwrap()
                     .downcast::<Vector::<Const<2>>>(&"")
                     .unwrap()
-                    .as_fornjot_vector(&context, &""),
+                    .as_fornjot_vector(context, &""),
                 Ok(fj_math::Vector::<2> {
                     components: [1.0.into(), 2.0.into()]
                 })
@@ -743,7 +841,7 @@ mod test {
                     .unwrap()
                     .downcast::<Vector::<Const<2>>>(&"")
                     .unwrap()
-                    .as_fornjot_vector::<_, 2>(&context, &""),
+                    .as_fornjot_vector::<_, 2>(context, &""),
                 Err(Failure::ExpectedGot("", "Length".into(), "Angle".into()))
             );
         });
@@ -756,7 +854,7 @@ mod test {
                     .unwrap()
                     .downcast::<Vector::<Const<2>>>(&"")
                     .unwrap()
-                    .as_fornjot_point(&context, &""),
+                    .as_fornjot_point(context, &""),
                 Ok(fj_math::Point::<2> {
                     coords: fj_math::Vector::<2> {
                         components: [1.0.into(), 2.0.into()]
@@ -771,11 +869,11 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec2(1, 2)[0]").unwrap().1),
-                Ok(Scalar::from_number(Number::new(1.0).unwrap()).into())
+                Ok(Scalar::from_number(Float::new(1.0).unwrap()).into())
             );
             assert_eq!(
                 run_expression(context, &Expression::parse("vec2(1, 2)[1]").unwrap().1),
-                Ok(Scalar::from_number(Number::new(2.0).unwrap()).into())
+                Ok(Scalar::from_number(Float::new(2.0).unwrap()).into())
             );
             assert_eq!(
                 run_expression(context, &Expression::parse("vec2(1, 2)[2]").unwrap().1),
@@ -793,36 +891,36 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).x").unwrap().1),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
             assert_eq!(
                 run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).y").unwrap().1),
-                Ok(Number::new(2.0).unwrap().into())
+                Ok(Float::new(2.0).unwrap().into())
             );
             assert_eq!(
                 run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).z").unwrap().1),
-                Ok(Number::new(3.0).unwrap().into())
+                Ok(Float::new(3.0).unwrap().into())
             );
             assert_eq!(
                 run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).w").unwrap().1),
-                Ok(Number::new(4.0).unwrap().into())
+                Ok(Float::new(4.0).unwrap().into())
             );
 
             assert_eq!(
                 run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).r").unwrap().1),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
             assert_eq!(
                 run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).g").unwrap().1),
-                Ok(Number::new(2.0).unwrap().into())
+                Ok(Float::new(2.0).unwrap().into())
             );
             assert_eq!(
                 run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).b").unwrap().1),
-                Ok(Number::new(3.0).unwrap().into())
+                Ok(Float::new(3.0).unwrap().into())
             );
             assert_eq!(
                 run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).a").unwrap().1),
-                Ok(Number::new(4.0).unwrap().into())
+                Ok(Float::new(4.0).unwrap().into())
             );
 
             assert_eq!(
@@ -951,7 +1049,7 @@ mod test {
                 run_expression(context, &Expression::parse("vec2(1, 2) / 0").unwrap().1),
                 Ok(Vector {
                     dimension: Dimension::zero(),
-                    value: NVector::<Const<2>>::new(RawNumber::INFINITY, RawNumber::INFINITY,),
+                    value: NVector::<Const<2>>::new(RawFloat::INFINITY, RawFloat::INFINITY,),
                 }
                 .into())
             );
@@ -962,11 +1060,11 @@ mod test {
     fn nan_check() {
         assert_eq!(NVector::<Const<2>>::new(1.0, 1.0).check_nan(&"nan"), Ok(()));
         assert_eq!(
-            NVector::<Const<2>>::new(RawNumber::NAN, 1.0).check_nan(&"nan"),
+            NVector::<Const<2>>::new(RawFloat::NAN, 1.0).check_nan(&"nan"),
             Err(Failure::ResultIsNan("nan")),
         );
         assert_eq!(
-            NVector::<Const<2>>::new(1.0, RawNumber::NAN).check_nan(&"nan"),
+            NVector::<Const<2>>::new(1.0, RawFloat::NAN).check_nan(&"nan"),
             Err(Failure::ResultIsNan("nan")),
         );
 
@@ -975,15 +1073,15 @@ mod test {
             Ok(())
         );
         assert_eq!(
-            NVector::<Const<3>>::new(RawNumber::NAN, 1.0, 1.0).check_nan(&"nan"),
+            NVector::<Const<3>>::new(RawFloat::NAN, 1.0, 1.0).check_nan(&"nan"),
             Err(Failure::ResultIsNan("nan")),
         );
         assert_eq!(
-            NVector::<Const<3>>::new(1.0, RawNumber::NAN, 1.0).check_nan(&"nan"),
+            NVector::<Const<3>>::new(1.0, RawFloat::NAN, 1.0).check_nan(&"nan"),
             Err(Failure::ResultIsNan("nan")),
         );
         assert_eq!(
-            NVector::<Const<3>>::new(1.0, 1.0, RawNumber::NAN).check_nan(&"nan"),
+            NVector::<Const<3>>::new(1.0, 1.0, RawFloat::NAN).check_nan(&"nan"),
             Err(Failure::ResultIsNan("nan")),
         );
     }
@@ -998,7 +1096,7 @@ mod test {
                 ),
                 Ok(Scalar {
                     dimension: Dimension::angle(),
-                    value: Number::new(0.5).unwrap(),
+                    value: Float::new(0.5).unwrap(),
                 }
                 .into())
             );

@@ -18,7 +18,7 @@
 
 use std::borrow::Cow;
 
-use common_data_types::{Dimension, RawNumber};
+use common_data_types::{Dimension, RawFloat};
 use nalgebra::Unit;
 
 use crate::script::{
@@ -31,9 +31,9 @@ use crate::script::{
     Span,
 };
 
-use super::{Scalar, Vector3};
+use super::{Angle, Scalar, Vector3};
 
-pub type Quaternion = nalgebra::UnitQuaternion<RawNumber>;
+pub type Quaternion = nalgebra::UnitQuaternion<RawFloat>;
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
@@ -63,10 +63,9 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
         |_context: &mut ExecutionContext<S>,
          span: &S,
          axis: Vector3,
-         angle: Scalar|
+         angle: Angle|
          -> OperatorResult<S, Value<S>> {
             axis.check_dimension(span, Dimension::zero())?;
-            angle.check_dimension(span, Dimension::angle())?;
 
             let angle = angle.value;
 

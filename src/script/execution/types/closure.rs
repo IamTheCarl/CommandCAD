@@ -101,7 +101,7 @@ impl<S: Span> NamedObject for Closure<S> {
 
 #[cfg(test)]
 mod test {
-    use common_data_types::Number;
+    use common_data_types::Float;
 
     use crate::script::{
         execution::{
@@ -120,7 +120,7 @@ mod test {
                     context,
                     &Expression::parse("[]() -> Number { 1 }()").unwrap().1
                 ),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
         });
     }
@@ -173,7 +173,7 @@ mod test {
 
                 assert_eq!(
                     context.stack.get_variable(&"value"),
-                    Ok(&Number::new(2.0).unwrap().into())
+                    Ok(&Float::new(2.0).unwrap().into())
                 );
             });
         });
@@ -189,11 +189,11 @@ mod test {
         .1;
 
             let result = run_block(context, &block);
-            assert_eq!(result, Ok(Number::new(2.0).unwrap().into()));
+            assert_eq!(result, Ok(Float::new(2.0).unwrap().into()));
 
             assert_eq!(
                 context.stack.get_variable(&"value"),
-                Ok(&Number::new(1.0).unwrap().into())
+                Ok(&Float::new(1.0).unwrap().into())
             );
         });
     }
@@ -208,11 +208,11 @@ mod test {
         .1;
 
             let result = run_block(context, &block);
-            assert_eq!(result, Ok(Number::new(2.0).unwrap().into()));
+            assert_eq!(result, Ok(Float::new(2.0).unwrap().into()));
 
             assert_eq!(
                 context.stack.get_variable(&"value"),
-                Ok(&Number::new(2.0).unwrap().into())
+                Ok(&Float::new(2.0).unwrap().into())
             );
         });
     }

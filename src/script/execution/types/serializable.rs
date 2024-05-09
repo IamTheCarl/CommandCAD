@@ -169,7 +169,7 @@ impl SerializableValue {
 
 #[cfg(test)]
 mod test {
-    use common_data_types::Number;
+    use common_data_types::Float;
     use uom::si::{f64::Length, length::millimeter};
 
     use crate::script::{
@@ -226,14 +226,14 @@ mod test {
                 serde_yaml::from_str::<SerializableValue>("42")
                     .unwrap()
                     .into_value(context, &"", &VariableType::Scalar("Number")),
-                Ok(Number::new(42.0).unwrap().into())
+                Ok(Float::new(42.0).unwrap().into())
             );
         });
     }
 
     #[test]
     fn serialize_number() {
-        let value = SerializableValue::Scalar(Scalar::from(Number::new(42.0).unwrap()));
+        let value = SerializableValue::Scalar(Scalar::from(Float::new(42.0).unwrap()));
 
         assert_eq!(serde_yaml::to_string(&value).unwrap(), "42.0\n");
     }
@@ -339,7 +339,7 @@ mod test {
                     ty: "MyStruct".to_string(),
                     members: HashMap::from([(
                         "value".to_string(),
-                        SerializableValue::Scalar(Scalar::from(Number::new(42.0).unwrap()))
+                        SerializableValue::Scalar(Scalar::from(Float::new(42.0).unwrap()))
                     )])
                 })
             );
@@ -370,7 +370,7 @@ mod test {
     fn serialize_list() {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             let value: Value<&'static str> = List::from([
-                Number::new(1.0).unwrap().into(),
+                Float::new(1.0).unwrap().into(),
                 true.into(),
                 SString::from("some text".to_string()).into(),
             ])
@@ -378,7 +378,7 @@ mod test {
             assert_eq!(
                 value.export(context.log, &""),
                 Ok(SerializableValue::List(vec![
-                    SerializableValue::Scalar(Scalar::from(Number::new(1.0).unwrap())),
+                    SerializableValue::Scalar(Scalar::from(Float::new(1.0).unwrap())),
                     SerializableValue::Boolean(true),
                     SerializableValue::String("some text".to_string())
                 ]))

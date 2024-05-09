@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use common_data_types::Number;
+use common_data_types::Float;
 use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
 use ouroboros::self_referencing;
 use std::{cell::RefCell, fmt::Write, isize, rc::Rc};
@@ -29,7 +29,7 @@ use crate::script::{
 };
 
 use super::{
-    function::AutoCall, number::UnwrapNotNan, serializable::SerializableValue,
+    function::AutoCall, math::Number, number::UnwrapNotNan, serializable::SerializableValue,
     string::formatting::Style, NamedObject, NoneType, Object, OperatorResult, Scalar,
     UnwrapBorrowFailure, Value,
 };
@@ -160,8 +160,15 @@ impl<S: Span> Object<S> for List<S> {
         index: Value<S>,
     ) -> OperatorResult<S, Value<S>> {
         match index {
-            Value::Scalar(index) => {
-                let index = index.to_index(span)?;
+            Value::Scalar(scalar) => {
+                let index = Number::try_from(scalar.clone()).map_err(|_| {
+                    Failure::ExpectedGot(
+                        span.clone(),
+                        Number::static_type_name().into(),
+                        <Scalar as Object<S>>::type_name(&scalar),
+                    )
+                })?;
+                let index = index.to_index();
 
                 let localized_index = self.internalize_index(span, index)?;
 
@@ -183,39 +190,39 @@ impl<S: Span> Object<S> for List<S> {
                 ) {
                     (None, None, false) => vector.get(..).ok_or((None, None)),
                     (Some(lower_bound), None, false) => {
-                        let signed_lower_bound = lower_bound.to_index(span)?;
+                        let signed_lower_bound = lower_bound.to_index();
                         let lower_bound = self.internalize_index(span, signed_lower_bound)?;
                         vector
                             .get(lower_bound..)
                             .ok_or((Some(signed_lower_bound), None))
                     }
                     (None, Some(upper_bound), false) => {
-                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let signed_upper_bound = upper_bound.to_index();
                         let upper_bound = self.internalize_index(span, signed_upper_bound)?;
                         vector
                             .get(..upper_bound)
                             .ok_or((None, Some(signed_upper_bound)))
                     }
                     (None, Some(upper_bound), true) => {
-                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let signed_upper_bound = upper_bound.to_index();
                         let upper_bound = self.internalize_index(span, signed_upper_bound)?;
                         vector
                             .get(..=upper_bound)
                             .ok_or((None, Some(signed_upper_bound)))
                     }
                     (Some(lower_bound), Some(upper_bound), false) => {
-                        let signed_lower_bound = lower_bound.to_index(span)?;
+                        let signed_lower_bound = lower_bound.to_index();
                         let lower_bound = self.internalize_index(span, signed_lower_bound)?;
-                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let signed_upper_bound = upper_bound.to_index();
                         let upper_bound = self.internalize_index(span, signed_upper_bound)?;
                         vector
                             .get(lower_bound..upper_bound)
                             .ok_or((Some(signed_lower_bound), Some(signed_upper_bound)))
                     }
                     (Some(lower_bound), Some(upper_bound), true) => {
-                        let signed_lower_bound = lower_bound.to_index(span)?;
+                        let signed_lower_bound = lower_bound.to_index();
                         let lower_bound = self.internalize_index(span, signed_lower_bound)?;
-                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let signed_upper_bound = upper_bound.to_index();
                         let upper_bound = self.internalize_index(span, signed_upper_bound)?;
                         vector
                             .get(lower_bound..=upper_bound)
@@ -288,10 +295,10 @@ impl<S: Span> Object<S> for List<S> {
             }
             "insert" => move |_context: &mut ExecutionContext<S>,
                               span: &S,
-                              index: Scalar,
+                              index: Number,
                               value: Value<S>|
                   -> OperatorResult<S, Value<S>> {
-                let index = index.to_index(span)?;
+                let index = index.to_index();
                 let index = self.internalize_index(span, index)?;
                 self.vector
                     .try_borrow_mut()
@@ -314,7 +321,7 @@ impl<S: Span> Object<S> for List<S> {
             }
             "len" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
-                    Number::new(self.vector.try_borrow().unwrap_borrow_failure(span)?.len() as f64)
+                    Float::new(self.vector.try_borrow().unwrap_borrow_failure(span)?.len() as f64)
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -334,9 +341,9 @@ impl<S: Span> Object<S> for List<S> {
             .auto_call(context, span, arguments, expressions),
             "remove" => |_context: &mut ExecutionContext<S>,
                          span: &S,
-                         index: Scalar|
+                         index: Number|
              -> OperatorResult<S, Value<S>> {
-                let index = index.to_index(span)?;
+                let index = index.to_index();
                 let index = self.internalize_index(span, index)?;
 
                 self.vector
@@ -398,9 +405,9 @@ impl<S: Span> Object<S> for List<S> {
             }
             "rotate_left" => |_context: &mut ExecutionContext<S>,
                               span: &S,
-                              mid: Scalar|
+                              mid: Number|
              -> OperatorResult<S, Value<S>> {
-                let mid = mid.to_index(span)?;
+                let mid = mid.to_index();
                 if mid.is_positive() {
                     let mut vector = self.vector.try_borrow_mut().unwrap_borrow_failure(span)?;
                     let mid = mid as usize % vector.len();
@@ -414,9 +421,9 @@ impl<S: Span> Object<S> for List<S> {
             .auto_call(context, span, arguments, expressions),
             "rotate_right" => |_context: &mut ExecutionContext<S>,
                                span: &S,
-                               mid: Scalar|
+                               mid: Number|
              -> OperatorResult<S, Value<S>> {
-                let mid = mid.to_index(span)?;
+                let mid = mid.to_index();
                 if mid.is_positive() {
                     let mut vector = self.vector.try_borrow_mut().unwrap_borrow_failure(span)?;
                     let mid = mid as usize % vector.len();
@@ -517,7 +524,7 @@ mod test {
     use crate::script::{
         execution::{expressions::run_expression, ExecutionContext},
         parsing::Expression,
-        Runtime,
+        Runtime, Scalar,
     };
 
     #[test]
@@ -526,12 +533,12 @@ mod test {
         ExecutionContext::new(&mut runtime, |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("[1, 2, 3][0]").unwrap().1),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
 
             assert_eq!(
                 run_expression(context, &Expression::parse("[1, 2, 3][-1]").unwrap().1),
-                Ok(Number::new(3.0).unwrap().into())
+                Ok(Float::new(3.0).unwrap().into())
             );
 
             assert_eq!(
@@ -549,22 +556,22 @@ mod test {
     fn test_unpack() {
         assert_eq!(
             List::<&'static str>::from([
-                Number::new(1.0).unwrap().into(),
-                Number::new(2.0).unwrap().into(),
-                Number::new(3.0).unwrap().into(),
+                Float::new(1.0).unwrap().into(),
+                Float::new(2.0).unwrap().into(),
+                Float::new(3.0).unwrap().into(),
             ])
             .unpack_fixed_length::<Scalar, 3usize>(&"span",)
             .map(|v| v.collect::<Vec<_>>()),
             Ok(vec![
-                Number::new(1.0).unwrap().into(),
-                Number::new(2.0).unwrap().into(),
-                Number::new(3.0).unwrap().into(),
+                Float::new(1.0).unwrap().into(),
+                Float::new(2.0).unwrap().into(),
+                Float::new(3.0).unwrap().into(),
             ])
         );
 
         let values = [
-            Number::new(1.0).unwrap().into(),
-            Number::new(2.0).unwrap().into(),
+            Float::new(1.0).unwrap().into(),
+            Float::new(2.0).unwrap().into(),
         ];
 
         assert_eq!(
@@ -574,7 +581,7 @@ mod test {
             Err(Failure::ListWrongLength("span", 3, 2))
         );
 
-        let values = [Number::new(1.0).unwrap().into(), true.into()];
+        let values = [Float::new(1.0).unwrap().into(), true.into()];
 
         assert_eq!(
             List::<&'static str>::from(values)

@@ -201,7 +201,7 @@ pub fn run_factor<S: Span>(
 mod test {
     use super::*;
 
-    use common_data_types::Number;
+    use common_data_types::Float;
 
     use crate::script::{
         execution::{
@@ -217,7 +217,7 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("24").unwrap().1),
-                Ok(Number::new(24.0).unwrap().into())
+                Ok(Float::new(24.0).unwrap().into())
             );
         });
     }
@@ -299,7 +299,7 @@ mod test {
             // Number
             assert_eq!(
                 Value::from_litteral(context, &Litteral::parse("22").unwrap().1),
-                Ok(Number::new(22.0).unwrap().into())
+                Ok(Float::new(22.0).unwrap().into())
             );
             // String
             assert_eq!(
@@ -310,9 +310,9 @@ mod test {
             assert_eq!(
                 Value::from_litteral(context, &Litteral::parse("[1, 2, 3]").unwrap().1),
                 Ok(List::from([
-                    Number::new(1.0).unwrap().into(),
-                    Number::new(2.0).unwrap().into(),
-                    Number::new(3.0).unwrap().into()
+                    Float::new(1.0).unwrap().into(),
+                    Float::new(2.0).unwrap().into(),
+                    Float::new(3.0).unwrap().into()
                 ])
                 .into())
             );
@@ -376,12 +376,12 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("+15").unwrap().1),
-                Ok(Number::new(15.0).unwrap().into())
+                Ok(Float::new(15.0).unwrap().into())
             );
 
             assert_eq!(
                 run_expression(context, &Expression::parse("-15").unwrap().1),
-                Ok(Number::new(-15.0).unwrap().into())
+                Ok(Float::new(-15.0).unwrap().into())
             );
         });
     }
@@ -391,7 +391,7 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("(1 + 2) * 3").unwrap().1),
-                Ok(Number::new(9.0).unwrap().into())
+                Ok(Float::new(9.0).unwrap().into())
             );
         });
     }
@@ -417,7 +417,7 @@ mod test {
                         .unwrap()
                         .1
                 ),
-                Ok(Number::new(42.0).unwrap().into())
+                Ok(Float::new(42.0).unwrap().into())
             );
         });
     }
@@ -427,7 +427,7 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("24.25.floor()").unwrap().1),
-                Ok(Number::new(24.0).unwrap().into())
+                Ok(Float::new(24.0).unwrap().into())
             );
         });
     }
@@ -439,7 +439,7 @@ mod test {
                 _context: &mut ExecutionContext<S>,
                 _span: &S,
             ) -> Result<S, Value<S>> {
-                Ok(Number::new(42.0).unwrap().into())
+                Ok(Float::new(42.0).unwrap().into())
             }
 
             let my_function = my_function::<&'static str>.into_builtin_function();
@@ -450,7 +450,7 @@ mod test {
 
             assert_eq!(
                 run_expression(context, &Expression::parse("my_function()").unwrap().1),
-                Ok(Number::new(42.0).unwrap().into())
+                Ok(Float::new(42.0).unwrap().into())
             );
         });
     }
@@ -460,7 +460,7 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("[1, 2, 3][0]").unwrap().1),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
         });
     }
@@ -470,7 +470,7 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("1 + 2 * 3").unwrap().1),
-                Ok(Number::new(7.0).unwrap().into())
+                Ok(Float::new(7.0).unwrap().into())
             );
         });
     }
@@ -480,7 +480,7 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("9 / 3").unwrap().1),
-                Ok(Number::new(3.0).unwrap().into())
+                Ok(Float::new(3.0).unwrap().into())
             );
         });
     }
@@ -504,7 +504,7 @@ mod test {
             assert_eq!(
                 run_expression(context, &Expression::parse("5..").unwrap().1),
                 Ok(Range {
-                    lower_bound: Some(Number::new(5.0).unwrap().into()),
+                    lower_bound: Some(Float::new(5.0).unwrap().into()),
                     upper_bound_is_inclusive: false,
                     upper_bound: None
                 }
@@ -515,7 +515,7 @@ mod test {
                 Ok(Range {
                     lower_bound: None,
                     upper_bound_is_inclusive: false,
-                    upper_bound: Some(Number::new(5.0).unwrap().into())
+                    upper_bound: Some(Float::new(5.0).unwrap().into())
                 }
                 .into())
             );
@@ -524,7 +524,7 @@ mod test {
                 Ok(Range {
                     lower_bound: None,
                     upper_bound_is_inclusive: true,
-                    upper_bound: Some(Number::new(5.0).unwrap().into())
+                    upper_bound: Some(Float::new(5.0).unwrap().into())
                 }
                 .into())
             );
@@ -536,7 +536,7 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("1 + 2").unwrap().1),
-                Ok(Number::new(3.0).unwrap().into())
+                Ok(Float::new(3.0).unwrap().into())
             );
         });
     }
@@ -546,7 +546,7 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("1 + 2").unwrap().1),
-                Ok(Number::new(3.0).unwrap().into())
+                Ok(Float::new(3.0).unwrap().into())
             );
         });
     }

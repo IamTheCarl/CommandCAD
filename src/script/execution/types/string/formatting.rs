@@ -31,7 +31,9 @@ use nom::{
 
 use crate::script::{
     execution::{
-        types::{unsupported_operation_message, Object, OperatorResult, Value},
+        types::{
+            math::Number, unsupported_operation_message, NamedObject, Object, OperatorResult, Value,
+        },
         Failure,
     },
     logging::RuntimeLog,
@@ -247,7 +249,14 @@ impl Format {
                 Precision::Referenced(index) => {
                     if let Some(argument) = arguments.get(*index as usize) {
                         let precision = argument.downcast_ref::<Scalar>(span)?;
-                        let precision = precision.to_index(span)?;
+                        let precision = Number::try_from(precision).map_err(|_| {
+                            Failure::ExpectedGot(
+                                span.clone(),
+                                Number::static_type_name().into(),
+                                <Scalar as Object<S>>::type_name(&precision),
+                            )
+                        })?;
+                        let precision = precision.to_index();
 
                         if precision.is_positive() {
                             Ok(Some(precision as u8))
@@ -341,7 +350,7 @@ pub trait UnsupportedMessage {
 #[cfg(test)]
 mod test {
     use crate::script::logging::StandardLog;
-    use common_data_types::Number;
+    use common_data_types::Float;
 
     use super::*;
 
@@ -501,7 +510,7 @@ mod test {
                 &mut log,
                 &"scope",
                 &mut formatted,
-                &[Number::new(42.24).unwrap().into()],
+                &[Float::new(42.24).unwrap().into()],
             )
             .unwrap();
         assert_eq!(formatted, "Test 42.24");
@@ -515,8 +524,8 @@ mod test {
                 &"scope",
                 &mut formatted,
                 &[
-                    Number::new(1.0).unwrap().into(),
-                    Number::new(2.0).unwrap().into(),
+                    Float::new(1.0).unwrap().into(),
+                    Float::new(2.0).unwrap().into(),
                 ],
             )
             .unwrap();

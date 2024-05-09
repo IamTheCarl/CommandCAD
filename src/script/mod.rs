@@ -199,7 +199,7 @@ impl<S: Span> Runtime<S> {
 mod test {
     use std::borrow::Cow;
 
-    use common_data_types::Number;
+    use common_data_types::Float;
     use uom::si::{
         f64::Length,
         length::{meter, millimeter},
@@ -302,15 +302,15 @@ mod test {
 
         assert_eq!(
             runtime.run_task("my_task", vec![SerializableValue::Default]),
-            Ok(SerializableValue::Scalar(Number::new(50.0).unwrap().into()))
+            Ok(SerializableValue::Scalar(Float::new(50.0).unwrap().into()))
         );
 
         assert_eq!(
             runtime.run_task(
                 "my_task",
-                vec![SerializableValue::Scalar(Number::new(22.0).unwrap().into())]
+                vec![SerializableValue::Scalar(Float::new(22.0).unwrap().into())]
             ),
-            Ok(SerializableValue::Scalar(Number::new(22.0).unwrap().into()))
+            Ok(SerializableValue::Scalar(Float::new(22.0).unwrap().into()))
         );
 
         let mut runtime =

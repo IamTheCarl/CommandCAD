@@ -332,7 +332,7 @@ mod test {
         parsing::Expression,
         Runtime,
     };
-    use common_data_types::Number;
+    use common_data_types::Float;
 
     use super::*;
 
@@ -383,8 +383,8 @@ mod test {
                 Structure::from_array(
                     two_part_struct.clone(),
                     [
-                        ("value".into(), Number::new(3.0).unwrap().into()),
-                        ("other".into(), Number::new(4.0).unwrap().into()),
+                        ("value".into(), Float::new(3.0).unwrap().into()),
+                        ("other".into(), Float::new(4.0).unwrap().into()),
                     ],
                 )
                 .into(),
@@ -402,7 +402,7 @@ mod test {
                 ),
                 Ok(Structure::from_array(
                     default_struct.clone(),
-                    [("value".into(), Number::new(24.0).unwrap().into())]
+                    [("value".into(), Float::new(24.0).unwrap().into())]
                 )
                 .into())
             );
@@ -413,7 +413,7 @@ mod test {
                 ),
                 Ok(Structure::from_array(
                     default_struct.clone(),
-                    [("value".into(), Number::new(42.0).unwrap().into())]
+                    [("value".into(), Float::new(42.0).unwrap().into())]
                 )
                 .into())
             );
@@ -426,7 +426,7 @@ mod test {
                 ),
                 Ok(Structure::from_array(
                     default_struct,
-                    [("value".into(), Number::new(42.0).unwrap().into())]
+                    [("value".into(), Float::new(42.0).unwrap().into())]
                 )
                 .into())
             );
@@ -438,8 +438,8 @@ mod test {
                 Ok(Structure::from_array(
                     two_part_struct.clone(),
                     [
-                        ("value".into(), Number::new(1.0).unwrap().into()),
-                        ("other".into(), Number::new(2.0).unwrap().into())
+                        ("value".into(), Float::new(1.0).unwrap().into()),
+                        ("other".into(), Float::new(2.0).unwrap().into())
                     ]
                 )
                 .into())
@@ -454,8 +454,8 @@ mod test {
                 Ok(Structure::from_array(
                     two_part_struct.clone(),
                     [
-                        ("value".into(), Number::new(3.0).unwrap().into()),
-                        ("other".into(), Number::new(2.0).unwrap().into())
+                        ("value".into(), Float::new(3.0).unwrap().into()),
+                        ("other".into(), Float::new(2.0).unwrap().into())
                     ]
                 )
                 .into())
@@ -470,8 +470,8 @@ mod test {
                 Ok(Structure::from_array(
                     two_part_struct.clone(),
                     [
-                        ("value".into(), Number::new(3.0).unwrap().into()),
-                        ("other".into(), Number::new(4.0).unwrap().into())
+                        ("value".into(), Float::new(3.0).unwrap().into()),
+                        ("other".into(), Float::new(4.0).unwrap().into())
                     ]
                 )
                 .into())
@@ -486,8 +486,8 @@ mod test {
                 Ok(Structure::from_array(
                     two_part_struct,
                     [
-                        ("value".into(), Number::new(5.0).unwrap().into()),
-                        ("other".into(), Number::new(4.0).unwrap().into())
+                        ("value".into(), Float::new(5.0).unwrap().into()),
+                        ("other".into(), Float::new(4.0).unwrap().into())
                     ]
                 )
                 .into())

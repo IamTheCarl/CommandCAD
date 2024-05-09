@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use common_data_types::Number;
+use common_data_types::Float;
 use imstr::ImString;
 use std::{cell::RefCell, cmp::Ordering, fmt::Write};
 
@@ -28,8 +28,8 @@ use crate::script::{
 };
 
 use super::{
-    function::AutoCall, number::UnwrapNotNan, serializable::SerializableValue, NamedObject,
-    NoneType, Object, OperatorResult, Range, Scalar, UnwrapBorrowFailure, Value,
+    function::AutoCall, math::Number, number::UnwrapNotNan, serializable::SerializableValue,
+    NamedObject, NoneType, Object, OperatorResult, Range, UnwrapBorrowFailure, Value,
 };
 
 pub mod formatting;
@@ -102,39 +102,39 @@ impl<S: Span> Object<S> for SString {
         ) {
             (None, None, false) => string.get(..).ok_or((None, None)),
             (Some(lower_bound), None, false) => {
-                let signed_lower_bound = lower_bound.to_index(span)?;
+                let signed_lower_bound = lower_bound.to_index();
                 let lower_bound = self.internalize_index(span, signed_lower_bound)?;
                 string
                     .get(lower_bound..)
                     .ok_or((Some(signed_lower_bound), None))
             }
             (None, Some(upper_bound), false) => {
-                let signed_upper_bound = upper_bound.to_index(span)?;
+                let signed_upper_bound = upper_bound.to_index();
                 let upper_bound = self.internalize_index(span, signed_upper_bound)?;
                 string
                     .get(..upper_bound)
                     .ok_or((None, Some(signed_upper_bound)))
             }
             (None, Some(upper_bound), true) => {
-                let signed_upper_bound = upper_bound.to_index(span)?;
+                let signed_upper_bound = upper_bound.to_index();
                 let upper_bound = self.internalize_index(span, signed_upper_bound)?;
                 string
                     .get(..=upper_bound)
                     .ok_or((None, Some(signed_upper_bound)))
             }
             (Some(lower_bound), Some(upper_bound), false) => {
-                let signed_lower_bound = lower_bound.to_index(span)?;
+                let signed_lower_bound = lower_bound.to_index();
                 let lower_bound = self.internalize_index(span, signed_lower_bound)?;
-                let signed_upper_bound = upper_bound.to_index(span)?;
+                let signed_upper_bound = upper_bound.to_index();
                 let upper_bound = self.internalize_index(span, signed_upper_bound)?;
                 string
                     .get(lower_bound..upper_bound)
                     .ok_or((Some(signed_lower_bound), Some(signed_upper_bound)))
             }
             (Some(lower_bound), Some(upper_bound), true) => {
-                let signed_lower_bound = lower_bound.to_index(span)?;
+                let signed_lower_bound = lower_bound.to_index();
                 let lower_bound = self.internalize_index(span, signed_lower_bound)?;
-                let signed_upper_bound = upper_bound.to_index(span)?;
+                let signed_upper_bound = upper_bound.to_index();
                 let upper_bound = self.internalize_index(span, signed_upper_bound)?;
                 string
                     .get(lower_bound..=upper_bound)
@@ -214,10 +214,10 @@ impl<S: Span> Object<S> for SString {
         match attribute.as_str() {
             "insert" => |_context: &mut ExecutionContext<S>,
                          span: &S,
-                         index: Scalar,
+                         index: Number,
                          text: SString|
              -> OperatorResult<S, Value<S>> {
-                let index = index.to_index(span)?;
+                let index = index.to_index();
                 let index = self.internalize_index(span, index)?;
 
                 self.string
@@ -240,7 +240,7 @@ impl<S: Span> Object<S> for SString {
             }
             "len" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
-                    Number::new(self.string.try_borrow().unwrap_borrow_failure(span)?.len() as f64)
+                    Float::new(self.string.try_borrow().unwrap_borrow_failure(span)?.len() as f64)
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }

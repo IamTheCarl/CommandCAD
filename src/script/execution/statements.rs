@@ -456,7 +456,7 @@ mod test {
         execution::{ControlFlow, Failure},
         Runtime,
     };
-    use common_data_types::Number;
+    use common_data_types::Float;
 
     use super::*;
 
@@ -481,7 +481,7 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"value"),
-                Ok(&Number::new(1.0).unwrap().into())
+                Ok(&Float::new(1.0).unwrap().into())
             );
 
             assert_eq!(
@@ -490,7 +490,7 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"value"),
-                Ok(&Number::new(2.0).unwrap().into())
+                Ok(&Float::new(2.0).unwrap().into())
             );
 
             assert_eq!(
@@ -504,11 +504,11 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"one"),
-                Ok(&Number::new(1.0).unwrap().into())
+                Ok(&Float::new(1.0).unwrap().into())
             );
             assert_eq!(
                 context.stack.get_variable(&"two"),
-                Ok(&Number::new(2.0).unwrap().into())
+                Ok(&Float::new(2.0).unwrap().into())
             );
 
             assert_eq!(
@@ -520,11 +520,11 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"one"),
-                Ok(&Number::new(3.0).unwrap().into())
+                Ok(&Float::new(3.0).unwrap().into())
             );
             assert_eq!(
                 context.stack.get_variable(&"two"),
-                Ok(&Number::new(4.0).unwrap().into())
+                Ok(&Float::new(4.0).unwrap().into())
             );
 
             assert_eq!(
@@ -562,10 +562,10 @@ mod test {
         ExecutionContext::new(&mut Runtime::default(), |context| {
             context
                 .stack
-                .new_variable(&"one", Number::new(1.0).unwrap().into());
+                .new_variable(&"one", Float::new(1.0).unwrap().into());
             context
                 .stack
-                .new_variable(&"value", Number::new(1.0).unwrap().into());
+                .new_variable(&"value", Float::new(1.0).unwrap().into());
 
             context.new_scope(|context| {
                 assert_eq!(
@@ -578,7 +578,7 @@ mod test {
 
                 assert_eq!(
                     context.stack.get_variable(&"value"),
-                    Ok(&Number::new(1.0).unwrap().into())
+                    Ok(&Float::new(1.0).unwrap().into())
                 );
                 assert_eq!(
                     run_statement(context, &parsing::Statement::parse("value = 2").unwrap().1),
@@ -586,17 +586,17 @@ mod test {
                 );
                 assert_eq!(
                     context.stack.get_variable(&"value"),
-                    Ok(&Number::new(2.0).unwrap().into())
+                    Ok(&Float::new(2.0).unwrap().into())
                 );
             });
 
             assert_eq!(
                 context.stack.get_variable(&"value"),
-                Ok(&Number::new(2.0).unwrap().into())
+                Ok(&Float::new(2.0).unwrap().into())
             );
             assert_eq!(
                 context.stack.get_variable(&"one"),
-                Ok(&Number::new(1.0).unwrap().into())
+                Ok(&Float::new(1.0).unwrap().into())
             );
         });
     }
@@ -622,7 +622,7 @@ mod test {
                     context,
                     &parsing::Statement::parse("if true { 1.0 }").unwrap().1
                 ),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
 
             assert_eq!(
@@ -640,7 +640,7 @@ mod test {
                         .unwrap()
                         .1
                 ),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
 
             assert_eq!(
@@ -650,7 +650,7 @@ mod test {
                         .unwrap()
                         .1
                 ),
-                Ok(Number::new(2.0).unwrap().into())
+                Ok(Float::new(2.0).unwrap().into())
             );
 
             assert_eq!(
@@ -660,7 +660,7 @@ mod test {
                         .unwrap()
                         .1
                 ),
-                Ok(Number::new(2.0).unwrap().into())
+                Ok(Float::new(2.0).unwrap().into())
             );
 
             assert_eq!(
@@ -670,7 +670,7 @@ mod test {
                         .unwrap()
                         .1
                 ),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
 
             assert_eq!(
@@ -682,7 +682,7 @@ mod test {
                     .unwrap()
                     .1
                 ),
-                Ok(Number::new(3.0).unwrap().into())
+                Ok(Float::new(3.0).unwrap().into())
             );
         });
     }
@@ -711,7 +711,7 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"test_one"),
-                Ok(&Number::new(1.0).unwrap().into())
+                Ok(&Float::new(1.0).unwrap().into())
             );
 
             assert_eq!(
@@ -724,7 +724,7 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"test_one"),
-                Ok(&Number::new(5.0).unwrap().into())
+                Ok(&Float::new(5.0).unwrap().into())
             );
 
             assert_eq!(
@@ -737,7 +737,7 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"test_one"),
-                Ok(&Number::new(0.0).unwrap().into())
+                Ok(&Float::new(0.0).unwrap().into())
             );
 
             assert_eq!(
@@ -745,7 +745,7 @@ mod test {
                     context,
                     &parsing::Block::parse("{ loop { break 1.0; } }").unwrap().1
                 ),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
         });
     }
@@ -791,7 +791,7 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"count"),
-                Ok(&Number::new(5.0).unwrap().into())
+                Ok(&Float::new(5.0).unwrap().into())
             );
         });
     }
@@ -812,7 +812,7 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"count"),
-                Ok(&Number::new(5.0).unwrap().into())
+                Ok(&Float::new(5.0).unwrap().into())
             );
 
             assert_eq!(
@@ -828,7 +828,7 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"count"),
-                Ok(&Number::new(10.0).unwrap().into())
+                Ok(&Float::new(10.0).unwrap().into())
             );
 
             assert_eq!(
@@ -841,11 +841,11 @@ mod test {
             );
             assert_eq!(
                 context.stack.get_variable(&"a"),
-                Ok(&Number::new(4.0).unwrap().into())
+                Ok(&Float::new(4.0).unwrap().into())
             );
             assert_eq!(
                 context.stack.get_variable(&"b"),
-                Ok(&Number::new(6.0).unwrap().into())
+                Ok(&Float::new(6.0).unwrap().into())
             );
         });
     }
@@ -882,7 +882,7 @@ mod test {
                     .unwrap()
                     .1
                 ),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
 
             assert_eq!(
@@ -894,7 +894,7 @@ mod test {
                     .unwrap()
                     .1
                 ),
-                Ok(Number::new(2.0).unwrap().into())
+                Ok(Float::new(2.0).unwrap().into())
             );
 
             assert_eq!(
@@ -904,7 +904,7 @@ mod test {
                         .unwrap()
                         .1
                 ),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
 
             assert_eq!(
@@ -914,7 +914,7 @@ mod test {
                         .unwrap()
                         .1
                 ),
-                Ok(Number::new(1.0).unwrap().into())
+                Ok(Float::new(1.0).unwrap().into())
             );
         });
     }

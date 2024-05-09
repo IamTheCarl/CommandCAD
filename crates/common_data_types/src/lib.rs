@@ -4,8 +4,8 @@ use ordered_float::NotNan;
 use paste::paste;
 use serde::Serialize;
 
-pub type RawNumber = f64;
-pub type Number = NotNan<RawNumber>;
+pub type RawFloat = f64;
+pub type Float = NotNan<RawFloat>;
 pub use ordered_float::{FloatIsNan, ParseNotNanError};
 pub use std::f64::consts;
 

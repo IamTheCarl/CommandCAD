@@ -18,7 +18,7 @@
 
 use std::borrow::Cow;
 
-use common_data_types::{Dimension, RawNumber};
+use common_data_types::{Dimension, RawFloat};
 use enum_downcast::AsVariant;
 use nalgebra::{
     allocator::Allocator, Const, DefaultAllocator, Dim, DimName, DimNameDiff, DimNameSub, OPoint,
@@ -40,11 +40,11 @@ use crate::script::{
 
 use super::{
     get_dimension_name,
-    vector::{NVector, Vector},
-    Scalar, Vector2,
+    vector::{LengthVector, NVector, Vector},
+    Angle, Vector2,
 };
 
-pub type Transform<D> = nalgebra::OMatrix<RawNumber, D, D>;
+pub type Transform<D> = nalgebra::OMatrix<RawFloat, D, D>;
 
 pub type Transform2D = Transform<Const<3>>;
 pub type Transform3D = Transform<Const<4>>;
@@ -72,10 +72,10 @@ impl<S, D> Object<S> for Transform<D>
 where
     D: DimName + DimNameSub<U1>,
     S: Span,
-    DefaultAllocator: Allocator<RawNumber, D>
-        + Allocator<RawNumber, <D as DimNameSub<U1>>::Output, <D as DimNameSub<U1>>::Output>
-        + Allocator<RawNumber, D, D>
-        + Allocator<RawNumber, <D as DimNameSub<U1>>::Output>,
+    DefaultAllocator: Allocator<RawFloat, D>
+        + Allocator<RawFloat, <D as DimNameSub<U1>>::Output, <D as DimNameSub<U1>>::Output>
+        + Allocator<RawFloat, D, D>
+        + Allocator<RawFloat, <D as DimNameSub<U1>>::Output>,
     Self: NamedObject
         + TransformPoint<<D as DimNameSub<U1>>::Output>
         + Rotate
@@ -84,7 +84,8 @@ where
     Vector<<D as DimNameSub<U1>>::Output>: NamedObject + Into<Value<S>>,
     Value<S>: From<Self>
         + AsVariant<Vector<<D as DimNameSub<U1>>::Output>>
-        + TryInto<Vector<<D as DimNameSub<U1>>::Output>>,
+        + TryInto<Vector<<D as DimNameSub<U1>>::Output>>
+        + TryInto<LengthVector<<D as DimNameSub<U1>>::Output>>,
 {
     fn matches_type(
         &self,
@@ -151,11 +152,9 @@ where
     ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
             "apply_to_vector" => |_context: &mut ExecutionContext<S>,
-                                  span: &S,
-                                  vector: Vector<DimNameDiff<D, U1>>|
+                                  _span: &S,
+                                  vector: LengthVector<DimNameDiff<D, U1>>|
              -> OperatorResult<S, Value<S>> {
-                vector.check_dimension(span, Dimension::length())?;
-
                 let value = self.transform_point(&vector.value);
                 Ok(Vector::<DimNameDiff<D, U1>> {
                     dimension: Dimension::length(),
@@ -201,11 +200,9 @@ impl Rotate for Transform2D {
         expressions: &[Expression<S>],
     ) -> OperatorResult<S, Value<S>> {
         |_context: &mut ExecutionContext<S>,
-         span: &S,
-         angle: Scalar|
+         _span: &S,
+         angle: Angle|
          -> OperatorResult<S, Value<S>> {
-            angle.check_dimension(span, Dimension::angle())?;
-
             let angle = angle.value;
             let angle = Self::new_rotation(*angle);
 
@@ -226,10 +223,9 @@ impl Rotate for Transform3D {
         |_context: &mut ExecutionContext<S>,
          span: &S,
          axis: Vector<Const<3>>,
-         angle: Scalar|
+         angle: Angle|
          -> OperatorResult<S, Value<S>> {
             axis.check_dimension(span, Dimension::zero())?;
-            angle.check_dimension(span, Dimension::angle())?;
 
             let angle = angle.value;
             let rotation = Self::new_rotation(*angle * axis.value);
@@ -312,7 +308,7 @@ where
 
 impl TransformPoint<Const<2>> for Transform2D
 where
-    DefaultAllocator: Allocator<RawNumber, Const<2>> + Allocator<RawNumber, Const<2>, Const<2>>,
+    DefaultAllocator: Allocator<RawFloat, Const<2>> + Allocator<RawFloat, Const<2>, Const<2>>,
 {
     fn transform_point(&self, pt: &NVector<Const<2>>) -> NVector<Const<2>> {
         let point = OPoint { coords: *pt };
@@ -323,7 +319,7 @@ where
 
 impl TransformPoint<Const<3>> for Transform3D
 where
-    DefaultAllocator: Allocator<RawNumber, Const<3>> + Allocator<RawNumber, Const<3>, Const<3>>,
+    DefaultAllocator: Allocator<RawFloat, Const<3>> + Allocator<RawFloat, Const<3>, Const<3>>,
 {
     fn transform_point(&self, pt: &NVector<Const<3>>) -> NVector<Const<3>> {
         let point = OPoint { coords: *pt };

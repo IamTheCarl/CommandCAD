@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use common_data_types::Number;
+use common_data_types::Float;
 
 use crate::script::{
     execution::{expressions::run_trailer, ExecutionContext, Failure},
@@ -25,13 +25,13 @@ use crate::script::{
     Span,
 };
 
-use super::{NamedObject, Object, OperatorResult, Scalar, Value};
+use super::{math::Number, NamedObject, Object, OperatorResult, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Range {
-    pub lower_bound: Option<Scalar>,
+    pub lower_bound: Option<Number>,
     pub upper_bound_is_inclusive: bool,
-    pub upper_bound: Option<Scalar>,
+    pub upper_bound: Option<Number>,
 }
 
 impl<S: Span> Object<S> for Range {
@@ -75,18 +75,17 @@ impl<S: Span> Object<S> for Range {
                 "iterator".into(),
             )),
             (Some(lower_bound), Some(upper_bound), false) => {
-                let lower_bound = lower_bound.to_index(span)?;
-                let upper_bound = upper_bound.to_index(span)?;
+                let lower_bound = lower_bound.to_index();
+                let upper_bound = upper_bound.to_index();
                 Ok(Box::new(
-                    (lower_bound..upper_bound).map(|index| Number::new(index as _).unwrap().into()),
+                    (lower_bound..upper_bound).map(|index| Float::new(index as _).unwrap().into()),
                 ))
             }
             (Some(lower_bound), Some(upper_bound), true) => {
-                let lower_bound = lower_bound.to_index(span)?;
-                let upper_bound = upper_bound.to_index(span)?;
+                let lower_bound = lower_bound.to_index();
+                let upper_bound = upper_bound.to_index();
                 Ok(Box::new(
-                    (lower_bound..=upper_bound)
-                        .map(|index| Number::new(index as _).unwrap().into()),
+                    (lower_bound..=upper_bound).map(|index| Float::new(index as _).unwrap().into()),
                 ))
             }
             (_, None, true) => unreachable!(), // Inclusive ranges without an upper bound are illegal to construct.
@@ -183,10 +182,10 @@ mod test {
                     .unwrap()
                     .collect::<Vec<_>>(),
                 [
-                    Number::new(1.0).unwrap().into(),
-                    Number::new(2.0).unwrap().into(),
-                    Number::new(3.0).unwrap().into(),
-                    Number::new(4.0).unwrap().into(),
+                    Float::new(1.0).unwrap().into(),
+                    Float::new(2.0).unwrap().into(),
+                    Float::new(3.0).unwrap().into(),
+                    Float::new(4.0).unwrap().into(),
                 ]
             );
             assert_eq!(
@@ -196,11 +195,11 @@ mod test {
                     .unwrap()
                     .collect::<Vec<_>>(),
                 [
-                    Number::new(1.0).unwrap().into(),
-                    Number::new(2.0).unwrap().into(),
-                    Number::new(3.0).unwrap().into(),
-                    Number::new(4.0).unwrap().into(),
-                    Number::new(5.0).unwrap().into(),
+                    Float::new(1.0).unwrap().into(),
+                    Float::new(2.0).unwrap().into(),
+                    Float::new(3.0).unwrap().into(),
+                    Float::new(4.0).unwrap().into(),
+                    Float::new(5.0).unwrap().into(),
                 ]
             );
         });

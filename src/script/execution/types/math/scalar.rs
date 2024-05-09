@@ -17,6 +17,7 @@
  */
 use std::{borrow::Cow, cmp::Ordering, fmt, str::FromStr};
 
+use enum_downcast::EnumDowncast;
 use fj_math::Scalar as FornjotScalar;
 use imstr::ImString;
 use nalgebra::Const;
@@ -29,7 +30,7 @@ use uom::{
     typenum::ToInt,
 };
 
-use common_data_types::{consts, ConversionFactor, Dimension, Number, RatioTypeHint, RawNumber};
+use common_data_types::{consts, ConversionFactor, Dimension, Float, RatioTypeHint, RawFloat};
 
 use crate::script::{
     execution::{
@@ -51,10 +52,89 @@ use super::{
     CONVERSION_FACTORS,
 };
 
+macro_rules! define_fixed_dimension_scalar {
+    ($name:ident, $dimension:expr) => {
+        #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+        pub struct $name {
+            pub value: Float,
+        }
+
+        impl From<$name> for Scalar {
+            fn from(value: $name) -> Scalar {
+                Scalar {
+                    dimension: $dimension,
+                    value: value.value,
+                }
+            }
+        }
+
+        impl<S: Span> From<$name> for Value<S> {
+            fn from(value: $name) -> Value<S> {
+                Value::from(Scalar::from(value))
+            }
+        }
+
+        impl<S: Span> TryFrom<Value<S>> for $name {
+            type Error = ();
+
+            fn try_from(value: Value<S>) -> Result<Self, ()> {
+                let scalar: Scalar = value.enum_downcast().map_err(|_| ())?;
+                Self::try_from(scalar)
+            }
+        }
+
+        impl TryFrom<Scalar> for $name {
+            type Error = ();
+
+            fn try_from(value: Scalar) -> Result<Self, ()> {
+                if value.dimension == $dimension {
+                    Ok(Self { value: value.value })
+                } else {
+                    Err(())
+                }
+            }
+        }
+
+        impl<'a> TryFrom<&'a Scalar> for $name {
+            type Error = ();
+
+            fn try_from(value: &'a Scalar) -> Result<Self, ()> {
+                if value.dimension == $dimension {
+                    Ok(Self { value: value.value })
+                } else {
+                    Err(())
+                }
+            }
+        }
+
+        impl NamedObject for $name {
+            fn static_type_name() -> &'static str {
+                "Scalar"
+            }
+        }
+    };
+}
+
+define_fixed_dimension_scalar!(Length, Dimension::length());
+define_fixed_dimension_scalar!(Angle, Dimension::angle());
+define_fixed_dimension_scalar!(Number, Dimension::zero());
+
+impl Number {
+    pub fn to_index(self) -> isize {
+        self.value.round() as isize
+    }
+}
+
+impl From<Float> for Number {
+    fn from(value: Float) -> Self {
+        Self { value }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scalar {
     pub(super) dimension: Dimension,
-    pub(super) value: Number,
+    pub(super) value: Float,
 }
 
 impl<S: Span> Object<S> for Scalar {
@@ -204,7 +284,7 @@ impl<S: Span> Object<S> for Scalar {
     ) -> OperatorResult<S, Value<S>> {
         let rhs = self.unpack_for_addition_or_subtraction(span, rhs)?;
 
-        let value = Number::new(*self.value + *rhs.value).unwrap_not_nan(span)?;
+        let value = Float::new(*self.value + *rhs.value).unwrap_not_nan(span)?;
 
         Ok(Self {
             value,
@@ -220,7 +300,7 @@ impl<S: Span> Object<S> for Scalar {
     ) -> OperatorResult<S, Value<S>> {
         let rhs = self.unpack_for_addition_or_subtraction(span, rhs)?;
 
-        let value = Number::new(*self.value - *rhs.value).unwrap_not_nan(span)?;
+        let value = Float::new(*self.value - *rhs.value).unwrap_not_nan(span)?;
 
         Ok(Self {
             value,
@@ -292,7 +372,7 @@ impl<S: Span> Object<S> for Scalar {
             "abs" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     Ok(Self {
-                        value: Number::new(self.value.abs()).unwrap_not_nan(span)?,
+                        value: Float::new(self.value.abs()).unwrap_not_nan(span)?,
                         ..self.clone()
                     }
                     .into())
@@ -316,12 +396,12 @@ impl<S: Span> Object<S> for Scalar {
             .auto_call(context, span, arguments, expressions),
             "copysign" => |_context: &mut ExecutionContext<S>,
                            span: &S,
-                           sign: Scalar|
+                           sign: Number|
              -> OperatorResult<S, Value<S>> {
-                let sign = sign.to_index(span)?;
+                let sign = sign.to_index();
 
                 Ok(Self {
-                    value: Number::new(self.value.copysign(sign as RawNumber))
+                    value: Float::new(self.value.copysign(sign as RawFloat))
                         .unwrap_not_nan(span)?,
                     ..self.clone()
                 }
@@ -335,7 +415,7 @@ impl<S: Span> Object<S> for Scalar {
                 let other = self.unpack_for_addition_or_subtraction(span, &other)?;
 
                 Ok(Self {
-                    value: Number::new(self.value.hypot(*other.value)).unwrap_not_nan(span)?,
+                    value: Float::new(self.value.hypot(*other.value)).unwrap_not_nan(span)?,
                     ..self.clone()
                 }
                 .into())
@@ -363,7 +443,7 @@ impl<S: Span> Object<S> for Scalar {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     Ok(Self {
                         dimension: self.dimension / 3,
-                        value: Number::new(self.value.cbrt()).unwrap_not_nan(span)?,
+                        value: Float::new(self.value.cbrt()).unwrap_not_nan(span)?,
                     }
                     .into())
                 }
@@ -379,7 +459,7 @@ impl<S: Span> Object<S> for Scalar {
 
                 Ok(Self {
                     dimension: self.dimension,
-                    value: Number::new(self.value.powf(exponent.into_inner()))
+                    value: Float::new(self.value.powf(exponent.into_inner()))
                         .unwrap_not_nan(span)?,
                 }
                 .into())
@@ -387,13 +467,13 @@ impl<S: Span> Object<S> for Scalar {
             .auto_call(context, span, arguments, expressions),
             "powi" => |_context: &mut ExecutionContext<S>,
                        _span: &S,
-                       exponent: Scalar|
+                       exponent: Number|
              -> OperatorResult<S, Value<S>> {
-                let exponent = exponent.to_index(span)? as i8;
+                let exponent = exponent.to_index() as i8;
 
                 Ok(Self {
                     dimension: self.dimension * exponent,
-                    value: Number::new(self.value.powi(exponent as i32)).unwrap_not_nan(span)?,
+                    value: Float::new(self.value.powi(exponent as i32)).unwrap_not_nan(span)?,
                 }
                 .into())
             }
@@ -402,7 +482,7 @@ impl<S: Span> Object<S> for Scalar {
                 |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
                     Ok(Self {
                         dimension: self.dimension / 2,
-                        value: Number::new(self.value.sqrt()).unwrap_not_nan(span)?,
+                        value: Float::new(self.value.sqrt()).unwrap_not_nan(span)?,
                     }
                     .into())
                 }
@@ -424,7 +504,7 @@ impl<S: Span> Object<S> for Scalar {
                 |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
                     Ok(Self {
                         dimension: -self.dimension,
-                        value: Number::new(1.0 / self.value.into_inner()).unwrap_not_nan(span)?,
+                        value: Float::new(1.0 / self.value.into_inner()).unwrap_not_nan(span)?,
                     }
                     .into())
                 }
@@ -437,7 +517,7 @@ impl<S: Span> Object<S> for Scalar {
                 let conversion_factor = Self::get_operation_conversion_factor(span, unit)?;
 
                 let value = conversion_factor.convert_from_measurement_to_number(span, self)?;
-                let value = Number::new(value.round()).unwrap_not_nan(span)?;
+                let value = Float::new(value.round()).unwrap_not_nan(span)?;
 
                 Ok(Self {
                     dimension: self.dimension,
@@ -452,8 +532,8 @@ impl<S: Span> Object<S> for Scalar {
              -> OperatorResult<S, Value<S>> {
                 let conversion_factor = Self::get_operation_conversion_factor(span, unit)?;
 
-                let value = conversion_factor.convert_from_measurement_to_number(span, &self)?;
-                let value = Number::new(value.trunc()).unwrap_not_nan(span)?;
+                let value = conversion_factor.convert_from_measurement_to_number(span, self)?;
+                let value = Float::new(value.trunc()).unwrap_not_nan(span)?;
 
                 Ok(Self {
                     dimension: self.dimension,
@@ -468,8 +548,8 @@ impl<S: Span> Object<S> for Scalar {
              -> OperatorResult<S, Value<S>> {
                 let conversion_factor = Self::get_operation_conversion_factor(span, unit)?;
 
-                let value = conversion_factor.convert_from_measurement_to_number(span, &self)?;
-                let value = Number::new(value.fract()).unwrap_not_nan(span)?;
+                let value = conversion_factor.convert_from_measurement_to_number(span, self)?;
+                let value = Float::new(value.fract()).unwrap_not_nan(span)?;
 
                 Ok(Self {
                     dimension: self.dimension,
@@ -484,8 +564,8 @@ impl<S: Span> Object<S> for Scalar {
              -> OperatorResult<S, Value<S>> {
                 let conversion_factor = Self::get_operation_conversion_factor(span, unit)?;
 
-                let value = conversion_factor.convert_from_measurement_to_number(span, &self)?;
-                let value = Number::new(value.floor()).unwrap_not_nan(span)?;
+                let value = conversion_factor.convert_from_measurement_to_number(span, self)?;
+                let value = Float::new(value.floor()).unwrap_not_nan(span)?;
 
                 Ok(Self {
                     dimension: self.dimension,
@@ -500,8 +580,8 @@ impl<S: Span> Object<S> for Scalar {
              -> OperatorResult<S, Value<S>> {
                 let conversion_factor = Self::get_operation_conversion_factor(span, unit)?;
 
-                let value = conversion_factor.convert_from_measurement_to_number(span, &self)?;
-                let value = Number::new(value.ceil()).unwrap_not_nan(span)?;
+                let value = conversion_factor.convert_from_measurement_to_number(span, self)?;
+                let value = Float::new(value.ceil()).unwrap_not_nan(span)?;
 
                 Ok(Self {
                     dimension: self.dimension,
@@ -515,7 +595,7 @@ impl<S: Span> Object<S> for Scalar {
                       other: Value<S>|
              -> OperatorResult<S, Value<S>> {
                 let other = self.unpack_for_addition_or_subtraction(span, &other)?;
-                Ok(Number::new(*self.value.max(other.value))
+                Ok(Float::new(*self.value.max(other.value))
                     .unwrap_not_nan(span)?
                     .into())
             }
@@ -525,7 +605,7 @@ impl<S: Span> Object<S> for Scalar {
                       other: Value<S>|
              -> OperatorResult<S, Value<S>> {
                 let other = self.unpack_for_addition_or_subtraction(span, &other)?;
-                Ok(Number::new(*self.value.min(other.value))
+                Ok(Float::new(*self.value.min(other.value))
                     .unwrap_not_nan(span)?
                     .into())
             }
@@ -543,7 +623,7 @@ impl<S: Span> Object<S> for Scalar {
             .auto_call(context, span, arguments, expressions),
             "signum" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
-                    Number::new(self.value.signum())
+                    Float::new(self.value.signum())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -552,7 +632,7 @@ impl<S: Span> Object<S> for Scalar {
             "acos" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_inverse_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).acos())
+                    Float::new((self.value * consts::PI).acos())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -561,7 +641,7 @@ impl<S: Span> Object<S> for Scalar {
             "acosh" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_inverse_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).acosh())
+                    Float::new((self.value * consts::PI).acosh())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -570,7 +650,7 @@ impl<S: Span> Object<S> for Scalar {
             "asin" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_inverse_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).asin())
+                    Float::new((self.value * consts::PI).asin())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -579,7 +659,7 @@ impl<S: Span> Object<S> for Scalar {
             "asinh" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_inverse_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).asinh())
+                    Float::new((self.value * consts::PI).asinh())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -588,7 +668,7 @@ impl<S: Span> Object<S> for Scalar {
             "atan" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_inverse_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).atan())
+                    Float::new((self.value * consts::PI).atan())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -597,7 +677,7 @@ impl<S: Span> Object<S> for Scalar {
             "atanh" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_inverse_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).atanh())
+                    Float::new((self.value * consts::PI).atanh())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -606,7 +686,7 @@ impl<S: Span> Object<S> for Scalar {
             "cos" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).cos())
+                    Float::new((self.value * consts::PI).cos())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -615,7 +695,7 @@ impl<S: Span> Object<S> for Scalar {
             "cosh" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).cosh())
+                    Float::new((self.value * consts::PI).cosh())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -624,7 +704,7 @@ impl<S: Span> Object<S> for Scalar {
             "sin" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).sin())
+                    Float::new((self.value * consts::PI).sin())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -646,7 +726,7 @@ impl<S: Span> Object<S> for Scalar {
             "sinh" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).sinh())
+                    Float::new((self.value * consts::PI).sinh())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -655,7 +735,7 @@ impl<S: Span> Object<S> for Scalar {
             "tan" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).tan())
+                    Float::new((self.value * consts::PI).tan())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -664,7 +744,7 @@ impl<S: Span> Object<S> for Scalar {
             "tanh" => {
                 |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
                     self.check_trig_compatible(span)?;
-                    Number::new((self.value * consts::PI).tanh())
+                    Float::new((self.value * consts::PI).tanh())
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
@@ -708,14 +788,14 @@ impl Scalar {
     }
 
     fn multiply_by_scalar<S: Span>(&self, span: &S, rhs: &Self) -> OperatorResult<S, Self> {
-        let value = Number::new(*self.value * *rhs.value).unwrap_not_nan(span)?;
+        let value = Float::new(*self.value * *rhs.value).unwrap_not_nan(span)?;
         let dimension = self.dimension + rhs.dimension;
 
         Ok(Self { dimension, value })
     }
 
     fn divide_by_measurement<S: Span>(&self, span: &S, rhs: &Self) -> OperatorResult<S, Self> {
-        let value = Number::new(*self.value / *rhs.value).unwrap_not_nan(span)?;
+        let value = Float::new(*self.value / *rhs.value).unwrap_not_nan(span)?;
         let dimension = self.dimension - rhs.dimension;
 
         Ok(Self { dimension, value })
@@ -810,7 +890,7 @@ impl Scalar {
         }
     }
 
-    pub fn to_number<S: Span>(&self, span: &S) -> OperatorResult<S, Number> {
+    pub fn to_number<S: Span>(&self, span: &S) -> OperatorResult<S, Float> {
         self.check_is_zero_dimension(span)?;
         if self.dimension.ratio_type_hint.0 == 0 {
             // It's just a number/ratio, we can use that.
@@ -824,7 +904,7 @@ impl Scalar {
         }
     }
 
-    pub fn from_number(value: Number) -> Self {
+    pub fn from_number(value: Float) -> Self {
         let dimension = Dimension {
             length: 0,
             mass: 0,
@@ -837,20 +917,6 @@ impl Scalar {
         };
 
         Self { dimension, value }
-    }
-
-    pub fn to_index<S: Span>(&self, span: &S) -> OperatorResult<S, isize> {
-        self.check_is_zero_dimension(span)?;
-        if self.dimension.ratio_type_hint.0 == 0 {
-            // It's just a number/ratio, we can use that.
-            Ok(self.value.round() as isize)
-        } else {
-            Err(Failure::ExpectedGot(
-                span.clone(),
-                "Number".into(),
-                Object::<S>::type_name(self),
-            ))
-        }
     }
 
     pub fn from_parsed_raw<S: Span>(measurement: &parsing::Scalar<S>) -> OperatorResult<S, Self> {
@@ -949,7 +1015,7 @@ where
             ratio_type_hint: RatioTypeHint::default(),
         };
 
-        let value = Number::new(value.value)?;
+        let value = Float::new(value.value)?;
 
         Ok(Self { dimension, value })
     }
@@ -1006,8 +1072,8 @@ impl FromStr for Scalar {
     }
 }
 
-impl From<Number> for Scalar {
-    fn from(value: Number) -> Self {
+impl From<Float> for Scalar {
+    fn from(value: Float) -> Self {
         Self {
             dimension: Dimension {
                 length: 0,
@@ -1078,7 +1144,7 @@ impl<'de> Visitor<'de> for ScalarVisitor {
     where
         E: de::Error,
     {
-        let v = Number::new(v).map_err(|e| E::custom(e))?;
+        let v = Float::new(v).map_err(|e| E::custom(e))?;
         Ok(Scalar::from_number(v))
     }
 
