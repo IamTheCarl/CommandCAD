@@ -18,12 +18,14 @@
 
 use std::rc::Rc;
 
+use macros::Struct;
 use parsing::Span;
 
 use crate::script::{
     execution::{
         types::{
-            LengthVector2, List, NamedObject, Object, OperatorResult, StructDefinition, Vector2,
+            Length, LengthVector2, List, NamedObject, Object, OperatorResult, StructDefinition,
+            Vector2,
         },
         ExecutionContext,
     },
@@ -33,7 +35,17 @@ use crate::script::{
 
 use super::surface::Surface;
 
-use macros::Struct;
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
+    Circle::define_struct(context);
+    Polygon::define_struct(context);
+}
+
+#[derive(Struct)]
+pub struct Circle {
+    pub center: LengthVector2,
+    pub radius: Length,
+    pub surface: Surface,
+}
 
 #[derive(Struct)]
 pub struct Polygon<S: Span> {
@@ -63,8 +75,4 @@ impl<S: Span> Polygon<S> {
 
         Ok(fornjot_points)
     }
-}
-
-pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
-    Polygon::define_struct(context);
 }

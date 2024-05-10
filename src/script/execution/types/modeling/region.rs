@@ -37,7 +37,11 @@ use crate::script::{
     Span,
 };
 
-use super::{circle::Circle, cycle::Cycle, handle_wrapper, polygon::Polygon};
+use super::{
+    cycle::Cycle,
+    handle_wrapper,
+    structs::{Circle, Polygon},
+};
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(

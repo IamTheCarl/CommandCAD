@@ -19,23 +19,21 @@
 use crate::script::{execution::ExecutionContext, Span};
 
 // TODO I want a box type that can be a square or a rectangle.
-mod circle;
 pub mod curve;
 pub mod cycle;
 pub mod face;
 pub mod half_edge;
 pub mod object_set;
-mod polygon;
 pub mod region;
 pub mod shell;
 pub mod sketch;
 pub mod solid;
+mod structs;
 pub mod surface;
 pub mod vertex;
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
-    circle::register_globals(context);
-    polygon::register_globals(context);
+    structs::register_globals(context);
 
     cycle::register_globals(context);
     face::register_globals(context);

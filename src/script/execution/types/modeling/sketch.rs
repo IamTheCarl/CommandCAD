@@ -37,7 +37,10 @@ use crate::script::{
 };
 
 use super::{
-    circle::Circle, handle_wrapper, polygon::Polygon, region::Region, solid::Solid,
+    handle_wrapper,
+    region::Region,
+    solid::Solid,
+    structs::{Circle, Polygon},
     surface::Surface,
 };
 

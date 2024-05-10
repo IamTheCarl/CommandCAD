@@ -37,7 +37,10 @@ use fj_core::{
     topology::Cycle as FornjotCycle,
 };
 
-use super::{circle::Circle, handle_wrapper, polygon::Polygon};
+use super::{
+    handle_wrapper,
+    structs::{Circle, Polygon},
+};
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
