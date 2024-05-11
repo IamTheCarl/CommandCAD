@@ -1,0 +1,146 @@
+
+sketch square(width: Length, height: Length) {
+  let half_width = width / 2;
+  let half_height = height / 2;
+
+  let corner_1 = vec2(-half_width, -half_height);
+  let corner_2 = vec2(half_width, -half_height);
+  let corner_3 = vec2(half_width, half_height);
+  let corner_4 = vec2(-half_width, half_height);
+
+  new_sketch(sketch_plane(), [
+    new_region(Segments {
+      start = corner_1,
+      surface = sketch_plane(),
+      distance_between_verticies = default,
+      segments = [
+	Line {
+          end = corner_2
+        },
+	Line {
+          end = corner_3
+        },
+	Line {
+          end = corner_4
+        },
+	Line {
+          end = corner_1
+        },
+      ]
+    }),
+  ])
+}
+
+solid square_sweep(depth: Length = 2mm, width: Length = 2cm, height: Length = 3cm) {
+  let square_sketch = square(width, height);
+
+  square_sketch.sweep(global_xy_plane(), vec3(0m, 0m, depth))
+}
+
+sketch rounded_square(width: Length, height: Length, corner_radius: Length) {
+  let half_width = width / 2;
+  let half_height = height / 2;
+
+  print("Half Width: {} Half Height: {}".format(half_width, half_height));
+
+  let corner_1 = vec2(-half_width, -half_height);
+  let corner_2 = vec2(half_width, -half_height);
+  let corner_3 = vec2(half_width, half_height);
+  let corner_4 = vec2(-half_width, half_height);
+
+  print("Corner 1: ({})x({})".format(corner_1.x, corner_1.y));
+  print("Corner 2: ({})x({})".format(corner_2.x, corner_2.y));
+  print("Corner 3: ({})x({})".format(corner_3.x, corner_3.y));
+  print("Corner 4: ({})x({})".format(corner_4.x, corner_4.y));
+
+  new_sketch(sketch_plane(), [
+    new_region(Segments {
+      start = corner_1 + vec2(0m, corner_radius),
+      surface = sketch_plane(),
+      distance_between_verticies = default,
+      segments = [
+        CenterArc {
+          center = corner_1 + vec2(corner_radius, corner_radius),
+	  angle = 90deg,
+	  clockwise = false,
+        },
+	Line {
+          end = corner_2 + vec2(-corner_radius, 0m),
+        },
+        CenterArc {
+          center = corner_2 + vec2(-corner_radius, corner_radius),
+	  angle = 90deg,
+	  clockwise = false,
+        },
+	Line {
+          end = corner_3 + vec2(0m, -corner_radius),
+        },
+        CenterArc {
+          center = corner_3 + vec2(-corner_radius, -corner_radius),
+	  angle = 90deg,
+	  clockwise = false,
+        },
+	Line {
+          end = corner_4 + vec2(corner_radius, 0m),
+        },
+        CenterArc {
+          center = corner_4 + vec2(corner_radius, -corner_radius),
+	  angle = 90deg,
+	  clockwise = false,
+        },
+	Line {
+          end = corner_1 + vec2(0m, corner_radius),
+        },
+      ]
+    }),
+  ])
+}
+
+solid rounded_square_sweep(depth: Length = 2mm, width: Length = 2cm, height: Length = 3cm, corner_radius: Length = 5mm) {
+  let square_sketch = rounded_square(width, height, corner_radius);
+
+  square_sketch.sweep(global_xy_plane(), vec3(0m, 0m, depth))
+}
+
+sketch beziers(width: Length, height: Length) {
+  let half_width = width / 2;
+  let half_height = height / 2;
+
+  print("Half Width: {} Half Height: {}".format(half_width, half_height));
+
+  let corner_1 = vec2(-half_width, -half_height);
+  let corner_2 = vec2(half_width, -half_height);
+  let corner_3 = vec2(half_width, half_height);
+  let corner_4 = vec2(-half_width, half_height);
+
+  new_sketch(sketch_plane(), [
+    new_region(Segments {
+      start = corner_1,
+      surface = sketch_plane(),
+      distance_between_verticies = default,
+      segments = [
+        Line {
+          end = corner_2,
+        },
+        QuadraticBezier {
+          end = corner_3,
+	  handle = vec2(half_width * 2, 0m),
+        },
+        Line {
+          end = corner_4,
+        },
+        CubicBezier {
+          end = corner_1,
+	  start_handle = corner_4 + vec2(half_width, 0m),
+	  end_handle = corner_1 + vec2(-half_width, 0m),
+        },
+      ]
+    }),
+  ])
+}
+
+solid beziers_sweep(depth: Length = 2mm, width: Length = 2cm, height: Length = 3cm) {
+  let beziers_sketch = beziers(width, height);
+
+  beziers_sketch.sweep(global_xy_plane(), vec3(0m, 0m, depth))
+}

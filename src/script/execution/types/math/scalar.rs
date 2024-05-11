@@ -124,13 +124,15 @@ macro_rules! define_fixed_dimension_scalar {
 define_fixed_dimension_scalar!(Length, Dimension::length());
 
 impl Length {
-    pub fn as_fornjot_scalar<S: Span>(&self, context: &ExecutionContext<S>) -> FornjotScalar {
-        let length = context
+    pub fn as_fornjot_scale_float<S: Span>(&self, context: &ExecutionContext<S>) -> Float {
+        context
             .global_resources
             .fornjot_unit_conversion_factor
-            .convert_from_base_unit(self.value);
+            .convert_from_base_unit(self.value)
+    }
 
-        FornjotScalar::from_f64(length.into_inner())
+    pub fn as_fornjot_scalar<S: Span>(&self, context: &ExecutionContext<S>) -> FornjotScalar {
+        FornjotScalar::from_f64(self.as_fornjot_scale_float(context).into_inner())
     }
 }
 

@@ -58,7 +58,7 @@ macro_rules! define_fixed_dimension_vector {
         where
             DefaultAllocator: Allocator<RawFloat, D>,
         {
-            pub(super) value: NVector<D>,
+            pub value: NVector<D>,
         }
 
         impl<D: DimName> From<$name<D>> for Vector<D>
@@ -155,6 +155,26 @@ impl<D: DimName> LengthVector<D>
 where
     DefaultAllocator: Allocator<RawFloat, D>,
 {
+    fn as_fornjot_scale_array<S: Span, const FD: usize>(
+        &self,
+        context: &ExecutionContext<S>,
+    ) -> [Float; FD] {
+        let mut number_array = context
+            .global_resources
+            .fornjot_unit_conversion_factor
+            .convert_from_vector_to_iter_without_dimension_check(&self.value);
+
+        std::array::from_fn(|_| number_array.next().unwrap())
+    }
+
+    pub fn as_fornjot_scale_nalgebra_vector<S: Span, const FD: usize>(
+        &self,
+        context: &ExecutionContext<S>,
+    ) -> NVector<D> {
+        let components: [_; FD] = self.as_fornjot_scale_array(context).map(|c| c.into_inner());
+        NVector::from_row_slice(&components)
+    }
+
     pub fn as_fornjot_vector<S: Span, const FD: usize>(
         &self,
         context: &ExecutionContext<S>,
@@ -162,13 +182,9 @@ where
     where
         Const<FD>: ToTypenum,
     {
-        let mut number_array = context
-            .global_resources
-            .fornjot_unit_conversion_factor
-            .convert_from_vector_to_iter_without_dimension_check(&self.value)
+        let components = self
+            .as_fornjot_scale_array(context)
             .map(|c| FornjotScalar::from_f64(c.into_inner()));
-
-        let components = std::array::from_fn(|_| number_array.next().unwrap());
 
         fj_math::Vector { components }
     }

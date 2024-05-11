@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Fields};
+use syn::{parse_macro_input, DeriveInput, Fields, Meta};
 
-#[proc_macro_derive(Struct)]
+#[proc_macro_derive(Struct, attributes(default))]
 pub fn derive_struct(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -34,13 +34,24 @@ pub fn derive_struct(input: TokenStream) -> TokenStream {
         let name = field.ident.unwrap().to_string();
         let ty = field.ty;
 
+        let mut default = quote! { None };
+
+        for attribute in field.attrs.iter() {
+            if let Meta::NameValue(name_value) = &attribute.meta {
+                if name_value.path.is_ident("default") {
+                    let value = &name_value.value;
+                    default = quote! { Some(crate::script::parsing::Litteral::parse(S::from_str(#value)).unwrap().1) };
+                }
+            }
+        }
+
         quote! {
             MemberVariable {
                 name: S::from_str(#name),
                 ty: MemberVariableType {
                     ty: <#ty as crate::script::execution::types::TypedObject>::get_type(),
                     constraints: None,
-                    default_value: None,
+                    default_value: #default,
                 }
             }
         }

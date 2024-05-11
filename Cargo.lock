@@ -299,6 +299,7 @@ dependencies = [
  "fj-math",
  "fortuples",
  "git2",
+ "glam",
  "imstr",
  "lazy_static",
  "log",

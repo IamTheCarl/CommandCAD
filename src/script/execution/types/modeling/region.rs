@@ -40,7 +40,7 @@ use crate::script::{
 use super::{
     cycle::Cycle,
     handle_wrapper,
-    structs::{Circle, Polygon},
+    structs::{Circle, Polygon, Segments},
 };
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
@@ -110,6 +110,25 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
 
                     Ok(region.into())
                 }
+                "Segments" => {
+                    let segments = Segments::unpack_struct(span, configuration)?;
+                    let mut polygon = segments.as_polygon(context, span)?;
+
+                    // The last point just returns to the starting point.
+                    // TODO validate that it's actually at the starting point.
+                    polygon.pop();
+
+                    let region = Region::from(
+                        FornjotRegion::polygon(
+                            polygon,
+                            segments.surface.handle,
+                            &mut context.global_resources.fornjot_core,
+                        )
+                        .insert(&mut context.global_resources.fornjot_core),
+                    );
+                    context.unpack_validation_warnings(span);
+                    Ok(region.into())
+                }
                 "RawRegion" => {
                     let region = Region::build_raw(context, span, configuration)?;
                     Ok(region.into())
@@ -117,7 +136,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
                 // TODO build a region from an SVG file.
                 _ => Err(Failure::ExpectedGot(
                     span.clone(),
-                    "Empty, Circle, or Polygon".into(),
+                    "Empty, Circle, Polygon, or Segments".into(),
                     configuration.name().to_string().into(),
                 )),
             }

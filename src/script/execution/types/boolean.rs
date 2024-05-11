@@ -23,7 +23,7 @@ use crate::script::{logging::RuntimeLog, parsing::VariableType, Span};
 use super::{
     serializable::SerializableValue,
     string::formatting::{Style, UnsupportedMessage, UnwrapFormattingResult},
-    NamedObject, Object, OperatorResult, Value,
+    NamedObject, Object, OperatorResult, TypedObject, Value,
 };
 
 pub type Boolean = bool;
@@ -103,6 +103,12 @@ impl<S: Span> Object<S> for Boolean {
         _span: &S,
     ) -> OperatorResult<S, SerializableValue> {
         Ok(SerializableValue::Boolean(*self))
+    }
+}
+
+impl TypedObject for Boolean {
+    fn get_type<S: Span>() -> VariableType<S> {
+        VariableType::Boolean
     }
 }
 

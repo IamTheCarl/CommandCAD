@@ -38,6 +38,7 @@ use fj_core::algorithms::{
 use fj_export::{export_3mf, export_obj, export_stl};
 use fj_math::{Aabb, Point, Scalar as FornjotScalar};
 use imstr::ImString;
+use nom_locate::LocatedSpan;
 use script::{Failure, Runtime, SerializableValue};
 use tempfile::SpooledTempFile;
 use uom::si::{f64::Length, length::millimeter};
@@ -227,10 +228,10 @@ fn trampoline<A, S, R>(
 ) -> Result<()>
 where
     A: FnOnce(
-        &mut Runtime<ImString>,
+        &mut Runtime<LocatedSpan<ImString>>,
         Vec<SerializableValue>,
-    ) -> std::result::Result<R, Failure<ImString>>,
-    S: FnOnce(R, &mut Runtime<ImString>) -> Result<()>,
+    ) -> std::result::Result<R, Failure<LocatedSpan<ImString>>>,
+    S: FnOnce(R, &mut Runtime<LocatedSpan<ImString>>) -> Result<()>,
 {
     fn parse_argument(argument: &str) -> Result<SerializableValue> {
         match serde_json::from_str(argument) {
@@ -254,6 +255,7 @@ where
 
     let code = fs::read_to_string(&script).context("Failed to read script into memory")?;
     let code: ImString = code.into();
+    let code = LocatedSpan::new(code);
 
     let mut runtime = script::Runtime::load(module_name, code).context("Failed to load runtime")?;
 

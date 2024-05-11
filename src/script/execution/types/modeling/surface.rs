@@ -32,6 +32,24 @@ use super::handle_wrapper;
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
+        "sketch_plane",
+        (|context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+            Ok(Surface::from(
+                context
+                    .global_resources
+                    .fornjot_core
+                    .layers
+                    .topology
+                    .surfaces
+                    .space_2d(),
+            )
+            .into())
+        })
+        .into_builtin_function()
+        .into(),
+    );
+
+    context.stack.new_variable_str(
         "global_xy_plane",
         (|context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
             Ok(Surface::from(

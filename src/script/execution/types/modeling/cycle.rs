@@ -39,7 +39,7 @@ use fj_core::{
 
 use super::{
     handle_wrapper,
-    structs::{Circle, Polygon},
+    structs::{Circle, Polygon, Segments},
 };
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
@@ -75,13 +75,26 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
 
                     Ok(Cycle { handle: polygon }.into())
                 }
+                "Segments" => {
+                    let segments = Segments::unpack_struct(span, configuration)?;
+                    let points = segments.as_polygon(context, span)?;
+
+                    let polygone = FornjotCycle::polygon(
+                        points,
+                        segments.surface.handle,
+                        &mut context.global_resources.fornjot_core,
+                    );
+                    let polygon = polygone.insert(&mut context.global_resources.fornjot_core);
+                    context.unpack_validation_warnings(span);
+
+                    Ok(Cycle { handle: polygon }.into())
+                }
                 _ => Err(Failure::ExpectedGot(
                     span.clone(),
                     "Empty, Circle, Polygon, or list of edges".into(),
                     configuration.name().to_string().into(),
                 )),
             },
-            Value::List(edges) => todo!(),
             configuration => Err(Failure::ExpectedGot(
                 span.clone(),
                 "Empty, Circle, Polygon, or list of edges".into(),
