@@ -16,9 +16,10 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use common_data_types::Number;
+use common_data_types::Float;
 use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
-use std::{fmt::Write, isize, rc::Rc};
+use ouroboros::self_referencing;
+use std::{cell::RefCell, fmt::Write, isize, rc::Rc};
 
 use crate::script::{
     execution::{expressions::run_expression, ExecutionContext, Failure},
@@ -28,84 +29,111 @@ use crate::script::{
 };
 
 use super::{
-    function::AutoCall, number::UnwrapNotNan, serializable::SerializableValue,
-    string::formatting::Style, NamedObject, Object, OperatorResult, Scalar, Value,
+    function::AutoCall, math::Number, number::UnwrapNotNan, serializable::SerializableValue,
+    string::formatting::Style, NamedObject, NoneType, Object, OperatorResult, Scalar, TypedObject,
+    UnwrapBorrowFailure, Value,
 };
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct List<'a, S: Span> {
-    vector: Rc<Vec<Value<'a, S>>>,
+pub struct List<S: Span> {
+    vector: Rc<RefCell<Vec<Value<S>>>>,
 }
 
-impl<'a, S: Span, I> From<I> for List<'a, S>
+impl<S: Span, I> From<I> for List<S>
 where
-    I: IntoIterator<Item = Value<'a, S>>,
+    I: IntoIterator<Item = Value<S>>,
 {
     fn from(value: I) -> Self {
         let value = value.into_iter();
 
         Self {
-            vector: Rc::new(value.collect()),
+            vector: Rc::new(RefCell::new(value.collect())),
         }
     }
 }
 
-impl<'a, S: Span> List<'a, S> {
-    fn unwrap_or_clone(&self) -> Vec<Value<'a, S>> {
-        // TODO In order to actually implement an "unwrap or clone" we need to be mutable.
-        self.vector.to_vec()
-    }
-
+impl<S: Span> List<S> {
     pub(crate) fn from_parsed(
-        context: &mut ExecutionContext<'a, S>,
-        list: &'a parsing::List<S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
-        let mut values = Vec::with_capacity(list.expressions.len());
+        context: &mut ExecutionContext<S>,
+        list: &parsing::List<S>,
+    ) -> OperatorResult<S, Value<S>> {
+        let mut vector = Vec::with_capacity(list.expressions.len());
 
         for expression in list.expressions.iter() {
             let value = run_expression(context, expression)?;
 
-            values.push(value);
+            vector.push(value);
         }
 
         Ok(Self {
-            vector: Rc::new(values),
+            vector: Rc::new(RefCell::new(vector)),
         }
         .into())
     }
 
     fn internalize_index(&self, span: &S, index: isize) -> OperatorResult<S, usize> {
+        let vector = self.vector.try_borrow().unwrap_borrow_failure(span)?;
+
         let new_index = if index >= 0 {
             Ok(index as usize)
-        } else if let Some(new_index) = self.vector.len().checked_sub(index.unsigned_abs()) {
+        } else if let Some(new_index) = vector.len().checked_sub(index.unsigned_abs()) {
             Ok(new_index)
         } else {
             Err(Failure::IndexOutOfRange(span.clone(), index))
         }?;
 
-        if new_index >= self.vector.len() {
+        if new_index >= vector.len() {
             Err(Failure::IndexOutOfRange(span.clone(), index))
         } else {
             Ok(new_index)
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.vector.len()
+    pub fn len(&self, span: &S) -> OperatorResult<S, usize> {
+        let vector = self.vector.try_borrow().unwrap_borrow_failure(span)?;
+        Ok(vector.len())
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Value<'a, S>> + Clone {
-        self.vector.iter()
-    }
+    pub fn iter(&self, span: &S) -> OperatorResult<S, impl Iterator<Item = Value<S>>> {
+        let vector = Rc::clone(&self.vector);
 
-    pub fn consume(self) -> impl Iterator<Item = Value<'a, S>> + Clone {
-        Rc::unwrap_or_clone(self.vector).into_iter()
+        #[self_referencing]
+        struct ListIter<S: Span> {
+            vector: Rc<RefCell<Vec<Value<S>>>>,
+
+            #[borrows(vector)]
+            #[not_covariant]
+            reference: std::cell::Ref<'this, Vec<Value<S>>>,
+
+            #[borrows(reference)]
+            #[not_covariant]
+            iterator: std::iter::Cloned<std::slice::Iter<'this, Value<S>>>,
+        }
+
+        impl<S: Span> Iterator for ListIter<S> {
+            type Item = Value<S>;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                self.with_iterator_mut(|iterator| iterator.next())
+            }
+        }
+
+        ListIter::try_new(
+            vector,
+            |vector| vector.try_borrow().unwrap_borrow_failure(span),
+            |reference| Ok(reference.iter().cloned()),
+        )
     }
 }
 
-impl<'a, S: Span> Object<'a, S> for List<'a, S> {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::List)
+impl<S: Span> Object<S> for List<S> {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::List))
     }
 
     fn format(
@@ -116,7 +144,9 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
         style: Style,
         precision: Option<u8>,
     ) -> OperatorResult<S, ()> {
-        for item in self.vector.iter() {
+        let vector = self.vector.try_borrow().unwrap_borrow_failure(span)?;
+
+        for item in vector.iter() {
             item.format(log, span, f, style, precision)?;
         }
 
@@ -127,63 +157,74 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        index: Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        index: Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         match index {
-            Value::Scalar(index) => {
-                let index = index.to_index(span)?;
+            Value::Scalar(scalar) => {
+                let index = Number::try_from(scalar.clone()).map_err(|_| {
+                    Failure::ExpectedGot(
+                        span.clone(),
+                        Number::static_type_name().into(),
+                        <Scalar as Object<S>>::type_name(&scalar),
+                    )
+                })?;
+                let index = index.to_index();
 
                 let localized_index = self.internalize_index(span, index)?;
 
                 self.vector
+                    .try_borrow()
+                    .unwrap_borrow_failure(span)?
                     .get(localized_index)
                     .cloned()
                     .ok_or(Failure::IndexOutOfRange(span.clone(), index))
             }
             Value::Range(range) => {
+                let vector = self.vector.try_borrow().unwrap_borrow_failure(span)?;
+
                 // TODO could we keep an immutable reference to the original list to avoid a copy?
                 let slice = match (
                     range.lower_bound,
                     range.upper_bound,
                     range.upper_bound_is_inclusive,
                 ) {
-                    (None, None, false) => self.vector.get(..).ok_or((None, None)),
+                    (None, None, false) => vector.get(..).ok_or((None, None)),
                     (Some(lower_bound), None, false) => {
-                        let signed_lower_bound = lower_bound.to_index(span)?;
+                        let signed_lower_bound = lower_bound.to_index();
                         let lower_bound = self.internalize_index(span, signed_lower_bound)?;
-                        self.vector
+                        vector
                             .get(lower_bound..)
                             .ok_or((Some(signed_lower_bound), None))
                     }
                     (None, Some(upper_bound), false) => {
-                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let signed_upper_bound = upper_bound.to_index();
                         let upper_bound = self.internalize_index(span, signed_upper_bound)?;
-                        self.vector
+                        vector
                             .get(..upper_bound)
                             .ok_or((None, Some(signed_upper_bound)))
                     }
                     (None, Some(upper_bound), true) => {
-                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let signed_upper_bound = upper_bound.to_index();
                         let upper_bound = self.internalize_index(span, signed_upper_bound)?;
-                        self.vector
+                        vector
                             .get(..=upper_bound)
                             .ok_or((None, Some(signed_upper_bound)))
                     }
                     (Some(lower_bound), Some(upper_bound), false) => {
-                        let signed_lower_bound = lower_bound.to_index(span)?;
+                        let signed_lower_bound = lower_bound.to_index();
                         let lower_bound = self.internalize_index(span, signed_lower_bound)?;
-                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let signed_upper_bound = upper_bound.to_index();
                         let upper_bound = self.internalize_index(span, signed_upper_bound)?;
-                        self.vector
+                        vector
                             .get(lower_bound..upper_bound)
                             .ok_or((Some(signed_lower_bound), Some(signed_upper_bound)))
                     }
                     (Some(lower_bound), Some(upper_bound), true) => {
-                        let signed_lower_bound = lower_bound.to_index(span)?;
+                        let signed_lower_bound = lower_bound.to_index();
                         let lower_bound = self.internalize_index(span, signed_lower_bound)?;
-                        let signed_upper_bound = upper_bound.to_index(span)?;
+                        let signed_upper_bound = upper_bound.to_index();
                         let upper_bound = self.internalize_index(span, signed_upper_bound)?;
-                        self.vector
+                        vector
                             .get(lower_bound..=upper_bound)
                             .ok_or((Some(signed_lower_bound), Some(signed_upper_bound)))
                     }
@@ -214,118 +255,121 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
     fn iterate(
         &self,
         _log: &mut dyn RuntimeLog<S>,
-        _span: &S,
-    ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
-        Ok(Box::new(self.vector.iter().cloned()))
+        span: &S,
+    ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<S>>>> {
+        Ok(Box::new(self.iter(span)?))
     }
 
     fn method_call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         attribute: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         expressions: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "append" => {
-                |_context: &mut ExecutionContext<'a, S>,
-                 _span: &S,
-                 other: List<'a, S>|
-                 -> OperatorResult<S, Value<S>> {
-                    // TODO make this accept any iteratable value.
-
-                    let mut vector = self.unwrap_or_clone();
-                    vector.extend_from_slice(&other.vector);
-
-                    Ok(Self {
-                        vector: Rc::new(vector),
-                    }
-                    .into())
-                }
-                .auto_call(context, span, arguments, expressions)
-            }
-            "dedup" => {
-                |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
-                    let mut vector = self.unwrap_or_clone();
-                    vector.dedup();
-
-                    Ok(Self {
-                        vector: Rc::new(vector),
-                    }
-                    .into())
-                }
-                .auto_call(context, span, arguments, expressions)
-            }
-            "insert" => |_context: &mut ExecutionContext<'a, S>,
+            "append" => |_context: &mut ExecutionContext<S>,
                          span: &S,
-                         index: Scalar,
-                         value: Value<'a, S>|
+                         other: List<S>|
              -> OperatorResult<S, Value<S>> {
-                let index = index.to_index(span)?;
-                let mut vector = self.unwrap_or_clone();
-                let index = self.internalize_index(span, index)?;
-                vector.insert(index, value);
+                let mut other = other.vector.try_borrow_mut().unwrap_borrow_failure(span)?;
 
-                Ok(Self {
-                    vector: Rc::new(vector),
+                self.vector
+                    .try_borrow_mut()
+                    .unwrap_borrow_failure(span)?
+                    .append(&mut other);
+
+                Ok(NoneType.into())
+            }
+            .auto_call(context, span, arguments, expressions),
+            "dedup" => {
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    self.vector
+                        .try_borrow_mut()
+                        .unwrap_borrow_failure(span)?
+                        .dedup();
+                    Ok(NoneType.into())
                 }
-                .into())
+                .auto_call(context, span, arguments, expressions)
+            }
+            "insert" => move |_context: &mut ExecutionContext<S>,
+                              span: &S,
+                              index: Number,
+                              value: Value<S>|
+                  -> OperatorResult<S, Value<S>> {
+                let index = index.to_index();
+                let index = self.internalize_index(span, index)?;
+                self.vector
+                    .try_borrow_mut()
+                    .unwrap_borrow_failure(span)?
+                    .insert(index, value);
+
+                Ok(NoneType.into())
             }
             .auto_call(context, span, arguments, expressions),
             "is_empty" => {
-                |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
-                    Ok(self.vector.is_empty().into())
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(self
+                        .vector
+                        .try_borrow()
+                        .unwrap_borrow_failure(span)?
+                        .is_empty()
+                        .into())
                 }
                 .auto_call(context, span, arguments, expressions)
             }
             "len" => {
-                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
-                    Number::new(self.vector.len() as f64)
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Float::new(self.vector.try_borrow().unwrap_borrow_failure(span)?.len() as f64)
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
                 .auto_call(context, span, arguments, expressions)
             }
-            "push" => |_context: &mut ExecutionContext<'a, S>,
-                       _span: &S,
-                       other: Value<'a, S>|
+            "push" => |_context: &mut ExecutionContext<S>,
+                       span: &S,
+                       other: Value<S>|
              -> OperatorResult<S, Value<S>> {
-                let mut vector = self.unwrap_or_clone();
-                vector.push(other);
+                self.vector
+                    .try_borrow_mut()
+                    .unwrap_borrow_failure(span)?
+                    .push(other);
 
-                Ok(Self {
-                    vector: Rc::new(vector),
-                }
-                .into())
+                Ok(NoneType.into())
             }
             .auto_call(context, span, arguments, expressions),
-            "remove" => |_context: &mut ExecutionContext<'a, S>,
+            "remove" => |_context: &mut ExecutionContext<S>,
                          span: &S,
-                         index: Scalar|
+                         index: Number|
              -> OperatorResult<S, Value<S>> {
-                let index = index.to_index(span)?;
+                let index = index.to_index();
                 let index = self.internalize_index(span, index)?;
 
-                let mut vector = self.unwrap_or_clone();
-                vector.remove(index);
+                self.vector
+                    .try_borrow_mut()
+                    .unwrap_borrow_failure(span)?
+                    .remove(index);
 
-                Ok(Self {
-                    vector: Rc::new(vector),
-                }
-                .into())
+                Ok(NoneType.into())
             }
             .auto_call(context, span, arguments, expressions),
-            "contains" => |_context: &mut ExecutionContext<'a, S>,
-                           _span: &S,
-                           search: Value<'a, S>|
+            "contains" => |_context: &mut ExecutionContext<S>,
+                           span: &S,
+                           search: Value<S>|
              -> OperatorResult<S, Value<S>> {
-                Ok(self.vector.contains(&search).into())
+                Ok(self
+                    .vector
+                    .try_borrow()
+                    .unwrap_borrow_failure(span)?
+                    .contains(&search)
+                    .into())
             }
             .auto_call(context, span, arguments, expressions),
             "last" => {
-                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
-                    let last = self.vector.last();
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    let vector = self.vector.try_borrow().unwrap_borrow_failure(span)?;
+                    let last = vector.last();
 
                     if let Some(last) = last {
                         Ok(last.clone())
@@ -336,8 +380,9 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
                 .auto_call(context, span, arguments, expressions)
             }
             "first" => {
-                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
-                    let first = self.vector.first();
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    let vector = self.vector.try_borrow().unwrap_borrow_failure(span)?;
+                    let first = vector.first();
 
                     if let Some(first) = first {
                         Ok(first.clone())
@@ -348,55 +393,54 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
                 .auto_call(context, span, arguments, expressions)
             }
             "reverse" => {
-                |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
-                    let mut vector = self.unwrap_or_clone();
-                    vector.reverse();
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    self.vector
+                        .try_borrow_mut()
+                        .unwrap_borrow_failure(span)?
+                        .reverse();
 
-                    Ok(Self {
-                        vector: Rc::new(vector),
-                    }
-                    .into())
+                    Ok(NoneType.into())
                 }
                 .auto_call(context, span, arguments, expressions)
             }
-            "rotate_left" => |_context: &mut ExecutionContext<'a, S>,
+            "rotate_left" => |_context: &mut ExecutionContext<S>,
                               span: &S,
-                              mid: Scalar|
+                              mid: Number|
              -> OperatorResult<S, Value<S>> {
-                let mid = mid.to_index(span)?;
+                let mid = mid.to_index();
                 if mid.is_positive() {
-                    let mid = mid as usize % self.vector.len();
-                    let mut vector = self.unwrap_or_clone();
+                    let mut vector = self.vector.try_borrow_mut().unwrap_borrow_failure(span)?;
+                    let mid = mid as usize % vector.len();
                     vector.rotate_left(mid);
 
-                    Ok(Self {
-                        vector: Rc::new(vector),
-                    }
-                    .into())
+                    Ok(NoneType.into())
                 } else {
                     Err(Failure::NumberMustBePositive(span.clone()))
                 }
             }
             .auto_call(context, span, arguments, expressions),
-            "rotate_right" => |_context: &mut ExecutionContext<'a, S>,
-                               _span: &S,
-                               mid: Scalar|
+            "rotate_right" => |_context: &mut ExecutionContext<S>,
+                               span: &S,
+                               mid: Number|
              -> OperatorResult<S, Value<S>> {
-                let mid = mid.to_index(span)?;
+                let mid = mid.to_index();
                 if mid.is_positive() {
-                    let mid = mid as usize % self.vector.len();
-                    let mut vector = self.unwrap_or_clone();
+                    let mut vector = self.vector.try_borrow_mut().unwrap_borrow_failure(span)?;
+                    let mid = mid as usize % vector.len();
                     vector.rotate_right(mid);
 
-                    Ok(Self {
-                        vector: Rc::new(vector),
-                    }
-                    .into())
+                    Ok(NoneType.into())
                 } else {
                     Err(Failure::NumberMustBePositive(span.clone()))
                 }
             }
             .auto_call(context, span, arguments, expressions),
+            "clone" => {
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(List::from(self.iter(span)?).into())
+                }
+                .auto_call(context, span, arguments, expressions)
+            }
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
     }
@@ -406,9 +450,11 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
         log: &mut dyn RuntimeLog<S>,
         span: &S,
     ) -> OperatorResult<S, SerializableValue> {
-        let mut list = Vec::with_capacity(self.vector.len());
+        let vector = self.vector.try_borrow().unwrap_borrow_failure(span)?;
 
-        for item in self.vector.iter() {
+        let mut list = Vec::with_capacity(vector.len());
+
+        for item in vector.iter() {
             let serializable = item.export(log, span)?;
             list.push(serializable);
         }
@@ -417,23 +463,29 @@ impl<'a, S: Span> Object<'a, S> for List<'a, S> {
     }
 }
 
-impl<'a, S: Span> NamedObject for List<'a, S> {
+impl<S: Span> TypedObject for List<S> {
+    fn get_type<LS: Span>() -> VariableType<LS> {
+        VariableType::List
+    }
+}
+
+impl<S: Span> NamedObject for List<S> {
     fn static_type_name() -> &'static str {
         "List"
     }
 }
 
-impl<'a, S: Span> List<'a, S> {
-    pub fn unpack_dynamic_length<T>(
-        self,
-        span: &S,
-    ) -> OperatorResult<S, impl Iterator<Item = T> + Clone + 'a>
+impl<S: Span> List<S> {
+    pub fn unpack_dynamic_length<T>(self, span: &S) -> OperatorResult<S, impl Iterator<Item = T>>
     where
-        T: NamedObject + Clone,
-        Value<'a, S>: IntoVariant<T> + AsVariant<T> + TryInto<T>,
+        T: NamedObject,
+        Value<S>: IntoVariant<T> + AsVariant<T> + TryInto<T>,
     {
+        // We're going to return copies of all the values in the end anyway, so may as well just own/copy it now.
+        let vector = Rc::unwrap_or_clone(self.vector).into_inner();
+
         // Verify that they're all of the right type.
-        for (index, item) in self.iter().enumerate() {
+        for (index, item) in vector.iter().enumerate() {
             if item.enum_downcast_ref::<T>().is_none() {
                 return Err(Failure::ListElement(
                     span.clone(),
@@ -449,23 +501,24 @@ impl<'a, S: Span> List<'a, S> {
 
         // Okay, we've validated them. Now we can really take them.
         // The unwraps will not fail because we've already validated the types.
-        let iter = self.consume().map(|v| v.enum_downcast::<T>().unwrap());
+        let iter = vector.into_iter().map(|v| v.enum_downcast::<T>().unwrap());
         Ok(iter)
     }
 
     pub fn unpack_fixed_length<T, const D: usize>(
         self,
         span: &S,
-    ) -> OperatorResult<S, impl Iterator<Item = T> + Clone + 'a>
+    ) -> OperatorResult<S, impl Iterator<Item = T>>
     where
-        T: NamedObject + Clone,
-        Value<'a, S>: IntoVariant<T> + AsVariant<T> + TryInto<T>,
+        T: NamedObject,
+        Value<S>: IntoVariant<T> + AsVariant<T> + TryInto<T>,
     {
-        if self.len() == D {
+        let length = self.vector.try_borrow().unwrap_borrow_failure(span)?.len();
+        if length == D {
             // This cannot exceed length D because we already validated that the list matched that length.
             self.unpack_dynamic_length(span)
         } else {
-            Err(Failure::ListWrongLength(span.clone(), D, self.len()))
+            Err(Failure::ListWrongLength(span.clone(), D, length))
         }
     }
 }
@@ -477,76 +530,67 @@ mod test {
     use crate::script::{
         execution::{expressions::run_expression, ExecutionContext},
         parsing::Expression,
+        Runtime, Scalar,
     };
 
     #[test]
     fn index() {
-        let mut context = ExecutionContext::default();
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("[1, 2, 3][0]").unwrap().1))
-            ),
-            Ok(Number::new(1.0).unwrap().into())
-        );
+        let mut runtime = Runtime::default();
+        ExecutionContext::new(&mut runtime, |context| {
+            assert_eq!(
+                run_expression(context, &Expression::parse("[1, 2, 3][0]").unwrap().1),
+                Ok(Float::new(1.0).unwrap().into())
+            );
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("[1, 2, 3][-1]").unwrap().1))
-            ),
-            Ok(Number::new(3.0).unwrap().into())
-        );
+            assert_eq!(
+                run_expression(context, &Expression::parse("[1, 2, 3][-1]").unwrap().1),
+                Ok(Float::new(3.0).unwrap().into())
+            );
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("[1, 2, 3][3]").unwrap().1))
-            ),
-            Err(Failure::IndexOutOfRange("[", 3))
-        );
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(Expression::parse("[1, 2, 3][-4]").unwrap().1))
-            ),
-            Err(Failure::IndexOutOfRange("[", -4))
-        );
+            assert_eq!(
+                run_expression(context, &Expression::parse("[1, 2, 3][3]").unwrap().1),
+                Err(Failure::IndexOutOfRange("[", 3))
+            );
+            assert_eq!(
+                run_expression(context, &Expression::parse("[1, 2, 3][-4]").unwrap().1),
+                Err(Failure::IndexOutOfRange("[", -4))
+            );
+        });
     }
 
     #[test]
     fn test_unpack() {
         assert_eq!(
-            List::<'_, &'static str>::from([
-                Number::new(1.0).unwrap().into(),
-                Number::new(2.0).unwrap().into(),
-                Number::new(3.0).unwrap().into(),
+            List::<&'static str>::from([
+                Float::new(1.0).unwrap().into(),
+                Float::new(2.0).unwrap().into(),
+                Float::new(3.0).unwrap().into(),
             ])
             .unpack_fixed_length::<Scalar, 3usize>(&"span",)
             .map(|v| v.collect::<Vec<_>>()),
             Ok(vec![
-                Number::new(1.0).unwrap().into(),
-                Number::new(2.0).unwrap().into(),
-                Number::new(3.0).unwrap().into(),
+                Float::new(1.0).unwrap().into(),
+                Float::new(2.0).unwrap().into(),
+                Float::new(3.0).unwrap().into(),
             ])
         );
 
         let values = [
-            Number::new(1.0).unwrap().into(),
-            Number::new(2.0).unwrap().into(),
+            Float::new(1.0).unwrap().into(),
+            Float::new(2.0).unwrap().into(),
         ];
 
         assert_eq!(
-            List::<'_, &'static str>::from(values)
+            List::<&'static str>::from(values)
                 .unpack_fixed_length::<Scalar, 3usize>(&"span",)
                 .map(|v| v.collect::<Vec<_>>()),
             Err(Failure::ListWrongLength("span", 3, 2))
         );
 
-        let values = [Number::new(1.0).unwrap().into(), true.into()];
+        let values = [Float::new(1.0).unwrap().into(), true.into()];
 
         assert_eq!(
-            List::<'_, &'static str>::from(values)
+            List::<&'static str>::from(values)
                 .unpack_fixed_length::<Scalar, 2usize>(&"span")
                 .map(|v| v.collect::<Vec<_>>()),
             Err(Failure::ListElement(

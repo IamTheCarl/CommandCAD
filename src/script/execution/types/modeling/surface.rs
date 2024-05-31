@@ -23,16 +23,35 @@ use crate::script::{
         types::{function::IntoBuiltinFunction, Object, OperatorResult, Value},
         ExecutionContext,
     },
+    logging::RuntimeLog,
     parsing::VariableType,
     Span,
 };
 
 use super::handle_wrapper;
 
-pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
+    context.stack.new_variable_str(
+        "sketch_plane",
+        (|context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+            Ok(Surface::from(
+                context
+                    .global_resources
+                    .fornjot_core
+                    .layers
+                    .topology
+                    .surfaces
+                    .space_2d(),
+            )
+            .into())
+        })
+        .into_builtin_function()
+        .into(),
+    );
+
     context.stack.new_variable_str(
         "global_xy_plane",
-        (|context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<'a, S>> {
+        (|context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
             Ok(Surface::from(
                 context
                     .global_resources
@@ -50,7 +69,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
 
     context.stack.new_variable_str(
         "global_xz_plane",
-        (|context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<'a, S>> {
+        (|context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
             Ok(Surface::from(
                 context
                     .global_resources
@@ -68,7 +87,7 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
 
     context.stack.new_variable_str(
         "global_yz_plane",
-        (|context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<'a, S>> {
+        (|context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
             Ok(Surface::from(
                 context
                     .global_resources
@@ -92,9 +111,14 @@ pub struct Surface {
     pub handle: Handle<FornjotSurface>,
 }
 
-impl<'a, S: Span> Object<'a, S> for Surface {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Surface)
+impl<S: Span> Object<S> for Surface {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Surface))
     }
 }
 

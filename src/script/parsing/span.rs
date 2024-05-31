@@ -39,6 +39,7 @@ pub trait Span:
     + AsStr
     + FromStr
     + FormatSpan
+    + 'static
 {
     fn chars(&self) -> impl Iterator<Item = char>;
 }
@@ -51,25 +52,25 @@ pub trait FromStr {
     fn from_str(string: &'static str) -> Self;
 }
 
-impl<'a> AsStr for &'a str {
+impl AsStr for &'static str {
     fn as_str(&self) -> &str {
         self
     }
 }
 
-impl<'a> FromStr for &'a str {
+impl FromStr for &'static str {
     fn from_str(string: &'static str) -> Self {
         string
     }
 }
 
-impl<'a> AsStr for LocatedSpan<&'a str> {
+impl AsStr for LocatedSpan<&'static str> {
     fn as_str(&self) -> &str {
         self.fragment()
     }
 }
 
-impl<'a> FromStr for LocatedSpan<&'a str> {
+impl FromStr for LocatedSpan<&'static str> {
     fn from_str(string: &'static str) -> Self {
         LocatedSpan::new(string)
     }
@@ -99,12 +100,12 @@ impl FromStr for LocatedSpan<imstr::ImString> {
     }
 }
 
-impl<'a> Span for &'a str {
+impl Span for &'static str {
     fn chars(&self) -> impl Iterator<Item = char> {
         str::chars(self)
     }
 }
-impl<'a> Span for LocatedSpan<&'a str> {
+impl Span for LocatedSpan<&'static str> {
     fn chars(&self) -> impl Iterator<Item = char> {
         self.fragment().chars()
     }

@@ -1,11 +1,13 @@
 
 solid cuboid(x: Length, y: Length, z: Length) {
   let base_sketch = new_sketch(Polygon { points = [
-    vec2(-x / 2., -y / 2.),
-    vec2(x / 2., -y / 2.),
-    vec2(x / 2., y / 2.),
-    vec2(-x / 2., y / 2.)
-  ]});
+      vec2(-x / 2., -y / 2.),
+      vec2(x / 2., -y / 2.),
+      vec2(x / 2., y / 2.),
+      vec2(-x / 2., y / 2.)
+      ],
+      surface = global_xy_plane()
+    });
 
   base_sketch.sweep(global_xy_plane(), vec3(0cm, 0cm, z))
 }
@@ -35,10 +37,10 @@ solid spacer(outer_radius: Length, inner_radius: Length, height: Length) {
     let bottom_surface = global_xy_plane();
     let sweep_path = vec3(0mm, 0mm, height);
 
-    let base_sketch = new_sketch([
+    let base_sketch = new_sketch(global_xy_plane(), [
       new_region(RawRegion {
-          exterior = new_cycle(Circle { center = vec2(0mm, 0mm), radius = outer_radius }),
-	  interiors = [new_cycle(Circle { center = vec2(0mm, 0mm), radius = inner_radius }).reverse()],
+          exterior = new_cycle(Circle { center = vec2(0mm, 0mm), radius = outer_radius, surface = global_xy_plane() }),
+	  interiors = [new_cycle(Circle { center = vec2(0mm, 0mm), radius = inner_radius, surface = global_xy_plane() }).reverse()],
       })
     ]);
 
@@ -60,17 +62,17 @@ solid star(num_points: Number, r1: Length, r2: Length, h: Length) {
     let normal_vector = angle.sin_cos();
     let point = normal_vector * radius;
     
-    outer_points = outer_points.append([point]);
-    inner_points = inner_points.append([point / 2]);
+    outer_points.append([point]);
+    inner_points.append([point / 2]);
   }
 
   let bottom_surface = global_xy_plane();
   let sweep_path = vec3(0mm, 0mm, h);
 
-  let exterior = new_cycle(Polygon { points = outer_points });
-  let interiors = [ new_cycle(Polygon { points = inner_points }).reverse() ];
+  let exterior = new_cycle(Polygon { points = outer_points, surface = global_xy_plane() });
+  let interiors = [ new_cycle(Polygon { points = inner_points, surface = global_xy_plane() }).reverse() ];
   
-  let base = new_sketch([new_region(RawRegion {
+  let base = new_sketch(global_xy_plane(), [new_region(RawRegion {
     exterior = exterior,
     interiors = interiors,
   })]);

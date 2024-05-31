@@ -48,6 +48,17 @@ enum CallableReference {
 pub struct Module<S: Span> {
     pub(super) file_name: String,
     pub(super) root_elements: RootElements<S>,
+    span: S,
+}
+
+impl<S: Span + Default> Default for Module<S> {
+    fn default() -> Self {
+        Self {
+            file_name: String::from("default"),
+            root_elements: Default::default(),
+            span: S::default(),
+        }
+    }
 }
 
 impl<S: Span> Module<S> {
@@ -59,7 +70,7 @@ impl<S: Span> Module<S> {
         let file_name = file_name.into();
         let code = code.into();
 
-        let root_elements = Self::load_ast(code)?;
+        let root_elements = Self::load_ast(code.clone())?;
         let mut callables = HashMap::new();
 
         // TODO Validation should have its own message types and not be considered a runtime failure.
@@ -104,11 +115,16 @@ impl<S: Span> Module<S> {
         let module = Self {
             file_name,
             root_elements,
+            span: code,
         };
 
         module.validate(log);
 
         Ok(module)
+    }
+
+    pub fn get_span(&self) -> &S {
+        &self.span
     }
 
     fn load_ast(code: S) -> Result<RootElements<S>> {
@@ -120,16 +136,18 @@ impl<S: Span> Module<S> {
         let mut functions = Vec::new();
         let mut tasks = Vec::new();
         let mut sketches = Vec::new();
-        let mut widgets = Vec::new();
+        let mut solids = Vec::new();
 
         for element in ast.root_elements.into_iter() {
             match element {
                 parsing::RootElement::Import(import) => imports.push(import),
                 parsing::RootElement::Struct(sstruct) => structs.push(sstruct),
-                parsing::RootElement::Sketch(sketch) => sketches.push(sketch),
-                parsing::RootElement::Solid(widget) => widgets.push(widget),
-                parsing::RootElement::Task(task) => tasks.push(task),
-                parsing::RootElement::Function(function) => functions.push(function),
+                parsing::RootElement::Function(function) => match function.signature {
+                    parsing::FunctionSignature::Function { .. } => functions.push(function),
+                    parsing::FunctionSignature::Task { .. } => tasks.push(function),
+                    parsing::FunctionSignature::Sketch { .. } => sketches.push(function),
+                    parsing::FunctionSignature::Solid { .. } => solids.push(function),
+                },
             }
         }
 
@@ -139,7 +157,7 @@ impl<S: Span> Module<S> {
             functions,
             tasks,
             sketches,
-            solids: widgets,
+            solids,
         })
     }
 
@@ -191,9 +209,22 @@ pub(super) struct RootElements<S: Span> {
     pub(super) imports: Vec<parsing::Import<S>>,
     pub(super) structs: Vec<parsing::StructDefinition<S>>,
     pub(super) functions: Vec<parsing::Function<S>>,
-    pub(super) tasks: Vec<parsing::Task<S>>,
-    pub(super) sketches: Vec<parsing::Sketch<S>>,
-    pub(super) solids: Vec<parsing::Solid<S>>,
+    pub(super) tasks: Vec<parsing::Function<S>>,
+    pub(super) sketches: Vec<parsing::Function<S>>,
+    pub(super) solids: Vec<parsing::Function<S>>,
+}
+
+impl<S: Span> Default for RootElements<S> {
+    fn default() -> Self {
+        Self {
+            imports: Default::default(),
+            structs: Default::default(),
+            functions: Default::default(),
+            tasks: Default::default(),
+            sketches: Default::default(),
+            solids: Default::default(),
+        }
+    }
 }
 
 impl<S: Span> RootElements<S> {
@@ -289,8 +320,6 @@ impl<S: Span> RootElements<S> {
 
 #[cfg(test)]
 mod test {
-    use std::rc::Rc;
-
     use crate::script::parsing::{CallableBlock, FunctionSignature, VariableType};
 
     use super::*;
@@ -330,7 +359,7 @@ mod test {
         );
         assert_eq!(
             root.sketches,
-            [parsing::Sketch {
+            [parsing::Function {
                 starting_span: "sketch",
                 named_block: parsing::NamedBlock {
                     name: "my_sketch",
@@ -340,12 +369,12 @@ mod test {
                         block: parsing::Block { statements: vec![] }
                     }
                 },
-                signature: Rc::new(FunctionSignature::Sketch { arguments: vec![] }),
+                signature: FunctionSignature::Sketch { arguments: vec![] },
             }]
         );
         assert_eq!(
             root.solids,
-            [parsing::Solid {
+            [parsing::Function {
                 starting_span: "solid",
                 named_block: parsing::NamedBlock {
                     name: "my_solid",
@@ -355,7 +384,7 @@ mod test {
                         block: parsing::Block { statements: vec![] }
                     }
                 },
-                signature: Rc::new(FunctionSignature::Solid { arguments: vec![] }),
+                signature: FunctionSignature::Solid { arguments: vec![] },
             }]
         );
 
@@ -373,10 +402,10 @@ mod test {
                         block: parsing::Block { statements: vec![] }
                     }
                 },
-                signature: Rc::new(FunctionSignature::Function {
+                signature: FunctionSignature::Function {
                     return_type: Box::new(VariableType::Scalar("Length")),
                     arguments: vec![]
-                }),
+                },
             }]
         );
     }

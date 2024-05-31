@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{borrow::Cow, error::Error};
+use std::error::Error;
 
 use fj_core::{validation::ValidationError, Core};
 
@@ -28,17 +28,17 @@ use super::{
     Span,
 };
 
-pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
         "print",
-        (|context: &mut ExecutionContext<'a, S>,
+        (|context: &mut ExecutionContext<S>,
           span: &S,
           text: SString|
-         -> OperatorResult<S, Value<'a, S>> {
-            let text = text.into_string();
+         -> OperatorResult<S, Value<S>> {
+            let text = text.to_string(span)?;
             context
                 .log
-                .push(LogMessage::UserMessage(span.clone(), text.into()));
+                .push(LogMessage::UserMessage(span.clone(), text));
 
             Ok(NoneType.into())
         })
@@ -48,14 +48,14 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
 
     context.stack.new_variable_str(
         "warn",
-        (|context: &mut ExecutionContext<'a, S>,
+        (|context: &mut ExecutionContext<S>,
           span: &S,
           text: SString|
-         -> OperatorResult<S, Value<'a, S>> {
-            let text = text.into_string();
+         -> OperatorResult<S, Value<S>> {
+            let text = text.to_string(span)?;
             context
                 .log
-                .push(LogMessage::UserWarning(span.clone(), text.into()));
+                .push(LogMessage::UserWarning(span.clone(), text));
 
             Ok(NoneType.into())
         })
@@ -65,11 +65,11 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
 
     context.stack.new_variable_str(
         "error",
-        (|_context: &mut ExecutionContext<'a, S>,
+        (|_context: &mut ExecutionContext<S>,
           span: &S,
           text: SString|
-         -> OperatorResult<S, Value<'a, S>> {
-            let text = text.into_string();
+         -> OperatorResult<S, Value<S>> {
+            let text = text.to_string(span)?;
 
             Err(Failure::User(span.clone(), text))
         })
@@ -78,19 +78,19 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
     );
 }
 
-pub trait RuntimeLog<'a, S: Span> {
-    fn push(&mut self, message: LogMessage<'a, S>);
+pub trait RuntimeLog<S: Span> {
+    fn push(&mut self, message: LogMessage<S>);
 }
 
 #[derive(Debug)]
-pub enum LogMessage<'a, S: Span> {
-    UserMessage(S, Cow<'a, str>),
-    UserWarning(S, Cow<'a, str>),
+pub enum LogMessage<S: Span> {
+    UserMessage(S, String),
+    UserWarning(S, String),
     FormatIntegerPrecision(S),
     ModelValidation(S, Vec<ValidationError>),
 }
 
-impl<'a, S: Span> LogMessage<'a, S> {
+impl<S: Span> LogMessage<S> {
     pub fn log_level(&self) -> LogLevel {
         match self {
             Self::UserMessage(_, _) => LogLevel::Info,
@@ -101,7 +101,7 @@ impl<'a, S: Span> LogMessage<'a, S> {
     }
 }
 
-impl<'a, S: Span> std::fmt::Display for LogMessage<'a, S> {
+impl<S: Span> std::fmt::Display for LogMessage<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UserMessage(span, message) => write!(f, "{}: {}", span.format_span(), message),
@@ -168,8 +168,8 @@ impl StandardLog {
     }
 }
 
-impl<'a, S: Span> RuntimeLog<'a, S> for StandardLog {
-    fn push(&mut self, message: LogMessage<'a, S>) {
+impl<'a, S: Span> RuntimeLog<S> for StandardLog {
+    fn push(&mut self, message: LogMessage<S>) {
         match message.log_level() {
             LogLevel::Info => log::info!("{}", message),
             LogLevel::Warning => log::warn!("{}", message),

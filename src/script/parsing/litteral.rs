@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 /*
  * Copyright 2024 James Carl
  * AGPL-3.0-only or AGPL-3.0-or-later
@@ -26,7 +28,7 @@ pub enum Litteral<S: Span> {
     List(List<S>),
     Boolean(S, bool),
     Default(S),
-    Closure(Closure<S>),
+    Closure(Rc<Closure<S>>),
 }
 
 impl<S: Span> Litteral<S> {
@@ -34,7 +36,7 @@ impl<S: Span> Litteral<S> {
         alt((
             map(Scalar::parse, Self::Scalar),
             map(PString::parse, Self::String),
-            map(Closure::parse, Self::Closure),
+            map(Closure::parse, |closure| Self::Closure(Rc::new(closure))),
             map(List::parse, Self::List),
             map(take_keyword("true"), |span| Self::Boolean(span, true)),
             map(take_keyword("false"), |span| Self::Boolean(span, false)),
@@ -135,19 +137,19 @@ mod test {
             Litteral::parse("[]() -> Number {}"),
             Ok((
                 "",
-                Litteral::Closure(Closure {
+                Litteral::Closure(Rc::new(Closure {
                     starting_span: "[",
                     captured_variables: vec![],
-                    callable: Rc::new(CallableBlock {
+                    callable: CallableBlock {
                         parameter_span: "(",
                         parameters: vec![],
                         block: Block { statements: vec![] }
-                    }),
-                    signature: Rc::new(FunctionSignature::Function {
+                    },
+                    signature: FunctionSignature::Function {
                         return_type: Box::new(VariableType::Scalar("Number")),
                         arguments: vec![]
-                    })
-                })
+                    }
+                }))
             ))
         )
     }

@@ -16,25 +16,25 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use common_data_types::{FloatIsNan, Number};
+use common_data_types::{Float, FloatIsNan};
 
 use crate::script::{execution::Failure, parsing, Span};
 
 use super::{OperatorResult, Scalar, Value};
 
 pub trait UnwrapNotNan: Sized {
-    fn unwrap_not_nan<S: Span>(self, span: &S) -> OperatorResult<S, Number>;
+    fn unwrap_not_nan<S: Span>(self, span: &S) -> OperatorResult<S, Float>;
 }
 
-pub fn unwrap_float<S: Span>(span: S, number: &parsing::Number<S>) -> OperatorResult<S, Number> {
-    match number.to_float::<Number>() {
+pub fn unwrap_float<S: Span>(span: S, number: &parsing::Number<S>) -> OperatorResult<S, Float> {
+    match number.to_float::<Float>() {
         Ok(number) => Ok(number),
         Err(error) => Err(Failure::NumberConversion(span, error)),
     }
 }
 
-impl UnwrapNotNan for std::result::Result<Number, FloatIsNan> {
-    fn unwrap_not_nan<S: Span>(self, span: &S) -> OperatorResult<S, Number> {
+impl UnwrapNotNan for std::result::Result<Float, FloatIsNan> {
+    fn unwrap_not_nan<S: Span>(self, span: &S) -> OperatorResult<S, Float> {
         match self {
             Ok(number) => Ok(number),
             Err(_float_is_nan) => Err(Failure::ResultIsNan(span.clone())),
@@ -42,8 +42,8 @@ impl UnwrapNotNan for std::result::Result<Number, FloatIsNan> {
     }
 }
 
-impl<'a, S: Span> From<Number> for Value<'a, S> {
-    fn from(value: Number) -> Self {
+impl<S: Span> From<Float> for Value<S> {
+    fn from(value: Float) -> Self {
         let measurement: Scalar = value.into();
         measurement.into()
     }

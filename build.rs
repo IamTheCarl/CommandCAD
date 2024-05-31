@@ -22,6 +22,7 @@ pub struct Row {
     pub information_kind: bool,
     pub solid_angle_kind: bool,
     pub temperature_kind: bool,
+    pub pixel_kind: bool,
     pub singular: String,
     pub plural: String,
     pub abbreviation: String,
@@ -78,6 +79,7 @@ fn main() {
         ratio_type_hint.set_is_information(row.information_kind);
         ratio_type_hint.set_is_solid_angle(row.solid_angle_kind);
         ratio_type_hint.set_is_temperature(row.temperature_kind);
+        ratio_type_hint.set_is_pixel(row.pixel_kind);
 
         let dimension = Dimension {
             length: row.length,

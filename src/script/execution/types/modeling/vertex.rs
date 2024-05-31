@@ -16,44 +16,38 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{storage::Handle, topology::ObjectSet};
+use fj_core::{storage::Handle, topology::Vertex as FornjotVertex};
 
 use crate::script::{
     execution::{
-        types::{List, OperatorResult, Value},
-        Failure,
+        types::{Object, OperatorResult},
+        ExecutionContext,
     },
+    logging::RuntimeLog,
+    parsing::VariableType,
     Span,
 };
 
-impl<'a, S, T> From<&ObjectSet<T>> for Value<'a, S>
-where
-    S: Span,
-    Value<'a, S>: From<Handle<T>>,
-{
-    fn from(object_set: &ObjectSet<T>) -> Self {
-        List::from(object_set.iter().map(|handle| Value::from(handle.clone()))).into()
+use super::handle_wrapper;
+
+pub fn register_globals<S: Span>(_context: &mut ExecutionContext<S>) {
+    // TODO we should have the power to build faces from surfaces and regions.
+}
+
+#[derive(Clone)]
+pub struct Vertex {
+    pub handle: Handle<FornjotVertex>,
+}
+
+impl<S: Span> Object<S> for Vertex {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Face))
     }
 }
 
-pub fn check_for_duplicates<S, T>(
-    span: &S,
-    expected_items: usize,
-    items: impl Iterator<Item = T>,
-) -> OperatorResult<S, Vec<T>>
-where
-    S: Span,
-    T: Eq,
-{
-    let mut set = Vec::with_capacity(expected_items);
-
-    for (index, item) in items.enumerate() {
-        if !set.contains(&item) {
-            set.push(item);
-        } else {
-            return Err(Failure::ListContainsDuplicate(span.clone(), index));
-        }
-    }
-
-    Ok(set)
-}
+handle_wrapper!(Vertex, FornjotVertex);

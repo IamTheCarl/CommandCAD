@@ -26,7 +26,7 @@ use fj_core::{
 
 use crate::script::{
     execution::{
-        types::{fornjot::shell::Shell, function::AutoCall, List, Object, OperatorResult, Value},
+        types::{function::AutoCall, List, Object, OperatorResult, Value},
         ExecutionContext, Failure,
     },
     logging::RuntimeLog,
@@ -34,7 +34,7 @@ use crate::script::{
     Span,
 };
 
-use super::{handle_wrapper, object_set::check_for_duplicates};
+use super::{handle_wrapper, object_set::check_for_duplicates, shell::Shell};
 
 pub fn register_globals<S: Span>(_context: &mut ExecutionContext<'_, S>) {}
 
@@ -43,9 +43,14 @@ pub struct Solid {
     pub handle: Handle<FornjotSolid>,
 }
 
-impl<'a, S: Span> Object<'a, S> for Solid {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Sketch)
+impl<S: Span> Object<S> for Solid {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Sketch))
     }
 
     fn attribute(
@@ -53,26 +58,26 @@ impl<'a, S: Span> Object<'a, S> for Solid {
         _log: &mut dyn RuntimeLog<S>,
         _span: &S,
         attribute: &S,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "shells" => Ok(self.handle.shells().into()),
+            "shells" => Ok(Value::from_object_set(self.handle.shells()).into()),
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
     }
 
     fn method_call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         attribute: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         spans: &[crate::script::parsing::Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "update_shell" => |context: &mut ExecutionContext<'a, S>,
+            "update_shell" => |context: &mut ExecutionContext<S>,
                                span: &S,
                                shell: Shell,
-                               update: Value<'a, S>|
+                               update: Value<S>|
              -> OperatorResult<S, Value<S>> {
                 // Update shell will panic if the shell isn't found in the solid, so check that it's in there.
                 if !self.handle.deref().shells().contains(&shell.handle) {
@@ -83,7 +88,7 @@ impl<'a, S: Span> Object<'a, S> for Solid {
                 // the update function.
                 let new_shells = update.call(context, span, vec![shell.clone().into()], &[])?;
                 let new_shells = new_shells.downcast::<List<S>>(span)?;
-                let num_shells = new_shells.len();
+                let num_shells = new_shells.len(span)?;
                 let new_shells = new_shells
                     .unpack_dynamic_length::<Shell>(span)?
                     .map(|shell| shell.handle);
@@ -105,11 +110,11 @@ impl<'a, S: Span> Object<'a, S> for Solid {
             }
             .auto_call(context, span, arguments, spans),
             "add_shells" => {
-                |context: &mut ExecutionContext<'a, S>,
+                |context: &mut ExecutionContext<S>,
                  span: &S,
-                 new_shells: List<'a, S>|
+                 new_shells: List<S>|
                  -> OperatorResult<S, Value<S>> {
-                    let num_shells = new_shells.len();
+                    let num_shells = new_shells.len(span)?;
                     let new_shells = new_shells
                         .unpack_dynamic_length::<Shell>(span)?
                         .map(|shell| shell.handle);

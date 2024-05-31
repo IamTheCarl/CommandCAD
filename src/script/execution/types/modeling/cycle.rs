@@ -22,10 +22,11 @@ use crate::script::{
     execution::{
         types::{
             function::{AutoCall, IntoBuiltinFunction},
-            Object, OperatorResult, Structure, Value,
+            Object, OperatorResult, Value,
         },
         ExecutionContext, Failure,
     },
+    logging::RuntimeLog,
     parsing::VariableType,
     Span,
 };
@@ -36,19 +37,24 @@ use fj_core::{
     topology::Cycle as FornjotCycle,
 };
 
-use super::{circle::unwrap_circle, handle_wrapper, polygon::unwrap_polygon};
+use super::{
+    handle_wrapper,
+    structs::{Circle, Polygon, Segments},
+};
 
-pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
+pub fn register_globals<S: Span>(context: &mut ExecutionContext<S>) {
     context.stack.new_variable_str(
         "new_cycle",
-        (|context: &mut ExecutionContext<'a, S>, span: &S, configuration: Structure<'a, S>| {
-            match configuration.name() {
+        (|context: &mut ExecutionContext<S>, span: &S, configuration: Value<S>| match configuration
+        {
+            Value::Structure(configuration) => match configuration.name() {
                 "Circle" => {
-                    let (center, radius) = unwrap_circle(context, span, configuration)?;
+                    let circle = Circle::unpack_struct(span, configuration)?;
 
                     let circle = FornjotCycle::circle(
-                        center,
-                        radius,
+                        circle.center.as_fornjot_point(context),
+                        circle.radius.as_fornjot_scalar(context),
+                        circle.surface.handle,
                         &mut context.global_resources.fornjot_core,
                     );
                     let circle = circle.insert(&mut context.global_resources.fornjot_core);
@@ -57,24 +63,43 @@ pub fn register_globals<'a, S: Span>(context: &mut ExecutionContext<'a, S>) {
                     Ok(Cycle { handle: circle }.into())
                 }
                 "Polygon" => {
-                    let points = unwrap_polygon(context, span, configuration)?;
+                    let polygon = Polygon::unpack_struct(span, configuration)?;
 
-                    let polygone =
-                        FornjotCycle::polygon(points, &mut context.global_resources.fornjot_core);
+                    let polygone = FornjotCycle::polygon(
+                        polygon.points(context, span)?,
+                        polygon.surface.handle,
+                        &mut context.global_resources.fornjot_core,
+                    );
                     let polygon = polygone.insert(&mut context.global_resources.fornjot_core);
                     context.unpack_validation_warnings(span);
 
                     Ok(Cycle { handle: polygon }.into())
                 }
-                // "RawCycle" => {
-                //     todo!() // TODO I want to be able to build a region from half-edges.
-                // }
+                "Segments" => {
+                    let segments = Segments::unpack_struct(span, configuration)?;
+                    let points = segments.as_polygon(context, span)?;
+
+                    let polygone = FornjotCycle::polygon(
+                        points,
+                        segments.surface.handle,
+                        &mut context.global_resources.fornjot_core,
+                    );
+                    let polygon = polygone.insert(&mut context.global_resources.fornjot_core);
+                    context.unpack_validation_warnings(span);
+
+                    Ok(Cycle { handle: polygon }.into())
+                }
                 _ => Err(Failure::ExpectedGot(
                     span.clone(),
-                    "Empty, Circle, or Polygon".into(),
+                    "Empty, Circle, Polygon, or list of edges".into(),
                     configuration.name().to_string().into(),
                 )),
-            }
+            },
+            configuration => Err(Failure::ExpectedGot(
+                span.clone(),
+                "Empty, Circle, Polygon, or list of edges".into(),
+                configuration.type_name(),
+            )),
         })
         .into_builtin_function()
         .into(),
@@ -86,22 +111,27 @@ pub struct Cycle {
     pub handle: Handle<FornjotCycle>,
 }
 
-impl<'a, S: Span> Object<'a, S> for Cycle {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Cycle)
+impl<S: Span> Object<S> for Cycle {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Cycle))
     }
 
     fn method_call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         attribute: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         spans: &[crate::script::parsing::Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
             "reverse" => {
-                |context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                |context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
                     let reversed = self
                         .handle
                         .deref()
@@ -126,45 +156,42 @@ mod test {
     use crate::script::{
         execution::{expressions::run_expression, types::Value},
         parsing::Expression,
+        Runtime,
     };
 
     use super::*;
 
     #[test]
     fn construct_circle() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
-                        "new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm })"
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
+                run_expression(
+                    context,
+                    &Expression::parse(
+                        "new_cycle(Circle { center = vec2(1mm, 2mm), radius = 3mm, surface = global_xy_plane() })"
                     )
                     .unwrap()
                     .1
-                )),
-            ),
-            Ok(Value::Cycle(_))
-        ));
+                ),
+                Ok(Value::Cycle(_))
+            ));
+        });
     }
 
     #[test]
     fn construct_polygon() {
-        let mut context = ExecutionContext::<&'static str>::default();
-
-        assert!(matches!(
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert!(matches!(
             run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse(
-                        "new_cycle(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)] })"
+                context,
+                    &Expression::parse(
+                        "new_cycle(Polygon { points = [vec2(0m, 0m), vec2(0m, 1m), vec2(1m, 1m), vec2(1m, 0m)], surface = global_xy_plane() })"
                     )
                     .unwrap()
                     .1
-                ))
             ),
             Ok(Value::Cycle(_))
         ));
+        });
     }
 }

@@ -19,23 +19,21 @@
 use crate::script::{execution::ExecutionContext, Span};
 
 // TODO I want a box type that can be a square or a rectangle.
-mod circle;
 pub mod curve;
 pub mod cycle;
 pub mod face;
 pub mod half_edge;
 pub mod object_set;
-mod polygon;
 pub mod region;
 pub mod shell;
 pub mod sketch;
 pub mod solid;
+mod structs;
 pub mod surface;
 pub mod vertex;
 
 pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
-    circle::register_globals(context);
-    polygon::register_globals(context);
+    structs::register_globals(context);
 
     cycle::register_globals(context);
     face::register_globals(context);
@@ -51,7 +49,7 @@ pub fn register_globals<S: Span>(context: &mut ExecutionContext<'_, S>) {
 
 macro_rules! handle_wrapper {
     ($name:ident, $handle:ident) => {
-        impl<'a, S: Span> From<Handle<$handle>> for crate::script::execution::types::Value<'a, S> {
+        impl<S: Span> From<Handle<$handle>> for crate::script::execution::types::Value<S> {
             fn from(handle: Handle<$handle>) -> Self {
                 $name::from(handle).into()
             }
@@ -68,13 +66,11 @@ macro_rules! handle_wrapper {
             }
         }
 
-        impl<'a, S: Span> TryFrom<crate::script::execution::types::Value<'a, S>>
-            for Handle<$handle>
-        {
-            type Error = crate::script::execution::types::Value<'a, S>;
+        impl<S: Span> TryFrom<crate::script::execution::types::Value<S>> for Handle<$handle> {
+            type Error = crate::script::execution::types::Value<S>;
 
             fn try_from(
-                value: crate::script::execution::types::Value<'a, S>,
+                value: crate::script::execution::types::Value<S>,
             ) -> Result<Self, Self::Error> {
                 use enum_downcast::EnumDowncast;
                 let value = value.enum_downcast::<$name>()?;
@@ -93,6 +89,12 @@ macro_rules! handle_wrapper {
         impl From<$name> for Handle<$handle> {
             fn from(val: $name) -> Self {
                 val.handle.into()
+            }
+        }
+
+        impl crate::script::execution::types::TypedObject for $name {
+            fn get_type<S: Span>() -> VariableType<S> {
+                VariableType::$name
             }
         }
 

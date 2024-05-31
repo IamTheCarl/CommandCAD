@@ -16,16 +16,21 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::script::{parsing::VariableType, Span};
+use crate::script::{logging::RuntimeLog, parsing::VariableType, Span};
 
-use super::{NamedObject, Object};
+use super::{NamedObject, Object, OperatorResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DefaultValue;
 
-impl<S: Span> Object<'_, S> for DefaultValue {
-    fn matches_type(&self, _ty: &VariableType<S>) -> bool {
-        false
+impl<S: Span> Object<S> for DefaultValue {
+    fn matches_type(
+        &self,
+        _ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(false)
     }
 }
 

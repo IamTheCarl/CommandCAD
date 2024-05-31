@@ -16,8 +16,9 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use common_data_types::Number;
-use std::{cmp::Ordering, fmt::Write, rc::Rc};
+use common_data_types::Float;
+use imstr::ImString;
+use std::{cell::RefCell, cmp::Ordering, fmt::Write};
 
 use crate::script::{
     execution::{ExecutionContext, Failure},
@@ -27,8 +28,8 @@ use crate::script::{
 };
 
 use super::{
-    function::AutoCall, number::UnwrapNotNan, serializable::SerializableValue, NamedObject, Object,
-    OperatorResult, Range, Scalar, Value,
+    function::AutoCall, math::Number, number::UnwrapNotNan, serializable::SerializableValue,
+    NamedObject, NoneType, Object, OperatorResult, Range, UnwrapBorrowFailure, Value,
 };
 
 pub mod formatting;
@@ -38,12 +39,17 @@ static ESCAPE_SEQUENCES: &[(&str, &str)] = &[("\\\"", "\""), ("\\n", "\n"), ("\\
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SString {
-    string: Rc<String>,
+    string: RefCell<ImString>,
 }
 
-impl<'a, S: Span> Object<'a, S> for SString {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::String)
+impl<S: Span> Object<S> for SString {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::String))
     }
 
     fn format(
@@ -54,13 +60,15 @@ impl<'a, S: Span> Object<'a, S> for SString {
         style: Style,
         precision: Option<u8>,
     ) -> OperatorResult<S, ()> {
+        let string = self.string.try_borrow().unwrap_borrow_failure(span)?;
+
         match (style, precision) {
-            (Style::Default, None) => write!(f, "{}", self.string).unwrap_formatting_result(span),
+            (Style::Default, None) => write!(f, "{}", string).unwrap_formatting_result(span),
             (Style::Debug, None) => {
                 let mut sequence_iter = ESCAPE_SEQUENCES.iter();
                 let (replace, find) = sequence_iter.next().unwrap(); // Should never fail since we static initalized that array.
 
-                let mut to_print = self.string.replace(find, replace);
+                let mut to_print = string.replace(find, replace);
 
                 for (replace, find) in sequence_iter {
                     to_print = to_print.replace(find, replace);
@@ -81,9 +89,10 @@ impl<'a, S: Span> Object<'a, S> for SString {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        index: Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        index: Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
         let range = index.downcast::<Range>(span)?;
+        let string = self.string.try_borrow().unwrap_borrow_failure(span)?;
 
         // TODO could we keep an immutable reference to the original string to avoid a copy?
         let slice = match (
@@ -91,43 +100,43 @@ impl<'a, S: Span> Object<'a, S> for SString {
             range.upper_bound,
             range.upper_bound_is_inclusive,
         ) {
-            (None, None, false) => self.string.get(..).ok_or((None, None)),
+            (None, None, false) => string.get(..).ok_or((None, None)),
             (Some(lower_bound), None, false) => {
-                let signed_lower_bound = lower_bound.to_index(span)?;
+                let signed_lower_bound = lower_bound.to_index();
                 let lower_bound = self.internalize_index(span, signed_lower_bound)?;
-                self.string
+                string
                     .get(lower_bound..)
                     .ok_or((Some(signed_lower_bound), None))
             }
             (None, Some(upper_bound), false) => {
-                let signed_upper_bound = upper_bound.to_index(span)?;
+                let signed_upper_bound = upper_bound.to_index();
                 let upper_bound = self.internalize_index(span, signed_upper_bound)?;
-                self.string
+                string
                     .get(..upper_bound)
                     .ok_or((None, Some(signed_upper_bound)))
             }
             (None, Some(upper_bound), true) => {
-                let signed_upper_bound = upper_bound.to_index(span)?;
+                let signed_upper_bound = upper_bound.to_index();
                 let upper_bound = self.internalize_index(span, signed_upper_bound)?;
-                self.string
+                string
                     .get(..=upper_bound)
                     .ok_or((None, Some(signed_upper_bound)))
             }
             (Some(lower_bound), Some(upper_bound), false) => {
-                let signed_lower_bound = lower_bound.to_index(span)?;
+                let signed_lower_bound = lower_bound.to_index();
                 let lower_bound = self.internalize_index(span, signed_lower_bound)?;
-                let signed_upper_bound = upper_bound.to_index(span)?;
+                let signed_upper_bound = upper_bound.to_index();
                 let upper_bound = self.internalize_index(span, signed_upper_bound)?;
-                self.string
+                string
                     .get(lower_bound..upper_bound)
                     .ok_or((Some(signed_lower_bound), Some(signed_upper_bound)))
             }
             (Some(lower_bound), Some(upper_bound), true) => {
-                let signed_lower_bound = lower_bound.to_index(span)?;
+                let signed_lower_bound = lower_bound.to_index();
                 let lower_bound = self.internalize_index(span, signed_lower_bound)?;
-                let signed_upper_bound = upper_bound.to_index(span)?;
+                let signed_upper_bound = upper_bound.to_index();
                 let upper_bound = self.internalize_index(span, signed_upper_bound)?;
-                self.string
+                string
                     .get(lower_bound..=upper_bound)
                     .ok_or((Some(signed_lower_bound), Some(signed_upper_bound)))
             }
@@ -152,7 +161,7 @@ impl<'a, S: Span> Object<'a, S> for SString {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
+        rhs: &Value<S>,
     ) -> OperatorResult<S, Ordering> {
         let rhs = rhs.downcast_ref::<Self>(span)?;
 
@@ -163,20 +172,24 @@ impl<'a, S: Span> Object<'a, S> for SString {
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-        rhs: &Value<'a, S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+        rhs: &Value<S>,
+    ) -> OperatorResult<S, Value<S>> {
+        let mut string = self
+            .string
+            .try_borrow()
+            .unwrap_borrow_failure(span)?
+            .clone()
+            .into_std_string();
+
         match rhs {
             Value::String(rhs) => {
-                let mut string = self.unwrap_or_clone();
-
-                string.push_str(rhs.as_str());
+                string.push_str(&rhs.as_str(span)?);
 
                 Ok(Self::from(string).into())
             }
             Value::Scalar(rhs) => {
                 // convert numbers to strings.
                 let rhs = rhs.to_number(span)?;
-                let mut string = self.unwrap_or_clone();
 
                 string += &format!("{}", rhs.into_inner());
 
@@ -192,43 +205,50 @@ impl<'a, S: Span> Object<'a, S> for SString {
 
     fn method_call(
         &self,
-        context: &mut ExecutionContext<'a, S>,
+        context: &mut ExecutionContext<S>,
         span: &S,
         attribute: &S,
-        arguments: Vec<Value<'a, S>>,
+        arguments: Vec<Value<S>>,
         expressions: &[Expression<S>],
-    ) -> OperatorResult<S, Value<'a, S>> {
+    ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "insert" => |_context: &mut ExecutionContext<'a, S>,
+            "insert" => |_context: &mut ExecutionContext<S>,
                          span: &S,
-                         index: Scalar,
+                         index: Number,
                          text: SString|
              -> OperatorResult<S, Value<S>> {
-                let mut string = self.unwrap_or_clone();
-
-                let index = index.to_index(span)?;
+                let index = index.to_index();
                 let index = self.internalize_index(span, index)?;
 
-                string.insert_str(index, text.as_str());
-                Ok(Self::from(string).into())
+                self.string
+                    .try_borrow_mut()
+                    .unwrap_borrow_failure(span)?
+                    .insert_str(index, &text.as_str(span)?);
+                Ok(NoneType.into())
             }
             .auto_call(context, span, arguments, expressions), // insert_str
             "is_empty" => {
-                |_context: &mut ExecutionContext<'a, S>, _span: &S| -> OperatorResult<S, Value<S>> {
-                    Ok(self.string.is_empty().into())
+                |_context: &mut ExecutionContext<S>, _span: &S| -> OperatorResult<S, Value<S>> {
+                    Ok(self
+                        .string
+                        .try_borrow()
+                        .unwrap_borrow_failure(span)?
+                        .is_empty()
+                        .into())
                 }
                 .auto_call(context, span, arguments, expressions)
             }
             "len" => {
-                |_context: &mut ExecutionContext<'a, S>, span: &S| -> OperatorResult<S, Value<S>> {
-                    Number::new(self.string.len() as f64)
+                |_context: &mut ExecutionContext<S>, span: &S| -> OperatorResult<S, Value<S>> {
+                    Float::new(self.string.try_borrow().unwrap_borrow_failure(span)?.len() as f64)
                         .unwrap_not_nan(span)
                         .map(|n| n.into())
                 }
                 .auto_call(context, span, arguments, expressions)
             }
             "format" => {
-                match formatting::Format::parse((*self.string).as_ref()) {
+                let string = self.string.try_borrow().unwrap_borrow_failure(span)?;
+                match formatting::Format::parse(string.as_str()) {
                     Ok((_, format)) => {
                         let mut output = String::new();
                         format.format(context.log, span, &mut output, &arguments)?;
@@ -249,16 +269,27 @@ impl<'a, S: Span> Object<'a, S> for SString {
     fn export(
         &self,
         _log: &mut dyn RuntimeLog<S>,
-        _span: &S,
+        span: &S,
     ) -> OperatorResult<S, SerializableValue> {
-        Ok(SerializableValue::String(String::clone(&self.string)))
+        let string = self.to_string(span)?;
+        Ok(SerializableValue::String(string))
+    }
+}
+
+pub struct StrRef<'a> {
+    reference: std::cell::Ref<'a, ImString>,
+}
+
+impl<'a> std::ops::Deref for StrRef<'a> {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.reference.as_str()
     }
 }
 
 impl SString {
-    pub fn from_parsed<'a, S: Span>(
-        parsed: &parsing::PString<S>,
-    ) -> OperatorResult<S, Value<'a, S>> {
+    pub fn from_parsed<S: Span>(parsed: &parsing::PString<S>) -> OperatorResult<S, Value<S>> {
         let mut sequence_iter = ESCAPE_SEQUENCES.iter();
         let (find, replace) = sequence_iter.next().unwrap(); // Should never fail since we static initalized that array.
 
@@ -268,39 +299,42 @@ impl SString {
             string = string.replace(find, replace);
         }
 
-        Ok(Self {
-            string: Rc::new(string),
-        }
-        .into())
+        let string = RefCell::new(string.into());
+        Ok(Self { string }.into())
     }
 
-    fn unwrap_or_clone(&self) -> String {
-        // FIXME we should be consuming self, rather than cloaning string.
-        Rc::try_unwrap(self.string.clone()).unwrap_or_else(|string| String::clone(&string))
+    pub fn as_str<'a, S: Span>(&'a self, span: &S) -> OperatorResult<S, StrRef<'a>> {
+        let reference = self.string.try_borrow().unwrap_borrow_failure(span)?;
+        let string_reference = StrRef { reference };
+
+        Ok(string_reference)
     }
 
-    pub fn as_str(&self) -> &str {
-        self.string.as_ref()
-    }
-
-    pub fn into_string(self) -> String {
-        self.unwrap_or_clone()
+    pub fn to_string<S: Span>(&self, span: &S) -> OperatorResult<S, String> {
+        Ok(self
+            .string
+            .try_borrow()
+            .unwrap_borrow_failure(span)?
+            .clone()
+            .into_std_string())
     }
 
     fn internalize_index<S: Span>(&self, span: &S, index: isize) -> OperatorResult<S, usize> {
+        let string = self.string.try_borrow().unwrap_borrow_failure(span)?;
+
         let new_index = if index >= 0 {
             Ok(index as usize)
-        } else if let Some(index) = self.string.len().checked_sub(index.unsigned_abs()) {
+        } else if let Some(index) = string.len().checked_sub(index.unsigned_abs()) {
             Ok(index)
         } else {
             Err(Failure::IndexOutOfRange(span.clone(), index))
         }?;
 
-        if new_index >= self.string.len() {
+        if new_index >= string.len() {
             Err(Failure::IndexOutOfRange(span.clone(), index))
-        } else if self.string.is_char_boundary(new_index) {
+        } else if string.is_char_boundary(new_index) {
             Ok(new_index)
-        } else if new_index < self.string.len() {
+        } else if new_index < string.len() {
             Err(Failure::InvalidCharIndex(span.clone(), new_index as isize))
         } else {
             Err(Failure::IndexOutOfRange(span.clone(), new_index as isize))
@@ -314,50 +348,46 @@ impl NamedObject for SString {
     }
 }
 
-impl From<String> for SString {
-    fn from(value: String) -> Self {
+impl<S> From<S> for SString
+where
+    S: Into<ImString>,
+{
+    fn from(value: S) -> Self {
         Self {
-            string: Rc::new(value),
+            string: RefCell::new(value.into()),
         }
-    }
-}
-
-impl<'a> From<&'a str> for SString {
-    fn from(value: &'a str) -> Self {
-        Self::from(String::from(value))
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::script::execution::{expressions::run_expression, ExecutionContext};
+    use crate::script::{
+        execution::{expressions::run_expression, ExecutionContext},
+        Runtime,
+    };
 
     use super::*;
 
     #[test]
     fn string_concat() {
-        let mut context = ExecutionContext::default();
-
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("\"test\" + \"test\" == \"testtest\"")
+        ExecutionContext::new(&mut Runtime::default(), |context| {
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse("\"test\" + \"test\" == \"testtest\"")
                         .unwrap()
                         .1
-                ))
-            ),
-            Ok(true.into())
-        );
+                ),
+                Ok(true.into())
+            );
 
-        assert_eq!(
-            run_expression(
-                &mut context,
-                Box::leak(Box::new(
-                    Expression::parse("\"test\" + 5 == \"test5\"").unwrap().1
-                ))
-            ),
-            Ok(true.into())
-        );
+            assert_eq!(
+                run_expression(
+                    context,
+                    &Expression::parse("\"test\" + 5 == \"test5\"").unwrap().1
+                ),
+                Ok(true.into())
+            );
+        });
     }
 }

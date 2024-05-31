@@ -16,10 +16,14 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fj_core::{storage::Handle, topology::Curve as FornjotCurve};
+use fj_core::{storage::Handle, topology::Face as FornjotFace};
 
 use crate::script::{
-    execution::{types::Object, ExecutionContext},
+    execution::{
+        types::{Object, OperatorResult},
+        ExecutionContext,
+    },
+    logging::RuntimeLog,
     parsing::VariableType,
     Span,
 };
@@ -31,14 +35,22 @@ pub fn register_globals<S: Span>(_context: &mut ExecutionContext<S>) {
 }
 
 #[derive(Clone)]
-pub struct Curve {
-    pub handle: Handle<FornjotCurve>,
+pub struct Face {
+    pub handle: Handle<FornjotFace>,
 }
 
-impl<'a, S: Span> Object<'a, S> for Curve {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Face)
+impl<S: Span> Object<S> for Face {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Face))
     }
 }
 
-handle_wrapper!(Curve, FornjotCurve);
+handle_wrapper!(Face, FornjotFace);
+
+// TODO test adding duplicate regions to the face (through update and add_regions)
+// TODO test updating a region that did not exist in the face

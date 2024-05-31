@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 /*
  * Copyright 2024 James Carl
  * AGPL-3.0-only or AGPL-3.0-or-later
@@ -55,8 +57,8 @@ pub enum Statement<S: Span> {
     Loop(Loop<S>),
     Break(Break<S>),
     Continue(Continue<S>),
-    DefineFunction(Function<S>),
-    DefineStruct(StructDefinition<S>),
+    DefineFunction(Rc<Function<S>>),
+    DefineStruct(Rc<StructDefinition<S>>),
 }
 
 impl<S: Span> Statement<S> {
@@ -73,8 +75,12 @@ impl<S: Span> Statement<S> {
                 map(Loop::parse, Self::Loop),
                 map(Break::parse, Self::Break),
                 map(Continue::parse, Self::Continue),
-                map(Function::parse, Self::DefineFunction),
-                map(StructDefinition::parse, Self::DefineStruct),
+                map(Function::parse_as_function, |function| {
+                    Self::DefineFunction(Rc::new(function))
+                }),
+                map(StructDefinition::parse, |structure| {
+                    Self::DefineStruct(Rc::new(structure))
+                }),
                 map(Expression::parse, Self::Expression),
             )),
         )(input)
@@ -218,21 +224,24 @@ mod test {
             Statement::parse("function my_function() -> Number {}"),
             Ok((
                 "",
-                Statement::DefineFunction(Function {
-                    starting_span: "function",
-                    named_block: NamedBlock {
-                        name: "my_function",
-                        callable: CallableBlock {
-                            parameter_span: "(",
-                            parameters: vec![],
-                            block: Block { statements: vec![] }
+                Statement::DefineFunction(
+                    Function {
+                        starting_span: "function",
+                        named_block: NamedBlock {
+                            name: "my_function",
+                            callable: CallableBlock {
+                                parameter_span: "(",
+                                parameters: vec![],
+                                block: Block { statements: vec![] }
+                            }
+                        },
+                        signature: FunctionSignature::Function {
+                            return_type: Box::new(VariableType::Scalar("Number")),
+                            arguments: vec![]
                         }
-                    },
-                    signature: Rc::new(FunctionSignature::Function {
-                        return_type: Box::new(VariableType::Scalar("Number")),
-                        arguments: vec![]
-                    })
-                })
+                    }
+                    .into()
+                )
             ))
         );
 
@@ -240,10 +249,10 @@ mod test {
             Statement::parse("struct MyStruct {}"),
             Ok((
                 "",
-                Statement::DefineStruct(StructDefinition {
+                Statement::DefineStruct(Rc::new(StructDefinition {
                     name: "MyStruct",
                     members: vec![]
-                })
+                }))
             ))
         );
     }

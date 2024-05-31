@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use common_data_types::Number;
+use common_data_types::Float;
 
 use crate::script::{
     execution::{expressions::run_trailer, ExecutionContext, Failure},
@@ -25,25 +25,30 @@ use crate::script::{
     Span,
 };
 
-use super::{NamedObject, Object, OperatorResult, Scalar, Value};
+use super::{math::Number, NamedObject, Object, OperatorResult, Value};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Range {
-    pub lower_bound: Option<Scalar>,
+    pub lower_bound: Option<Number>,
     pub upper_bound_is_inclusive: bool,
-    pub upper_bound: Option<Scalar>,
+    pub upper_bound: Option<Number>,
 }
 
-impl<'a, S: Span> Object<'a, S> for Range {
-    fn matches_type(&self, ty: &VariableType<S>) -> bool {
-        matches!(ty, VariableType::Range)
+impl<S: Span> Object<S> for Range {
+    fn matches_type(
+        &self,
+        ty: &VariableType<S>,
+        _log: &mut dyn RuntimeLog<S>,
+        _variable_name_span: &S,
+    ) -> OperatorResult<S, bool> {
+        Ok(matches!(ty, VariableType::Range))
     }
 
     fn iterate(
         &self,
         _log: &mut dyn RuntimeLog<S>,
         span: &S,
-    ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<'a, S>> + '_>> {
+    ) -> OperatorResult<S, Box<dyn Iterator<Item = Value<S>>>> {
         match (
             self.lower_bound.as_ref(),
             self.upper_bound.as_ref(),
@@ -70,18 +75,17 @@ impl<'a, S: Span> Object<'a, S> for Range {
                 "iterator".into(),
             )),
             (Some(lower_bound), Some(upper_bound), false) => {
-                let lower_bound = lower_bound.to_index(span)?;
-                let upper_bound = upper_bound.to_index(span)?;
+                let lower_bound = lower_bound.to_index();
+                let upper_bound = upper_bound.to_index();
                 Ok(Box::new(
-                    (lower_bound..upper_bound).map(|index| Number::new(index as _).unwrap().into()),
+                    (lower_bound..upper_bound).map(|index| Float::new(index as _).unwrap().into()),
                 ))
             }
             (Some(lower_bound), Some(upper_bound), true) => {
-                let lower_bound = lower_bound.to_index(span)?;
-                let upper_bound = upper_bound.to_index(span)?;
+                let lower_bound = lower_bound.to_index();
+                let upper_bound = upper_bound.to_index();
                 Ok(Box::new(
-                    (lower_bound..=upper_bound)
-                        .map(|index| Number::new(index as _).unwrap().into()),
+                    (lower_bound..=upper_bound).map(|index| Float::new(index as _).unwrap().into()),
                 ))
             }
             (_, None, true) => unreachable!(), // Inclusive ranges without an upper bound are illegal to construct.
@@ -90,9 +94,9 @@ impl<'a, S: Span> Object<'a, S> for Range {
 }
 
 impl Range {
-    pub fn from_parsed<'a, S: Span>(
-        context: &mut ExecutionContext<'a, S>,
-        range: &'a parsing::Range<S>,
+    pub fn from_parsed<S: Span>(
+        context: &mut ExecutionContext<S>,
+        range: &parsing::Range<S>,
     ) -> OperatorResult<S, Self> {
         let lower_bound = if let Some(lower_bound) = &range.lower_bound {
             let span = lower_bound.get_span();
@@ -131,81 +135,73 @@ impl NamedObject for Range {
 
 #[cfg(test)]
 mod test {
+    use crate::script::Runtime;
+
     use super::*;
 
     #[test]
     fn iterate() {
-        let mut context = ExecutionContext::default();
+        let mut runtime = Runtime::default();
+        ExecutionContext::new(&mut runtime, |context| {
+            assert!(
+                Range::from_parsed(context, &parsing::Range::parse("..").unwrap().1)
+                    .unwrap()
+                    .iterate(context.log, &"span")
+                    .is_err()
+            );
 
-        assert!(Range::from_parsed(
-            &mut context,
-            Box::leak(Box::new(parsing::Range::parse("..").unwrap().1))
-        )
-        .unwrap()
-        .iterate(context.log, &"span")
-        .is_err());
+            assert!(
+                Range::from_parsed(context, &parsing::Range::parse("1..").unwrap().1)
+                    .unwrap()
+                    .iterate(context.log, &"span")
+                    .is_err()
+            );
 
-        assert!(Range::from_parsed(
-            &mut context,
-            Box::leak(Box::new(parsing::Range::parse("1..").unwrap().1))
-        )
-        .unwrap()
-        .iterate(context.log, &"span")
-        .is_err());
-
-        assert!(Range::from_parsed(
-            &mut context,
-            Box::leak(Box::new(parsing::Range::parse("..1").unwrap().1))
-        )
-        .unwrap()
-        .iterate(context.log, &"span")
-        .is_err());
-        assert!(Range::from_parsed(
-            &mut context,
-            Box::leak(Box::new(parsing::Range::parse("..=1").unwrap().1))
-        )
-        .unwrap()
-        .iterate(context.log, &"span")
-        .is_err());
-        assert!(Range::from_parsed(
-            &mut context,
-            Box::leak(Box::new(parsing::Range::parse("..=1").unwrap().1))
-        )
-        .unwrap()
-        .iterate(context.log, &"span")
-        .is_err());
-        assert_eq!(
-            Range::from_parsed(
-                &mut context,
-                Box::leak(Box::new(parsing::Range::parse("1..5").unwrap().1))
-            )
-            .unwrap()
-            .iterate(context.log, &"span")
-            .unwrap()
-            .collect::<Vec<_>>(),
-            [
-                Number::new(1.0).unwrap().into(),
-                Number::new(2.0).unwrap().into(),
-                Number::new(3.0).unwrap().into(),
-                Number::new(4.0).unwrap().into(),
-            ]
-        );
-        assert_eq!(
-            Range::from_parsed(
-                &mut context,
-                Box::leak(Box::new(parsing::Range::parse("1..=5").unwrap().1))
-            )
-            .unwrap()
-            .iterate(context.log, &"span")
-            .unwrap()
-            .collect::<Vec<_>>(),
-            [
-                Number::new(1.0).unwrap().into(),
-                Number::new(2.0).unwrap().into(),
-                Number::new(3.0).unwrap().into(),
-                Number::new(4.0).unwrap().into(),
-                Number::new(5.0).unwrap().into(),
-            ]
-        );
+            assert!(
+                Range::from_parsed(context, &parsing::Range::parse("..1").unwrap().1)
+                    .unwrap()
+                    .iterate(context.log, &"span")
+                    .is_err()
+            );
+            assert!(
+                Range::from_parsed(context, &parsing::Range::parse("..=1").unwrap().1)
+                    .unwrap()
+                    .iterate(context.log, &"span")
+                    .is_err()
+            );
+            assert!(
+                Range::from_parsed(context, &parsing::Range::parse("..=1").unwrap().1)
+                    .unwrap()
+                    .iterate(context.log, &"span")
+                    .is_err()
+            );
+            assert_eq!(
+                Range::from_parsed(context, &parsing::Range::parse("1..5").unwrap().1)
+                    .unwrap()
+                    .iterate(context.log, &"span")
+                    .unwrap()
+                    .collect::<Vec<_>>(),
+                [
+                    Float::new(1.0).unwrap().into(),
+                    Float::new(2.0).unwrap().into(),
+                    Float::new(3.0).unwrap().into(),
+                    Float::new(4.0).unwrap().into(),
+                ]
+            );
+            assert_eq!(
+                Range::from_parsed(context, &parsing::Range::parse("1..=5").unwrap().1)
+                    .unwrap()
+                    .iterate(context.log, &"span")
+                    .unwrap()
+                    .collect::<Vec<_>>(),
+                [
+                    Float::new(1.0).unwrap().into(),
+                    Float::new(2.0).unwrap().into(),
+                    Float::new(3.0).unwrap().into(),
+                    Float::new(4.0).unwrap().into(),
+                    Float::new(5.0).unwrap().into(),
+                ]
+            );
+        });
     }
 }

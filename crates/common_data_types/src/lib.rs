@@ -4,8 +4,8 @@ use ordered_float::NotNan;
 use paste::paste;
 use serde::Serialize;
 
-pub type RawNumber = f64;
-pub type Number = NotNan<RawNumber>;
+pub type RawFloat = f64;
+pub type Float = NotNan<RawFloat>;
 pub use ordered_float::{FloatIsNan, ParseNotNanError};
 pub use std::f64::consts;
 
@@ -49,6 +49,7 @@ impl RatioTypeHint {
     const INFORMATION_MASK: u8 = 0x04;
     const SOLID_ANGLE_MASK: u8 = 0x08;
     const TEMPRATURE_MASK: u8 = 0x10;
+    const PIXEL_MASK: u8 = 0x20;
 
     bit_getter_setter!(Self::ANGLE_KIND_MASK, angle);
     bit_getter_setter!(
@@ -58,6 +59,7 @@ impl RatioTypeHint {
     bit_getter_setter!(Self::INFORMATION_MASK, information);
     bit_getter_setter!(Self::SOLID_ANGLE_MASK, solid_angle);
     bit_getter_setter!(Self::TEMPRATURE_MASK, temperature);
+    bit_getter_setter!(Self::PIXEL_MASK, pixel);
 }
 
 impl std::ops::BitOr for RatioTypeHint {
@@ -79,6 +81,7 @@ impl std::fmt::Debug for RatioTypeHint {
             .field("is_information", &self.is_information())
             .field("is_solid_angle", &self.is_solid_angle())
             .field("is_temperature", &self.is_temperature())
+            .field("is_pixel", &self.is_pixel())
             .finish()
     }
 }
@@ -196,7 +199,7 @@ impl std::ops::Div<i8> for Dimension {
 }
 
 impl Dimension {
-    pub fn zero() -> Self {
+    pub const fn zero() -> Self {
         Self {
             length: 0,
             mass: 0,
@@ -209,10 +212,7 @@ impl Dimension {
         }
     }
 
-    pub fn angle() -> Self {
-        let mut ratio_type_hint = RatioTypeHint(0);
-        ratio_type_hint.set_is_angle(true);
-
+    pub const fn angle() -> Self {
         Self {
             length: 0,
             mass: 0,
@@ -221,11 +221,11 @@ impl Dimension {
             thermodynamic_temprature: 0,
             amount_of_substance: 0,
             luminous_intensity: 0,
-            ratio_type_hint,
+            ratio_type_hint: RatioTypeHint(RatioTypeHint::ANGLE_KIND_MASK),
         }
     }
 
-    pub fn length() -> Self {
+    pub const fn length() -> Self {
         Self {
             length: 1,
             mass: 0,

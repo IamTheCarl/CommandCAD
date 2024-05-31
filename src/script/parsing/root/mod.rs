@@ -23,14 +23,11 @@ use nom::{
     sequence::delimited,
 };
 
-pub use self::{import::Import, sketch::Sketch, solid::Solid, task::Task};
+pub use self::import::Import;
 
 use super::{space0, Function, Span, StructDefinition, VResult};
 
 mod import;
-mod sketch;
-mod solid;
-mod task;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct FileAST<S: Span> {
@@ -50,9 +47,6 @@ impl<S: Span> FileAST<S> {
 pub enum RootElement<S: Span> {
     Import(Import<S>),
     Struct(StructDefinition<S>),
-    Sketch(Sketch<S>),
-    Solid(Solid<S>),
-    Task(Task<S>),
     Function(Function<S>),
 }
 
@@ -61,18 +55,16 @@ impl<S: Span> RootElement<S> {
         alt((
             map(Import::parse, Self::Import),
             map(StructDefinition::parse, Self::Struct),
-            map(Sketch::parse, Self::Sketch),
-            map(Solid::parse, Self::Solid),
-            map(Task::parse, Self::Task),
-            map(Function::parse, Self::Function),
+            map(Function::parse_as_sketch, Self::Function),
+            map(Function::parse_as_solid, Self::Function),
+            map(Function::parse_as_task, Self::Function),
+            map(Function::parse_as_function, Self::Function),
         ))(input)
     }
 }
 
 #[cfg(test)]
 mod test {
-
-    use std::rc::Rc;
 
     use crate::script::parsing::{
         blocks::CallableBlock, Block, FunctionSignature, NamedBlock, VariableType,
@@ -111,7 +103,7 @@ mod test {
             RootElement::parse("sketch my_sketch() {}"),
             Ok((
                 "",
-                RootElement::Sketch(Sketch {
+                RootElement::Function(Function {
                     starting_span: "sketch",
                     named_block: NamedBlock {
                         name: "my_sketch",
@@ -121,7 +113,7 @@ mod test {
                             block: Block { statements: vec![] }
                         }
                     },
-                    signature: Rc::new(FunctionSignature::Sketch { arguments: vec![] }),
+                    signature: FunctionSignature::Sketch { arguments: vec![] },
                 })
             ))
         );
@@ -131,7 +123,7 @@ mod test {
             RootElement::parse("solid my_solid() {}"),
             Ok((
                 "",
-                RootElement::Solid(Solid {
+                RootElement::Function(Function {
                     starting_span: "solid",
                     named_block: NamedBlock {
                         name: "my_solid",
@@ -141,7 +133,7 @@ mod test {
                             block: Block { statements: vec![] }
                         }
                     },
-                    signature: Rc::new(FunctionSignature::Solid { arguments: vec![] }),
+                    signature: FunctionSignature::Solid { arguments: vec![] },
                 })
             ))
         );
@@ -161,10 +153,10 @@ mod test {
                             block: Block { statements: vec![] }
                         }
                     },
-                    signature: Rc::new(FunctionSignature::Function {
+                    signature: FunctionSignature::Function {
                         return_type: Box::new(VariableType::Scalar("Length")),
                         arguments: vec![]
-                    }),
+                    },
                 })
             ))
         );
@@ -217,7 +209,7 @@ mod test {
                             name: "MyStruct",
                             members: vec![]
                         }),
-                        RootElement::Sketch(Sketch {
+                        RootElement::Function(Function {
                             starting_span: "sketch",
                             named_block: NamedBlock {
                                 name: "my_sketch",
@@ -227,9 +219,9 @@ mod test {
                                     block: Block { statements: vec![] }
                                 }
                             },
-                            signature: Rc::new(FunctionSignature::Sketch { arguments: vec![] }),
+                            signature: FunctionSignature::Sketch { arguments: vec![] },
                         }),
-                        RootElement::Solid(Solid {
+                        RootElement::Function(Function {
                             starting_span: "solid",
                             named_block: NamedBlock {
                                 name: "my_solid",
@@ -239,7 +231,7 @@ mod test {
                                     block: Block { statements: vec![] }
                                 }
                             },
-                            signature: Rc::new(FunctionSignature::Solid { arguments: vec![] }),
+                            signature: FunctionSignature::Solid { arguments: vec![] },
                         }),
                         RootElement::Function(Function {
                             starting_span: "function",
@@ -251,12 +243,12 @@ mod test {
                                     block: Block { statements: vec![] }
                                 }
                             },
-                            signature: Rc::new(FunctionSignature::Function {
+                            signature: FunctionSignature::Function {
                                 return_type: Box::new(VariableType::Scalar("Length")),
                                 arguments: vec![]
-                            }),
+                            },
                         }),
-                        RootElement::Task(Task {
+                        RootElement::Function(Function {
                             starting_span: "task",
                             named_block: NamedBlock {
                                 name: "my_task",
@@ -266,10 +258,10 @@ mod test {
                                     block: Block { statements: vec![] }
                                 }
                             },
-                            signature: Rc::new(FunctionSignature::Task {
+                            signature: FunctionSignature::Task {
                                 return_type: Box::new(VariableType::Scalar("Length")),
                                 arguments: vec![]
-                            }),
+                            },
                         }),
                     ]
                 }

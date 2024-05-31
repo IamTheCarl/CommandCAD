@@ -18,7 +18,7 @@
 
 use std::{
     fs::{self, File},
-    io::{Seek, Write},
+    io::{IsTerminal, Seek, Write},
     ops::Deref,
     path::PathBuf,
     str::FromStr,
@@ -26,7 +26,6 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Result};
 use arguments::{ListUnitsArgs, OutputTarget, SolidOutputFormat, TaskOutputFormat};
-use atty::Stream;
 use clap::Parser;
 
 mod arguments;
@@ -38,6 +37,8 @@ use fj_core::algorithms::{
 };
 use fj_export::{export_3mf, export_obj, export_stl};
 use fj_math::{Aabb, Point, Scalar as FornjotScalar};
+use imstr::ImString;
+use nom_locate::LocatedSpan;
 use script::{Failure, Runtime, SerializableValue};
 use tempfile::SpooledTempFile;
 use uom::si::{f64::Length, length::millimeter};
@@ -137,13 +138,10 @@ fn form(form_args: arguments::FormArgs) {
                 }
                 None => {
                     // Compute a default tolerance derived from the bounding box.
-                    let aabb = runtime
-                        .global_resources(|global_resources| {
-                            solid
-                                .handle
-                                .deref()
-                                .aabb(&global_resources.fornjot_core.layers.geometry)
-                        })
+                    let aabb = solid
+                        .handle
+                        .deref()
+                        .aabb(&runtime.global_resources.fornjot_core.layers.geometry)
                         .unwrap_or(Aabb {
                             min: Point::origin(),
                             max: Point::origin(),
@@ -163,9 +161,8 @@ fn form(form_args: arguments::FormArgs) {
                 }
             };
 
-            let mesh = runtime.global_resources_mut(|global_resources| {
-                (solid.handle.deref(), tolerance).triangulate(&mut global_resources.fornjot_core)
-            });
+            let mesh = (solid.handle.deref(), tolerance)
+                .triangulate(&mut runtime.global_resources.fornjot_core);
 
             match form_args.output {
                 OutputTarget::Stdout => {
@@ -178,7 +175,7 @@ fn form(form_args: arguments::FormArgs) {
                         SolidOutputFormat::Obj => false,
                     };
 
-                    if is_binary_format && atty::is(Stream::Stdout) {
+                    if is_binary_format && output.is_terminal() {
                         bail!("Refusing to output binary data to terminal.");
                     }
 
@@ -230,8 +227,11 @@ fn trampoline<A, S, R>(
     serialize_action: S,
 ) -> Result<()>
 where
-    A: FnOnce(&mut Runtime, Vec<SerializableValue>) -> std::result::Result<R, Failure>,
-    S: FnOnce(R, &mut Runtime) -> Result<()>,
+    A: FnOnce(
+        &mut Runtime<LocatedSpan<ImString>>,
+        Vec<SerializableValue>,
+    ) -> std::result::Result<R, Failure<LocatedSpan<ImString>>>,
+    S: FnOnce(R, &mut Runtime<LocatedSpan<ImString>>) -> Result<()>,
 {
     fn parse_argument(argument: &str) -> Result<SerializableValue> {
         match serde_json::from_str(argument) {
@@ -254,9 +254,10 @@ where
         .context("Script name could not be UTF8 encoded")?;
 
     let code = fs::read_to_string(&script).context("Failed to read script into memory")?;
+    let code: ImString = code.into();
+    let code = LocatedSpan::new(code);
 
-    let mut runtime =
-        script::Runtime::load((module_name, code)).context("Failed to load runtime")?;
+    let mut runtime = script::Runtime::load(module_name, code).context("Failed to load runtime")?;
 
     let mut unpacked_arguments = Vec::with_capacity(arguments.len());
 
