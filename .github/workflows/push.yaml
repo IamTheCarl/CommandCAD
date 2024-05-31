@@ -1,0 +1,73 @@
+name: Pull Request
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo check
+        run: cargo check
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo clippy
+        run: cargo clippy
+
+  test:
+    name: Test
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
+    runs-on: ${{matrix.os}}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+      - name: Run `cargo build`
+        run: cargo build --all-features
+      - name: Run `cargo test`
+        run: cargo test --all-features
