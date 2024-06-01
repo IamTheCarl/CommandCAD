@@ -60,7 +60,7 @@ impl<S: Span> Object<S> for Solid {
         attribute: &S,
     ) -> OperatorResult<S, Value<S>> {
         match attribute.as_str() {
-            "shells" => Ok(Value::from_object_set(self.handle.shells()).into()),
+            "shells" => Ok(Value::from_object_set(self.handle.shells())),
             _ => Err(Failure::UnknownAttribute(attribute.clone())),
         }
     }

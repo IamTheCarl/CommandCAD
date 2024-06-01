@@ -536,7 +536,7 @@ mod test {
     #[test]
     fn index() {
         let mut runtime = Runtime::default();
-        ExecutionContext::new(&mut runtime, |context| {
+        ExecutionContext::create(&mut runtime, |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("[1, 2, 3][0]").unwrap().1),
                 Ok(Float::new(1.0).unwrap().into())

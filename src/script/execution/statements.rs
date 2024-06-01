@@ -462,7 +462,7 @@ mod test {
 
     #[test]
     fn assignment() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_statement(context, &parsing::Statement::parse("value = 1").unwrap().1),
                 Err(ControlFlow::Failure(Failure::VariableNotInScope(
@@ -559,7 +559,7 @@ mod test {
 
     #[test]
     fn assign_scopes() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             context
                 .stack
                 .new_variable(&"one", Float::new(1.0).unwrap().into());
@@ -603,7 +603,7 @@ mod test {
 
     #[test]
     fn loop_statement() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_statement(
                     context,
@@ -616,7 +616,7 @@ mod test {
 
     #[test]
     fn if_statement() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_statement(
                     context,
@@ -689,7 +689,7 @@ mod test {
 
     #[test]
     fn break_statement() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_statement(
                     context,
@@ -752,7 +752,7 @@ mod test {
 
     #[test]
     fn continue_statement() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
 		run_block(context, &parsing::Block::parse(
 		    "{ let a = 0; let b = false; loop { a = a + 1; if a >= 2 { break; } continue; b = true; } }",
@@ -777,7 +777,7 @@ mod test {
 
     #[test]
     fn while_statement() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_block(
                     context,
@@ -798,7 +798,7 @@ mod test {
 
     #[test]
     fn for_statement() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_block(
                     context,
@@ -852,7 +852,7 @@ mod test {
 
     #[test]
     fn match_statement() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_block(
                     context,
@@ -921,7 +921,7 @@ mod test {
 
     #[test]
     fn define_function() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_statement(
                     context,
@@ -941,7 +941,7 @@ mod test {
 
     #[test]
     fn define_structure() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_statement(
                     context,

@@ -138,7 +138,7 @@ mod test {
 
     #[test]
     fn rotate() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let result = run_expression(
             context,
             &
@@ -157,7 +157,7 @@ mod test {
 
     #[test]
     fn addition() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let result = run_expression(
             context,
                 &Expression::parse(
@@ -175,7 +175,7 @@ mod test {
 
     #[test]
     fn subtraction() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let result = run_expression(
             context,
                 &Expression::parse(

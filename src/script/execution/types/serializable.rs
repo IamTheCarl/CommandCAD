@@ -186,7 +186,7 @@ mod test {
 
     #[test]
     fn deserialize_boolean() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 serde_yaml::from_str::<SerializableValue>("true")
                     .unwrap()
@@ -204,7 +204,7 @@ mod test {
 
     #[test]
     fn serialize_boolean() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let boolean: Value<&'static str> = true.into();
             assert_eq!(
                 boolean.export(context.log, &""),
@@ -221,7 +221,7 @@ mod test {
 
     #[test]
     fn deserialize_number() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 serde_yaml::from_str::<SerializableValue>("42")
                     .unwrap()
@@ -251,7 +251,7 @@ mod test {
 
         assert!(log.is_empty());
 
-        ExecutionContext::new(&mut Runtime::from(module), |context| {
+        ExecutionContext::create(&mut Runtime::from(module), |context| {
             let struct_def = r#"
                    type: MyStruct
                    members:
@@ -326,7 +326,7 @@ mod test {
 
         assert!(log.is_empty());
 
-        ExecutionContext::new(&mut Runtime::from(module), |context| {
+        ExecutionContext::create(&mut Runtime::from(module), |context| {
             let value: Value<&'static str> = run_expression(
                 context,
                 &Expression::parse("MyStruct { value = 42 }").unwrap().1,
@@ -350,7 +350,7 @@ mod test {
     fn deserialize_list() {
         let list_def = r#"[1, true, "some text"]"#;
 
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let list = serde_yaml::from_str::<SerializableValue>(list_def).unwrap();
 
             let list = list.into_value(context, &"", &VariableType::List);
@@ -368,7 +368,7 @@ mod test {
 
     #[test]
     fn serialize_list() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let value: Value<&'static str> = List::from([
                 Float::new(1.0).unwrap().into(),
                 true.into(),
@@ -388,7 +388,7 @@ mod test {
 
     #[test]
     fn deserialize_string() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 serde_yaml::from_str::<SerializableValue>("text")
                     .unwrap()
@@ -400,7 +400,7 @@ mod test {
 
     #[test]
     fn serialize_string() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let value: Value<&'static str> = SString::from("This is a test".to_string()).into();
             assert_eq!(
                 value.export(context.log, &""),
@@ -411,7 +411,7 @@ mod test {
 
     #[test]
     fn deserialize_measurement() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 serde_yaml::from_str::<SerializableValue>("42mm")
                     .unwrap()
@@ -433,7 +433,7 @@ mod test {
 
     #[test]
     fn deserialize_default() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 serde_yaml::from_str::<SerializableValue>("default")
                     .unwrap()

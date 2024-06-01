@@ -339,7 +339,7 @@ mod test {
 
     #[test]
     fn translate() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(
                     context,
@@ -408,7 +408,7 @@ mod test {
 
     #[test]
     fn scale() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(
                     context,
@@ -429,7 +429,7 @@ mod test {
 
     #[test]
     fn rotate_2d() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let result = run_expression(
                 context,
                 &Expression::parse(
@@ -447,7 +447,7 @@ mod test {
 
     #[test]
     fn rotate_3d() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let result = run_expression(
             context,
         &        Expression::parse(

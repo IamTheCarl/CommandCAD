@@ -168,7 +168,7 @@ impl StandardLog {
     }
 }
 
-impl<'a, S: Span> RuntimeLog<S> for StandardLog {
+impl<S: Span> RuntimeLog<S> for StandardLog {
     fn push(&mut self, message: LogMessage<S>) {
         match message.log_level() {
             LogLevel::Info => log::info!("{}", message),

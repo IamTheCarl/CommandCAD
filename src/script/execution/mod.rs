@@ -91,7 +91,7 @@ pub struct ExecutionContext<'a, S: Span> {
 }
 
 impl<'a, S: Span> ExecutionContext<'a, S> {
-    pub fn new<R>(runtime: &'a mut Runtime<S>, run: impl FnOnce(&mut Self) -> R) -> R {
+    pub fn create<R>(runtime: &'a mut Runtime<S>, run: impl FnOnce(&mut Self) -> R) -> R {
         let mut context = Self {
             global_resources: &mut runtime.global_resources,
             log: StandardLog::global(),
@@ -292,7 +292,7 @@ mod test {
 
         assert!(log.is_empty());
 
-        ExecutionContext::new(&mut module.into(), |context| {
+        ExecutionContext::create(&mut module.into(), |context| {
             let block = parsing::Block::parse("{ my_function(5) }").unwrap().1;
 
             let result = run_block(context, Box::leak(Box::new(block)));
@@ -313,7 +313,7 @@ mod test {
 
         assert!(log.is_empty());
 
-        ExecutionContext::new(&mut module.into(), |context| {
+        ExecutionContext::create(&mut module.into(), |context| {
             let block = parsing::Block::parse("{ my_function(default) }").unwrap().1;
 
             let result = run_block(context, Box::leak(Box::new(block)));
@@ -334,7 +334,7 @@ mod test {
 
         assert!(log.is_empty());
 
-        ExecutionContext::new(&mut module.into(), |context| {
+        ExecutionContext::create(&mut module.into(), |context| {
             let block = parsing::Block::parse("{ let value = 0; my_function(5); value }")
                 .unwrap()
                 .1;
@@ -364,7 +364,7 @@ mod test {
 
         assert!(log.is_empty());
 
-        ExecutionContext::new(&mut module.into(), |context| {
+        ExecutionContext::create(&mut module.into(), |context| {
             let block = parsing::Block::parse("{ my_function() }").unwrap().1;
 
             let result =

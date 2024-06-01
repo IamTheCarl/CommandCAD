@@ -114,7 +114,7 @@ mod test {
 
     #[test]
     fn call_closure() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(
                     context,
@@ -127,7 +127,7 @@ mod test {
 
     #[test]
     fn closure_hygene() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let block = parsing::Block::parse(
                 "{ let closure = []() -> Number { let value = 1; }; closure(); }",
             )
@@ -181,7 +181,7 @@ mod test {
 
     #[test]
     fn pass_by_copy() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let block = parsing::Block::parse(
             "{ let value = 1; let closure = [value]() -> Number { value = 2; value }; closure() }",
         )
@@ -200,7 +200,7 @@ mod test {
 
     #[test]
     fn pass_by_reference() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             let block = parsing::Block::parse(
             "{ let value = 1; let closure = [&value]() -> Number { value = 2; value }; closure() }",
         )
