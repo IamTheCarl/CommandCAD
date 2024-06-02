@@ -83,7 +83,7 @@ impl<S: Span> Runtime<S> {
         arguments: Vec<SerializableValue>,
     ) -> std::result::Result<(), Failure<S>> {
         let root_span = self.root_span.clone();
-        ExecutionContext::new(self, |context| {
+        ExecutionContext::create(self, |context| {
             let mut argument_values = Vec::with_capacity(arguments.len());
             for argument in arguments {
                 let value = argument.into_value_without_type_check(context, &root_span)?;
@@ -124,7 +124,7 @@ impl<S: Span> Runtime<S> {
         arguments: Vec<SerializableValue>,
     ) -> std::result::Result<Solid, Failure<S>> {
         let root_span = self.root_span.clone();
-        ExecutionContext::new(self, |context| {
+        ExecutionContext::create(self, |context| {
             let mut argument_values = Vec::with_capacity(arguments.len());
             for argument in arguments {
                 let value = argument.into_value_without_type_check(context, &root_span)?;
@@ -160,7 +160,7 @@ impl<S: Span> Runtime<S> {
         arguments: Vec<SerializableValue>,
     ) -> std::result::Result<SerializableValue, Failure<S>> {
         let root_span = self.root_span.clone();
-        ExecutionContext::new(self, |context| {
+        ExecutionContext::create(self, |context| {
             let mut argument_values = Vec::with_capacity(arguments.len());
             for argument in arguments {
                 let value = argument.into_value_without_type_check(context, &root_span)?;

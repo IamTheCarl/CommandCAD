@@ -142,7 +142,7 @@ mod test {
     #[test]
     fn iterate() {
         let mut runtime = Runtime::default();
-        ExecutionContext::new(&mut runtime, |context| {
+        ExecutionContext::create(&mut runtime, |context| {
             assert!(
                 Range::from_parsed(context, &parsing::Range::parse("..").unwrap().1)
                     .unwrap()

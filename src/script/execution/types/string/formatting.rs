@@ -253,7 +253,7 @@ impl Format {
                             Failure::ExpectedGot(
                                 span.clone(),
                                 Number::static_type_name().into(),
-                                <Scalar as Object<S>>::type_name(&precision),
+                                <Scalar as Object<S>>::type_name(precision),
                             )
                         })?;
                         let precision = precision.to_index();

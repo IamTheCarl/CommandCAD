@@ -163,7 +163,7 @@ mod test {
 
     #[test]
     fn construct_circle() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert!(matches!(
                 run_expression(
                     context,
@@ -180,7 +180,7 @@ mod test {
 
     #[test]
     fn construct_polygon() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert!(matches!(
             run_expression(
                 context,

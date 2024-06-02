@@ -177,7 +177,7 @@ mod test {
 
     #[test]
     fn construct_circle() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert!(matches!(
                 run_expression(
                     context,
@@ -194,7 +194,7 @@ mod test {
 
     #[test]
     fn construct_polygon() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert!(matches!(
 		run_expression(
                     context,
@@ -211,7 +211,7 @@ mod test {
 
     #[test]
     fn construct_from_regions() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert!(matches!(
                 run_expression(
                     context,
@@ -229,7 +229,7 @@ new_region(Circle { center = vec2(4mm, 2mm), radius = 3mm, surface = global_xy_p
 
     #[test]
     fn sweep() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert!(matches!(
 		dbg!(run_expression(
                     context,

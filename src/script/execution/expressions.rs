@@ -214,7 +214,7 @@ mod test {
 
     #[test]
     fn expression_straight_number() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("24").unwrap().1),
                 Ok(Float::new(24.0).unwrap().into())
@@ -224,7 +224,7 @@ mod test {
 
     #[test]
     fn expression_logical_operators() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("true").unwrap().1),
                 Ok(Value::Boolean(true))
@@ -284,7 +284,7 @@ mod test {
 
     #[test]
     fn value_from_litteral() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             // Scalar
             assert_eq!(
                 Value::from_litteral(context, &Litteral::parse("22mm").unwrap().1),
@@ -335,7 +335,7 @@ mod test {
 
     #[test]
     fn variable_access() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             context.stack.new_variable(&"global_scope", true.into());
 
             context.new_scope(|context| {
@@ -373,7 +373,7 @@ mod test {
 
     #[test]
     fn unary_operators() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("+15").unwrap().1),
                 Ok(Float::new(15.0).unwrap().into())
@@ -388,7 +388,7 @@ mod test {
 
     #[test]
     fn parenthasis() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("(1 + 2) * 3").unwrap().1),
                 Ok(Float::new(9.0).unwrap().into())
@@ -409,7 +409,7 @@ mod test {
 
         assert!(log.is_empty());
 
-        ExecutionContext::new(&mut module.into(), |context| {
+        ExecutionContext::create(&mut module.into(), |context| {
             assert_eq!(
                 run_expression(
                     context,
@@ -424,7 +424,7 @@ mod test {
 
     #[test]
     fn method_call() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("24.25.floor()").unwrap().1),
                 Ok(Float::new(24.0).unwrap().into())
@@ -434,7 +434,7 @@ mod test {
 
     #[test]
     fn call() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             fn my_function<S: Span>(
                 _context: &mut ExecutionContext<S>,
                 _span: &S,
@@ -457,7 +457,7 @@ mod test {
 
     #[test]
     fn index() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("[1, 2, 3][0]").unwrap().1),
                 Ok(Float::new(1.0).unwrap().into())
@@ -467,7 +467,7 @@ mod test {
 
     #[test]
     fn multiply() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("1 + 2 * 3").unwrap().1),
                 Ok(Float::new(7.0).unwrap().into())
@@ -477,7 +477,7 @@ mod test {
 
     #[test]
     fn divide() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("9 / 3").unwrap().1),
                 Ok(Float::new(3.0).unwrap().into())
@@ -487,7 +487,7 @@ mod test {
 
     #[test]
     fn range() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("..").unwrap().1),
                 Ok(Range {
@@ -533,7 +533,7 @@ mod test {
 
     #[test]
     fn addition() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("1 + 2").unwrap().1),
                 Ok(Float::new(3.0).unwrap().into())
@@ -543,7 +543,7 @@ mod test {
 
     #[test]
     fn subtraction() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("1 + 2").unwrap().1),
                 Ok(Float::new(3.0).unwrap().into())
@@ -553,7 +553,7 @@ mod test {
 
     #[test]
     fn comparisions() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             // LessThan(_, _)
             assert_eq!(
                 run_expression(context, &Expression::parse("1 < 2").unwrap().1),

@@ -1252,7 +1252,7 @@ mod test {
 
     #[test]
     fn conversions() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("1m + 100cm == 2m").unwrap().1),
                 Ok(true.into())

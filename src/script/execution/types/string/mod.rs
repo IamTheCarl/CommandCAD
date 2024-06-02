@@ -370,7 +370,7 @@ mod test {
 
     #[test]
     fn string_concat() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(
                     context,

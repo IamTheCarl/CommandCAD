@@ -352,7 +352,7 @@ mod test {
         assert!(log.is_empty());
 
         let mut runtime = Runtime::from(module);
-        ExecutionContext::new(&mut runtime, |context| {
+        ExecutionContext::create(&mut runtime, |context| {
             let two_part_struct = context
                 .stack
                 .get_variable(&"TwoPartStruct")

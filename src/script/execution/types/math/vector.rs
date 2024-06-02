@@ -751,7 +751,7 @@ mod test {
 
     #[test]
     fn construct_vec2() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec2(1)").unwrap().1),
                 Ok(Vector {
@@ -773,7 +773,7 @@ mod test {
 
     #[test]
     fn construct_vec3() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec3(1)").unwrap().1),
                 Ok(Vector {
@@ -813,7 +813,7 @@ mod test {
 
     #[test]
     fn construct_vec4() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec4(1)").unwrap().1),
                 Ok(Vector {
@@ -853,7 +853,7 @@ mod test {
 
     #[test]
     fn to_fornjot_vector() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec2(1mm, 2mm)").unwrap().1)
                     .unwrap()
@@ -869,7 +869,7 @@ mod test {
     }
     #[test]
     fn to_fornjot_point() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec2(1mm, 2mm)").unwrap().1)
                     .unwrap()
@@ -888,7 +888,7 @@ mod test {
 
     #[test]
     fn index() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec2(1, 2)[0]").unwrap().1),
                 Ok(Scalar::from_number(Float::new(1.0).unwrap()).into())
@@ -910,7 +910,7 @@ mod test {
 
     #[test]
     fn swizzle() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec4(1, 2, 3, 4).x").unwrap().1),
                 Ok(Float::new(1.0).unwrap().into())
@@ -1010,7 +1010,7 @@ mod test {
 
     #[test]
     fn addition() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(
                     context,
@@ -1027,7 +1027,7 @@ mod test {
 
     #[test]
     fn subtraction() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(
                     context,
@@ -1044,7 +1044,7 @@ mod test {
 
     #[test]
     fn scalar_multiplication() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec2(1, 2) * 4").unwrap().1),
                 Ok(Vector {
@@ -1058,7 +1058,7 @@ mod test {
 
     #[test]
     fn scalar_division() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(context, &Expression::parse("vec2(1, 2) / 2").unwrap().1),
                 Ok(Vector {
@@ -1110,7 +1110,7 @@ mod test {
 
     #[test]
     fn angle() {
-        ExecutionContext::new(&mut Runtime::default(), |context| {
+        ExecutionContext::create(&mut Runtime::default(), |context| {
             assert_eq!(
                 run_expression(
                     context,
