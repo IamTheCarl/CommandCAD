@@ -1,0 +1,7 @@
+{
+  "git+https://github.com/IamTheCarl/imstr#0.2.0": "0csqvjlgi1wvrfhidy0khivwx5p3h0rhwzz5r5zsx0zzwn7qpn2d",
+  "git+https://github.com/hannobraun/fornjot.git#fj-core@0.49.0": "10grx83xjz63gpmcfmkbihv9zq78f67sa5yjjsmvnz5bd9rrlx9d",
+  "git+https://github.com/hannobraun/fornjot.git#fj-export@0.49.0": "10grx83xjz63gpmcfmkbihv9zq78f67sa5yjjsmvnz5bd9rrlx9d",
+  "git+https://github.com/hannobraun/fornjot.git#fj-interop@0.49.0": "10grx83xjz63gpmcfmkbihv9zq78f67sa5yjjsmvnz5bd9rrlx9d",
+  "git+https://github.com/hannobraun/fornjot.git#fj-math@0.49.0": "10grx83xjz63gpmcfmkbihv9zq78f67sa5yjjsmvnz5bd9rrlx9d"
+}

@@ -1,13 +1,10 @@
-# `nixpkgs` by default if no argument is passed to it.
-{ pkgs ? import <nixpkgs> {} }:
-
-# This avoids typing `pkgs.` before each package name.
-with pkgs;
-
-# Defines a shell.
-mkShell {
-  # Sets the build inputs, i.e. what will be available in our
-  # local environment.
-  buildInputs = [ rustup pkg-config openssl_3_1 ];
-}
-
+{ pkgs ? import <nixpkgs> { } }:
+let
+  addDeps = list: { ... }: {
+    nativeBuildInputs = list ++ (import ./build_dependencies.nix {
+      pkgs = pkgs;
+    });
+  };
+  cargo_nix = pkgs.callPackage ./Cargo.nix { };
+in
+cargo_nix.workspaceMembers."command_cad".build.overrideAttrs { }
