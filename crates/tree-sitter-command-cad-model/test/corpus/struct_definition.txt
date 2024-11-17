@@ -1,0 +1,241 @@
+==================
+One
+==================
+
+( one: std.Constraint )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier)))))))
+
+==================
+One,
+==================
+
+( one: std.Constraint )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier)))))))
+
+==================
+...
+==================
+
+( ... )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (varadic_dots))))
+
+==================
+...,
+==================
+
+( ..., )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (varadic_dots))))
+
+==================
+One, ...
+==================
+
+( one: std.Constraint, ... )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier))))
+      (varadic_dots))))
+
+==================
+One, ...,
+==================
+
+( one: std.Constraint, ..., )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier))))
+      (varadic_dots))))
+
+==================
+One, two
+==================
+
+( one: std.Constraint, two: std.Constraint )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier))))
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier)))))))
+
+==================
+One, two,
+==================
+
+( one: std.Constraint, two: std.Constraint, )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier))))
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier)))))))
+
+==================
+One, two, ...
+==================
+
+( one: std.Constraint, two: std.Constraint, ... )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier))))
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier))))
+      (varadic_dots))))
+
+==================
+One, two, ...,
+==================
+
+( one: std.Constraint, two: std.Constraint, ..., )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier))))
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier))))
+      (varadic_dots))))
+
+==================
+Default
+==================
+
+( one: std.Constraint = a )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier)))
+        (expression
+          (path
+            (local_path
+              (identifier))))))))
+
+==================
+Default,
+==================
+
+( one: std.Constraint = a, )
+
+---
+
+(source_file
+  (expression
+    (struct_definition
+      (struct_member
+        (identifier)
+        (path
+          (local_path
+            (identifier)
+            (identifier)))
+        (expression
+          (path
+            (local_path
+              (identifier))))))))

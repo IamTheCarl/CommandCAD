@@ -1,0 +1,21 @@
+==================
+Assign
+==================
+
+ {
+    for x in y {}
+ } 
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (for
+          (identifier)
+          (expression
+            (path
+              (local_path
+                (identifier))))
+          (procedural_block))))))

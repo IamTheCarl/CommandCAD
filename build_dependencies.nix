@@ -17,11 +17,27 @@ let
     cargo = rust;
     rustc = rust;
   };
+
+  tree-sitter-cli = rust_platform.buildRustPackage rec {
+    pname = "tree-sitter-cli";
+    version = "0.22.6";
+
+    src = pkgs.fetchCrate {
+      inherit pname version;
+      sha256 = "sha256-bqWGJ8ZbqKAI0T9Fzx9pW6dOztJZ72dzJNOj1jtOc4o=";
+    };
+
+    cargoSha256 = "sha256-BreZqkSP/fis5HmjFYQeDux2EB37nqFaIS4HVRTe3Kg=";
+    doCheck = false;
+  };
 in
 [
   rust
   rust_platform.bindgenHook
+  tree-sitter-cli
   pkgs.crate2nix
   pkgs.openssl
   pkgs.pkg-config
+  pkgs.nodejs_22
+  pkgs.gcc
 ]

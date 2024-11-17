@@ -1,0 +1,45 @@
+==================
+Precedence
+==================
+
+(a + b * c ** d >= e) + c
+
+---
+
+(source_file
+  (expression
+    (binary_expression
+      (expression
+        (parenthesis
+          (expression
+            (binary_expression
+              (expression
+                (binary_expression
+                  (expression
+                    (path
+                      (local_path
+                        (identifier))))
+                  (expression
+                    (binary_expression
+                      (expression
+                        (path
+                          (local_path
+                            (identifier))))
+                      (expression
+                        (binary_expression
+                          (expression
+                            (path
+                              (local_path
+                                (identifier))))
+                          (expression
+                            (path
+                              (local_path
+                                (identifier))))))))))
+              (expression
+                (path
+                  (local_path
+                    (identifier))))))))
+      (expression
+        (path
+          (local_path
+            (identifier)))))))

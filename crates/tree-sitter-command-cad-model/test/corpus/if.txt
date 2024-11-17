@@ -1,0 +1,50 @@
+==================
+If
+==================
+
+if true {} 
+
+---
+
+(source_file
+  (expression
+    (if
+      (expression
+        (boolean))
+      (procedural_block))))
+
+==================
+If else
+==================
+
+if true {} else {} 
+
+---
+
+(source_file
+  (expression
+    (if
+      (expression
+        (boolean))
+      (procedural_block)
+      (procedural_block))))
+
+==================
+With other operations
+==================
+
+1 + if true {} 
+
+---
+
+(source_file
+  (expression
+    (binary_expression
+      (expression
+        (scalar
+          (number)))
+      (expression
+        (if
+          (expression
+            (boolean))
+          (procedural_block))))))

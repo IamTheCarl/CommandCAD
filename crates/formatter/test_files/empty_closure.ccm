@@ -1,0 +1,2 @@
+# An empty closure that takes no arguments, and returns no arguments.
+() -> {}

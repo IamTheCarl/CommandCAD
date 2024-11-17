@@ -1,0 +1,130 @@
+==================
+Comment
+==================
+
+()
+
+---
+
+(source_file
+  (expression
+    (void)))
+
+==================
+String
+==================
+
+"Some text"
+
+---
+
+(source_file
+  (expression
+    (string)))
+
+==================
+Escaped string
+==================
+
+"Some \"text\""
+
+---
+
+(source_file
+  (expression
+    (string)))
+
+==================
+Signed Integer Positive
+==================
+
+123i
+
+---
+
+(source_file
+  (expression
+    (signed_integer)))
+
+==================
+Signed Integer Positive with plus
+==================
+
++123i
+
+---
+
+(source_file
+  (expression
+    (unary_expression
+      (expression
+        (signed_integer)))))
+
+==================
+Signed Integer Positive with minus
+==================
+
+-123i
+
+---
+
+(source_file
+  (expression
+    (unary_expression
+      (expression
+        (signed_integer)))))
+
+==================
+Scalar no decimal no unit
+==================
+
+123
+
+---
+
+(source_file
+  (expression
+    (scalar
+      (number))))
+
+==================
+Scalar no unit
+==================
+
+123.321
+
+---
+
+(source_file
+  (expression
+    (scalar
+      (number)
+      (number))))
+
+==================
+Scalar with unquoted unit
+==================
+
+123 mm
+
+---
+
+(source_file
+  (expression
+    (scalar
+      (number)
+      (identifier))))
+
+==================
+Scalar with quoted unit
+==================
+
+123 'mm'
+
+---
+
+(source_file
+  (expression
+    (scalar
+      (number)
+      (unit_quote))))

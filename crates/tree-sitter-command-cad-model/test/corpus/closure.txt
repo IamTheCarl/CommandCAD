@@ -1,0 +1,95 @@
+==================
+Empty
+==================
+
+()[] -> std.None {} 
+
+---
+
+(source_file
+  (expression
+    (closure_definition
+      (void)
+      (closure_captured_variables)
+      (path
+        (local_path
+          (identifier)
+          (identifier)))
+      (expression
+        (procedural_block)))))
+
+==================
+Capture
+==================
+
+()[a, b, c] -> std.None {} 
+
+---
+
+(source_file
+  (expression
+    (closure_definition
+      (void)
+      (closure_captured_variables
+        (identifier)
+        (identifier)
+        (identifier))
+      (path
+        (local_path
+          (identifier)
+          (identifier)))
+      (expression
+        (procedural_block)))))
+
+==================
+Capture,
+==================
+
+()[a, b, c,] -> std.None {} 
+
+---
+
+(source_file
+  (expression
+    (closure_definition
+      (void)
+      (closure_captured_variables
+        (identifier)
+        (identifier)
+        (identifier))
+      (path
+        (local_path
+          (identifier)
+          (identifier)))
+      (expression
+        (procedural_block)))))
+
+==================
+With a statement
+==================
+
+()[] -> std.None {
+  value = 5i;
+} 
+
+---
+
+(source_file
+  (expression
+    (closure_definition
+      (void)
+      (closure_captured_variables)
+      (path
+        (local_path
+          (identifier)
+          (identifier)))
+      (expression
+        (procedural_block
+          (statement
+            (assign
+              (path
+                (local_path
+                  (identifier)))
+              (assignment_operator)
+              (expression
+                (signed_integer)))))))))

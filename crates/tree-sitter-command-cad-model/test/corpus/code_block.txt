@@ -1,0 +1,95 @@
+==================
+Empty
+==================
+
+{} 
+
+---
+
+(source_file
+  (expression
+    (procedural_block)))
+
+==================
+Closed statement
+==================
+
+{
+    5i;
+} 
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (closed_expression
+          (expression
+            (signed_integer)))))))
+
+==================
+Open statement
+==================
+
+{
+    5i
+} 
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (expression
+          (signed_integer))))))
+
+==================
+Two open statements
+==================
+
+{
+    5i 5i
+} 
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (expression
+          (signed_integer)))
+      (statement
+        (expression
+          (signed_integer))))))
+
+==================
+If statement
+==================
+
+{
+    if this {
+
+    }
+
+    5i
+} 
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (expression
+          (if
+            (expression
+              (path
+                (local_path
+                  (identifier))))
+            (procedural_block))))
+      (statement
+        (expression
+          (signed_integer))))))

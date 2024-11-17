@@ -1,0 +1,35 @@
+==================
+Comment
+==================
+
+# There's a comment before the code.
+()
+
+---
+
+(source_file
+  (comment)
+  (expression
+    (void)))
+
+==================
+Comment
+==================
+
+# There's a comment before the code.
+()[]->std.None {}
+
+---
+
+(source_file
+  (comment)
+  (expression
+    (closure_definition
+      (void)
+      (closure_captured_variables)
+      (path
+        (local_path
+          (identifier)
+          (identifier)))
+      (expression
+        (procedural_block)))))

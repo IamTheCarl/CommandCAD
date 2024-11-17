@@ -1,0 +1,41 @@
+==================
+Assign
+==================
+
+ {
+    test = 5i;
+ } 
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (assign
+          (path
+            (local_path
+              (identifier)))
+          (assignment_operator)
+          (expression
+            (signed_integer)))))))
+
+==================
+Let
+==================
+
+{
+    let test = 5i; 
+}
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (let
+          (identifier)
+          (assignment_operator)
+          (expression
+            (signed_integer)))))))
