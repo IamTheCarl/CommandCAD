@@ -56,7 +56,9 @@ module.exports = grammar({
 
     scalar: $ => prec.left(PREC.unit, seq($._float, optional($._unit))),
 
-    boolean: $ => choice('true', 'false'),
+    true: $ => 'true',
+    false: $ => 'false',
+    boolean: $ => choice($.true, $.false),
 
     expression: $ => choice(
       $.void,

@@ -1,0 +1,13 @@
+[package]
+name = "interpreter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tree-sitter = "0.24.4"
+tree-sitter-command-cad-model = { path = "../tree-sitter-command-cad-model" }
+type-sitter = "0.5.2"
+
+[build-dependencies]
+type-sitter-gen = "0.5.2"
+tree-sitter-command-cad-model = { path = "../tree-sitter-command-cad-model" }

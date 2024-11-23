@@ -1,4 +1,4 @@
-workspace = { members = ["crates/common_data_types", "crates/macros", "crates/formatter"] }
+workspace = { members = ["crates/common_data_types", "crates/macros", "crates/formatter", "crates/interpreter"] }
 [package]
 name = "command_cad"
 version = "0.6.0"

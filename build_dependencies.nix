@@ -20,14 +20,14 @@ let
 
   tree-sitter-cli = rust_platform.buildRustPackage rec {
     pname = "tree-sitter-cli";
-    version = "0.22.6";
+    version = "0.24.4";
 
     src = pkgs.fetchCrate {
       inherit pname version;
-      sha256 = "sha256-bqWGJ8ZbqKAI0T9Fzx9pW6dOztJZ72dzJNOj1jtOc4o=";
+      sha256 = "sha256-+45nWB37pR6yUqyFovlnOTCCHSPPeoKa0mcEYQn2I1o=";
     };
 
-    cargoSha256 = "sha256-BreZqkSP/fis5HmjFYQeDux2EB37nqFaIS4HVRTe3Kg=";
+    cargoSha256 = "sha256-WDMAuRbU7Afuwg4D9oZG2ZIQfhkFXZXhCnJ3qqZyuSo=";
     doCheck = false;
   };
 in
