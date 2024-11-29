@@ -256,6 +256,16 @@ pub struct ConversionFactor {
     pub dimension: Dimension,
 }
 
+impl ConversionFactor {
+    pub fn convert_to_base_unit(&self, input: Float) -> Float {
+        input * self.coefficient + self.constant
+    }
+
+    pub fn convert_from_base_unit(&self, input: Float) -> Float {
+        (input - self.constant) / self.coefficient
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

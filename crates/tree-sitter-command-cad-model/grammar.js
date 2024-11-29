@@ -41,20 +41,21 @@ module.exports = grammar({
     default: _ => 'default',
     void: _ => seq('(', ')'),
 
-    signed_integer: _ => /[0-9]+[iI]/,
-    unsigned_integer: _ => /[0-9]+[uU]/,
+    integer: _ => /[0-9]+/,
+    signed_integer: $ => seq(field('value', $.integer), token.immediate(/[iI]/)),
+    unsigned_integer: $ => seq(field('value', $.integer), token.immediate(/[uU]/)),
 
     number: _ => /[0-9]+/,
     unit_quote: _ => /'(\\'|[^'])*'/,
 
     _float: $ => choice(
-      seq($.number, '.', $.number),
-      seq($.number),
+      seq(field('whole', $.number), '.', field('fractional', $.number)),
+      seq(field('whole', $.number)),
     ),
 
     _unit: $ => choice($.identifier, $.unit_quote),
 
-    scalar: $ => prec.left(PREC.unit, seq($._float, optional($._unit))),
+    scalar: $ => prec.left(PREC.unit, seq($._float, field('unit', optional($._unit)))),
 
     true: $ => 'true',
     false: $ => 'false',
@@ -80,9 +81,9 @@ module.exports = grammar({
       $.binary_expression,
     ),
     unary_expression: $ => prec(PREC.unary, choice(
-      seq('-', $.expression),
-      seq('+', $.expression),
-      seq('!', $.expression),
+      seq(field('op', '-'), $.expression),
+      seq(field('op', '+'), $.expression),
+      seq(field('op', '!'), $.expression),
     )),
     binary_expression: $ => {
       const table = [
@@ -124,9 +125,9 @@ module.exports = grammar({
       ))));
     },
 
-    if: $ => seq('if', $.expression, $.procedural_block, optional(seq('else', $.procedural_block))),
+    if: $ => seq('if', field('condition', $.expression), field('on_true', $.procedural_block), optional(seq('else', field('on_false', $.procedural_block)))),
 
-    _variable_type: $ => $.path,
+    _variable_type: $ => field('type_path', $.path),
     path: $ => choice($.local_path, $.argument_path),
     argument_path: $ => seq('@', repeat(seq('.', $.identifier))),
     local_path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
@@ -143,30 +144,29 @@ module.exports = grammar({
 
     varadic_dots: $ => '...',
 
-    struct_member: $ => seq(field('name', $.identifier), $._declaration_type, field('default', optional(seq('=', $.expression)))),
+    struct_member: $ => seq(field('name', $.identifier), $._declaration_type, optional(seq('=', field('default', $.expression)))),
     _struct_final_element: $ => choice(
       seq($.struct_member),
-      $.varadic_dots,
-      seq($.varadic_dots, ',')
+      seq($.varadic_dots, optional(','))
     ),
     struct_definition: $ => seq('(',
       choice(
         seq(
-          repeat1(seq($.struct_member, ',')),
-          optional($._struct_final_element),
+          field('members', repeat1(seq($.struct_member, ','))),
+          field('final_element', optional($._struct_final_element)),
         ),
-        $._struct_final_element
+        field('final_element', $._struct_final_element)
       ),
       ')'),
 
-    dictionary_member_assignment: $ => seq($.identifier, '=', $.expression),
+    dictionary_member_assignment: $ => seq(field('name', $.identifier), '=', field('assignment', $.expression)),
     dictionary_construction: $ => seq('(',
-      choice(
+      field('assignments',
         seq(
-          repeat1(seq($.dictionary_member_assignment, ',')),
-          optional($.dictionary_member_assignment),
+          repeat(seq($.dictionary_member_assignment, ',')),
+          $.dictionary_member_assignment,
+          optional(',')
         ),
-        $.dictionary_member_assignment
       ),
       ')'
     ),
@@ -183,7 +183,11 @@ module.exports = grammar({
       ']'
     ),
     closure_definition: $ => prec.left(PREC.closure, seq(
-      choice($.struct_definition, $.path, $.void), $.closure_captured_variables, '->', choice($.struct_definition, $.path, $.void), $.expression,
+      field('argument', choice($.struct_definition, $.path, $.void)),
+      field('captured_variables', $.closure_captured_variables),
+      '->',
+      field('result', choice($.struct_definition, $.path, $.void)),
+      field('expression', $.expression),
     )),
 
     closed_expression: $ => seq($.expression, ';'),
@@ -215,11 +219,11 @@ module.exports = grammar({
         '>>='
       ];
 
-      return choice(...operators);
+      return choice(...operators.map((operator) => field('op', operator)));
     },
 
-    let: $ => seq('let', $.identifier, $.assignment_operator, $.expression, ';'),
-    assign: $ => seq($.path, $.assignment_operator, $.expression, ';'),
-    for: $ => seq('for', $.identifier, 'in', $.expression, $.procedural_block),
+    let: $ => seq('let', field('to_assign', $.identifier), $.assignment_operator, field('value', $.expression), ';'),
+    assign: $ => seq(field('to_assign', $.path), $.assignment_operator, field('value', $.expression), ';'),
+    for: $ => seq('for', field('to_assign', $.identifier), 'in', field('to_iterate', $.expression), field('to_run', $.procedural_block)),
   }
 });

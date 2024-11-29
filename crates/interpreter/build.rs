@@ -50,7 +50,7 @@ fn main() {
 
     // Obligatory: in this and future lines, replace `vendor/path/to/tree-sitter-foobar-lang`
     // with the path to your grammar's folder, relative to the folder containing `Cargo.toml`
-    println!("cargo::rerun-if-changed=vendor/path/to/tree-sitter-foobar-lang");
+    println!("cargo::rerun-if-changed=../tree-sitter-command-cad-model");
 
     // To generate nodes
     fs::write(

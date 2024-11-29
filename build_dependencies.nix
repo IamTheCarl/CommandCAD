@@ -27,7 +27,7 @@ let
       sha256 = "sha256-+45nWB37pR6yUqyFovlnOTCCHSPPeoKa0mcEYQn2I1o=";
     };
 
-    cargoSha256 = "sha256-WDMAuRbU7Afuwg4D9oZG2ZIQfhkFXZXhCnJ3qqZyuSo=";
+    cargoHash = "sha256-4Zl/5nSTRJOLtXebJxERNKaqyVRXN/VpoIMu9ZpMAao=";
     doCheck = false;
   };
 in

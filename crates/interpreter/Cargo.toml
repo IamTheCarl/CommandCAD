@@ -4,10 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+common_data_types = { path = "../common_data_types" }
+units = { path = "../units" }
 tree-sitter = "0.24.4"
 tree-sitter-command-cad-model = { path = "../tree-sitter-command-cad-model" }
-type-sitter = "0.5.2"
+type-sitter = "0.6"
+unwrap-enum = "0.1.0"
 
 [build-dependencies]
-type-sitter-gen = "0.5.2"
+type-sitter-gen = "0.6"
 tree-sitter-command-cad-model = { path = "../tree-sitter-command-cad-model" }

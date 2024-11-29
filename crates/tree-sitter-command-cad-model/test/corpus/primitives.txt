@@ -35,6 +35,18 @@ Escaped string
     (string)))
 
 ==================
+Unsigned Integer
+==================
+
+123u
+
+---
+
+(source_file
+  (expression
+    (unsigned_integer (integer))))
+
+==================
 Signed Integer Positive
 ==================
 
@@ -44,13 +56,13 @@ Signed Integer Positive
 
 (source_file
   (expression
-    (signed_integer)))
+    (signed_integer (integer))))
 
 ==================
 Signed Integer Positive with plus
 ==================
 
-+123i
++123 i
 
 ---
 
@@ -58,7 +70,7 @@ Signed Integer Positive with plus
   (expression
     (unary_expression
       (expression
-        (signed_integer)))))
+        (signed_integer (integer))))))
 
 ==================
 Signed Integer Positive with minus
@@ -72,7 +84,7 @@ Signed Integer Positive with minus
   (expression
     (unary_expression
       (expression
-        (signed_integer)))))
+        (signed_integer (integer))))))
 
 ==================
 Scalar no decimal no unit
