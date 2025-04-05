@@ -918,18 +918,13 @@ pub fn compile<'t, 'i>(
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::compile::full_compile;
 
-    fn full_compile(input: &str) -> AstNode<Expression> {
-        let test_file = Arc::new(PathBuf::from("test_file.ccm"));
-        let mut tree = new_parser();
-        let root = tree.parse(input, None).unwrap();
-        compile(&test_file, input, &root).unwrap()
-    }
+    use super::*;
 
     #[test]
     fn binary_expression() {
-        let root = full_compile("2i + 3i");
+        let root = full_compile("test_file.ccm", "2i + 3i");
 
         let binary_expression = root.node.as_binaryexpression().unwrap();
         let operation_reference = binary_expression.node.operation.reference.clone();
@@ -973,7 +968,7 @@ mod test {
 
     #[test]
     fn boolean_true() {
-        let root = full_compile("true");
+        let root = full_compile("test_file.ccm", "true");
         assert_eq!(
             root,
             AstNode {
@@ -988,7 +983,7 @@ mod test {
 
     #[test]
     fn boolean_false() {
-        let root = full_compile("false");
+        let root = full_compile("test_file.ccm", "false");
         assert_eq!(
             root,
             AstNode {
@@ -1003,7 +998,7 @@ mod test {
 
     #[test]
     fn closure_definition() {
-        let root = full_compile("()[this, that] -> () {}");
+        let root = full_compile("test_file.ccm", "()[this, that] -> () {}");
         let closure = root.node.as_closuredefinition().unwrap();
         let closure_reference = closure.reference.clone();
         let argument = &closure.node.argument;
@@ -1073,7 +1068,7 @@ mod test {
 
     #[test]
     fn default() {
-        let root = full_compile("default");
+        let root = full_compile("test_file.ccm", "default");
         assert_eq!(
             root,
             AstNode {
@@ -1088,7 +1083,7 @@ mod test {
 
     #[test]
     fn dictionary_construction() {
-        let root = full_compile("(a = true, b = false)");
+        let root = full_compile("test_file.ccm", "(a = true, b = false)");
         let construction_expression = root.node.as_dictionaryconstruction().unwrap();
         assert_eq!(construction_expression.node.assignments.len(), 2);
         let a = &construction_expression.node.assignments[0];
@@ -1133,7 +1128,7 @@ mod test {
 
     #[test]
     fn if_expression() {
-        let root = full_compile("if true {}");
+        let root = full_compile("test_file.ccm", "if true {}");
         let if_expression = root.node.as_if().unwrap();
         let if_reference = if_expression.reference.clone();
         let condition = &if_expression.node.condition;
@@ -1169,7 +1164,7 @@ mod test {
 
     #[test]
     fn if_else_expression() {
-        let root = full_compile("if true {} else {}");
+        let root = full_compile("test_file.ccm", "if true {} else {}");
         let if_expression = root.node.as_if().unwrap();
         let if_reference = if_expression.reference.clone();
         let condition = &if_expression.node.condition;
@@ -1215,7 +1210,7 @@ mod test {
 
     #[test]
     fn list() {
-        let root = full_compile("[1i, 2i, 3i, 4i, 5i]");
+        let root = full_compile("test_file.ccm", "[1i, 2i, 3i, 4i, 5i]");
 
         let list = root.node.as_list().unwrap();
         let list_reference = list.reference.clone();
@@ -1305,7 +1300,7 @@ mod test {
 
     #[test]
     fn parenthesis() {
-        let root = full_compile("(5i)");
+        let root = full_compile("test_file.ccm", "(5i)");
         let parenthesis = root.node.as_parenthesis().unwrap();
         let parenthesis_reference = parenthesis.reference.clone();
         let integer = parenthesis.node.as_signedinteger().unwrap();
@@ -1329,7 +1324,7 @@ mod test {
 
     #[test]
     fn local_path() {
-        let root = full_compile("this.thang");
+        let root = full_compile("test_file.ccm", "this.thang");
         let path = root.node.as_path().unwrap();
         let this = &path.node.path[0];
         let thang = &path.node.path[1];
@@ -1360,7 +1355,7 @@ mod test {
 
     #[test]
     fn argument_path() {
-        let root = full_compile("@.this.thang");
+        let root = full_compile("test_file.ccm", "@.this.thang");
         let path = root.node.as_path().unwrap();
         let this = &path.node.path[0];
         let thang = &path.node.path[1];
@@ -1392,7 +1387,7 @@ mod test {
     #[test]
     fn procedural_block() {
         // An unimpressive test. The more in-depth testing gets done in statements.rs
-        let root = full_compile("{}");
+        let root = full_compile("test_file.ccm", "{}");
         assert_eq!(
             root,
             AstNode {
@@ -1407,7 +1402,7 @@ mod test {
 
     #[test]
     fn scalar_no_decimal() {
-        let root = full_compile("0");
+        let root = full_compile("test_file.ccm", "0");
 
         assert_eq!(
             root,
@@ -1426,7 +1421,7 @@ mod test {
 
     #[test]
     fn scalar_no_unit() {
-        let root = full_compile("0.0");
+        let root = full_compile("test_file.ccm", "0.0");
         assert_eq!(
             root,
             AstNode {
@@ -1444,7 +1439,7 @@ mod test {
 
     #[test]
     fn scalar_with_unit() {
-        let root = full_compile("0.0mm");
+        let root = full_compile("test_file.ccm", "0.0mm");
         assert_eq!(
             root,
             AstNode {
@@ -1463,7 +1458,7 @@ mod test {
     #[test]
     fn scalar_unit_conversion() {
         // Test conversion factor
-        let root = full_compile("1cm");
+        let root = full_compile("test_file.ccm", "1cm");
         assert_eq!(
             root,
             AstNode {
@@ -1481,7 +1476,7 @@ mod test {
 
     #[test]
     fn signed_integer() {
-        let root = full_compile("5i");
+        let root = full_compile("test_file.ccm", "5i");
         assert_eq!(
             root,
             AstNode {
@@ -1496,7 +1491,7 @@ mod test {
 
     #[test]
     fn string() {
-        let root = full_compile("\"Some text\\n\"");
+        let root = full_compile("test_file.ccm", "\"Some text\\n\"");
         assert_eq!(
             root,
             AstNode {
@@ -1511,7 +1506,10 @@ mod test {
 
     #[test]
     fn struct_definition() {
-        let root = full_compile("( one: std.Constraint, two: std.Constraint = a, ... )");
+        let root = full_compile(
+            "test_file.ccm",
+            "( one: std.Constraint, two: std.Constraint = a, ... )",
+        );
         let struct_definition = root.node.as_structdefinition().unwrap();
         let members = &struct_definition.node.members;
         let one = &members[0];
@@ -1597,7 +1595,7 @@ mod test {
 
     #[test]
     fn unary_expression() {
-        let root = full_compile("-5i");
+        let root = full_compile("test_file.ccm", "-5i");
         let unary_expression = root.node.as_unaryexpression().unwrap();
         let unary_expression_reference = unary_expression.reference.clone();
         let expression_reference = unary_expression.node.expression.reference.clone();
@@ -1637,7 +1635,7 @@ mod test {
 
     #[test]
     fn unsigned_integer() {
-        let root = full_compile("5u");
+        let root = full_compile("test_file.ccm", "5u");
         assert_eq!(
             root,
             AstNode {
@@ -1652,7 +1650,7 @@ mod test {
 
     #[test]
     fn void() {
-        let root = full_compile("()");
+        let root = full_compile("test_file.ccm", "()");
         assert_eq!(
             root,
             AstNode {

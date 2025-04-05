@@ -17,20 +17,14 @@
  */
 
 use super::logging::StackPoint;
-use std::{any::Any, fmt::Display};
+use std::{any::Any, fmt::Display, iter::once};
 
-pub type OperatorResult<R> = std::result::Result<R, Error>;
+pub type ExpressionResult<R> = std::result::Result<R, Error>;
 
-#[derive(Debug, Eq)]
+#[derive(Debug)]
 pub struct Error {
     pub ty: Box<dyn ErrorType>,
     pub trace: Vec<StackPoint>,
-}
-
-impl PartialEq for Error {
-    fn eq(&self, other: &Self) -> bool {
-        self.ty.as_ref() == other.ty.as_ref() && self.trace == other.trace
-    }
 }
 
 impl Display for Error {
@@ -48,46 +42,41 @@ impl Display for Error {
 pub trait ErrorType: std::fmt::Debug + std::fmt::Display + Any {}
 
 pub trait Raise {
-    fn raise<R>(self, stack_trace: &[StackPoint]) -> OperatorResult<R>;
+    fn raise<'s, R>(
+        self,
+        stack_trace: impl IntoIterator<Item = &'s StackPoint>,
+    ) -> ExpressionResult<R>;
+
+    fn raise_with_line<'s, R>(
+        self,
+        stack_trace: impl IntoIterator<Item = &'s StackPoint>,
+        current_line: StackPoint,
+    ) -> ExpressionResult<R>;
 }
 
 impl<E: ErrorType> Raise for E {
-    fn raise<R>(self, stack_trace: &[StackPoint]) -> OperatorResult<R> {
+    fn raise<'s, R>(
+        self,
+        stack_trace: impl IntoIterator<Item = &'s StackPoint>,
+    ) -> ExpressionResult<R> {
         Err(Error {
             ty: Box::new(self),
-            trace: stack_trace.into(),
+            trace: stack_trace.into_iter().cloned().collect(),
+        })
+    }
+
+    fn raise_with_line<'s, R>(
+        self,
+        stack_trace: impl IntoIterator<Item = &'s StackPoint>,
+        current_line: StackPoint,
+    ) -> ExpressionResult<R> {
+        Err(Error {
+            ty: Box::new(self),
+            trace: stack_trace
+                .into_iter()
+                .cloned()
+                .chain(once(current_line))
+                .collect(),
         })
     }
 }
-
-trait AutoAny {
-    fn as_any(&self) -> &dyn Any;
-}
-
-impl<A: Any> AutoAny for A {
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-}
-
-trait DynEq {
-    fn dyn_eq(&self, other: &dyn AutoAny) -> bool;
-}
-
-impl<D: PartialEq + AutoAny + 'static> DynEq for D {
-    fn dyn_eq(&self, other: &dyn AutoAny) -> bool {
-        if let Some(other) = other.as_any().downcast_ref::<D>() {
-            todo!()
-        } else {
-            false
-        }
-    }
-}
-
-impl PartialEq for dyn ErrorType {
-    fn eq(&self, other: &Self) -> bool {
-        todo!()
-    }
-}
-
-impl Eq for dyn ErrorType {}

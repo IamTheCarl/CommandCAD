@@ -18,7 +18,7 @@
 
 use crate::execution::logging::{RuntimeLog, StackPoint};
 
-use super::{value_type::VariableType, Object, OperatorResult, StaticTypeName};
+use super::{value_type::VariableType, ExpressionResult, Object, StaticTypeName};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct DefaultValue;
@@ -29,7 +29,7 @@ impl Object for DefaultValue {
         _ty: &VariableType,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[StackPoint],
-    ) -> OperatorResult<bool> {
+    ) -> ExpressionResult<bool> {
         Ok(false)
     }
 }

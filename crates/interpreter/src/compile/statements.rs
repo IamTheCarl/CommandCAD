@@ -208,20 +208,13 @@ impl<'t> Parse<'t, nodes::ClosedExpression<'t>> for ClosedExpression {
 
 #[cfg(test)]
 mod test {
-    use crate::{compile::PathType, new_parser};
+    use crate::compile::{full_compile, PathType};
 
     use super::*;
 
-    fn full_compile(input: &str) -> AstNode<Expression> {
-        let test_file = Arc::new(PathBuf::from("test_file.ccm"));
-        let mut tree = new_parser();
-        let root = tree.parse(input, None).unwrap();
-        crate::compile(&test_file, input, &root).unwrap()
-    }
-
     #[test]
     fn assign() {
-        let root = full_compile("{ my_value.sub_value = (); }");
+        let root = full_compile("test_file.ccm", "{ my_value.sub_value = (); }");
         let block = root.node.as_proceduralblock().unwrap();
         let statement = &block.node.statements[0];
         let assign = statement.node.as_assign().unwrap();
@@ -286,7 +279,7 @@ mod test {
 
     #[test]
     fn assign_let() {
-        let root = full_compile("{ let my_value = (); }");
+        let root = full_compile("test_file.ccm", "{ let my_value = (); }");
         let block = root.node.as_proceduralblock().unwrap();
         let statement = &block.node.statements[0];
         let let_assign = statement.node.as_let().unwrap();
@@ -339,7 +332,7 @@ mod test {
 
     #[test]
     fn for_statement() {
-        let root = full_compile("{ for i in () {} }");
+        let root = full_compile("test_file.ccm", "{ for i in () {} }");
         let block = root.node.as_proceduralblock().unwrap();
         let statement = &block.node.statements[0];
         let for_loop = statement.node.as_for().unwrap();
@@ -390,7 +383,7 @@ mod test {
 
     #[test]
     fn expression() {
-        let root = full_compile("{ () }");
+        let root = full_compile("test_file.ccm", "{ () }");
         let block = root.node.as_proceduralblock().unwrap();
         let statement = &block.node.statements[0];
         let expression = statement.node.as_expression().unwrap();
@@ -420,7 +413,7 @@ mod test {
 
     #[test]
     fn closed_expression() {
-        let root = full_compile("{ (); }");
+        let root = full_compile("test_file.ccm", "{ (); }");
         let block = root.node.as_proceduralblock().unwrap();
         let statement = &block.node.statements[0];
         let closed_expression = statement.node.as_closedexpression().unwrap();

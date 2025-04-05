@@ -18,24 +18,24 @@
 
 use crate::execution::logging::{RuntimeLog, StackPoint};
 
-use super::{value_type::VariableType, Object, OperatorResult, StaticTypeName};
+use super::{value_type::VariableType, ExpressionResult, Object, StaticTypeName};
 
 #[derive(Debug, Hash, Clone, Eq, PartialEq)]
-pub struct NoneType;
+pub struct Void;
 
-impl Object for NoneType {
+impl Object for Void {
     fn matches_type(
         &self,
         _ty: &VariableType,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[StackPoint],
-    ) -> OperatorResult<bool> {
+    ) -> ExpressionResult<bool> {
         Ok(false)
     }
 }
 
-impl StaticTypeName for NoneType {
+impl StaticTypeName for Void {
     fn static_type_name() -> &'static str {
-        "None"
+        "Void"
     }
 }

@@ -5,15 +5,15 @@ use enum_downcast::{AsVariant, EnumDowncast};
 use value_type::VariableType;
 
 use super::{
-    errors::{ErrorType, OperatorResult, Raise as _},
+    errors::{ErrorType, ExpressionResult, Raise as _},
     logging::{RuntimeLog, StackPoint},
 };
 
-mod none;
-use none::NoneType;
+mod void;
+pub use void::Void;
 
 mod default;
-use default::DefaultValue;
+pub use default::DefaultValue;
 
 mod value_type;
 
@@ -46,7 +46,7 @@ impl UnsupportedOperationError {
         object: &O,
         stack_trace: &[StackPoint],
         operation_name: &'static str,
-    ) -> OperatorResult<R> {
+    ) -> ExpressionResult<R> {
         Self {
             type_name: object.type_name(),
             operation_name,
@@ -62,7 +62,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         ty: &VariableType,
         log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
-    ) -> OperatorResult<bool>;
+    ) -> ExpressionResult<bool>;
 
     // fn format(
     //     &self,
@@ -84,7 +84,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
         _rhs: &Value,
-    ) -> OperatorResult<Value> {
+    ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "and")
     }
     fn or(
@@ -92,7 +92,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
         _rhs: Value,
-    ) -> OperatorResult<Value> {
+    ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "or")
     }
     fn cmp(
@@ -100,7 +100,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
         _rhs: &Value,
-    ) -> OperatorResult<Ordering> {
+    ) -> ExpressionResult<Ordering> {
         UnsupportedOperationError::raise(self, stack_trace, "compare")
     }
     fn eq(
@@ -108,7 +108,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
         rhs: &Value,
-    ) -> OperatorResult<bool> {
+    ) -> ExpressionResult<bool> {
         Ok(matches!(self.cmp(log, stack_trace, rhs)?, Ordering::Equal))
     }
     fn addition(
@@ -116,7 +116,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
         _rhs: &Value,
-    ) -> OperatorResult<Value> {
+    ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "addition")
     }
     fn subtraction(
@@ -124,7 +124,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
         _rhs: &Value,
-    ) -> OperatorResult<Value> {
+    ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "subtraction")
     }
     fn multiply(
@@ -132,7 +132,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
         _rhs: &Value,
-    ) -> OperatorResult<Value> {
+    ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "multiply")
     }
     fn divide(
@@ -140,7 +140,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
         _rhs: &Value,
-    ) -> OperatorResult<Value> {
+    ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "divide")
     }
     // fn attribute(
@@ -175,35 +175,35 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
         _index: Value,
-    ) -> OperatorResult<Value> {
+    ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "index")
     }
     fn iterate(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
-    ) -> OperatorResult<Box<dyn Iterator<Item = Value>>> {
+    ) -> ExpressionResult<Box<dyn Iterator<Item = Value>>> {
         UnsupportedOperationError::raise(self, stack_trace, "iterate")
     }
     fn unary_plus(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
-    ) -> OperatorResult<Value> {
+    ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "unary plus")
     }
     fn unary_minus(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
-    ) -> OperatorResult<Value> {
+    ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "unary minus")
     }
     fn unary_logical_not(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[StackPoint],
-    ) -> OperatorResult<Value> {
+    ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "unary logical not")
     }
 
@@ -219,7 +219,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
 #[enum_dispatch(Object)]
 #[derive(Debug, Hash, Eq, PartialEq, EnumDowncast, Clone)]
 pub enum Value {
-    NoneType,
+    Void,
     Default(DefaultValue),
     // Boolean,
     // BuiltinFunction(BuiltinFunctionRef<S>),
@@ -270,7 +270,7 @@ impl Display for DowncastError {
 }
 
 impl Value {
-    pub fn downcast_ref<T>(&self, stack_trace: &[StackPoint]) -> OperatorResult<&T>
+    pub fn downcast_ref<T>(&self, stack_trace: &[StackPoint]) -> ExpressionResult<&T>
     where
         T: StaticTypeName,
         Self: AsVariant<T>,
@@ -286,7 +286,7 @@ impl Value {
         }
     }
 
-    pub fn downcast<T>(self, stack_trace: &[StackPoint]) -> OperatorResult<T>
+    pub fn downcast<T>(self, stack_trace: &[StackPoint]) -> ExpressionResult<T>
     where
         T: StaticTypeName,
         Self: TryInto<T, Error = Self>,
@@ -301,13 +301,13 @@ impl Value {
         }
     }
 
-    pub fn downcast_optional<T>(self, stack_trace: &[StackPoint]) -> OperatorResult<Option<T>>
+    pub fn downcast_optional<T>(self, stack_trace: &[StackPoint]) -> ExpressionResult<Option<T>>
     where
         T: StaticTypeName,
         Self: TryInto<T, Error = Self>,
     {
         match self {
-            Self::NoneType(_) => Ok(None),
+            Self::Void(_) => Ok(None),
             this => Ok(Some(this.downcast::<T>(stack_trace)?)),
         }
     }

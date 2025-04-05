@@ -76,3 +76,12 @@ impl<'t> From<ParseIntError<'t>> for Error<'t, '_> {
         Self::ParseInt(value)
     }
 }
+
+/// Compiles a full document. Panics if there are any issues.
+/// This is for testing only.
+pub(crate) fn full_compile(file: impl Into<PathBuf>, input: &str) -> AstNode<Expression> {
+    let test_file = Arc::new(file.into());
+    let mut tree = new_parser();
+    let root = tree.parse(input, None).unwrap();
+    crate::compile(&test_file, input, &root).unwrap()
+}
