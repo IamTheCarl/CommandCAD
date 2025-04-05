@@ -10,6 +10,10 @@ tree-sitter = "0.24.4"
 tree-sitter-command-cad-model = { path = "../tree-sitter-command-cad-model" }
 type-sitter = "0.6"
 unwrap-enum = "0.1.0"
+file-guard = "0.2.0"
+enum_dispatch = "0.3"
+enum_downcast = { version = "0.1", features = [ "derive" ] }
+compact_str = "0.9"
 
 [build-dependencies]
 type-sitter-gen = "0.6"
