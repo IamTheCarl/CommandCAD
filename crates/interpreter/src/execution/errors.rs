@@ -16,15 +16,16 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::logging::StackPoint;
 use std::{any::Any, fmt::Display, iter::once};
+
+use crate::compile::SourceReference;
 
 pub type ExpressionResult<R> = std::result::Result<R, Error>;
 
 #[derive(Debug)]
 pub struct Error {
     pub ty: Box<dyn ErrorType>,
-    pub trace: Vec<StackPoint>,
+    pub trace: Vec<SourceReference>,
 }
 
 impl Display for Error {
@@ -39,36 +40,54 @@ impl Display for Error {
     }
 }
 
+/// A generic error that will just display a static message.
+#[derive(Debug, Eq, PartialEq)]
+pub struct GenericFailure(pub &'static str);
+
+impl ErrorType for GenericFailure {}
+
+impl Display for GenericFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 pub trait ErrorType: std::fmt::Debug + std::fmt::Display + Any {}
 
 pub trait Raise {
     fn raise<'s, R>(
         self,
-        stack_trace: impl IntoIterator<Item = &'s StackPoint>,
+        stack_trace: impl IntoIterator<Item = &'s SourceReference>,
     ) -> ExpressionResult<R>;
+
+    fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error;
 
     fn raise_with_line<'s, R>(
         self,
-        stack_trace: impl IntoIterator<Item = &'s StackPoint>,
-        current_line: StackPoint,
+        stack_trace: impl IntoIterator<Item = &'s SourceReference>,
+        current_line: SourceReference,
     ) -> ExpressionResult<R>;
 }
 
 impl<E: ErrorType> Raise for E {
     fn raise<'s, R>(
         self,
-        stack_trace: impl IntoIterator<Item = &'s StackPoint>,
+        stack_trace: impl IntoIterator<Item = &'s SourceReference>,
     ) -> ExpressionResult<R> {
-        Err(Error {
+        Err(self.to_error(stack_trace))
+    }
+
+    fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error {
+        Error {
             ty: Box::new(self),
             trace: stack_trace.into_iter().cloned().collect(),
-        })
+        }
     }
 
     fn raise_with_line<'s, R>(
         self,
-        stack_trace: impl IntoIterator<Item = &'s StackPoint>,
-        current_line: StackPoint,
+        stack_trace: impl IntoIterator<Item = &'s SourceReference>,
+        current_line: SourceReference,
     ) -> ExpressionResult<R> {
         Err(Error {
             ty: Box::new(self),

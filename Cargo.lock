@@ -937,6 +937,7 @@ dependencies = [
  "enum_dispatch",
  "enum_downcast",
  "file-guard",
+ "num-traits",
  "tree-sitter",
  "tree-sitter-command-cad-model",
  "type-sitter",

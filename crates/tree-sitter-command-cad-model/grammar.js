@@ -41,7 +41,11 @@ module.exports = grammar({
     default: _ => 'default',
     void: _ => seq('(', ')'),
 
-    integer: _ => /[0-9]+/,
+    base_ten: _ => /[0-9]+/,
+    octal: _ => seq(token.immediate(/0o/), /[0-9]+/),
+    hex: _ => seq(token.immediate(/0x/), /[0-9a-fA-F]+/),
+    binary: _ => seq(token.immediate(/0b/), /[01]+/),
+    integer: $ => choice($.base_ten, $.octal, $.hex, $.binary),
     signed_integer: $ => seq(field('value', $.integer), token.immediate(/[iI]/)),
     unsigned_integer: $ => seq(field('value', $.integer), token.immediate(/[uU]/)),
 

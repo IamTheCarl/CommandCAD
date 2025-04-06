@@ -43,6 +43,8 @@ pub enum VariableType {
     String,
     List,
     Boolean,
+    SignedInteger,
+    UnsignedInteger,
     Range,
     Struct(String),
     Scalar(String),
@@ -68,6 +70,8 @@ impl VariableType {
             Self::String => "String".into(),
             Self::List => "List".into(),
             Self::Boolean => "Boolean".into(),
+            Self::SignedInteger => "Signed Integer".into(),
+            Self::UnsignedInteger => "Unsigned Integer".into(),
             Self::Range => "Range".into(),
             Self::Struct(name) => format!("struct {}", name.as_str()).into(),
             Self::Scalar(name) => name.to_string().into(),
@@ -96,30 +100,13 @@ impl VariableType {
 impl Display for VariableType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::String => write!(f, "String"),
-            Self::List => write!(f, "List"),
-            Self::Boolean => write!(f, "Boolean"),
-            Self::Range => write!(f, "Range"),
             Self::Struct(name) => write!(f, "struct {}", name.as_str()),
             Self::Scalar(name) => write!(f, "{}", name.as_str()),
             Self::Vector(dimension, name) => {
                 write!(f, "Vector{}<{}>", dimension, name.as_str())
             }
-            Self::Transform(2) => write!(f, "Transform2D"),
-            Self::Transform(3) => write!(f, "Transform3D"),
-            Self::Transform(_) => unreachable!(),
-            Self::Quaternion => write!(f, "Quaternion"),
-            Self::Cycle => write!(f, "Cycle"),
-            Self::Region => write!(f, "Region"),
-            Self::Sketch => write!(f, "Sketch"),
-            Self::Surface => write!(f, "Surface"),
-            Self::Solid => write!(f, "Solid"),
-            Self::Shell => write!(f, "Shell"),
-            Self::Face => write!(f, "Face"),
-            Self::Curve => write!(f, "Curve"),
-            Self::HalfEdge => write!(f, "HalfEdge"),
-            Self::Vertex => write!(f, "Vertex"),
             Self::Closure(closure) => write!(f, "{}", closure),
+            _ => write!(f, "{}", self.name()),
         }
     }
 }

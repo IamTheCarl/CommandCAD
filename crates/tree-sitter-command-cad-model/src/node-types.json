@@ -123,6 +123,16 @@
     }
   },
   {
+    "type": "base_ten",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "binary",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "binary_expression",
     "named": true,
     "fields": {
@@ -511,6 +521,11 @@
     }
   },
   {
+    "type": "hex",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "if",
     "named": true,
     "fields": {
@@ -549,7 +564,29 @@
   {
     "type": "integer",
     "named": true,
-    "fields": {}
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "base_ten",
+          "named": true
+        },
+        {
+          "type": "binary",
+          "named": true
+        },
+        {
+          "type": "hex",
+          "named": true
+        },
+        {
+          "type": "octal",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "let",
@@ -619,6 +656,11 @@
   },
   {
     "type": "number",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "octal",
     "named": true,
     "fields": {}
   },

@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::execution::logging::{RuntimeLog, StackPoint};
+use crate::{compile::SourceReference, execution::logging::RuntimeLog};
 
 use super::{value_type::VariableType, ExpressionResult, Object, StaticTypeName};
 
@@ -28,7 +28,7 @@ impl Object for DefaultValue {
         &self,
         _ty: &VariableType,
         _log: &mut dyn RuntimeLog,
-        _stack_trace: &[StackPoint],
+        _stack_trace: &[SourceReference],
     ) -> ExpressionResult<bool> {
         Ok(false)
     }

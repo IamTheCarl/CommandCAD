@@ -44,7 +44,7 @@ Unsigned Integer
 
 (source_file
   (expression
-    (unsigned_integer (integer))))
+    (unsigned_integer (integer (base_ten)))))
 
 ==================
 Signed Integer Positive
@@ -56,7 +56,80 @@ Signed Integer Positive
 
 (source_file
   (expression
-    (signed_integer (integer))))
+    (signed_integer (integer (base_ten)))))
+
+
+==================
+Unsigned Integer Octal
+==================
+
+0o123u
+
+---
+
+(source_file
+  (expression
+    (unsigned_integer (integer (octal)))))
+
+==================
+Signed Integer Positive Octal
+==================
+
+0o123i
+
+---
+
+(source_file
+  (expression
+    (signed_integer (integer (octal)))))
+
+==================
+Unsigned Integer hex
+==================
+
+0xABCu
+
+---
+
+(source_file
+  (expression
+    (unsigned_integer (integer (hex)))))
+
+==================
+Signed Integer Positive Hex
+==================
+
+0xABCi
+
+---
+
+(source_file
+  (expression
+    (signed_integer (integer (hex)))))
+
+==================
+Unsigned Integer Binary
+==================
+
+0b1010u
+
+---
+
+(source_file
+  (expression
+    (unsigned_integer (integer (binary)))))
+
+==================
+Signed Integer Positive Binary
+==================
+
+0b1010i
+
+---
+
+(source_file
+  (expression
+    (signed_integer (integer (binary)))))
 
 ==================
 Signed Integer Positive with plus
@@ -70,7 +143,7 @@ Signed Integer Positive with plus
   (expression
     (unary_expression
       (expression
-        (signed_integer (integer))))))
+        (signed_integer (integer (base_ten)))))))
 
 ==================
 Signed Integer Positive with minus
@@ -84,7 +157,7 @@ Signed Integer Positive with minus
   (expression
     (unary_expression
       (expression
-        (signed_integer (integer))))))
+        (signed_integer (integer (base_ten)))))))
 
 ==================
 Scalar no decimal no unit

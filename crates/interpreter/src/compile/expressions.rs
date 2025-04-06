@@ -17,6 +17,12 @@ pub struct InvalidUnitError<'t, 'i> {
 #[derive(Debug, Eq, PartialEq)]
 pub struct ParseIntError<'t> {
     pub error: std::num::ParseIntError,
+    pub node: nodes::Integer<'t>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct ParseNumberError<'t> {
+    pub error: std::num::ParseIntError,
     pub node: nodes::Number<'t>,
 }
 
@@ -244,9 +250,29 @@ impl<'t> Parse<'t, nodes::SignedInteger<'t>> for Expression {
         input: &'i str,
         value: nodes::SignedInteger<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        let value = value.value()?;
-        let text = &input[value.byte_range()];
-        let integer = text.parse().unwrap();
+        let number = value.value()?;
+        let integer = match number.child()? {
+            nodes::anon_unions::BaseTen_Binary_Hex_Octal::Hex(value) => {
+                let text = &input[value.byte_range()][2..];
+                i64::from_str_radix(text, 16)
+            }
+            nodes::anon_unions::BaseTen_Binary_Hex_Octal::BaseTen(value) => {
+                let text = &input[value.byte_range()];
+                i64::from_str_radix(text, 10)
+            }
+            nodes::anon_unions::BaseTen_Binary_Hex_Octal::Octal(value) => {
+                let text = &input[value.byte_range()][2..];
+                i64::from_str_radix(text, 8)
+            }
+            nodes::anon_unions::BaseTen_Binary_Hex_Octal::Binary(value) => {
+                let text = &input[value.byte_range()][2..];
+                i64::from_str_radix(text, 2)
+            }
+        }
+        .map_err(|error| ParseIntError {
+            error,
+            node: number,
+        })?;
 
         Ok(AstNode::new(
             file,
@@ -319,9 +345,29 @@ impl<'t> Parse<'t, nodes::UnsignedInteger<'t>> for Expression {
         input: &'i str,
         value: nodes::UnsignedInteger<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        let integer = value.value()?;
-        let text = &input[integer.byte_range()];
-        let integer = text.parse().unwrap();
+        let number = value.value()?;
+        let integer = match number.child()? {
+            nodes::anon_unions::BaseTen_Binary_Hex_Octal::Hex(value) => {
+                let text = &input[value.byte_range()][2..];
+                u64::from_str_radix(text, 16)
+            }
+            nodes::anon_unions::BaseTen_Binary_Hex_Octal::BaseTen(value) => {
+                let text = &input[value.byte_range()];
+                u64::from_str_radix(text, 10)
+            }
+            nodes::anon_unions::BaseTen_Binary_Hex_Octal::Octal(value) => {
+                let text = &input[value.byte_range()][2..];
+                u64::from_str_radix(text, 8)
+            }
+            nodes::anon_unions::BaseTen_Binary_Hex_Octal::Binary(value) => {
+                let text = &input[value.byte_range()][2..];
+                u64::from_str_radix(text, 2)
+            }
+        }
+        .map_err(|error| ParseIntError {
+            error,
+            node: number,
+        })?;
 
         Ok(AstNode::new(
             file,
@@ -624,14 +670,14 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for Scalar {
 
         let whole_node = value.whole()?;
         let whole = &input[whole_node.byte_range()];
-        let whole: u64 = whole.parse().map_err(|error| ParseIntError {
+        let whole: u64 = whole.parse().map_err(|error| ParseNumberError {
             error,
             node: whole_node,
         })?;
 
         let (fraction, fraction_len): (u64, _) = if let Some(fractional_node) = value.fractional() {
             let fraction_str = &input[fractional_node.byte_range()];
-            let fraction = fraction_str.parse().map_err(|error| ParseIntError {
+            let fraction = fraction_str.parse().map_err(|error| ParseNumberError {
                 error,
                 node: whole_node,
             })?;
@@ -1490,6 +1536,51 @@ mod test {
     }
 
     #[test]
+    fn signed_integer_hex() {
+        let root = full_compile("test_file.ccm", "0x5i");
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::SignedInteger(AstNode {
+                    reference: root.node.as_signedinteger().unwrap().reference.clone(),
+                    node: 0x5
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn signed_integer_octal() {
+        let root = full_compile("test_file.ccm", "0o5i");
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::SignedInteger(AstNode {
+                    reference: root.node.as_signedinteger().unwrap().reference.clone(),
+                    node: 0o5
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn signed_integer_binary() {
+        let root = full_compile("test_file.ccm", "0b1010i");
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::SignedInteger(AstNode {
+                    reference: root.node.as_signedinteger().unwrap().reference.clone(),
+                    node: 0b1010
+                })
+            }
+        );
+    }
+
+    #[test]
     fn string() {
         let root = full_compile("test_file.ccm", "\"Some text\\n\"");
         assert_eq!(
@@ -1643,6 +1734,51 @@ mod test {
                 node: Expression::UnsignedInteger(AstNode {
                     reference: root.node.as_unsignedinteger().unwrap().reference.clone(),
                     node: 5
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn unsigned_integer_hex() {
+        let root = full_compile("test_file.ccm", "0x5u");
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::UnsignedInteger(AstNode {
+                    reference: root.node.as_unsignedinteger().unwrap().reference.clone(),
+                    node: 0x5
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn unsigned_integer_octal() {
+        let root = full_compile("test_file.ccm", "0o5u");
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::UnsignedInteger(AstNode {
+                    reference: root.node.as_unsignedinteger().unwrap().reference.clone(),
+                    node: 0o5
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn unsigned_integer_binary() {
+        let root = full_compile("test_file.ccm", "0b1010u");
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::UnsignedInteger(AstNode {
+                    reference: root.node.as_unsignedinteger().unwrap().reference.clone(),
+                    node: 0b1010
                 })
             }
         );

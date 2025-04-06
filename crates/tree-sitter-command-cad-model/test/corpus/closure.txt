@@ -92,4 +92,4 @@ With a statement
                   (identifier)))
               (assignment_operator)
               (expression
-                (signed_integer (integer))))))))))
+                (signed_integer (integer (base_ten)))))))))))

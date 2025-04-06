@@ -18,7 +18,7 @@ Assign
               (identifier)))
           (assignment_operator)
           (expression
-            (signed_integer (integer))))))))
+            (signed_integer (integer (base_ten)))))))))
 
 ==================
 Let
@@ -38,4 +38,4 @@ Let
           (identifier)
           (assignment_operator)
           (expression
-            (signed_integer (integer))))))))
+            (signed_integer (integer (base_ten)))))))))

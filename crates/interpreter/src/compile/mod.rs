@@ -13,7 +13,7 @@ mod nodes {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct AstNode<N> {
-    reference: SourceReference,
+    pub reference: SourceReference,
     pub node: N,
 }
 
@@ -63,6 +63,7 @@ pub enum Error<'t, 'i> {
     IncorrectKind(IncorrectKind<'t>),
     InvalidUnit(InvalidUnitError<'t, 'i>),
     ParseInt(ParseIntError<'t>),
+    ParseNumber(ParseNumberError<'t>),
 }
 
 impl<'t> From<IncorrectKind<'t>> for Error<'t, '_> {
@@ -74,6 +75,12 @@ impl<'t> From<IncorrectKind<'t>> for Error<'t, '_> {
 impl<'t> From<ParseIntError<'t>> for Error<'t, '_> {
     fn from(value: ParseIntError<'t>) -> Self {
         Self::ParseInt(value)
+    }
+}
+
+impl<'t> From<ParseNumberError<'t>> for Error<'t, '_> {
+    fn from(value: ParseNumberError<'t>) -> Self {
+        Self::ParseNumber(value)
     }
 }
 

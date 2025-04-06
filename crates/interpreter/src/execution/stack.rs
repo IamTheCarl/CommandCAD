@@ -16,9 +16,11 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::compile::SourceReference;
+
 use super::{
     errors::{ErrorType, ExpressionResult, Raise},
-    logging::{LocatedStr, StackPoint},
+    logging::LocatedStr,
     values::Value,
 };
 use compact_str::CompactString;
@@ -37,7 +39,6 @@ struct Scope {
 
 pub struct Stack {
     scopes: Vec<Scope>,
-    trace: Vec<StackPoint>,
     active_scope: usize,
 }
 
@@ -87,7 +88,7 @@ impl Stack {
     pub fn push_scope<'s>(
         &mut self,
         variables_to_copy: impl Iterator<Item = LocatedStr<'s>>,
-        point: StackPoint,
+        stack_trace: &[SourceReference],
         mode: ScopeType,
     ) -> ExpressionResult<()> {
         let next_scope_index = self.active_scope + 1;
@@ -101,14 +102,13 @@ impl Stack {
         self.scopes[next_scope_index].ty = mode;
 
         for variable in variables_to_copy {
-            let value = self.get_variable(&self.trace, &variable)?.clone();
+            let value = self.get_variable(stack_trace, &variable)?.clone();
             self.scopes[next_scope_index]
                 .variables
                 .insert(variable.string.into(), value);
         }
 
         self.active_scope = next_scope_index;
-        self.trace.push(point);
 
         Ok(())
     }
@@ -116,14 +116,13 @@ impl Stack {
     pub(super) fn pop_scope(&mut self) {
         self.scopes[self.active_scope].variables.clear();
         self.active_scope -= 1;
-        self.trace.pop();
     }
 
     // TODO Recommending similar named variables would help users to notice typos.
     // https://crates.io/crates/levenshtein
     pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(
         &self,
-        stack_trace: &[StackPoint],
+        stack_trace: &[SourceReference],
         name: S,
     ) -> ExpressionResult<&Value> {
         let name = name.into();
@@ -132,7 +131,7 @@ impl Stack {
 
     pub fn get_variable_mut<'s, S: Into<LocatedStr<'s>>>(
         &mut self,
-        stack_trace: &[StackPoint],
+        stack_trace: &[SourceReference],
         name: S,
     ) -> ExpressionResult<&mut Value> {
         let name = name.into();
