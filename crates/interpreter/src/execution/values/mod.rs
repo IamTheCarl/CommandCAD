@@ -17,6 +17,9 @@ pub use void::Void;
 mod default;
 pub use default::DefaultValue;
 
+mod boolean;
+pub use boolean::Boolean;
+
 mod integer;
 pub use integer::{SignedInteger, UnsignedInteger};
 
@@ -276,7 +279,7 @@ pub enum Value {
     Default(DefaultValue),
     SignedInteger,
     UnsignedInteger,
-    // Boolean,
+    Boolean,
     // BuiltinFunction(BuiltinFunctionRef<S>),
     // UserFunction(UserFunction<S>),
     // Structure(Structure<S>),

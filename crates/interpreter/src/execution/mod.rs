@@ -29,7 +29,7 @@ pub fn execute_expression(
             compile::Expression::BinaryExpression(ast_node) => {
                 execute_binary_expression(log, stack_trace, ast_node)
             }
-            compile::Expression::Boolean(ast_node) => todo!(),
+            compile::Expression::Boolean(ast_node) => Ok(values::Boolean(ast_node.node).into()),
             compile::Expression::ClosureDefinition(ast_node) => todo!(),
             compile::Expression::Default(_ast_node) => Ok(values::DefaultValue.into()),
             compile::Expression::DictionaryConstruction(ast_node) => todo!(),
@@ -127,6 +127,13 @@ mod test {
         let root = compile::full_compile("test_file.ccm", "default");
         let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
         assert_eq!(product, values::DefaultValue.into());
+    }
+
+    #[test]
+    fn boolean_type() {
+        let root = compile::full_compile("test_file.ccm", "true");
+        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        assert_eq!(product, values::Boolean(true).into());
     }
 
     #[test]
