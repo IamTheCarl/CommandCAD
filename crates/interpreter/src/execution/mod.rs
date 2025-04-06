@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::compile::{self, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation};
 
 mod errors;
@@ -83,7 +85,11 @@ fn execute_binary_expression(
             let value_a = execute_expression(log, stack_trace, &node.a)?;
             let value_b = execute_expression(log, stack_trace, &node.b)?;
             match node.operation.node {
-                BinaryExpressionOperation::NotEq => todo!(),
+                BinaryExpressionOperation::NotEq => Ok(values::Boolean(!matches!(
+                    value_a.cmp(log, stack_trace, &value_b)?,
+                    Ordering::Equal
+                ))
+                .into()),
                 BinaryExpressionOperation::And => value_a.bit_and(log, stack_trace, &value_b),
                 BinaryExpressionOperation::AndAnd => value_a.and(log, stack_trace, &value_b),
                 BinaryExpressionOperation::Mul => value_a.multiply(log, stack_trace, &value_b),
@@ -96,12 +102,32 @@ fn execute_binary_expression(
                 BinaryExpressionOperation::DivDiv => {
                     value_a.floor_divide(log, stack_trace, &value_b)
                 }
-                BinaryExpressionOperation::Lt => todo!(),
+                BinaryExpressionOperation::Lt => Ok(values::Boolean(matches!(
+                    value_a.cmp(log, stack_trace, &value_b)?,
+                    Ordering::Less
+                ))
+                .into()),
                 BinaryExpressionOperation::LtLt => todo!(),
-                BinaryExpressionOperation::LtEq => todo!(),
-                BinaryExpressionOperation::EqEq => todo!(),
-                BinaryExpressionOperation::Gt => todo!(),
-                BinaryExpressionOperation::GtEq => todo!(),
+                BinaryExpressionOperation::LtEq => Ok(values::Boolean(matches!(
+                    value_a.cmp(log, stack_trace, &value_b)?,
+                    Ordering::Less | Ordering::Equal
+                ))
+                .into()),
+                BinaryExpressionOperation::EqEq => Ok(values::Boolean(matches!(
+                    value_a.cmp(log, stack_trace, &value_b)?,
+                    Ordering::Equal
+                ))
+                .into()),
+                BinaryExpressionOperation::Gt => Ok(values::Boolean(matches!(
+                    value_a.cmp(log, stack_trace, &value_b)?,
+                    Ordering::Greater
+                ))
+                .into()),
+                BinaryExpressionOperation::GtEq => Ok(values::Boolean(matches!(
+                    value_a.cmp(log, stack_trace, &value_b)?,
+                    Ordering::Equal | Ordering::Greater
+                ))
+                .into()),
                 BinaryExpressionOperation::GtGt => todo!(),
                 BinaryExpressionOperation::BitXor => value_a.bit_xor(log, stack_trace, &value_b),
                 BinaryExpressionOperation::Or => value_a.bit_or(log, stack_trace, &value_b),
