@@ -1,8 +1,11 @@
 use common_data_types::{
-    ConversionFactor, ConversionFactorDatabase, Dimension, DimensionNameDatabase, RatioTypeHint,
-    UnitDescription, UnitList, BaseUnits
+    BaseUnits, ConversionFactor, ConversionFactorDatabase, Dimension, DimensionNameDatabase,
+    RatioTypeHint, UnitDescription, UnitList,
 };
-use std::{borrow::Borrow, sync::OnceLock};
+use std::{
+    borrow::{Borrow, Cow},
+    sync::OnceLock,
+};
 
 pub fn get_conversion_factor(name: &str) -> Option<&'static ConversionFactor> {
     static CONVERSION_FACTORS: OnceLock<ConversionFactorDatabase> = OnceLock::new();
@@ -12,12 +15,28 @@ pub fn get_conversion_factor(name: &str) -> Option<&'static ConversionFactor> {
     database.get(name)
 }
 
-pub fn get_dimension_name(dimension: impl AsRef<Dimension>) -> Option<&'static str> {
+pub fn get_dimension_name(dimension: &Dimension) -> Cow<'static, str> {
     static DIMENSIONS: OnceLock<DimensionNameDatabase> = OnceLock::new();
     let database =
         DIMENSIONS.get_or_init(|| include!(concat!(env!("OUT_DIR"), "/dimension_names.rs")));
 
-    database.get(dimension.as_ref()).map(|cow| cow.borrow())
+    if let Some(name) = database.get(dimension) {
+        Cow::Borrowed(name)
+    } else {
+        // This is a custom unit. We will need to generate a name to represent it.
+        format!(
+            "<L{}, M{}, T{}, I{}, Th{}, N{}, J{}, K{}>",
+            dimension.length,
+            dimension.mass,
+            dimension.time,
+            dimension.electric_current,
+            dimension.thermodynamic_temprature,
+            dimension.amount_of_substance,
+            dimension.luminous_intensity,
+            dimension.ratio_type_hint
+        )
+        .into()
+    }
 }
 
 pub fn get_unit_list() -> &'static Vec<(String, Vec<UnitDescription>)> {

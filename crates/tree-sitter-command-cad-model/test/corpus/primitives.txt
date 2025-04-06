@@ -213,3 +213,17 @@ Scalar with quoted unit
     (scalar
       (number)
       (unit_quote))))
+
+==================
+Scalar with quoted unit that would not work as an identifier
+==================
+
+123 'm^2'
+
+---
+
+(source_file
+  (expression
+    (scalar
+      (number)
+      (unit_quote))))

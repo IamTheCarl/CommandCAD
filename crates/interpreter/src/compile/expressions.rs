@@ -653,10 +653,21 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for Scalar {
         // Get the conversion factor using the unit name.
         let conversion_factor = if let Some(unit_name) = value.unit() {
             let unit_name = unit_name?;
-            let unit_name_str = &input[unit_name.byte_range()];
+
+            let unit_name_str = match unit_name {
+                nodes::anon_unions::Identifier_UnitQuote::Identifier(identifier) => {
+                    &input[unit_name.byte_range()]
+                }
+                nodes::anon_unions::Identifier_UnitQuote::UnitQuote(unit_quote) => {
+                    let original = &input[unit_name.byte_range()];
+                    &original[1..original.len() - 1]
+                }
+            };
+
             if let Some(conversion_factor) = units::get_conversion_factor(unit_name_str) {
                 conversion_factor
             } else {
+                // TODO try and list similar names to what they user may have meant.
                 // We don't know what this is.
                 return Err(Error::InvalidUnit(InvalidUnitError {
                     name: unit_name_str,
@@ -1514,6 +1525,25 @@ mod test {
                     node: Scalar {
                         dimension: Dimension::length(),
                         value: Float::new(0.01).unwrap()
+                    }
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn scalar_quoted_unit() {
+        // Test conversion factor
+        let root = full_compile("test_file.ccm", "1'm^2'");
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::Scalar(AstNode {
+                    reference: root.node.as_scalar().unwrap().reference.clone(),
+                    node: Scalar {
+                        dimension: Dimension::area(),
+                        value: Float::new(1.0).unwrap()
                     }
                 })
             }

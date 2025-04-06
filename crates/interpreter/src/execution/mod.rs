@@ -1,3 +1,21 @@
+/*
+ * Copyright 2025 James Carl
+ * AGPL-3.0-only or AGPL-3.0-or-later
+ *
+ * This file is part of Command Cad.
+ *
+ * Command CAD is free software: you can redistribute it and/or modify it under the terms of
+ * the GNU Affero General Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along with this
+ * program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 use std::cmp::Ordering;
 
 use crate::compile::{self, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation};
@@ -40,7 +58,11 @@ pub fn execute_expression(
             compile::Expression::Parenthesis(ast_node) => todo!(),
             compile::Expression::Path(ast_node) => todo!(),
             compile::Expression::ProceduralBlock(ast_node) => todo!(),
-            compile::Expression::Scalar(ast_node) => todo!(),
+            compile::Expression::Scalar(ast_node) => Ok(values::Scalar {
+                dimension: ast_node.node.dimension,
+                value: ast_node.node.value,
+            }
+            .into()),
             compile::Expression::SignedInteger(ast_node) => {
                 Ok(values::SignedInteger::from(ast_node.node).into())
             }

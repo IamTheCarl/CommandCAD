@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
 use ordered_float::NotNan;
 use paste::paste;
@@ -9,10 +9,10 @@ pub type Float = NotNan<RawFloat>;
 pub use ordered_float::{FloatIsNan, ParseNotNanError};
 pub use std::f64::consts;
 
-pub type ConversionFactorDatabase = HashMap<Cow<'static, str>, ConversionFactor>;
-pub type DimensionNameDatabase = HashMap<Dimension, Cow<'static, str>>;
+pub type ConversionFactorDatabase = HashMap<String, ConversionFactor>;
+pub type DimensionNameDatabase = HashMap<Dimension, String>;
 pub type UnitList = Vec<(String, Vec<UnitDescription>)>;
-pub type BaseUnits = HashMap<Dimension, Cow<'static, str>>;
+pub type BaseUnits = HashMap<Dimension, String>;
 
 #[derive(Debug, Serialize)]
 pub struct UnitDescription {
@@ -60,6 +60,36 @@ impl RatioTypeHint {
     bit_getter_setter!(Self::SOLID_ANGLE_MASK, solid_angle);
     bit_getter_setter!(Self::TEMPRATURE_MASK, temperature);
     bit_getter_setter!(Self::PIXEL_MASK, pixel);
+}
+
+impl std::fmt::Display for RatioTypeHint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_angle() {
+            write!(f, "-ANGLE")?;
+        }
+
+        if self.is_constituent_concentration() {
+            write!(f, "-CONSTITUENT_CONCENTRATION")?;
+        }
+
+        if self.is_information() {
+            write!(f, "-INFORMATION")?;
+        }
+
+        if self.is_solid_angle() {
+            write!(f, "-SOLID_ANGLE")?;
+        }
+
+        if self.is_temperature() {
+            write!(f, "-TEMPRATURE")?;
+        }
+
+        if self.is_pixel() {
+            write!(f, "-PIXEL")?;
+        }
+
+        Ok(())
+    }
 }
 
 impl std::ops::BitOr for RatioTypeHint {
@@ -228,6 +258,19 @@ impl Dimension {
     pub const fn length() -> Self {
         Self {
             length: 1,
+            mass: 0,
+            time: 0,
+            electric_current: 0,
+            thermodynamic_temprature: 0,
+            amount_of_substance: 0,
+            luminous_intensity: 0,
+            ratio_type_hint: RatioTypeHint(0),
+        }
+    }
+
+    pub const fn area() -> Self {
+        Self {
+            length: 2,
             mass: 0,
             time: 0,
             electric_current: 0,

@@ -17,128 +17,31 @@
  */
 use std::{borrow::Cow, fmt::Display};
 
-use crate::execution::formatting::IteratorFormatter;
+use common_data_types::Dimension;
 
-use super::Value;
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub struct ClosureSignature {
-    return_type: Box<VariableType>,
-    arguments: Vec<MemberVariableType>,
-}
-
-impl Display for ClosureSignature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "({})[...] -> {}",
-            IteratorFormatter(self.arguments.iter()),
-            self.return_type
-        )
-    }
-}
+use super::{Boolean, SignedInteger, StaticTypeName, UnsignedInteger};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum VariableType {
-    String,
-    List,
     Boolean,
     SignedInteger,
     UnsignedInteger,
-    Range,
-    Struct(String),
-    Scalar(String),
-    Vector(u8, String),
-    Transform(u8),
-    Quaternion,
-    Cycle,
-    Region,
-    Sketch,
-    Surface,
-    Solid,
-    Shell,
-    Face,
-    Curve,
-    HalfEdge,
-    Vertex,
-    Closure(ClosureSignature),
+    Scalar(Dimension),
 }
 
 impl VariableType {
     pub fn name(&self) -> Cow<'static, str> {
         match self {
-            Self::String => "String".into(),
-            Self::List => "List".into(),
-            Self::Boolean => "Boolean".into(),
-            Self::SignedInteger => "Signed Integer".into(),
-            Self::UnsignedInteger => "Unsigned Integer".into(),
-            Self::Range => "Range".into(),
-            Self::Struct(name) => format!("struct {}", name.as_str()).into(),
-            Self::Scalar(name) => name.to_string().into(),
-            Self::Vector(dimension, name) => {
-                format!("Vector{}<{}>", dimension, name.as_str()).into()
-            }
-            Self::Transform(2) => "Transform2D".into(),
-            Self::Transform(3) => "Transform3D".into(),
-            Self::Transform(_) => unreachable!(),
-            Self::Quaternion => "Quaternion".into(),
-            Self::Cycle => "Cycle".into(),
-            Self::Region => "Region".into(),
-            Self::Sketch => "Sketch".into(),
-            Self::Surface => "Surface".into(),
-            Self::Solid => "Solid".into(),
-            Self::Shell => "Shell".into(),
-            Self::Face => "Face".into(),
-            Self::Curve => "Curve".into(),
-            Self::HalfEdge => "HalfEdge".into(),
-            Self::Vertex => "Vertex".into(),
-            Self::Closure(closure) => format!("{}", closure).into(),
+            Self::Boolean => Boolean::static_type_name().into(),
+            Self::SignedInteger => SignedInteger::static_type_name().into(),
+            Self::UnsignedInteger => UnsignedInteger::static_type_name().into(),
+            Self::Scalar(dimension) => units::get_dimension_name(dimension).into(),
         }
     }
 }
 
 impl Display for VariableType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Struct(name) => write!(f, "struct {}", name.as_str()),
-            Self::Scalar(name) => write!(f, "{}", name.as_str()),
-            Self::Vector(dimension, name) => {
-                write!(f, "Vector{}<{}>", dimension, name.as_str())
-            }
-            Self::Closure(closure) => write!(f, "{}", closure),
-            _ => write!(f, "{}", self.name()),
-        }
-    }
-}
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub struct MemberVariableType {
-    pub ty: VariableType,
-    pub default_value: Option<Value>,
-}
-
-impl Display for MemberVariableType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.default_value.is_some() {
-            write!(f, "{} = default", self.ty)
-        } else {
-            write!(f, "{}", self.ty)
-        }
-    }
-}
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub struct MemberVariable {
-    pub name: String,
-    pub ty: MemberVariableType,
-}
-
-impl Display for MemberVariable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.ty.default_value.is_some() {
-            write!(f, "{}: {} = default", self.name.as_str(), self.ty.ty)
-        } else {
-            write!(f, "{}: {}", self.name.as_str(), self.ty.ty)
-        }
+        write!(f, "{}", self.name())
     }
 }
