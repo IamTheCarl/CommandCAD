@@ -18,7 +18,7 @@
 
 use crate::{compile::SourceReference, execution::logging::RuntimeLog};
 
-use super::{value_type::VariableType, ExpressionResult, Object, StaticTypeName, Value};
+use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
 
 #[derive(Debug, Hash, Clone, Eq, PartialEq)]
 pub struct Boolean(pub bool);
@@ -26,7 +26,7 @@ pub struct Boolean(pub bool);
 impl Object for Boolean {
     fn matches_type(
         &self,
-        _ty: &VariableType,
+        _ty: &ValueType,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
     ) -> ExpressionResult<bool> {

@@ -22,14 +22,14 @@ use common_data_types::Dimension;
 use super::{Boolean, SignedInteger, StaticTypeName, UnsignedInteger};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub enum VariableType {
+pub enum ValueType {
     Boolean,
     SignedInteger,
     UnsignedInteger,
     Scalar(Dimension),
 }
 
-impl VariableType {
+impl ValueType {
     pub fn name(&self) -> Cow<'static, str> {
         match self {
             Self::Boolean => Boolean::static_type_name().into(),
@@ -40,7 +40,7 @@ impl VariableType {
     }
 }
 
-impl Display for VariableType {
+impl Display for ValueType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }

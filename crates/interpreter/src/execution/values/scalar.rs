@@ -27,7 +27,7 @@ use crate::{
     },
 };
 
-use super::{value_type::VariableType, DowncastError, Object, StaticTypeName, Value};
+use super::{value_type::ValueType, DowncastError, Object, StaticTypeName, Value};
 
 pub trait UnwrapNotNan: Sized {
     fn unwrap_not_nan(self, stack_trace: &[SourceReference]) -> ExpressionResult<Float>;
@@ -53,11 +53,11 @@ pub struct Scalar {
 impl Object for Scalar {
     fn matches_type(
         &self,
-        ty: &VariableType,
+        ty: &ValueType,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
     ) -> ExpressionResult<bool> {
-        Ok(if let VariableType::Scalar(dimension) = ty {
+        Ok(if let ValueType::Scalar(dimension) = ty {
             *dimension == self.dimension
         } else {
             false

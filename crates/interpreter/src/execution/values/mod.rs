@@ -20,7 +20,7 @@ use std::{borrow::Cow, cmp::Ordering, fmt::Display};
 
 use enum_dispatch::enum_dispatch;
 use enum_downcast::{AsVariant, EnumDowncast};
-use value_type::VariableType;
+use value_type::ValueType;
 
 use crate::compile::SourceReference;
 
@@ -88,7 +88,7 @@ impl UnsupportedOperationError {
 pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
     fn matches_type(
         &self,
-        ty: &VariableType,
+        ty: &ValueType,
         log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
     ) -> ExpressionResult<bool>;

@@ -34,7 +34,7 @@ use crate::{
     },
 };
 
-use super::{value_type::VariableType, Object, StaticTypeName, Value};
+use super::{value_type::ValueType, Object, StaticTypeName, Value};
 
 #[derive(Debug, Hash, Clone, Eq, PartialEq)]
 pub struct Integer<I>(pub I);
@@ -69,7 +69,7 @@ where
 {
     fn matches_type(
         &self,
-        ty: &VariableType,
+        ty: &ValueType,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
     ) -> ExpressionResult<bool> {
@@ -228,7 +228,7 @@ where
 }
 
 trait GetType {
-    fn get_type() -> VariableType;
+    fn get_type() -> ValueType;
 }
 
 /// Custom version of the std::ops::Neg trait that can fail.
@@ -237,8 +237,8 @@ trait Neg {
 }
 
 impl GetType for i64 {
-    fn get_type() -> VariableType {
-        VariableType::SignedInteger
+    fn get_type() -> ValueType {
+        ValueType::SignedInteger
     }
 }
 
@@ -255,8 +255,8 @@ impl StaticTypeName for Integer<i64> {
 }
 
 impl GetType for u64 {
-    fn get_type() -> VariableType {
-        VariableType::UnsignedInteger
+    fn get_type() -> ValueType {
+        ValueType::UnsignedInteger
     }
 }
 
