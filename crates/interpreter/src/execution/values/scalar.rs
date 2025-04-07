@@ -51,17 +51,8 @@ pub struct Scalar {
 }
 
 impl Object for Scalar {
-    fn matches_type(
-        &self,
-        ty: &ValueType,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-    ) -> ExpressionResult<bool> {
-        Ok(if let ValueType::Scalar(dimension) = ty {
-            *dimension == self.dimension
-        } else {
-            false
-        })
+    fn get_type(&self) -> ValueType {
+        ValueType::Scalar(self.dimension)
     }
 
     fn type_name(&self) -> Cow<'static, str> {
@@ -776,7 +767,10 @@ impl Scalar {
 #[cfg(test)]
 mod test {
 
-    use crate::{compile, execute_expression, execution::values::Boolean};
+    use crate::{
+        compile, execute_expression,
+        execution::{stack::Stack, values::Boolean},
+    };
 
     use super::*;
 
@@ -784,7 +778,13 @@ mod test {
     fn addition() {
         let root = compile::full_compile("test_file.ccm", "3m + 2m");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -799,7 +799,13 @@ mod test {
     fn subtraction() {
         let root = compile::full_compile("test_file.ccm", "3m - 2m");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -814,7 +820,13 @@ mod test {
     fn multiplication() {
         let root = compile::full_compile("test_file.ccm", "3m * 2m");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -829,7 +841,13 @@ mod test {
     fn division() {
         let root = compile::full_compile("test_file.ccm", "6'm^2' / 2m");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -843,70 +861,166 @@ mod test {
     #[test]
     fn comparisions() {
         let root = compile::full_compile("test_file.ccm", "6m > 2m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let root = compile::full_compile("test_file.ccm", "2m > 6m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
 
         let root = compile::full_compile("test_file.ccm", "6m >= 2m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let root = compile::full_compile("test_file.ccm", "6m >= 6m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let root = compile::full_compile("test_file.ccm", "2m >= 6m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
 
         let root = compile::full_compile("test_file.ccm", "6m == 6m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let root = compile::full_compile("test_file.ccm", "6m == 5m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
 
         let root = compile::full_compile("test_file.ccm", "6m <= 5m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
 
         let root = compile::full_compile("test_file.ccm", "5m <= 5m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let root = compile::full_compile("test_file.ccm", "5m <= 6m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let root = compile::full_compile("test_file.ccm", "5m < 6m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let root = compile::full_compile("test_file.ccm", "6m < 6m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
 
         let root = compile::full_compile("test_file.ccm", "6m != 6m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
 
         let root = compile::full_compile("test_file.ccm", "6m != 5m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn conversions() {
         let root = compile::full_compile("test_file.ccm", "1m + 100cm == 2m");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let root = compile::full_compile("test_file.ccm", "2m * 2m == 4'm^2'");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 }

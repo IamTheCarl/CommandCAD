@@ -655,10 +655,10 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for Scalar {
             let unit_name = unit_name?;
 
             let unit_name_str = match unit_name {
-                nodes::anon_unions::Identifier_UnitQuote::Identifier(identifier) => {
+                nodes::anon_unions::Identifier_UnitQuote::Identifier(_identifier) => {
                     &input[unit_name.byte_range()]
                 }
-                nodes::anon_unions::Identifier_UnitQuote::UnitQuote(unit_quote) => {
+                nodes::anon_unions::Identifier_UnitQuote::UnitQuote(_unit_quote) => {
                     let original = &input[unit_name.byte_range()];
                     &original[1..original.len() - 1]
                 }

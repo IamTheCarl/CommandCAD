@@ -20,7 +20,6 @@ use std::{borrow::Cow, cmp::Ordering, fmt::Display};
 
 use enum_dispatch::enum_dispatch;
 use enum_downcast::{AsVariant, EnumDowncast};
-use value_type::ValueType;
 
 use crate::compile::SourceReference;
 
@@ -45,6 +44,7 @@ mod scalar;
 pub use scalar::Scalar;
 
 mod value_type;
+pub use value_type::ValueType;
 
 pub trait StaticTypeName {
     /// Provides the type name without having an instance of the object.
@@ -86,12 +86,7 @@ impl UnsupportedOperationError {
 
 #[enum_dispatch]
 pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
-    fn matches_type(
-        &self,
-        ty: &ValueType,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-    ) -> ExpressionResult<bool>;
+    fn get_type(&self) -> ValueType;
 
     // fn format(
     //     &self,

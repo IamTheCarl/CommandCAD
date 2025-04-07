@@ -67,13 +67,8 @@ where
     Self: StaticTypeName + Into<Value>,
     Value: AsVariant<Self>,
 {
-    fn matches_type(
-        &self,
-        ty: &ValueType,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-    ) -> ExpressionResult<bool> {
-        Ok(*ty == I::get_type())
+    fn get_type(&self) -> ValueType {
+        I::get_type()
     }
 
     fn bit_and(
@@ -283,7 +278,7 @@ pub type UnsignedInteger = Integer<u64>;
 mod test {
     use crate::{
         compile,
-        execution::{execute_expression, values::Boolean},
+        execution::{execute_expression, stack::Stack, values::Boolean},
     };
 
     use super::*;
@@ -292,84 +287,186 @@ mod test {
     fn signed_bit_or() {
         let root = compile::full_compile("test_file.ccm", "0xAAi | 0x55i");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(0xFF).into());
     }
 
     #[test]
     fn signed_bit_and() {
         let root = compile::full_compile("test_file.ccm", "0xFFi & 0x0Fi");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(0x0F).into());
     }
 
     #[test]
     fn signed_bit_xor() {
         let root = compile::full_compile("test_file.ccm", "0xF0i ^ 0xFFi");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(0x0F).into());
     }
 
     #[test]
     fn signed_cmp_greater_than() {
         let root = compile::full_compile("test_file.ccm", "3i > 2i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
         let root = compile::full_compile("test_file.ccm", "2i > 3i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
     }
 
     #[test]
     fn signed_cmp_greater_than_eq() {
         let root = compile::full_compile("test_file.ccm", "3i >= 2i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
         let root = compile::full_compile("test_file.ccm", "3i >= 3i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
         let root = compile::full_compile("test_file.ccm", "2i >= 3i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
     }
 
     #[test]
     fn signed_cmp_eq() {
         let root = compile::full_compile("test_file.ccm", "3i == 3i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
         let root = compile::full_compile("test_file.ccm", "3i == 2i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
 
         let root = compile::full_compile("test_file.ccm", "3i != 3i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
         let root = compile::full_compile("test_file.ccm", "3i != 2i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn signed_cmp_less_than_eq() {
         let root = compile::full_compile("test_file.ccm", "3i <= 2i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
         let root = compile::full_compile("test_file.ccm", "3i <= 3i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
         let root = compile::full_compile("test_file.ccm", "2i <= 3i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn signed_cmp_less_than() {
         let root = compile::full_compile("test_file.ccm", "3i < 2i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
         let root = compile::full_compile("test_file.ccm", "2i < 3i");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
@@ -377,7 +474,13 @@ mod test {
     fn signed_addition() {
         let root = compile::full_compile("test_file.ccm", "3i + 2i");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(5).into());
     }
 
@@ -385,7 +488,13 @@ mod test {
     fn signed_subtraction() {
         let root = compile::full_compile("test_file.ccm", "3i - 2i");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(1).into());
     }
 
@@ -393,7 +502,13 @@ mod test {
     fn signed_multiply() {
         let root = compile::full_compile("test_file.ccm", "3i * 2i");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(6).into());
     }
 
@@ -401,7 +516,13 @@ mod test {
     fn signed_divide() {
         let root = compile::full_compile("test_file.ccm", "6i / 2i");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(3).into());
     }
 
@@ -409,7 +530,13 @@ mod test {
     fn signed_floor_divide() {
         let root = compile::full_compile("test_file.ccm", "6i // 2i");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(3).into());
     }
 
@@ -417,7 +544,13 @@ mod test {
     fn signed_exponent() {
         let root = compile::full_compile("test_file.ccm", "6i ** 3i");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(216).into());
     }
 
@@ -425,7 +558,13 @@ mod test {
     fn signed_unary_plus() {
         let root = compile::full_compile("test_file.ccm", "+3i");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(3).into());
     }
 
@@ -433,7 +572,13 @@ mod test {
     fn signed_unary_minus() {
         let root = compile::full_compile("test_file.ccm", "-3i");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(-3).into());
     }
 
@@ -441,7 +586,13 @@ mod test {
     fn signed_unary_bit_not() {
         let root = compile::full_compile("test_file.ccm", "!0xAAi");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, SignedInteger::from(!0xAA).into());
     }
 
@@ -451,84 +602,186 @@ mod test {
     fn unsigned_bit_or() {
         let root = compile::full_compile("test_file.ccm", "0xAAu | 0x55u");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(0xFF).into());
     }
 
     #[test]
     fn unsigned_bit_and() {
         let root = compile::full_compile("test_file.ccm", "0xFFu & 0x0Fu");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(0x0F).into());
     }
 
     #[test]
     fn unsigned_bit_xor() {
         let root = compile::full_compile("test_file.ccm", "0xF0u ^ 0xFFu");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(0x0F).into());
     }
 
     #[test]
     fn unsigned_cmp_greater_than() {
         let root = compile::full_compile("test_file.ccm", "3u > 2u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
         let root = compile::full_compile("test_file.ccm", "2u > 3u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
     }
 
     #[test]
     fn unsigned_cmp_greater_than_eq() {
         let root = compile::full_compile("test_file.ccm", "3u >= 2u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
         let root = compile::full_compile("test_file.ccm", "3u >= 3u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
         let root = compile::full_compile("test_file.ccm", "2u >= 3u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
     }
 
     #[test]
     fn unsigned_cmp_eq() {
         let root = compile::full_compile("test_file.ccm", "3u == 3u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
         let root = compile::full_compile("test_file.ccm", "3u == 2u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
 
         let root = compile::full_compile("test_file.ccm", "3u != 3u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
         let root = compile::full_compile("test_file.ccm", "3u != 2u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn unsigned_cmp_less_than_eq() {
         let root = compile::full_compile("test_file.ccm", "3u <= 2u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
         let root = compile::full_compile("test_file.ccm", "3u <= 3u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
         let root = compile::full_compile("test_file.ccm", "2u <= 3u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn unsigned_cmp_less_than() {
         let root = compile::full_compile("test_file.ccm", "3u < 2u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(false).into());
         let root = compile::full_compile("test_file.ccm", "2u < 3u");
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
@@ -536,7 +789,13 @@ mod test {
     fn unsigned_addition() {
         let root = compile::full_compile("test_file.ccm", "3u + 2u");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(5).into());
     }
 
@@ -544,7 +803,13 @@ mod test {
     fn unsigned_subtraction() {
         let root = compile::full_compile("test_file.ccm", "3u - 2u");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(1).into());
     }
 
@@ -552,7 +817,13 @@ mod test {
     fn unsigned_multiply() {
         let root = compile::full_compile("test_file.ccm", "3u * 2u");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(6).into());
     }
 
@@ -560,7 +831,13 @@ mod test {
     fn unsigned_divide() {
         let root = compile::full_compile("test_file.ccm", "6u / 2u");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(3).into());
     }
 
@@ -568,7 +845,13 @@ mod test {
     fn unsigned_floor_divide() {
         let root = compile::full_compile("test_file.ccm", "6u // 2u");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(3).into());
     }
 
@@ -576,7 +859,13 @@ mod test {
     fn unsigned_exponent() {
         let root = compile::full_compile("test_file.ccm", "6u ** 3u");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(216).into());
     }
 
@@ -584,7 +873,13 @@ mod test {
     fn unsigned_unary_plus() {
         let root = compile::full_compile("test_file.ccm", "+3u");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(3).into());
     }
 
@@ -592,14 +887,26 @@ mod test {
     fn unsigned_unary_minus() {
         let root = compile::full_compile("test_file.ccm", "-3u");
 
-        execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap_err();
+        execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap_err();
     }
 
     #[test]
     fn unsigned_unary_bit_not() {
         let root = compile::full_compile("test_file.ccm", "!0xAAu");
 
-        let product = execute_expression(&mut Vec::new(), &mut Vec::new(), &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
         assert_eq!(product, UnsignedInteger::from(!0xAA).into());
     }
 }

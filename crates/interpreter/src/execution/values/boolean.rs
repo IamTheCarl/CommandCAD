@@ -24,13 +24,8 @@ use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Val
 pub struct Boolean(pub bool);
 
 impl Object for Boolean {
-    fn matches_type(
-        &self,
-        _ty: &ValueType,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-    ) -> ExpressionResult<bool> {
-        Ok(false)
+    fn get_type(&self) -> ValueType {
+        ValueType::Boolean
     }
 
     fn eq(

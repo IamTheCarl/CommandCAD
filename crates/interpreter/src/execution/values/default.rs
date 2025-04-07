@@ -16,21 +16,14 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{compile::SourceReference, execution::logging::RuntimeLog};
-
-use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName};
+use super::{value_type::ValueType, Object, StaticTypeName};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct DefaultValue;
 
 impl Object for DefaultValue {
-    fn matches_type(
-        &self,
-        _ty: &ValueType,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-    ) -> ExpressionResult<bool> {
-        Ok(false)
+    fn get_type(&self) -> ValueType {
+        ValueType::Default
     }
 }
 

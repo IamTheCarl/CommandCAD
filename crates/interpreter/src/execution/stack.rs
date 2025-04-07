@@ -32,14 +32,30 @@ pub enum ScopeType {
     Inherited,
 }
 
+#[derive(Debug)]
 struct Scope {
     ty: ScopeType,
     variables: HashMap<CompactString, Value>,
 }
 
+#[derive(Debug)]
 pub struct Stack {
     scopes: Vec<Scope>,
     active_scope: usize,
+}
+
+impl Default for Stack {
+    fn default() -> Self {
+        Self {
+            scopes: vec![Scope {
+                ty: ScopeType::Isolated,
+
+                // TODO we should load the standard environment.
+                variables: HashMap::new(),
+            }],
+            active_scope: 0,
+        }
+    }
 }
 
 macro_rules! generate_variable_getter {
@@ -85,7 +101,24 @@ impl Display for NotInScopeError {
 }
 
 impl Stack {
-    pub fn push_scope<'s>(
+    pub fn scope<'s, B, R>(
+        &mut self,
+        variables_to_copy: impl IntoIterator<Item = LocatedStr<'s>>,
+        stack_trace: &mut Vec<SourceReference>,
+        mode: ScopeType,
+        block: B,
+    ) -> ExpressionResult<R>
+    where
+        B: FnOnce(&mut Self, &mut Vec<SourceReference>) -> R,
+    {
+        self.push_scope(variables_to_copy.into_iter(), stack_trace, mode)?;
+        let result = block(self, stack_trace);
+        self.pop_scope();
+
+        Ok(result)
+    }
+
+    fn push_scope<'s>(
         &mut self,
         variables_to_copy: impl Iterator<Item = LocatedStr<'s>>,
         stack_trace: &[SourceReference],
@@ -113,7 +146,7 @@ impl Stack {
         Ok(())
     }
 
-    pub(super) fn pop_scope(&mut self) {
+    fn pop_scope(&mut self) {
         self.scopes[self.active_scope].variables.clear();
         self.active_scope -= 1;
     }

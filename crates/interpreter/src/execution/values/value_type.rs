@@ -19,10 +19,12 @@ use std::{borrow::Cow, fmt::Display};
 
 use common_data_types::Dimension;
 
-use super::{Boolean, SignedInteger, StaticTypeName, UnsignedInteger};
+use super::{Boolean, DefaultValue, SignedInteger, StaticTypeName, UnsignedInteger, Void};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum ValueType {
+    Void,
+    Default,
     Boolean,
     SignedInteger,
     UnsignedInteger,
@@ -32,6 +34,8 @@ pub enum ValueType {
 impl ValueType {
     pub fn name(&self) -> Cow<'static, str> {
         match self {
+            Self::Void => Void::static_type_name().into(),
+            Self::Default => DefaultValue::static_type_name().into(),
             Self::Boolean => Boolean::static_type_name().into(),
             Self::SignedInteger => SignedInteger::static_type_name().into(),
             Self::UnsignedInteger => UnsignedInteger::static_type_name().into(),
