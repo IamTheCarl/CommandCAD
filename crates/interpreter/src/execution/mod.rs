@@ -237,13 +237,23 @@ fn execute_statement(
     stack_trace: &mut Vec<SourceReference>,
     statement: &compile::AstNode<compile::Statement>,
 ) -> ExpressionResult<Value> {
-    match &statement.node {
-        compile::Statement::Assign(ast_node) => todo!(),
-        compile::Statement::Let(ast_node) => todo!(),
-        compile::Statement::For(ast_node) => todo!(),
-        compile::Statement::Expression(ast_node) => todo!(),
-        compile::Statement::ClosedExpression(ast_node) => todo!(),
-    }
+    stack_trace.stack_scope(
+        statement.reference.clone(),
+        |stack_trace| match &statement.node {
+            compile::Statement::Assign(ast_node) => todo!(),
+            compile::Statement::Let(ast_node) => todo!(),
+            compile::Statement::For(ast_node) => todo!(),
+            compile::Statement::Expression(ast_node) => {
+                execute_expression(log, stack_trace, stack, ast_node)
+            }
+            compile::Statement::ClosedExpression(ast_node) => {
+                // It's the same as a normal statement, but we eat the result instead of returning
+                // it.
+                execute_expression(log, stack_trace, stack, &ast_node.node.expression)
+                    .map(|_value| values::Void.into())
+            }
+        },
+    )
 }
 
 #[cfg(test)]
@@ -326,5 +336,44 @@ mod test {
         )
         .unwrap();
         assert_eq!(product, values::Void.into());
+    }
+
+    #[test]
+    fn block_open_expression_statement() {
+        let root = compile::full_compile("test_file.ccm", "{ 5u }");
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn block_closed_expression_statement() {
+        let root = compile::full_compile("test_file.ccm", "{ 5u; }");
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
+        assert_eq!(product, values::Void.into());
+    }
+
+    #[test]
+    fn block_recursive_blocks() {
+        let root = compile::full_compile("test_file.ccm", "{ { 5u } }");
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
     }
 }
