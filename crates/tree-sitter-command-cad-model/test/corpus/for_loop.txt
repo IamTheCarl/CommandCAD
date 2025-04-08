@@ -1,5 +1,5 @@
 ==================
-Assign
+For loop
 ==================
 
  {
@@ -16,6 +16,5 @@ Assign
           (identifier)
           (expression
             (path
-              (local_path
-                (identifier))))
+              (identifier)))
           (procedural_block))))))

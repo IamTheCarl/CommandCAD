@@ -151,6 +151,12 @@ impl Stack {
         self.active_scope -= 1;
     }
 
+    pub fn insert_value(&mut self, name: impl Into<CompactString>, value: Value) {
+        self.scopes[self.active_scope]
+            .variables
+            .insert(name.into(), value);
+    }
+
     // TODO Recommending similar named variables would help users to notice typos.
     // https://crates.io/crates/levenshtein
     pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(

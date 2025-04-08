@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use common_data_types::{ConversionFactor, Dimension, Float, RawFloat};
 use nodes::SourceFile;
 use tree_sitter::Range;
-use type_sitter::{HasChild, IncorrectKind, Node};
+use type_sitter::{HasChild, Node};
 use unwrap_enum::EnumAs;
 
 use super::{nodes, AstNode, Error, Parse, Statement};
@@ -566,14 +566,7 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for BinaryExpression {
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]
-pub enum PathType {
-    Argument,
-    Local,
-}
-
-#[derive(Debug, Hash, Eq, PartialEq)]
 pub struct IdentityPath {
-    pub ty: PathType,
     pub path: Vec<AstNode<String>>,
 }
 
@@ -583,52 +576,17 @@ impl<'t> Parse<'t, nodes::Path<'t>> for IdentityPath {
         input: &'i str,
         value: nodes::Path<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        let path_type = value.child()?;
+        let mut cursor = value.walk();
+        let mut path = Vec::new();
 
-        fn collect_identifiers<'t, 'i>(
-            file: &Arc<PathBuf>,
-            input: &'i str,
-            identifiers: impl Iterator<Item = Result<nodes::Identifier<'t>, IncorrectKind<'t>>>,
-        ) -> Result<Vec<AstNode<String>>, Error<'t, 'i>> {
-            let mut path = Vec::new();
+        for ident in value.identifiers(&mut cursor) {
+            let ident = ident?;
+            let text = String::parse(file, input, ident)?;
 
-            for ident in identifiers {
-                let ident = ident?;
-                let text = String::parse(file, input, ident)?;
-
-                path.push(text);
-            }
-
-            Ok(path)
+            path.push(text);
         }
 
-        let (path_type, identifiers) = match path_type {
-            nodes::anon_unions::ArgumentPath_LocalPath::ArgumentPath(argument_path) => {
-                let mut cursor = argument_path.walk();
-
-                (
-                    PathType::Argument,
-                    collect_identifiers(file, input, argument_path.identifiers(&mut cursor))?,
-                )
-            }
-            nodes::anon_unions::ArgumentPath_LocalPath::LocalPath(local_path) => {
-                let mut cursor = local_path.walk();
-
-                (
-                    PathType::Local,
-                    collect_identifiers(file, input, local_path.identifiers(&mut cursor))?,
-                )
-            }
-        };
-
-        Ok(AstNode::new(
-            file,
-            &value,
-            Self {
-                ty: path_type,
-                path: identifiers,
-            },
-        ))
+        Ok(AstNode::new(file, &value, Self { path }))
     }
 }
 
@@ -1393,7 +1351,6 @@ mod test {
                 node: Expression::Path(AstNode {
                     reference: path.reference.clone(),
                     node: IdentityPath {
-                        ty: PathType::Local,
                         path: vec![
                             AstNode {
                                 reference: this.reference.clone(),
@@ -1424,7 +1381,6 @@ mod test {
                 node: Expression::Path(AstNode {
                     reference: path.reference.clone(),
                     node: IdentityPath {
-                        ty: PathType::Argument,
                         path: vec![
                             AstNode {
                                 reference: this.reference.clone(),
@@ -1654,7 +1610,6 @@ mod test {
                     ty: AstNode {
                         reference: one.node.ty.reference.clone(),
                         node: IdentityPath {
-                            ty: PathType::Local,
                             path: vec![
                                 AstNode {
                                     reference: one.node.ty.node.path[0].reference.clone(),
@@ -1683,7 +1638,6 @@ mod test {
                     ty: AstNode {
                         reference: two.node.ty.reference.clone(),
                         node: IdentityPath {
-                            ty: PathType::Local,
                             path: vec![
                                 AstNode {
                                     reference: two.node.ty.node.path[0].reference.clone(),
@@ -1701,7 +1655,6 @@ mod test {
                         node: Expression::Path(AstNode {
                             reference: two_default_path.reference.clone(),
                             node: IdentityPath {
-                                ty: PathType::Local,
                                 path: vec![AstNode {
                                     reference: two_default_path.node.path[0].reference.clone(),
                                     node: "a".into()

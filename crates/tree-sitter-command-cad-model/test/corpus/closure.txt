@@ -12,9 +12,8 @@ Empty
       (void)
       (closure_captured_variables)
       (path
-        (local_path
-          (identifier)
-          (identifier)))
+        (identifier)
+        (identifier))
       (expression
         (procedural_block)))))
 
@@ -35,9 +34,8 @@ Capture
         (identifier)
         (identifier))
       (path
-        (local_path
-          (identifier)
-          (identifier)))
+        (identifier)
+        (identifier))
       (expression
         (procedural_block)))))
 
@@ -58,9 +56,8 @@ Capture,
         (identifier)
         (identifier))
       (path
-        (local_path
-          (identifier)
-          (identifier)))
+        (identifier)
+        (identifier))
       (expression
         (procedural_block)))))
 
@@ -80,16 +77,14 @@ With a statement
       (void)
       (closure_captured_variables)
       (path
-        (local_path
-          (identifier)
-          (identifier)))
+        (identifier)
+        (identifier))
       (expression
         (procedural_block
           (statement
             (assign
               (path
-                (local_path
-                  (identifier)))
+                  (identifier))
               (assignment_operator)
               (expression
                 (signed_integer (integer (base_ten)))))))))))

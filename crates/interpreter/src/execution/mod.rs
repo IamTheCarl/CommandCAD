@@ -26,7 +26,7 @@ mod logging;
 mod stack;
 pub mod values;
 use errors::{ErrorType, ExpressionResult, Raise};
-use logging::{RuntimeLog, StackScope};
+use logging::{LocatedStr, RuntimeLog, StackScope};
 use stack::{ScopeType, Stack};
 use values::{Object, Value, ValueType};
 
@@ -58,7 +58,27 @@ pub fn execute_expression(
             compile::Expression::If(ast_node) => todo!(),
             compile::Expression::List(ast_node) => todo!(),
             compile::Expression::Parenthesis(ast_node) => todo!(),
-            compile::Expression::Path(ast_node) => todo!(),
+            compile::Expression::Path(ast_node) => {
+                let mut path_iter = ast_node.node.path.iter();
+
+                // An empty path should be impossible.
+                let root = path_iter.next().expect("Path is empty");
+
+                let mut value = stack.get_variable(
+                    stack_trace,
+                    LocatedStr {
+                        location: root.reference.clone(),
+                        string: &root.node,
+                    },
+                )?;
+
+                // Follow the chain of elements to evaluate the whole path.
+                for sub_path in path_iter {
+                    todo!();
+                }
+
+                Ok(value.clone())
+            }
             compile::Expression::ProceduralBlock(ast_node) => {
                 execute_procedural_block(log, stack, stack_trace, ast_node)
             }
@@ -241,7 +261,12 @@ fn execute_statement(
         statement.reference.clone(),
         |stack_trace| match &statement.node {
             compile::Statement::Assign(ast_node) => todo!(),
-            compile::Statement::Let(ast_node) => todo!(),
+            compile::Statement::Let(ast_node) => {
+                let value = execute_expression(log, stack_trace, stack, &ast_node.node.value)?;
+
+                stack.insert_value(&ast_node.node.to_assign.node, value);
+                Ok(values::Void.into())
+            }
             compile::Statement::For(ast_node) => todo!(),
             compile::Statement::Expression(ast_node) => {
                 execute_expression(log, stack_trace, stack, ast_node)
@@ -367,6 +392,19 @@ mod test {
     #[test]
     fn block_recursive_blocks() {
         let root = compile::full_compile("test_file.ccm", "{ { 5u } }");
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn let_statement() {
+        let root = compile::full_compile("test_file.ccm", "{ let value = 5u; value }");
         let product = execute_expression(
             &mut Vec::new(),
             &mut Vec::new(),

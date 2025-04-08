@@ -87,8 +87,7 @@ If statement
           (if
             (expression
               (path
-                (local_path
-                  (identifier))))
+                (identifier)))
             (procedural_block))))
       (statement
         (expression

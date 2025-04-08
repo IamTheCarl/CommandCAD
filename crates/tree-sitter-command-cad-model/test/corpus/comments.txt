@@ -13,7 +13,7 @@ Comment
     (void)))
 
 ==================
-Comment
+Comment before closure
 ==================
 
 # There's a comment before the code.
@@ -28,8 +28,7 @@ Comment
       (void)
       (closure_captured_variables)
       (path
-        (local_path
-          (identifier)
-          (identifier)))
+        (identifier)
+        (identifier))
       (expression
         (procedural_block)))))

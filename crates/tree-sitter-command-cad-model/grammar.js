@@ -132,9 +132,7 @@ module.exports = grammar({
     if: $ => seq('if', field('condition', $.expression), field('on_true', $.procedural_block), optional(seq('else', field('on_false', $.procedural_block)))),
 
     _variable_type: $ => field('type_path', $.path),
-    path: $ => choice($.local_path, $.argument_path),
-    argument_path: $ => seq('@', repeat(seq('.', $.identifier))),
-    local_path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
+    path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
 
     _declaration_type: $ => seq(':', $._variable_type),
 
@@ -226,7 +224,7 @@ module.exports = grammar({
       return choice(...operators.map((operator) => field('op', operator)));
     },
 
-    let: $ => seq('let', field('to_assign', $.identifier), $.assignment_operator, field('value', $.expression), ';'),
+    let: $ => seq('let', field('to_assign', $.identifier), '=', field('value', $.expression), ';'),
     assign: $ => seq(field('to_assign', $.path), $.assignment_operator, field('value', $.expression), ';'),
     for: $ => seq('for', field('to_assign', $.identifier), 'in', field('to_iterate', $.expression), field('to_run', $.procedural_block)),
   }

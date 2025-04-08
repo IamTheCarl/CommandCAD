@@ -23,8 +23,7 @@ Single
     (list
       (expression
         (path
-          (local_path
-            (identifier)))))))
+          (identifier))))))
 
 ==================
 Multi
@@ -39,20 +38,16 @@ Multi
     (list
       (expression
         (path
-          (local_path
-            (identifier))))
+          (identifier)))
       (expression
         (path
-          (local_path
-            (identifier))))
+          (identifier)))
       (expression
         (path
-          (local_path
-            (identifier))))
+          (identifier)))
       (expression
         (path
-          (local_path
-            (identifier)))))))
+          (identifier))))))
 
 ==================
 Multi with comma at the end
@@ -67,17 +62,13 @@ Multi with comma at the end
     (list
       (expression
         (path
-          (local_path
-            (identifier))))
+          (identifier)))
       (expression
         (path
-          (local_path
-            (identifier))))
+          (identifier)))
       (expression
         (path
-          (local_path
-            (identifier))))
+          (identifier)))
       (expression
         (path
-          (local_path
-            (identifier)))))))
+          (identifier))))))

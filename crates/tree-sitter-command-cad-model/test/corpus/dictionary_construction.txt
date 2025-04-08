@@ -13,8 +13,7 @@ One
         (identifier)
         (expression
           (path
-            (local_path
-              (identifier))))))))
+            (identifier)))))))
 
 ==================
 One,
@@ -31,8 +30,7 @@ One,
         (identifier)
         (expression
           (path
-            (local_path
-              (identifier))))))))
+            (identifier)))))))
 
 ==================
 One, two
@@ -49,14 +47,12 @@ One, two
         (identifier)
         (expression
           (path
-            (local_path
-              (identifier)))))
+            (identifier))))
       (dictionary_member_assignment
         (identifier)
         (expression
           (path
-            (local_path
-              (identifier))))))))
+            (identifier)))))))
 
 ==================
 One, two,
@@ -73,11 +69,9 @@ One, two,
         (identifier)
         (expression
           (path
-            (local_path
-              (identifier)))))
+            (identifier))))
       (dictionary_member_assignment
         (identifier)
         (expression
           (path
-            (local_path
-              (identifier))))))))
+            (identifier)))))))

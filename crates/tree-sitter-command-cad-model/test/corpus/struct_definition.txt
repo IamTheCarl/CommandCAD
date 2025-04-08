@@ -12,9 +12,8 @@ One
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier)))))))
+          (identifier)
+          (identifier))))))
 
 ==================
 One,
@@ -30,9 +29,8 @@ One,
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier)))))))
+          (identifier)
+          (identifier))))))
 
 ==================
 ...
@@ -74,9 +72,8 @@ One, ...
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier))))
+          (identifier)
+          (identifier)))
       (varadic_dots))))
 
 ==================
@@ -93,9 +90,8 @@ One, ...,
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier))))
+          (identifier)
+          (identifier)))
       (varadic_dots))))
 
 ==================
@@ -112,15 +108,13 @@ One, two
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier))))
+          (identifier)
+          (identifier)))
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier)))))))
+          (identifier)
+          (identifier))))))
 
 ==================
 One, two,
@@ -136,15 +130,13 @@ One, two,
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier))))
+          (identifier)
+          (identifier)))
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier)))))))
+          (identifier)
+          (identifier))))))
 
 ==================
 One, two, ...
@@ -160,15 +152,13 @@ One, two, ...
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier))))
+          (identifier)
+          (identifier)))
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier))))
+          (identifier)
+          (identifier)))
       (varadic_dots))))
 
 ==================
@@ -185,15 +175,13 @@ One, two, ...,
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier))))
+          (identifier)
+          (identifier)))
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier))))
+          (identifier)
+          (identifier)))
       (varadic_dots))))
 
 ==================
@@ -210,13 +198,11 @@ Default
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier)))
+          (identifier)
+          (identifier))
         (expression
           (path
-            (local_path
-              (identifier))))))))
+            (identifier)))))))
 
 ==================
 Default,
@@ -232,10 +218,8 @@ Default,
       (struct_member
         (identifier)
         (path
-          (local_path
-            (identifier)
-            (identifier)))
+          (identifier)
+          (identifier))
         (expression
           (path
-            (local_path
-              (identifier))))))))
+            (identifier)))))))

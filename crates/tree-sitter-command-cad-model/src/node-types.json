@@ -1,20 +1,5 @@
 [
   {
-    "type": "argument_path",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": false,
-      "types": [
-        {
-          "type": "identifier",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
     "type": "assign",
     "named": true,
     "fields": {
@@ -612,16 +597,6 @@
           }
         ]
       }
-    },
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "assignment_operator",
-          "named": true
-        }
-      ]
     }
   },
   {
@@ -634,21 +609,6 @@
       "types": [
         {
           "type": "expression",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "local_path",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "identifier",
           "named": true
         }
       ]
@@ -684,15 +644,11 @@
     "named": true,
     "fields": {},
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": true,
       "types": [
         {
-          "type": "argument_path",
-          "named": true
-        },
-        {
-          "type": "local_path",
+          "type": "identifier",
           "named": true
         }
       ]
@@ -1091,10 +1047,6 @@
   },
   {
     "type": ">>=",
-    "named": false
-  },
-  {
-    "type": "@",
     "named": false
   },
   {

@@ -17,29 +17,23 @@ Precedence
                 (binary_expression
                   (expression
                     (path
-                      (local_path
-                        (identifier))))
+                      (identifier)))
                   (expression
                     (binary_expression
                       (expression
                         (path
-                          (local_path
-                            (identifier))))
+                          (identifier)))
                       (expression
                         (binary_expression
                           (expression
                             (path
-                              (local_path
-                                (identifier))))
+                              (identifier)))
                           (expression
                             (path
-                              (local_path
-                                (identifier))))))))))
+                              (identifier)))))))))
               (expression
                 (path
-                  (local_path
-                    (identifier))))))))
+                  (identifier)))))))
       (expression
         (path
-          (local_path
-            (identifier)))))))
+          (identifier))))))

@@ -14,8 +14,7 @@ Assign
       (statement
         (assign
           (path
-            (local_path
-              (identifier)))
+	    (identifier))
           (assignment_operator)
           (expression
             (signed_integer (integer (base_ten)))))))))
@@ -36,6 +35,5 @@ Let
       (statement
         (let
           (identifier)
-          (assignment_operator)
           (expression
             (signed_integer (integer (base_ten)))))))))

@@ -69,7 +69,6 @@ impl<'t> Parse<'t, nodes::Assign<'t>> for Assign {
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct Let {
     pub to_assign: AstNode<String>,
-    pub assignment_type: AstNode<AssignmentType>,
     pub value: AstNode<Expression>,
 }
 
@@ -80,7 +79,6 @@ impl<'t> Parse<'t, nodes::Let<'t>> for Let {
         value: nodes::Let<'t>,
     ) -> Result<AstNode<Self>, super::Error<'t, 'i>> {
         let to_assign = String::parse(file, input, value.to_assign()?)?;
-        let assignment_type = AssignmentType::parse(file, input, value.assignment_operator()?)?;
         let assigned_value = Expression::parse(file, input, value.value()?)?;
 
         Ok(AstNode::new(
@@ -88,7 +86,6 @@ impl<'t> Parse<'t, nodes::Let<'t>> for Let {
             &value,
             Self {
                 to_assign,
-                assignment_type,
                 value: assigned_value,
             },
         ))
@@ -208,7 +205,7 @@ impl<'t> Parse<'t, nodes::ClosedExpression<'t>> for ClosedExpression {
 
 #[cfg(test)]
 mod test {
-    use crate::compile::{full_compile, PathType};
+    use crate::compile::full_compile;
 
     use super::*;
 
@@ -233,7 +230,6 @@ mod test {
                                     to_assign: AstNode {
                                         reference: assign.node.to_assign.reference.clone(),
                                         node: IdentityPath {
-                                            ty: PathType::Local,
                                             path: vec![
                                                 AstNode {
                                                     reference: assign.node.to_assign.node.path[0]
@@ -298,14 +294,6 @@ mod test {
                                     to_assign: AstNode {
                                         reference: let_assign.node.to_assign.reference.clone(),
                                         node: "my_value".to_string()
-                                    },
-                                    assignment_type: AstNode {
-                                        reference: let_assign
-                                            .node
-                                            .assignment_type
-                                            .reference
-                                            .clone(),
-                                        node: AssignmentType::Direct
                                     },
                                     value: AstNode {
                                         reference: let_assign.node.value.reference.clone(),

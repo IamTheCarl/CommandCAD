@@ -1,5 +1,5 @@
 ==================
-Local Variable Path
+Variable Path
 ==================
 
 this.is.a.test
@@ -9,38 +9,7 @@ this.is.a.test
 (source_file
 (expression
   (path
-    (local_path
-      (identifier)
-      (identifier)
-      (identifier)
-      (identifier)))))
-
-==================
-Argument
-==================
-
-@
-
----
-
-(source_file
-(expression
-  (path
-    (argument_path))))
-      
-==================
-Argument Variable Path
-==================
-
-@.this.is.a.test
-
----
-
-(source_file
-(expression
-  (path
-    (argument_path
-      (identifier)
-      (identifier)
-      (identifier)
-      (identifier)))))
+    (identifier)
+    (identifier)
+    (identifier)
+    (identifier))))
