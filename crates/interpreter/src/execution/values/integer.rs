@@ -23,7 +23,7 @@ use num_traits::{
 use std::{
     cmp::Ordering,
     hash::Hash,
-    ops::{BitAnd, BitOr, BitXor, Not},
+    ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr},
 };
 
 use crate::{
@@ -60,6 +60,8 @@ where
         + BitAnd<Output = I>
         + BitOr<Output = I>
         + BitXor<Output = I>
+        + Shl<Output = I>
+        + Shr<Output = I>
         + Neg
         + Not<Output = I>
         + One
@@ -198,6 +200,24 @@ where
             .to_error(stack_trace)
         })?)
         .into())
+    }
+    fn left_shift(
+        &self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        rhs: &Value,
+    ) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+        Ok(Self(self.0 << rhs.0).into())
+    }
+    fn right_shift(
+        &self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        rhs: &Value,
+    ) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+        Ok(Self(self.0 >> rhs.0).into())
     }
     fn unary_plus(
         &self,
@@ -555,6 +575,34 @@ mod test {
     }
 
     #[test]
+    fn signed_shift_left() {
+        let root = compile::full_compile("test_file.ccm", "0x0Fi << 4i");
+
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
+        assert_eq!(product, SignedInteger::from(0xF0).into());
+    }
+
+    #[test]
+    fn signed_shift_right() {
+        let root = compile::full_compile("test_file.ccm", "0xF0i >> 4i");
+
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
+        assert_eq!(product, SignedInteger::from(0x0F).into());
+    }
+
+    #[test]
     fn signed_unary_plus() {
         let root = compile::full_compile("test_file.ccm", "+3i");
 
@@ -595,8 +643,6 @@ mod test {
         .unwrap();
         assert_eq!(product, SignedInteger::from(!0xAA).into());
     }
-
-    ////////////////////
 
     #[test]
     fn unsigned_bit_or() {
@@ -867,6 +913,34 @@ mod test {
         )
         .unwrap();
         assert_eq!(product, UnsignedInteger::from(216).into());
+    }
+
+    #[test]
+    fn unsigned_shift_left() {
+        let root = compile::full_compile("test_file.ccm", "0x0Fu << 4u");
+
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
+        assert_eq!(product, UnsignedInteger::from(0xF0).into());
+    }
+
+    #[test]
+    fn unsigned_shift_right() {
+        let root = compile::full_compile("test_file.ccm", "0xF0u >> 4u");
+
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
+        assert_eq!(product, UnsignedInteger::from(0x0F).into());
     }
 
     #[test]

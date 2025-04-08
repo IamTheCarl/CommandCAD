@@ -123,7 +123,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _rhs: Value,
+        _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "logical xor")
     }
@@ -214,6 +214,22 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "exponent")
+    }
+    fn left_shift(
+        &self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        _rhs: &Value,
+    ) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(self, stack_trace, "left shift")
+    }
+    fn right_shift(
+        &self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        _rhs: &Value,
+    ) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(self, stack_trace, "right shift")
     }
     // fn attribute(
     //     &self,

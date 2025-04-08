@@ -61,7 +61,7 @@ impl Object for Boolean {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        rhs: Value,
+        rhs: &Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self((self.0 && rhs.0) || (!self.0 && !rhs.0)).into())

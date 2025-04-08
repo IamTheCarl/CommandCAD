@@ -18,7 +18,9 @@
 
 use std::{cmp::Ordering, fmt::Display};
 
-use crate::compile::{self, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation};
+use crate::compile::{
+    self, AssignmentType, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation,
+};
 
 mod errors;
 mod formatting;
@@ -38,6 +40,29 @@ pub type CacheSignature = [u8; 32];
 pub struct CachedExpression {}
 
 pub struct RuntimeContext {}
+
+macro_rules! find_value {
+    ($path_iter:expr, $stack_trace:ident, $stack:ident.$stack_method:ident) => {{
+        // An empty path should be impossible.
+        let mut path_iter = $path_iter;
+        let root = path_iter.next().expect("Path is empty");
+
+        let mut value = $stack.$stack_method(
+            $stack_trace,
+            LocatedStr {
+                location: root.reference.clone(),
+                string: &root.node,
+            },
+        )?;
+
+        // Follow the chain of elements to evaluate the whole path.
+        for sub_path in path_iter {
+            todo!();
+        }
+
+        Ok(value)
+    }};
+}
 
 pub fn execute_expression(
     log: &mut dyn RuntimeLog,
@@ -59,25 +84,7 @@ pub fn execute_expression(
             compile::Expression::List(ast_node) => todo!(),
             compile::Expression::Parenthesis(ast_node) => todo!(),
             compile::Expression::Path(ast_node) => {
-                let mut path_iter = ast_node.node.path.iter();
-
-                // An empty path should be impossible.
-                let root = path_iter.next().expect("Path is empty");
-
-                let mut value = stack.get_variable(
-                    stack_trace,
-                    LocatedStr {
-                        location: root.reference.clone(),
-                        string: &root.node,
-                    },
-                )?;
-
-                // Follow the chain of elements to evaluate the whole path.
-                for sub_path in path_iter {
-                    todo!();
-                }
-
-                Ok(value.clone())
+                find_value!(ast_node.node.path.iter(), stack_trace, stack.get_variable).cloned()
             }
             compile::Expression::ProceduralBlock(ast_node) => {
                 execute_procedural_block(log, stack, stack_trace, ast_node)
@@ -155,7 +162,7 @@ fn execute_binary_expression(
                     Ordering::Less
                 ))
                 .into()),
-                BinaryExpressionOperation::LtLt => todo!(),
+                BinaryExpressionOperation::LtLt => value_a.left_shift(log, stack_trace, &value_b),
                 BinaryExpressionOperation::LtEq => Ok(values::Boolean(matches!(
                     value_a.cmp(log, stack_trace, &value_b)?,
                     Ordering::Less | Ordering::Equal
@@ -176,7 +183,7 @@ fn execute_binary_expression(
                     Ordering::Equal | Ordering::Greater
                 ))
                 .into()),
-                BinaryExpressionOperation::GtGt => todo!(),
+                BinaryExpressionOperation::GtGt => value_a.right_shift(log, stack_trace, &value_b),
                 BinaryExpressionOperation::BitXor => value_a.bit_xor(log, stack_trace, &value_b),
                 BinaryExpressionOperation::Or => value_a.bit_or(log, stack_trace, &value_b),
                 BinaryExpressionOperation::OrOr => value_a.or(log, stack_trace, &value_b),
@@ -260,7 +267,66 @@ fn execute_statement(
     stack_trace.stack_scope(
         statement.reference.clone(),
         |stack_trace| match &statement.node {
-            compile::Statement::Assign(ast_node) => todo!(),
+            compile::Statement::Assign(ast_node) => {
+                let value = execute_expression(log, stack_trace, stack, &ast_node.node.value)?;
+
+                let original_value = find_value!(
+                    ast_node.node.to_assign.node.path.iter(),
+                    stack_trace,
+                    stack.get_variable_mut
+                )?;
+
+                // Start with a type check.
+                if value.get_type() == original_value.get_type() {
+                    // Okay, we're good to assign the value.
+
+                    let new_value = match ast_node.node.assignment_type.node {
+                        AssignmentType::Direct => value,
+                        AssignmentType::BitAnd => {
+                            original_value.bit_and(log, stack_trace, &value)?
+                        }
+                        AssignmentType::BitOr => original_value.bit_or(log, stack_trace, &value)?,
+                        AssignmentType::BitXor => {
+                            original_value.bit_xor(log, stack_trace, &value)?
+                        }
+                        AssignmentType::LogicAnd => original_value.and(log, stack_trace, &value)?,
+                        AssignmentType::LogicOr => original_value.or(log, stack_trace, &value)?,
+                        AssignmentType::LogicXor => original_value.xor(log, stack_trace, &value)?,
+                        AssignmentType::Add => original_value.addition(log, stack_trace, &value)?,
+                        AssignmentType::Sub => {
+                            original_value.subtraction(log, stack_trace, &value)?
+                        }
+                        AssignmentType::Exponent => {
+                            original_value.exponent(log, stack_trace, &value)?
+                        }
+                        AssignmentType::Multiply => {
+                            original_value.multiply(log, stack_trace, &value)?
+                        }
+                        AssignmentType::IntegerDivision => {
+                            original_value.floor_divide(log, stack_trace, &value)?
+                        }
+                        AssignmentType::Division => {
+                            original_value.divide(log, stack_trace, &value)?
+                        }
+                        AssignmentType::LeftShift => {
+                            original_value.left_shift(log, stack_trace, &value)?
+                        }
+                        AssignmentType::RightShift => {
+                            original_value.right_shift(log, stack_trace, &value)?
+                        }
+                    };
+
+                    *original_value = new_value;
+
+                    Ok(values::Void.into())
+                } else {
+                    Err(AssignmentTypeMissmatch {
+                        expected: original_value.get_type(),
+                        got: value.get_type(),
+                    }
+                    .to_error(stack_trace.iter()))
+                }
+            }
             compile::Statement::Let(ast_node) => {
                 let value = execute_expression(log, stack_trace, stack, &ast_node.node.value)?;
 
@@ -279,6 +345,23 @@ fn execute_statement(
             }
         },
     )
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct AssignmentTypeMissmatch {
+    expected: ValueType,
+    got: ValueType,
+}
+
+impl ErrorType for AssignmentTypeMissmatch {}
+
+impl Display for AssignmentTypeMissmatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "When assigning a new value to an already defined variable, you cannot change the variable's type. This variable's type was `{}`, but you tried to assign it a value with a `{}` typing.", self.expected, self.got
+        )
+    }
 }
 
 #[cfg(test)]
@@ -413,5 +496,31 @@ mod test {
         )
         .unwrap();
         assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn assign_statement() {
+        let root = compile::full_compile("test_file.ccm", "{ let value = 5u; value = 4u; value }");
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(4).into());
+    }
+
+    #[test]
+    fn assign_statement_with_wrong_type() {
+        // Fails because of a type mismatch.
+        let root = compile::full_compile("test_file.ccm", "{ let value = 5u; value = 4i; value }");
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap_err();
     }
 }
