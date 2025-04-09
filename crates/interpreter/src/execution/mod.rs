@@ -82,7 +82,9 @@ pub fn execute_expression(
             compile::Expression::DictionaryConstruction(ast_node) => todo!(),
             compile::Expression::If(ast_node) => todo!(),
             compile::Expression::List(ast_node) => todo!(),
-            compile::Expression::Parenthesis(ast_node) => todo!(),
+            compile::Expression::Parenthesis(ast_node) => {
+                execute_expression(log, stack_trace, stack, &ast_node)
+            }
             compile::Expression::Path(ast_node) => {
                 find_value!(ast_node.node.path.iter(), stack_trace, stack.get_variable).cloned()
             }
@@ -515,12 +517,26 @@ mod test {
     fn assign_statement_with_wrong_type() {
         // Fails because of a type mismatch.
         let root = compile::full_compile("test_file.ccm", "{ let value = 5u; value = 4i; value }");
-        let product = execute_expression(
+        execute_expression(
             &mut Vec::new(),
             &mut Vec::new(),
             &mut Stack::default(),
             &root,
         )
         .unwrap_err();
+    }
+
+    #[test]
+    fn parenthesis() {
+        // Fails because of a type mismatch.
+        let root = compile::full_compile("test_file.ccm", "(1i + 2i) * 3i");
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Stack::default(),
+            &root,
+        )
+        .unwrap();
+        assert_eq!(product, values::SignedInteger::from(9).into());
     }
 }

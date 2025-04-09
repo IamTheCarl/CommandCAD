@@ -41,7 +41,7 @@ pub enum Expression {
     DictionaryConstruction(AstNode<DictionaryConstruction>),
     If(AstNode<IfExpression>),
     List(AstNode<Vec<AstNode<Expression>>>),
-    Parenthesis(AstNode<Box<Expression>>),
+    Parenthesis(Box<AstNode<Expression>>),
     Path(AstNode<IdentityPath>),
     ProceduralBlock(AstNode<ProceduralBlock>),
     Scalar(AstNode<Scalar>),
@@ -197,7 +197,7 @@ impl<'t> Parse<'t, nodes::Parenthesis<'t>> for Expression {
         Ok(AstNode::new(
             file,
             &value,
-            Self::Parenthesis(Self::parse(file, input, expression).map(|e| e.into_box())?),
+            Self::Parenthesis(Box::new(Self::parse(file, input, expression)?)),
         ))
     }
 }
@@ -1323,16 +1323,13 @@ mod test {
             root,
             AstNode {
                 reference: root.reference.clone(),
-                node: Expression::Parenthesis(
-                    AstNode {
-                        reference: parenthesis_reference,
-                        node: Expression::SignedInteger(AstNode {
-                            reference: integer.reference.clone(),
-                            node: 5
-                        })
-                    }
-                    .into_box()
-                )
+                node: Expression::Parenthesis(Box::new(AstNode {
+                    reference: parenthesis_reference,
+                    node: Expression::SignedInteger(AstNode {
+                        reference: integer.reference.clone(),
+                        node: 5
+                    })
+                }))
             }
         );
     }
