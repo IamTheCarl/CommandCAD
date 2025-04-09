@@ -15,11 +15,14 @@
  * You should have received a copy of the GNU Affero General Public License along with this
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
-use std::{borrow::Cow, fmt::Display};
+use std::{borrow::Cow, fmt::Display, sync::Arc};
 
 use common_data_types::Dimension;
 
-use super::{Boolean, DefaultValue, SignedInteger, StaticTypeName, UnsignedInteger, Void};
+use super::{
+    closure::Signature as ClosureSignature, Boolean, DefaultValue, SignedInteger, StaticTypeName,
+    UnsignedInteger, Void,
+};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum ValueType {
@@ -29,6 +32,7 @@ pub enum ValueType {
     SignedInteger,
     UnsignedInteger,
     Scalar(Dimension),
+    Closure(Arc<ClosureSignature>),
 }
 
 impl ValueType {
@@ -40,12 +44,17 @@ impl ValueType {
             Self::SignedInteger => SignedInteger::static_type_name().into(),
             Self::UnsignedInteger => UnsignedInteger::static_type_name().into(),
             Self::Scalar(dimension) => units::get_dimension_name(dimension).into(),
+            Self::Closure(signature) => format!("{}", signature).into(),
         }
     }
 }
 
 impl Display for ValueType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
+        match self {
+            // We can avoid a copy operation if we write directly into the formatter.
+            Self::Closure(signature) => write!(f, "{}", signature),
+            _ => write!(f, "{}", self.name()),
+        }
     }
 }

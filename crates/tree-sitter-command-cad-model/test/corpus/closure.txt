@@ -88,3 +88,124 @@ With a statement
               (assignment_operator)
               (expression
                 (signed_integer (integer (base_ten)))))))))))
+
+==================
+Call function
+==================
+
+value(value=value)
+
+---
+
+(source_file
+  (expression
+    (function_call
+      (expression
+        (path
+          (identifier)))
+      (dictionary_construction
+        (dictionary_member_assignment
+          (identifier)
+          (expression
+            (path
+              (identifier))))))))
+
+==================
+Call no arguments
+==================
+
+value()
+
+---
+
+(source_file
+  (expression
+    (function_call
+      (expression
+        (path
+          (identifier)))
+      (void))))
+
+==================
+Call function deep in tree
+==================
+
+value.value(value=value)
+
+---
+
+(source_file
+  (expression
+    (function_call
+      (expression
+        (path
+          (identifier)
+          (identifier)))
+      (dictionary_construction
+        (dictionary_member_assignment
+          (identifier)
+          (expression
+            (path
+              (identifier))))))))
+
+==================
+Call method
+==================
+
+value:value(value=value)
+
+---
+
+(source_file
+  (expression
+    (method_call
+      (expression
+        (path
+          (identifier)))
+      (identifier)
+      (dictionary_construction
+        (dictionary_member_assignment
+          (identifier)
+          (expression
+            (path
+              (identifier))))))))
+
+==================
+Call method no arguments
+==================
+
+value:value()
+
+---
+
+(source_file
+  (expression
+    (method_call
+      (expression
+        (path
+          (identifier)))
+      (identifier)
+      (void))))
+
+==================
+Call method deep in tree
+==================
+
+value.value:value(value=value)
+
+---
+
+(source_file
+  (expression
+    (method_call
+      (expression
+        (path
+          (identifier)
+          (identifier)))
+      (identifier)
+      (dictionary_construction
+        (dictionary_member_assignment
+          (identifier)
+          (expression
+            (path
+              (identifier))))))))

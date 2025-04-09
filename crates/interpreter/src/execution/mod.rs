@@ -77,7 +77,9 @@ pub fn execute_expression(
                 execute_binary_expression(log, stack_trace, stack, ast_node)
             }
             compile::Expression::Boolean(ast_node) => Ok(values::Boolean(ast_node.node).into()),
-            compile::Expression::ClosureDefinition(ast_node) => todo!(),
+            compile::Expression::ClosureDefinition(ast_node) => {
+                Ok(values::UserClosure::from_ast(ast_node).into())
+            }
             compile::Expression::Default(_ast_node) => Ok(values::DefaultValue.into()),
             compile::Expression::DictionaryConstruction(ast_node) => todo!(),
             compile::Expression::If(ast_node) => todo!(),
@@ -108,6 +110,8 @@ pub fn execute_expression(
                 Ok(values::UnsignedInteger::from(ast_node.node).into())
             }
             compile::Expression::Void(_ast_node) => Ok(values::Void.into()),
+            compile::Expression::FunctionCall(ast_node) => todo!(),
+            compile::Expression::MethodCall(ast_node) => todo!(),
         },
     )
 }

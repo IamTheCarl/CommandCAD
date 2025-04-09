@@ -43,6 +43,9 @@ pub use integer::{SignedInteger, UnsignedInteger};
 mod scalar;
 pub use scalar::Scalar;
 
+mod closure;
+pub use closure::{Argument, UserClosure};
+
 mod value_type;
 pub use value_type::ValueType;
 
@@ -239,25 +242,14 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
     // ) -> OperatorResult<S, Value> {
     //     Err(Failure::UnknownAttribute(attribute.clone()))
     // }
-    // fn call(
-    //     &self,
-    //     _context: &mut ExecutionContext,
-    //     stack_trace: &[SourceReference],
-    //     _arguments: Vec<Value>,
-    //     _stack_traces: &[Expression],
-    // ) -> OperatorResult<Value> {
-    //     UnsupportedOperationError::raise(self, stack_trace, "call")
-    // }
-    // fn method_call(
-    //     &self,
-    //     _context: &mut ExecutionContext,
-    //     _stack_trace: &[SourceReference],
-    //     attribute: &S,
-    //     _arguments: Vec<Value>,
-    //     _stack_traces: &[Expression],
-    // ) -> OperatorResult<Value> {
-    //     Err(Failure::UnknownAttribute(attribute.clone()))
-    // }
+    fn call(
+        &self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        argument: Value,
+    ) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(self, stack_trace, "call")
+    }
     fn index(
         &self,
         _log: &mut dyn RuntimeLog,
@@ -313,8 +305,7 @@ pub enum Value {
     UnsignedInteger,
     Boolean,
     Scalar,
-    // BuiltinFunction(BuiltinFunctionRef<S>),
-    // UserFunction(UserFunction<S>),
+    UserClosure,
     // Structure(Structure<S>),
     // StructDefinition(StructDefinition<S>),
     // List(List<S>),

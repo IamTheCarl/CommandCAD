@@ -8,8 +8,10 @@
 // @ts-check
 
 const PREC = {
-  unit: 16,
-  call: 15,
+  struct_member: 18,
+  unit: 17,
+  method_call: 16,
+  function_call: 15,
   field: 14,
   unary: 12,
   exponential: 11,
@@ -65,6 +67,18 @@ module.exports = grammar({
     false: $ => 'false',
     boolean: $ => choice($.true, $.false),
 
+    function_call: $ => seq(
+      prec.left(PREC.function_call, seq(
+        field('to_call', $.expression), field("argument", choice($.dictionary_construction, $.void)),
+      ))
+    ), 
+    
+    method_call: $ => seq(
+      prec.left(PREC.method_call, seq(
+        field('self_dictionary', $.expression), ':', field('to_call', $.identifier), field("argument", choice($.dictionary_construction, $.void)) 
+      ))
+    ), 
+
     expression: $ => choice(
       $.void,
       $.parenthesis,
@@ -83,6 +97,8 @@ module.exports = grammar({
       $.closure_definition,
       $.unary_expression,
       $.binary_expression,
+      $.function_call,
+      $.method_call,
     ),
     unary_expression: $ => prec(PREC.unary, choice(
       seq(field('op', '-'), $.expression),
@@ -119,7 +135,7 @@ module.exports = grammar({
 
         [PREC.range, '..'],
         [PREC.range, '..='],
-
+        
       ];
 
       return choice(...table.map(([precedence, operator]) => prec.left(precedence, seq(
@@ -146,7 +162,7 @@ module.exports = grammar({
 
     varadic_dots: $ => '...',
 
-    struct_member: $ => seq(field('name', $.identifier), $._declaration_type, optional(seq('=', field('default', $.expression)))),
+    struct_member: $ => prec.left(PREC.struct_member, seq(field('name', $.identifier), $._declaration_type, optional(seq('=', field('default', $.expression))))),
     _struct_final_element: $ => choice(
       seq($.struct_member),
       seq($.varadic_dots, optional(','))

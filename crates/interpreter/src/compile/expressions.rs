@@ -51,6 +51,8 @@ pub enum Expression {
     UnaryExpression(AstNode<Box<UnaryExpression>>),
     UnsignedInteger(AstNode<u64>),
     Void(AstNode<()>),
+    FunctionCall(AstNode<FunctionCall>),
+    MethodCall(AstNode<MethodCall>),
 }
 
 impl<'t> Parse<'t, nodes::anon_unions::Path_StructDefinition_Void<'t>> for Expression {
@@ -377,6 +379,34 @@ impl<'t> Parse<'t, nodes::UnsignedInteger<'t>> for Expression {
     }
 }
 
+impl<'t> Parse<'t, nodes::FunctionCall<'t>> for Expression {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::FunctionCall<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        Ok(AstNode::new(
+            file,
+            &value,
+            Self::FunctionCall(FunctionCall::parse(file, input, value)?),
+        ))
+    }
+}
+
+impl<'t> Parse<'t, nodes::MethodCall<'t>> for Expression {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::MethodCall<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        Ok(AstNode::new(
+            file,
+            &value,
+            Self::MethodCall(MethodCall::parse(file, input, value)?),
+        ))
+    }
+}
+
 impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
@@ -425,6 +455,8 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
                 &value,
                 Self::Void(AstNode::new(file, &void, ())),
             )),
+            ChildType::FunctionCall(function_call) => Self::parse(file, input, function_call),
+            ChildType::MethodCall(method_call) => Self::parse(file, input, method_call),
         }
     }
 }
@@ -795,7 +827,7 @@ pub struct ClosureDefinition {
     pub argument: AstNode<Expression>,
     pub captures: Vec<AstNode<String>>,
     pub returns: AstNode<Expression>,
-    pub expression: AstNode<Expression>,
+    pub expression: AstNode<Arc<Expression>>,
 }
 
 impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for ClosureDefinition {
@@ -824,6 +856,10 @@ impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for ClosureDefinition {
 
         let expression = value.expression()?;
         let expression = Expression::parse(file, input, expression)?;
+        let expression = AstNode {
+            reference: expression.reference,
+            node: Arc::new(expression.node),
+        };
 
         Ok(AstNode::new(
             file,
@@ -913,6 +949,78 @@ impl<'t> Parse<'t, nodes::StructDefinition<'t>> for StructDefinition {
         };
 
         Ok(AstNode::new(file, &value, Self { members, variadic }))
+    }
+}
+
+#[derive(Debug, Hash, Eq, PartialEq, EnumAs)]
+pub enum Argument {
+    Void(AstNode<()>),
+    DictionaryConstruction(AstNode<DictionaryConstruction>),
+}
+
+impl<'t> Parse<'t, nodes::anon_unions::DictionaryConstruction_Void<'t>> for Argument {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::anon_unions::DictionaryConstruction_Void<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        use nodes::anon_unions::DictionaryConstruction_Void as ChildType;
+        let argument = match value {
+            ChildType::Void(void) => Argument::Void(AstNode::new(file, &void, ())),
+            ChildType::DictionaryConstruction(dictionary) => Argument::DictionaryConstruction(
+                DictionaryConstruction::parse(file, input, dictionary)?,
+            ),
+        };
+
+        Ok(AstNode::new(file, &value, argument))
+    }
+}
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub struct FunctionCall {
+    pub to_call: AstNode<Box<Expression>>,
+    pub argument: AstNode<Argument>,
+}
+
+impl<'t> Parse<'t, nodes::FunctionCall<'t>> for FunctionCall {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::FunctionCall<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        let to_call = Expression::parse(file, input, value.to_call()?)?.into_box();
+        let argument = Argument::parse(file, input, value.argument()?)?;
+
+        Ok(AstNode::new(file, &value, Self { to_call, argument }))
+    }
+}
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub struct MethodCall {
+    pub self_dictionary: AstNode<Box<Expression>>,
+    pub to_call: AstNode<String>,
+    pub argument: AstNode<Argument>,
+}
+
+impl<'t> Parse<'t, nodes::MethodCall<'t>> for MethodCall {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::MethodCall<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        let self_dictionary = Expression::parse(file, input, value.self_dictionary()?)?.into_box();
+        let to_call = String::parse(file, input, value.to_call()?)?;
+        let argument = Argument::parse(file, input, value.argument()?)?;
+
+        Ok(AstNode::new(
+            file,
+            &value,
+            Self {
+                self_dictionary,
+                to_call,
+                argument,
+            },
+        ))
     }
 }
 
@@ -1070,10 +1178,10 @@ mod test {
                         },
                         expression: AstNode {
                             reference: expression_reference,
-                            node: Expression::ProceduralBlock(AstNode {
+                            node: Arc::new(Expression::ProceduralBlock(AstNode {
                                 reference: block_reference,
                                 node: ProceduralBlock { statements: vec![] }
-                            })
+                            }))
                         }
                     })
                 })
@@ -1774,6 +1882,260 @@ mod test {
                 node: Expression::Void(AstNode {
                     reference: root.node.as_void().unwrap().reference.clone(),
                     node: ()
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn function_call_no_arguments() {
+        let root = full_compile("test_file.ccm", "a.b()");
+        let call = root.node.as_functioncall().unwrap();
+        let to_call = call.node.to_call.node.as_path().unwrap();
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::FunctionCall(AstNode {
+                    reference: call.reference.clone(),
+                    node: FunctionCall {
+                        to_call: AstNode {
+                            reference: call.node.to_call.reference.clone(),
+                            node: Box::new(Expression::Path(AstNode {
+                                reference: to_call.reference.clone(),
+                                node: IdentityPath {
+                                    path: vec![
+                                        AstNode {
+                                            reference: to_call.node.path[0].reference.clone(),
+                                            node: "a".into()
+                                        },
+                                        AstNode {
+                                            reference: to_call.node.path[1].reference.clone(),
+                                            node: "b".into()
+                                        }
+                                    ]
+                                }
+                            }))
+                        },
+                        argument: AstNode {
+                            reference: call.node.argument.reference.clone(),
+                            node: Argument::Void(AstNode {
+                                reference: call
+                                    .node
+                                    .argument
+                                    .node
+                                    .as_void()
+                                    .unwrap()
+                                    .reference
+                                    .clone(),
+                                node: ()
+                            })
+                        }
+                    }
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn function_call_with_arguments() {
+        let root = full_compile("test_file.ccm", "a.b(value = ())");
+        let call = root.node.as_functioncall().unwrap();
+        let to_call = call.node.to_call.node.as_path().unwrap();
+        let dict = &call.node.argument.node.as_dictionaryconstruction().unwrap();
+        let dict_assignment = &dict.node.assignments[0];
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::FunctionCall(AstNode {
+                    reference: call.reference.clone(),
+                    node: FunctionCall {
+                        to_call: AstNode {
+                            reference: call.node.to_call.reference.clone(),
+                            node: Box::new(Expression::Path(AstNode {
+                                reference: to_call.reference.clone(),
+                                node: IdentityPath {
+                                    path: vec![
+                                        AstNode {
+                                            reference: to_call.node.path[0].reference.clone(),
+                                            node: "a".into()
+                                        },
+                                        AstNode {
+                                            reference: to_call.node.path[1].reference.clone(),
+                                            node: "b".into()
+                                        }
+                                    ]
+                                }
+                            }))
+                        },
+                        argument: AstNode {
+                            reference: call.node.argument.reference.clone(),
+                            node: Argument::DictionaryConstruction(AstNode {
+                                reference: dict.reference.clone(),
+                                node: DictionaryConstruction {
+                                    assignments: vec![AstNode {
+                                        reference: dict_assignment.reference.clone(),
+                                        node: DictionaryMemberAssignment {
+                                            name: AstNode {
+                                                reference: dict_assignment
+                                                    .node
+                                                    .name
+                                                    .reference
+                                                    .clone(),
+                                                node: "value".into()
+                                            },
+                                            assignment: AstNode {
+                                                reference: dict_assignment
+                                                    .node
+                                                    .assignment
+                                                    .reference
+                                                    .clone(),
+                                                node: Expression::Void(AstNode {
+                                                    reference: dict_assignment
+                                                        .node
+                                                        .assignment
+                                                        .node
+                                                        .as_void()
+                                                        .unwrap()
+                                                        .reference
+                                                        .clone(),
+                                                    node: ()
+                                                })
+                                            }
+                                        }
+                                    }]
+                                }
+                            })
+                        }
+                    }
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn method_call_no_arguments() {
+        let root = full_compile("test_file.ccm", "():c()");
+        let call = root.node.as_methodcall().unwrap();
+        let to_call = &call.node.to_call;
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::MethodCall(AstNode {
+                    reference: call.reference.clone(),
+                    node: MethodCall {
+                        self_dictionary: AstNode {
+                            reference: call.node.self_dictionary.reference.clone(),
+                            node: Box::new(Expression::Void(AstNode {
+                                reference: call
+                                    .node
+                                    .self_dictionary
+                                    .node
+                                    .as_void()
+                                    .unwrap()
+                                    .reference
+                                    .clone(),
+                                node: ()
+                            }))
+                        },
+                        to_call: AstNode {
+                            reference: to_call.reference.clone(),
+                            node: "c".into()
+                        },
+                        argument: AstNode {
+                            reference: call.node.argument.reference.clone(),
+                            node: Argument::Void(AstNode {
+                                reference: call
+                                    .node
+                                    .argument
+                                    .node
+                                    .as_void()
+                                    .unwrap()
+                                    .reference
+                                    .clone(),
+                                node: ()
+                            })
+                        }
+                    }
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn method_call_with_arguments() {
+        let root = full_compile("test_file.ccm", "():c(value = ())");
+        let call = root.node.as_methodcall().unwrap();
+        let to_call = &call.node.to_call;
+        let dict = &call.node.argument.node.as_dictionaryconstruction().unwrap();
+        let dict_assignment = &dict.node.assignments[0];
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::MethodCall(AstNode {
+                    reference: call.reference.clone(),
+                    node: MethodCall {
+                        self_dictionary: AstNode {
+                            reference: call.node.self_dictionary.reference.clone(),
+                            node: Box::new(Expression::Void(AstNode {
+                                reference: call
+                                    .node
+                                    .self_dictionary
+                                    .node
+                                    .as_void()
+                                    .unwrap()
+                                    .reference
+                                    .clone(),
+                                node: ()
+                            }))
+                        },
+                        to_call: AstNode {
+                            reference: to_call.reference.clone(),
+                            node: "c".into()
+                        },
+                        argument: AstNode {
+                            reference: call.node.argument.reference.clone(),
+                            node: Argument::DictionaryConstruction(AstNode {
+                                reference: dict.reference.clone(),
+                                node: DictionaryConstruction {
+                                    assignments: vec![AstNode {
+                                        reference: dict_assignment.reference.clone(),
+                                        node: DictionaryMemberAssignment {
+                                            name: AstNode {
+                                                reference: dict_assignment
+                                                    .node
+                                                    .name
+                                                    .reference
+                                                    .clone(),
+                                                node: "value".into()
+                                            },
+                                            assignment: AstNode {
+                                                reference: dict_assignment
+                                                    .node
+                                                    .assignment
+                                                    .reference
+                                                    .clone(),
+                                                node: Expression::Void(AstNode {
+                                                    reference: dict_assignment
+                                                        .node
+                                                        .assignment
+                                                        .node
+                                                        .as_void()
+                                                        .unwrap()
+                                                        .reference
+                                                        .clone(),
+                                                    node: ()
+                                                })
+                                            }
+                                        }
+                                    }]
+                                }
+                            })
+                        }
+                    }
                 })
             }
         );
