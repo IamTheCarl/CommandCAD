@@ -19,13 +19,15 @@
 use std::{borrow::Cow, cmp::Ordering, fmt::Display};
 
 use enum_dispatch::enum_dispatch;
-use enum_downcast::{AsVariant, EnumDowncast};
+use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
+use unwrap_enum::EnumAs;
 
 use crate::compile::SourceReference;
 
 use super::{
     errors::{ErrorType, ExpressionResult, Raise as _},
     logging::RuntimeLog,
+    Heap,
 };
 
 mod void;
@@ -44,10 +46,13 @@ mod scalar;
 pub use scalar::Scalar;
 
 mod closure;
-pub use closure::{Argument, UserClosure};
+pub use closure::UserClosure;
+
+mod dictionary;
+pub use dictionary::{Dictionary, DictionaryStorage};
 
 mod value_type;
-pub use value_type::ValueType;
+pub use value_type::{StructDefinition, StructMember, ValueType};
 
 pub trait StaticTypeName {
     /// Provides the type name without having an instance of the object.
@@ -79,16 +84,29 @@ impl UnsupportedOperationError {
         stack_trace: &[SourceReference],
         operation_name: &'static str,
     ) -> ExpressionResult<R> {
-        Self {
+        Err(Self {
             type_name: object.type_name(),
             operation_name,
         }
-        .raise(stack_trace)
+        .to_error(stack_trace))
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct MissingAttributeError {
+    pub name: String,
+}
+
+impl ErrorType for MissingAttributeError {}
+
+impl Display for MissingAttributeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Object does not contain the attribute `{}`", self.name)
     }
 }
 
 #[enum_dispatch]
-pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
+pub trait Object: StaticTypeName + Sized + Eq + PartialEq + ObjectClone {
     fn get_type(&self) -> ValueType;
 
     // fn format(
@@ -110,6 +128,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "logical and")
@@ -118,6 +137,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "logical or")
@@ -126,6 +146,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "logical xor")
@@ -134,6 +155,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "binary and")
@@ -142,6 +164,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "binary or")
@@ -150,6 +173,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "binary xor")
@@ -158,6 +182,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Ordering> {
         UnsupportedOperationError::raise(self, stack_trace, "compare")
@@ -166,14 +191,19 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        heap: &Heap,
         rhs: &Value,
     ) -> ExpressionResult<bool> {
-        Ok(matches!(self.cmp(log, stack_trace, rhs)?, Ordering::Equal))
+        Ok(matches!(
+            self.cmp(log, stack_trace, heap, rhs)?,
+            Ordering::Equal
+        ))
     }
     fn addition(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "addition")
@@ -182,6 +212,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "subtraction")
@@ -190,6 +221,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "multiply")
@@ -198,6 +230,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "divide")
@@ -206,6 +239,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "floor_divide")
@@ -214,6 +248,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "exponent")
@@ -222,6 +257,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "left shift")
@@ -230,23 +266,38 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _rhs: &Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "right shift")
     }
-    // fn attribute(
-    //     &self,
-    //     _log: &mut dyn RuntimeLog,
-    //     _stack_trace: &[SourceReference],
-    //     attribute: &S,
-    // ) -> OperatorResult<S, Value> {
-    //     Err(Failure::UnknownAttribute(attribute.clone()))
-    // }
+    fn get_attribute_ref<'h>(
+        &self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        _heap: &'h Heap,
+        attribute: &str,
+    ) -> ExpressionResult<&'h Value> {
+        Err(MissingAttributeError {
+            name: attribute.into(),
+        }
+        .to_error(stack_trace))
+    }
+    fn get_attribute_mut<'h>(
+        &mut self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        _heap: &'h mut Heap,
+        _attribute: &str,
+    ) -> ExpressionResult<&'h mut Value> {
+        UnsupportedOperationError::raise(self, stack_trace, "set attribute")
+    }
     fn call(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        argument: Value,
+        _heap: &Heap,
+        _argument: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "call")
     }
@@ -254,6 +305,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         _index: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "index")
@@ -262,6 +314,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
     ) -> ExpressionResult<Box<dyn Iterator<Item = Value>>> {
         UnsupportedOperationError::raise(self, stack_trace, "iterate")
     }
@@ -269,6 +322,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "unary plus")
     }
@@ -276,6 +330,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "unary minus")
     }
@@ -283,6 +338,7 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "unary not")
     }
@@ -294,10 +350,26 @@ pub trait Object: StaticTypeName + Sized + std::hash::Hash + Eq + PartialEq {
     // ) -> OperatorResult<SerializableValue> {
     //     UnsupportedOperationError::raise(self, stack_trace, "export")
     // }
+
+    fn drop(self, _heap: &mut Heap) {}
 }
 
-#[enum_dispatch(Object)]
-#[derive(Debug, Hash, Eq, PartialEq, EnumDowncast, Clone)]
+#[enum_dispatch]
+pub trait ObjectClone {
+    fn object_clone(&self, heap: &Heap) -> Value;
+}
+
+impl<O> ObjectClone for O
+where
+    O: Object + Clone + Into<Value>,
+{
+    fn object_clone(&self, _heap: &Heap) -> Value {
+        self.clone().into()
+    }
+}
+
+#[enum_dispatch(Object, ObjectClone)]
+#[derive(Debug, Eq, PartialEq, EnumDowncast, EnumAs)]
 pub enum Value {
     Void,
     Default(DefaultValue),
@@ -306,8 +378,8 @@ pub enum Value {
     Boolean,
     Scalar,
     UserClosure,
-    // Structure(Structure<S>),
-    // StructDefinition(StructDefinition<S>),
+    ValueType,
+    Dictionary(Dictionary),
     // List(List<S>),
     // String(SString),
     // Range(Range),
@@ -359,26 +431,26 @@ impl Value {
         if let Some(value) = self.enum_downcast_ref() {
             Ok(value)
         } else {
-            DowncastError {
+            Err(DowncastError {
                 expected: T::static_type_name().into(),
                 got: self.type_name(),
             }
-            .raise(stack_trace)
+            .to_error(stack_trace))
         }
     }
 
     pub fn downcast<T>(self, stack_trace: &[SourceReference]) -> ExpressionResult<T>
     where
         T: StaticTypeName,
-        Self: TryInto<T, Error = Self>,
+        Self: IntoVariant<T>,
     {
-        match self.try_into() {
+        match self.into_variant() {
             Ok(value) => Ok(value),
-            Err(original) => DowncastError {
+            Err(original) => Err(DowncastError {
                 expected: T::static_type_name().into(),
                 got: original.type_name(),
             }
-            .raise(stack_trace)?,
+            .to_error(stack_trace)),
         }
     }
 
@@ -388,7 +460,7 @@ impl Value {
     ) -> ExpressionResult<Option<T>>
     where
         T: StaticTypeName,
-        Self: TryInto<T, Error = Self>,
+        Self: IntoVariant<T>,
     {
         match self {
             Self::Void(_) => Ok(None),

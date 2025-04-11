@@ -18,7 +18,7 @@
 
 use super::{value_type::ValueType, Object, StaticTypeName};
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, Clone, PartialEq, Hash)]
 pub struct DefaultValue;
 
 impl Object for DefaultValue {

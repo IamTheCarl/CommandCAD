@@ -15,10 +15,13 @@ pub fn get_conversion_factor(name: &str) -> Option<&'static ConversionFactor> {
     database.get(name)
 }
 
-pub fn get_dimension_name(dimension: &Dimension) -> Cow<'static, str> {
+fn get_named_dimensions() -> &'static DimensionNameDatabase {
     static DIMENSIONS: OnceLock<DimensionNameDatabase> = OnceLock::new();
-    let database =
-        DIMENSIONS.get_or_init(|| include!(concat!(env!("OUT_DIR"), "/dimension_names.rs")));
+    DIMENSIONS.get_or_init(|| include!(concat!(env!("OUT_DIR"), "/dimension_names.rs")))
+}
+
+pub fn get_dimension_name(dimension: &Dimension) -> Cow<'static, str> {
+    let database = get_named_dimensions();
 
     if let Some(name) = database.get(dimension) {
         Cow::Borrowed(name)
@@ -37,6 +40,14 @@ pub fn get_dimension_name(dimension: &Dimension) -> Cow<'static, str> {
         )
         .into()
     }
+}
+
+pub fn list_named_dimensions() -> impl Iterator<Item = (&'static str, Dimension)> {
+    let database = get_named_dimensions();
+
+    database
+        .iter()
+        .map(|(dimension, name)| (name.as_str(), *dimension))
 }
 
 pub fn get_unit_list() -> &'static Vec<(String, Vec<UnitDescription>)> {

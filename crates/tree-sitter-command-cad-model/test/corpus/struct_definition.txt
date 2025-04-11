@@ -11,9 +11,11 @@ One
     (struct_definition
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier))))))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier))))))))
 
 ==================
 One,
@@ -28,9 +30,11 @@ One,
     (struct_definition
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier))))))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier))))))))
 
 ==================
 ...
@@ -71,9 +75,11 @@ One, ...
     (struct_definition
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier)))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier)))))
       (varadic_dots))))
 
 ==================
@@ -89,9 +95,11 @@ One, ...,
     (struct_definition
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier)))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier)))))
       (varadic_dots))))
 
 ==================
@@ -107,14 +115,18 @@ One, two
     (struct_definition
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier)))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier)))))
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier))))))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier))))))))
 
 ==================
 One, two,
@@ -129,37 +141,18 @@ One, two,
     (struct_definition
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier)))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier)))))
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier))))))
-
-==================
-One, two, ...
-==================
-
-( one: std.Constraint, two: std.Constraint, ... )
-
----
-
-(source_file
-  (expression
-    (struct_definition
-      (struct_member
-        (identifier)
-        (path
-          (identifier)
-          (identifier)))
-      (struct_member
-        (identifier)
-        (path
-          (identifier)
-          (identifier)))
-      (varadic_dots))))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier))))))))
 
 ==================
 One, two, ...,
@@ -174,14 +167,18 @@ One, two, ...,
     (struct_definition
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier)))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier)))))
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier)))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier)))))
       (varadic_dots))))
 
 ==================
@@ -197,9 +194,11 @@ Default
     (struct_definition
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier))))
         (expression
           (path
             (identifier)))))))
@@ -217,9 +216,11 @@ Default,
     (struct_definition
       (struct_member
         (identifier)
-        (path
-          (identifier)
-          (identifier))
+        (declaration_type
+          (expression
+            (path
+              (identifier)
+              (identifier))))
         (expression
           (path
             (identifier)))))))

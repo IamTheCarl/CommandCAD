@@ -20,26 +20,23 @@ use std::{fmt::Display, sync::Arc};
 
 use fortuples::fortuples;
 
-use crate::compile::{AstNode, ClosureDefinition, Expression, SourceReference};
+use crate::{
+    compile::{AstNode, ClosureDefinition, Expression},
+    execution::Heap,
+};
 
-use super::{Object, StaticTypeName, Value, ValueType};
+use super::{Object, ObjectClone, StaticTypeName, StructDefinition, Value, ValueType};
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct Argument {
-    pub source: SourceReference,
-    pub value: Value,
-}
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct CapturedValue {
     pub name: String,
     pub value: Value,
 }
 
 /// Signature of a closure, used for type comparison.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Signature {
-    argument_type: ValueType,
+    argument_type: StructDefinition,
     return_type: ValueType,
 }
 
@@ -51,14 +48,14 @@ impl Display for Signature {
 
 /// Closures are immutable, meaning that all copies can reference the same data.
 /// This is that common data.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 struct UserClosureInternals {
     signature: Arc<Signature>,
     captured_values: Vec<CapturedValue>,
     expression: Arc<Expression>,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct UserClosure {
     data: Arc<UserClosureInternals>,
 }
@@ -78,6 +75,12 @@ impl Object for UserClosure {
 impl StaticTypeName for UserClosure {
     fn static_type_name() -> &'static str {
         "Closure"
+    }
+}
+
+impl ObjectClone for UserClosure {
+    fn object_clone(&self, _heap: &Heap) -> Value {
+        todo!()
     }
 }
 

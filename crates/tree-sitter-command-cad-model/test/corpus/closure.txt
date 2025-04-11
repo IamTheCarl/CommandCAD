@@ -2,14 +2,63 @@
 Empty
 ==================
 
-()[] -> std.None {} 
+(,)[] -> std.None {} 
 
 ---
 
 (source_file
   (expression
     (closure_definition
-      (void)
+      (struct_definition)
+      (closure_captured_variables)
+      (path
+        (identifier)
+        (identifier))
+      (expression
+        (procedural_block)))))
+
+==================
+With argument
+==================
+
+(argument: std.types.UInt)[] -> std.None {} 
+
+---
+
+(source_file
+  (expression
+    (closure_definition
+      (struct_definition
+        (struct_member
+          (identifier)
+          (declaration_type
+            (expression
+              (path
+                (identifier)
+                (identifier)
+                (identifier))))))
+      (closure_captured_variables)
+      (path
+        (identifier)
+        (identifier))
+      (expression
+        (procedural_block)))))
+
+==================
+Path for argument signature
+==================
+
+path.to.signature[] -> std.None {} 
+
+---
+
+(source_file
+  (expression
+    (closure_definition
+      (path
+        (identifier)
+        (identifier)
+        (identifier))
       (closure_captured_variables)
       (path
         (identifier)
@@ -21,14 +70,14 @@ Empty
 Capture
 ==================
 
-()[a, b, c] -> std.None {} 
+(,)[a, b, c] -> std.None {} 
 
 ---
 
 (source_file
   (expression
     (closure_definition
-      (void)
+      (struct_definition)
       (closure_captured_variables
         (identifier)
         (identifier)
@@ -43,14 +92,14 @@ Capture
 Capture,
 ==================
 
-()[a, b, c,] -> std.None {} 
+(,)[a, b, c,] -> std.None {} 
 
 ---
 
 (source_file
   (expression
     (closure_definition
-      (void)
+      (struct_definition)
       (closure_captured_variables
         (identifier)
         (identifier)
@@ -65,7 +114,7 @@ Capture,
 With a statement
 ==================
 
-()[] -> std.None {
+(,)[] -> std.None {
   value = 5i;
 } 
 
@@ -74,7 +123,7 @@ With a statement
 (source_file
   (expression
     (closure_definition
-      (void)
+      (struct_definition)
       (closure_captured_variables)
       (path
         (identifier)
@@ -124,7 +173,7 @@ value()
       (expression
         (path
           (identifier)))
-      (void))))
+      (dictionary_construction))))
 
 ==================
 Call function deep in tree
@@ -185,7 +234,7 @@ value:value()
         (path
           (identifier)))
       (identifier)
-      (void))))
+      (dictionary_construction))))
 
 ==================
 Call method deep in tree

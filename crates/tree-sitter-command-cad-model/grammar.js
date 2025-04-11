@@ -26,7 +26,8 @@ const PREC = {
   or: 2,
   range: 1,
   assign: 0,
-  closure: -1,
+  struct_def: -1,
+  closure: -2,
 };
 
 module.exports = grammar({
@@ -41,7 +42,7 @@ module.exports = grammar({
     identifier: _ => /[a-zA-Z_][a-zA-Z0-9_]*/,
     string: _ => /\"(\\\"|[^\"])*\"/,
     default: _ => 'default',
-    void: _ => seq('(', ')'),
+    void: _ => '~',
 
     base_ten: _ => /[0-9]+/,
     octal: _ => seq(token.immediate(/0o/), /[0-9]+/),
@@ -69,13 +70,13 @@ module.exports = grammar({
 
     function_call: $ => seq(
       prec.left(PREC.function_call, seq(
-        field('to_call', $.expression), field("argument", choice($.dictionary_construction, $.void)),
+        field('to_call', $.expression), field("argument", $.dictionary_construction),
       ))
     ), 
     
     method_call: $ => seq(
       prec.left(PREC.method_call, seq(
-        field('self_dictionary', $.expression), ':', field('to_call', $.identifier), field("argument", choice($.dictionary_construction, $.void)) 
+        field('self_dictionary', $.expression), ':', field('to_call', $.identifier), field("argument", $.dictionary_construction) 
       ))
     ), 
 
@@ -147,10 +148,9 @@ module.exports = grammar({
 
     if: $ => seq('if', field('condition', $.expression), field('on_true', $.procedural_block), optional(seq('else', field('on_false', $.procedural_block)))),
 
-    _variable_type: $ => field('type_path', $.path),
     path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
 
-    _declaration_type: $ => seq(':', $._variable_type),
+    declaration_type: $ => seq(':', $.expression),
 
     parenthesis: $ => seq('(', $.expression, ')'),
     list: $ => seq(
@@ -162,29 +162,30 @@ module.exports = grammar({
 
     varadic_dots: $ => '...',
 
-    struct_member: $ => prec.left(PREC.struct_member, seq(field('name', $.identifier), $._declaration_type, optional(seq('=', field('default', $.expression))))),
+    struct_member: $ => prec.left(PREC.struct_member, seq(field('name', $.identifier), $.declaration_type, optional(seq('=', field('default', $.expression))))),
     _struct_final_element: $ => choice(
       seq($.struct_member),
       seq($.varadic_dots, optional(','))
     ),
-    struct_definition: $ => seq('(',
+    struct_definition: $ => prec.left(PREC.struct_def, seq('(',
       choice(
         seq(
           field('members', repeat1(seq($.struct_member, ','))),
           field('final_element', optional($._struct_final_element)),
         ),
-        field('final_element', $._struct_final_element)
+        field('final_element', $._struct_final_element),
+        ',', // Empty struct.
       ),
-      ')'),
+      ')')),
 
     dictionary_member_assignment: $ => seq(field('name', $.identifier), '=', field('assignment', $.expression)),
     dictionary_construction: $ => seq('(',
       field('assignments',
-        seq(
-          repeat(seq($.dictionary_member_assignment, ',')),
+        optional(seq(
           $.dictionary_member_assignment,
+          repeat(seq(',', $.dictionary_member_assignment)),
           optional(',')
-        ),
+        )),
       ),
       ')'
     ),
@@ -201,7 +202,7 @@ module.exports = grammar({
       ']'
     ),
     closure_definition: $ => prec.left(PREC.closure, seq(
-      field('argument', choice($.struct_definition, $.path, $.void)),
+      field('argument', choice($.struct_definition, $.path)),
       field('captured_variables', $.closure_captured_variables),
       '->',
       field('result', choice($.struct_definition, $.path, $.void)),

@@ -3,7 +3,7 @@ Comment
 ==================
 
 # There's a comment before the code.
-()
+~
 
 ---
 
@@ -17,7 +17,7 @@ Comment before closure
 ==================
 
 # There's a comment before the code.
-()[]->std.None {}
+(,)[]->std.None {}
 
 ---
 
@@ -25,7 +25,7 @@ Comment before closure
   (comment)
   (expression
     (closure_definition
-      (void)
+      (struct_definition)
       (closure_captured_variables)
       (path
         (identifier)

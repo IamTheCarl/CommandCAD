@@ -16,7 +16,10 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{compile::SourceReference, execution::logging::RuntimeLog};
+use crate::{
+    compile::SourceReference,
+    execution::{heap::Heap, logging::RuntimeLog},
+};
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
 
@@ -32,6 +35,7 @@ impl Object for Boolean {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         rhs: &Value,
     ) -> ExpressionResult<bool> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -41,6 +45,7 @@ impl Object for Boolean {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         rhs: &Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -51,6 +56,7 @@ impl Object for Boolean {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         rhs: &Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -61,6 +67,7 @@ impl Object for Boolean {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         rhs: &Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -71,6 +78,7 @@ impl Object for Boolean {
         &self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
+        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         Ok(Self(!self.0).into())
     }

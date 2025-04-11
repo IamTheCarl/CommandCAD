@@ -23,6 +23,7 @@ use crate::{
     compile::SourceReference,
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
+        heap::Heap,
         logging::RuntimeLog,
     },
 };
@@ -184,6 +185,7 @@ impl Object for Scalar {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         rhs: &Value,
     ) -> ExpressionResult<Value> {
         let rhs = self.unpack_for_addition_or_subtraction(stack_trace, rhs)?;
@@ -200,6 +202,7 @@ impl Object for Scalar {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         rhs: &Value,
     ) -> ExpressionResult<Value> {
         let rhs = self.unpack_for_addition_or_subtraction(stack_trace, rhs)?;
@@ -216,6 +219,7 @@ impl Object for Scalar {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         rhs: &Value,
     ) -> ExpressionResult<Value> {
         let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
@@ -226,6 +230,7 @@ impl Object for Scalar {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         rhs: &Value,
     ) -> ExpressionResult<Value> {
         let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
@@ -236,6 +241,7 @@ impl Object for Scalar {
         &self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
+        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         Ok(self.clone().into())
     }
@@ -243,6 +249,7 @@ impl Object for Scalar {
         &self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
+        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         Ok(Self {
             value: -self.value,
@@ -254,17 +261,18 @@ impl Object for Scalar {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _heap: &Heap,
         rhs: &Value,
     ) -> ExpressionResult<Ordering> {
         let rhs = rhs.downcast_ref::<Self>(stack_trace)?;
         if self.dimension == rhs.dimension {
             Ok(std::cmp::Ord::cmp(&self.value, &rhs.value))
         } else {
-            DowncastError {
+            Err(DowncastError {
                 expected: self.type_name(),
                 got: rhs.type_name(),
             }
-            .raise(stack_trace)
+            .to_error(stack_trace))
         }
     }
     // fn method_call(
@@ -711,7 +719,7 @@ impl Scalar {
         if self.dimension.is_zero_dimension() {
             Ok(())
         } else {
-            GenericFailure("Expected zero dimensional type").raise(stack_trace)
+            Err(GenericFailure("Expected zero dimensional type").to_error(stack_trace))
         }
     }
 
@@ -722,7 +730,7 @@ impl Scalar {
         if self.dimension.is_zero_dimension() {
             Ok(())
         } else {
-            GenericFailure("Inverse trigonometric functions can only be used with zero dimensional types (Angles, Ratios)").raise(stack_trace)
+            Err(GenericFailure("Inverse trigonometric functions can only be used with zero dimensional types (Angles, Ratios)").to_error(stack_trace))
         }
     }
 
@@ -730,8 +738,10 @@ impl Scalar {
         if self.dimension.is_zero_dimension() && self.dimension.ratio_type_hint.is_angle() {
             Ok(())
         } else {
-            GenericFailure("Trigonometric functions can only be used with angles")
-                .raise(stack_trace)
+            Err(
+                GenericFailure("Trigonometric functions can only be used with angles")
+                    .to_error(stack_trace),
+            )
         }
     }
 
@@ -748,18 +758,18 @@ impl Scalar {
             if self.dimension == rhs.dimension {
                 Ok(rhs)
             } else {
-                DowncastError {
+                Err(DowncastError {
                     expected: self.type_name(),
                     got: rhs.type_name(),
                 }
-                .raise(stack_trace)
+                .to_error(stack_trace))
             }
         } else {
-            DowncastError {
+            Err(DowncastError {
                 expected: self.type_name(),
                 got: rhs.type_name(),
             }
-            .raise(stack_trace)
+            .to_error(stack_trace))
         }
     }
 }
@@ -767,24 +777,13 @@ impl Scalar {
 #[cfg(test)]
 mod test {
 
-    use crate::{
-        compile, execute_expression,
-        execution::{stack::Stack, values::Boolean},
-    };
+    use crate::execution::{test_run, values::Boolean};
 
     use super::*;
 
     #[test]
     fn addition() {
-        let root = compile::full_compile("test_file.ccm", "3m + 2m");
-
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("3m + 2m").unwrap().0;
         assert_eq!(
             product,
             Scalar {
@@ -797,15 +796,7 @@ mod test {
 
     #[test]
     fn subtraction() {
-        let root = compile::full_compile("test_file.ccm", "3m - 2m");
-
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("3m - 2m").unwrap().0;
         assert_eq!(
             product,
             Scalar {
@@ -818,15 +809,7 @@ mod test {
 
     #[test]
     fn multiplication() {
-        let root = compile::full_compile("test_file.ccm", "3m * 2m");
-
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("3m * 2m").unwrap().0;
         assert_eq!(
             product,
             Scalar {
@@ -839,15 +822,7 @@ mod test {
 
     #[test]
     fn division() {
-        let root = compile::full_compile("test_file.ccm", "6'm^2' / 2m");
-
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("6'm^2' / 2m").unwrap().0;
         assert_eq!(
             product,
             Scalar {
@@ -860,167 +835,55 @@ mod test {
 
     #[test]
     fn comparisions() {
-        let root = compile::full_compile("test_file.ccm", "6m > 2m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("6m > 2m").unwrap().0;
         assert_eq!(product, Boolean(true).into());
 
-        let root = compile::full_compile("test_file.ccm", "2m > 6m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("2m > 6m").unwrap().0;
         assert_eq!(product, Boolean(false).into());
 
-        let root = compile::full_compile("test_file.ccm", "6m >= 2m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("6m >= 2m").unwrap().0;
         assert_eq!(product, Boolean(true).into());
 
-        let root = compile::full_compile("test_file.ccm", "6m >= 6m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("6m >= 6m").unwrap().0;
         assert_eq!(product, Boolean(true).into());
 
-        let root = compile::full_compile("test_file.ccm", "2m >= 6m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("2m >= 6m").unwrap().0;
         assert_eq!(product, Boolean(false).into());
 
-        let root = compile::full_compile("test_file.ccm", "6m == 6m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("6m == 6m").unwrap().0;
         assert_eq!(product, Boolean(true).into());
 
-        let root = compile::full_compile("test_file.ccm", "6m == 5m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("6m == 5m").unwrap().0;
         assert_eq!(product, Boolean(false).into());
 
-        let root = compile::full_compile("test_file.ccm", "6m <= 5m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("6m <= 5m").unwrap().0;
         assert_eq!(product, Boolean(false).into());
 
-        let root = compile::full_compile("test_file.ccm", "5m <= 5m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("5m <= 5m").unwrap().0;
         assert_eq!(product, Boolean(true).into());
 
-        let root = compile::full_compile("test_file.ccm", "5m <= 6m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("5m <= 6m").unwrap().0;
         assert_eq!(product, Boolean(true).into());
 
-        let root = compile::full_compile("test_file.ccm", "5m < 6m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("5m < 6m").unwrap().0;
         assert_eq!(product, Boolean(true).into());
 
-        let root = compile::full_compile("test_file.ccm", "6m < 6m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("6m < 6m").unwrap().0;
         assert_eq!(product, Boolean(false).into());
 
-        let root = compile::full_compile("test_file.ccm", "6m != 6m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("6m != 6m").unwrap().0;
         assert_eq!(product, Boolean(false).into());
 
-        let root = compile::full_compile("test_file.ccm", "6m != 5m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("6m != 5m").unwrap().0;
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn conversions() {
-        let root = compile::full_compile("test_file.ccm", "1m + 100cm == 2m");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("1m + 100cm == 2m").unwrap().0;
         assert_eq!(product, Boolean(true).into());
 
-        let root = compile::full_compile("test_file.ccm", "2m * 2m == 4'm^2'");
-        let product = execute_expression(
-            &mut Vec::new(),
-            &mut Vec::new(),
-            &mut Stack::default(),
-            &root,
-        )
-        .unwrap();
+        let product = test_run("2m * 2m == 4'm^2'").unwrap().0;
         assert_eq!(product, Boolean(true).into());
     }
 }

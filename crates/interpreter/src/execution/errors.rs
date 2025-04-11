@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::Any, fmt::Display, iter::once};
+use std::{any::Any, fmt::Display};
 
 use crate::compile::SourceReference;
 
@@ -55,47 +55,14 @@ impl Display for GenericFailure {
 pub trait ErrorType: std::fmt::Debug + std::fmt::Display + Any {}
 
 pub trait Raise {
-    fn raise<'s, R>(
-        self,
-        stack_trace: impl IntoIterator<Item = &'s SourceReference>,
-    ) -> ExpressionResult<R>;
-
     fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error;
-
-    fn raise_with_line<'s, R>(
-        self,
-        stack_trace: impl IntoIterator<Item = &'s SourceReference>,
-        current_line: SourceReference,
-    ) -> ExpressionResult<R>;
 }
 
 impl<E: ErrorType> Raise for E {
-    fn raise<'s, R>(
-        self,
-        stack_trace: impl IntoIterator<Item = &'s SourceReference>,
-    ) -> ExpressionResult<R> {
-        Err(self.to_error(stack_trace))
-    }
-
     fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error {
         Error {
             ty: Box::new(self),
             trace: stack_trace.into_iter().cloned().collect(),
         }
-    }
-
-    fn raise_with_line<'s, R>(
-        self,
-        stack_trace: impl IntoIterator<Item = &'s SourceReference>,
-        current_line: SourceReference,
-    ) -> ExpressionResult<R> {
-        Err(Error {
-            ty: Box::new(self),
-            trace: stack_trace
-                .into_iter()
-                .cloned()
-                .chain(once(current_line))
-                .collect(),
-        })
     }
 }

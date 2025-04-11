@@ -40,17 +40,8 @@
       "value": "default"
     },
     "void": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "("
-        },
-        {
-          "type": "STRING",
-          "value": ")"
-        }
-      ]
+      "type": "STRING",
+      "value": "~"
     },
     "base_ten": {
       "type": "PATTERN",
@@ -300,17 +291,8 @@
                 "type": "FIELD",
                 "name": "argument",
                 "content": {
-                  "type": "CHOICE",
-                  "members": [
-                    {
-                      "type": "SYMBOL",
-                      "name": "dictionary_construction"
-                    },
-                    {
-                      "type": "SYMBOL",
-                      "name": "void"
-                    }
-                  ]
+                  "type": "SYMBOL",
+                  "name": "dictionary_construction"
                 }
               }
             ]
@@ -351,17 +333,8 @@
                 "type": "FIELD",
                 "name": "argument",
                 "content": {
-                  "type": "CHOICE",
-                  "members": [
-                    {
-                      "type": "SYMBOL",
-                      "name": "dictionary_construction"
-                    },
-                    {
-                      "type": "SYMBOL",
-                      "name": "void"
-                    }
-                  ]
+                  "type": "SYMBOL",
+                  "name": "dictionary_construction"
                 }
               }
             ]
@@ -1258,14 +1231,6 @@
         }
       ]
     },
-    "_variable_type": {
-      "type": "FIELD",
-      "name": "type_path",
-      "content": {
-        "type": "SYMBOL",
-        "name": "path"
-      }
-    },
     "path": {
       "type": "SEQ",
       "members": [
@@ -1291,7 +1256,7 @@
         }
       ]
     },
-    "_declaration_type": {
+    "declaration_type": {
       "type": "SEQ",
       "members": [
         {
@@ -1300,7 +1265,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "_variable_type"
+          "name": "expression"
         }
       ]
     },
@@ -1387,7 +1352,7 @@
           },
           {
             "type": "SYMBOL",
-            "name": "_declaration_type"
+            "name": "declaration_type"
           },
           {
             "type": "CHOICE",
@@ -1453,71 +1418,79 @@
       ]
     },
     "struct_definition": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "("
-        },
-        {
-          "type": "CHOICE",
-          "members": [
-            {
-              "type": "SEQ",
-              "members": [
-                {
-                  "type": "FIELD",
-                  "name": "members",
-                  "content": {
-                    "type": "REPEAT1",
+      "type": "PREC_LEFT",
+      "value": -1,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "("
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SEQ",
+                "members": [
+                  {
+                    "type": "FIELD",
+                    "name": "members",
                     "content": {
-                      "type": "SEQ",
+                      "type": "REPEAT1",
+                      "content": {
+                        "type": "SEQ",
+                        "members": [
+                          {
+                            "type": "SYMBOL",
+                            "name": "struct_member"
+                          },
+                          {
+                            "type": "STRING",
+                            "value": ","
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "FIELD",
+                    "name": "final_element",
+                    "content": {
+                      "type": "CHOICE",
                       "members": [
                         {
                           "type": "SYMBOL",
-                          "name": "struct_member"
+                          "name": "_struct_final_element"
                         },
                         {
-                          "type": "STRING",
-                          "value": ","
+                          "type": "BLANK"
                         }
                       ]
                     }
                   }
-                },
-                {
-                  "type": "FIELD",
-                  "name": "final_element",
-                  "content": {
-                    "type": "CHOICE",
-                    "members": [
-                      {
-                        "type": "SYMBOL",
-                        "name": "_struct_final_element"
-                      },
-                      {
-                        "type": "BLANK"
-                      }
-                    ]
-                  }
+                ]
+              },
+              {
+                "type": "FIELD",
+                "name": "final_element",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_struct_final_element"
                 }
-              ]
-            },
-            {
-              "type": "FIELD",
-              "name": "final_element",
-              "content": {
-                "type": "SYMBOL",
-                "name": "_struct_final_element"
+              },
+              {
+                "type": "STRING",
+                "value": ","
               }
-            }
-          ]
-        },
-        {
-          "type": "STRING",
-          "value": ")"
-        }
-      ]
+            ]
+          },
+          {
+            "type": "STRING",
+            "value": ")"
+          }
+        ]
+      }
     },
     "dictionary_member_assignment": {
       "type": "SEQ",
@@ -1555,39 +1528,47 @@
           "type": "FIELD",
           "name": "assignments",
           "content": {
-            "type": "SEQ",
+            "type": "CHOICE",
             "members": [
               {
-                "type": "REPEAT",
-                "content": {
-                  "type": "SEQ",
-                  "members": [
-                    {
-                      "type": "SYMBOL",
-                      "name": "dictionary_member_assignment"
-                    },
-                    {
-                      "type": "STRING",
-                      "value": ","
-                    }
-                  ]
-                }
-              },
-              {
-                "type": "SYMBOL",
-                "name": "dictionary_member_assignment"
-              },
-              {
-                "type": "CHOICE",
+                "type": "SEQ",
                 "members": [
                   {
-                    "type": "STRING",
-                    "value": ","
+                    "type": "SYMBOL",
+                    "name": "dictionary_member_assignment"
                   },
                   {
-                    "type": "BLANK"
+                    "type": "REPEAT",
+                    "content": {
+                      "type": "SEQ",
+                      "members": [
+                        {
+                          "type": "STRING",
+                          "value": ","
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "dictionary_member_assignment"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "type": "CHOICE",
+                    "members": [
+                      {
+                        "type": "STRING",
+                        "value": ","
+                      },
+                      {
+                        "type": "BLANK"
+                      }
+                    ]
                   }
                 ]
+              },
+              {
+                "type": "BLANK"
               }
             ]
           }
@@ -1666,7 +1647,7 @@
     },
     "closure_definition": {
       "type": "PREC_LEFT",
-      "value": -1,
+      "value": -2,
       "content": {
         "type": "SEQ",
         "members": [
@@ -1683,10 +1664,6 @@
                 {
                   "type": "SYMBOL",
                   "name": "path"
-                },
-                {
-                  "type": "SYMBOL",
-                  "name": "void"
                 }
               ]
             }

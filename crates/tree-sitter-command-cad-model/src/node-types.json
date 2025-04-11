@@ -297,10 +297,6 @@
           {
             "type": "struct_definition",
             "named": true
-          },
-          {
-            "type": "void",
-            "named": true
           }
         ]
       },
@@ -345,12 +341,27 @@
     }
   },
   {
+    "type": "declaration_type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "dictionary_construction",
     "named": true,
     "fields": {
       "assignments": {
         "multiple": true,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": ",",
@@ -524,10 +535,6 @@
           {
             "type": "dictionary_construction",
             "named": true
-          },
-          {
-            "type": "void",
-            "named": true
           }
         ]
       },
@@ -662,10 +669,6 @@
         "types": [
           {
             "type": "dictionary_construction",
-            "named": true
-          },
-          {
-            "type": "void",
             "named": true
           }
         ]
@@ -911,17 +914,17 @@
             "named": true
           }
         ]
-      },
-      "type_path": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "path",
-            "named": true
-          }
-        ]
       }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "declaration_type",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -973,11 +976,6 @@
         ]
       }
     }
-  },
-  {
-    "type": "void",
-    "named": true,
-    "fields": {}
   },
   {
     "type": "!",
@@ -1197,6 +1195,10 @@
   },
   {
     "type": "varadic_dots",
+    "named": true
+  },
+  {
+    "type": "void",
     "named": true
   },
   {

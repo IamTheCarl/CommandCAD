@@ -709,6 +709,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashable-map"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46ab77e35afc7a5a3087e72e8e93a90a226a78f62c5f4dceaeb3d7ef5decdccb"
+
+[[package]]
 name = "hashbrown"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -938,6 +944,7 @@ dependencies = [
  "enum_downcast",
  "file-guard",
  "fortuples",
+ "hashable-map",
  "num-traits",
  "tree-sitter",
  "tree-sitter-command-cad-model",

@@ -18,3 +18,23 @@ For loop
             (path
               (identifier)))
           (procedural_block))))))
+
+==================
+For with void
+==================
+
+ {
+    for x in ~ {}
+ } 
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (for
+          (identifier)
+          (expression
+            (void))
+          (procedural_block))))))

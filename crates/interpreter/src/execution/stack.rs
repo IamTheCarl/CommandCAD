@@ -21,7 +21,8 @@ use crate::compile::SourceReference;
 use super::{
     errors::{ErrorType, ExpressionResult, Raise},
     logging::LocatedStr,
-    values::Value,
+    values::{Object, ObjectClone, Value},
+    Heap,
 };
 use compact_str::CompactString;
 use std::{collections::HashMap, fmt::Display};
@@ -41,27 +42,15 @@ struct Scope {
 #[derive(Debug)]
 pub struct Stack {
     scopes: Vec<Scope>,
+    prelude: HashMap<String, Value>,
     active_scope: usize,
 }
 
-impl Default for Stack {
-    fn default() -> Self {
-        Self {
-            scopes: vec![Scope {
-                ty: ScopeType::Isolated,
-
-                // TODO we should load the standard environment.
-                variables: HashMap::new(),
-            }],
-            active_scope: 0,
-        }
-    }
-}
-
 macro_rules! generate_variable_getter {
-    ($self:ident, $stack_trace: ident, $name:ident, $iter:ident, $get:ident, $mutable:ident) => {{
+    ($self:ident, $stack_trace: ident, $name:ident, $iter:ident, $get:ident) => {{
         let mut scope_iterator = $self.scopes[..=$self.active_scope].$iter().rev();
 
+        // Search the stack for the thing.
         for scope in &mut scope_iterator {
             if let Some(value) = scope.variables.$get($name.string) {
                 return Ok(value);
@@ -69,6 +58,7 @@ macro_rules! generate_variable_getter {
 
             match &scope.ty {
                 // If this scope is isolated, then we should not continue searching up the stack.
+                // Skip to the prelude.
                 ScopeType::Isolated => {
                     break;
                 }
@@ -76,10 +66,16 @@ macro_rules! generate_variable_getter {
             }
         }
 
-        NotInScopeError {
+        // See if we can find it in the prelude.
+        if let Some(value) = $self.prelude.$get($name.string) {
+            return Ok(value);
+        }
+
+        // We couldn't find it.
+        Err(NotInScopeError {
             variable_name: $name.string.to_string(),
         }
-        .raise_with_line($stack_trace, $name.location.clone())
+        .to_error($stack_trace.iter().chain([&$name.location])))
     }};
 }
 
@@ -101,25 +97,44 @@ impl Display for NotInScopeError {
 }
 
 impl Stack {
+    pub fn new(prelude: HashMap<String, Value>) -> Self {
+        Self {
+            scopes: vec![Scope {
+                ty: ScopeType::Isolated,
+                variables: HashMap::new(),
+            }],
+            prelude,
+            active_scope: 0,
+        }
+    }
+
+    pub fn drop_prelude(&mut self, heap: &mut Heap) {
+        for (_name, object) in self.prelude.drain() {
+            object.drop(heap);
+        }
+    }
+
     pub fn scope<'s, B, R>(
         &mut self,
+        heap: &mut Heap,
         variables_to_copy: impl IntoIterator<Item = LocatedStr<'s>>,
         stack_trace: &mut Vec<SourceReference>,
         mode: ScopeType,
         block: B,
     ) -> ExpressionResult<R>
     where
-        B: FnOnce(&mut Self, &mut Vec<SourceReference>) -> R,
+        B: FnOnce(&mut Self, &mut Vec<SourceReference>, &mut Heap) -> R,
     {
-        self.push_scope(variables_to_copy.into_iter(), stack_trace, mode)?;
-        let result = block(self, stack_trace);
-        self.pop_scope();
+        self.push_scope(heap, variables_to_copy.into_iter(), stack_trace, mode)?;
+        let result = block(self, stack_trace, heap);
+        self.pop_scope(heap);
 
         Ok(result)
     }
 
     fn push_scope<'s>(
         &mut self,
+        heap: &mut Heap,
         variables_to_copy: impl Iterator<Item = LocatedStr<'s>>,
         stack_trace: &[SourceReference],
         mode: ScopeType,
@@ -135,7 +150,9 @@ impl Stack {
         self.scopes[next_scope_index].ty = mode;
 
         for variable in variables_to_copy {
-            let value = self.get_variable(stack_trace, &variable)?.clone();
+            let value = self
+                .get_variable(stack_trace, &variable)?
+                .object_clone(heap);
             self.scopes[next_scope_index]
                 .variables
                 .insert(variable.string.into(), value);
@@ -146,8 +163,10 @@ impl Stack {
         Ok(())
     }
 
-    fn pop_scope(&mut self) {
-        self.scopes[self.active_scope].variables.clear();
+    fn pop_scope(&mut self, heap: &mut Heap) {
+        for (_name, value) in self.scopes[self.active_scope].variables.drain() {
+            value.drop(heap);
+        }
         self.active_scope -= 1;
     }
 
@@ -165,7 +184,7 @@ impl Stack {
         name: S,
     ) -> ExpressionResult<&Value> {
         let name = name.into();
-        generate_variable_getter!(self, stack_trace, name, iter, get, immutable)
+        generate_variable_getter!(self, stack_trace, name, iter, get)
     }
 
     pub fn get_variable_mut<'s, S: Into<LocatedStr<'s>>>(
@@ -174,6 +193,6 @@ impl Stack {
         name: S,
     ) -> ExpressionResult<&mut Value> {
         let name = name.into();
-        generate_variable_getter!(self, stack_trace, name, iter_mut, get_mut, mutable)
+        generate_variable_getter!(self, stack_trace, name, iter_mut, get_mut)
     }
 }
