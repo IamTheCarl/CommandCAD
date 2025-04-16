@@ -20,17 +20,25 @@ use std::{borrow::Cow, fmt::Display, sync::Arc};
 use common_data_types::Dimension;
 
 use super::{
-    closure::Signature as ClosureSignature, Boolean, DefaultValue, Object, SignedInteger,
-    StaticTypeName, UnsignedInteger, Value, Void,
+    closure::Signature as ClosureSignature, Boolean, DefaultValue, Object, ObjectClone,
+    SignedInteger, StaticTypeName, UnsignedInteger, Value, Void,
 };
 
 use crate::{
     compile::{self, AstNode, SourceReference},
     execute_expression,
-    execution::{errors::ExpressionResult, logging::RuntimeLog, stack::Stack, Heap},
+    execution::{
+        errors::ExpressionResult,
+        heap::{HeapKey, HeapStorage},
+        logging::RuntimeLog,
+        stack::Stack,
+        Heap,
+    },
 };
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+pub type StructMemberStorage = HeapStorage<Vec<StructMember>>;
+
+#[derive(Debug, Eq, PartialEq)]
 pub enum ValueType {
     Void,
     Default,
@@ -90,6 +98,25 @@ impl StaticTypeName for ValueType {
     }
 }
 
+impl ObjectClone for ValueType {
+    fn object_clone(&self, heap: &Heap) -> Value {
+        match self {
+            Self::Void => Self::Void,
+            Self::Default => Self::Default,
+            Self::Boolean => Self::Boolean,
+            Self::SignedInteger => Self::SignedInteger,
+            Self::UnsignedInteger => Self::UnsignedInteger,
+            Self::Scalar(dimension) => Self::Scalar(*dimension),
+            Self::Closure(signature) => Self::Closure(signature),
+            Self::Dictionary(struct_definition) => {
+                Self::Dictionary(struct_definition.object_clone(heap))
+            }
+            Self::ValueType => Self::ValueType,
+        }
+        .into()
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct StructMember {
     pub name: String,
@@ -116,6 +143,12 @@ impl StructMember {
 
         Ok(Self { name, ty, default })
     }
+
+    fn drop(self, heap: &mut Heap) {
+        if let Some(default) = self.default {
+            default.drop(heap);
+        }
+    }
 }
 
 impl Display for StructMember {
@@ -128,9 +161,9 @@ impl Display for StructMember {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct StructDefinition {
-    pub members: Arc<Vec<StructMember>>,
+    pub members: HeapKey,
     pub variadic: bool,
 }
 
@@ -147,9 +180,26 @@ impl StructDefinition {
             members.push(StructMember::new(log, stack_trace, stack, heap, member)?);
         }
 
-        let members = Arc::new(members);
+        let members = heap.struct_members.new_allocation(members);
         let variadic = source.node.variadic;
         Ok(Self { members, variadic })
+    }
+
+    fn drop(self, heap: &mut Heap) {
+        if let Some(members) = heap.struct_members.dereference_allocation(self.members) {
+            for member in members {
+                member.drop(heap);
+            }
+        }
+    }
+
+    fn object_clone(&self, heap: &Heap) -> StructDefinition {
+        let members = heap.struct_members.reference_allocation(&self.members);
+
+        Self {
+            members,
+            variadic: self.variadic,
+        }
     }
 }
 
@@ -157,24 +207,29 @@ impl Display for StructDefinition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "(")?;
 
-        let mut member_iter = self.members.iter();
-
-        // The first member should not have a comma before it.
-        if let Some(first_member) = member_iter.next() {
-            write!(f, "{}", first_member)?;
-        }
-
-        // All other members get a comma before them.
-        for member in member_iter {
-            write!(f, ", {}", member)?;
-        }
-
-        // This struct is variadic.
-        if self.variadic {
-            // Only put a comma before the dots if there were any members before it.
-            if self.members.is_empty() {
+        if self.members.is_empty() {
+            if self.variadic {
                 write!(f, "...")?;
             } else {
+                write!(f, "~")?;
+            }
+        } else {
+            let mut member_iter = self.members.iter();
+
+            // The first member should not have a comma before it.
+            if let Some(first_member) = member_iter.next() {
+                write!(f, "{}", first_member)?;
+            }
+
+            // All other members get a comma before them.
+            for member in member_iter {
+                write!(f, ", {}", member)?;
+            }
+
+            // This struct is variadic.
+            if self.variadic {
+                // We're not empty, so something is guaranteed to have been printed before the
+                // dots. Make sure to put a comma before the dots.
                 write!(f, ", ...")?;
             }
         }

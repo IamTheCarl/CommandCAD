@@ -52,7 +52,7 @@ mod dictionary;
 pub use dictionary::{Dictionary, DictionaryStorage};
 
 mod value_type;
-pub use value_type::{StructDefinition, StructMember, ValueType};
+pub use value_type::{StructDefinition, StructMember, StructMemberStorage, ValueType};
 
 pub trait StaticTypeName {
     /// Provides the type name without having an instance of the object.

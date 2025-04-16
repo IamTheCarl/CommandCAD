@@ -656,6 +656,12 @@ mod test {
         assert_eq!(product, values::UnsignedInteger::from(32).into());
     }
 
+    #[test]
+    fn define_closure() {
+        let product = test_run("(~)[std.types] -> std.types.Void {}").unwrap().0;
+        assert_eq!(product, values::UnsignedInteger::from(32).into());
+    }
+
     // #[test]
     // fn nested_value_creation() {
     //     let product =

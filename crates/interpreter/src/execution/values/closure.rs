@@ -33,6 +33,12 @@ pub struct CapturedValue {
     pub value: Value,
 }
 
+impl CapturedValue {
+    fn drop(self, heap: &mut Heap) {
+        self.value.drop(heap);
+    }
+}
+
 /// Signature of a closure, used for type comparison.
 #[derive(Debug, Eq, PartialEq)]
 pub struct Signature {
@@ -69,6 +75,10 @@ impl UserClosure {
 impl Object for UserClosure {
     fn get_type(&self) -> ValueType {
         ValueType::Closure(self.data.signature.clone())
+    }
+
+    fn drop(self, heap: &mut Heap) {
+        todo!()
     }
 }
 

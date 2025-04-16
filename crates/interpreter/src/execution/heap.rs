@@ -22,12 +22,13 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use super::values::DictionaryStorage;
+use super::values::{DictionaryStorage, StructMemberStorage};
 
 #[derive(Debug, Default)]
 /// A collection of objects that are stored on the heap.
 pub struct Heap {
     pub dictionaries: DictionaryStorage,
+    pub struct_members: StructMemberStorage,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]
