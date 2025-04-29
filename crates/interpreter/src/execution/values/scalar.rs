@@ -23,7 +23,6 @@ use crate::{
     compile::SourceReference,
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
-        heap::Heap,
         logging::RuntimeLog,
     },
 };
@@ -45,7 +44,7 @@ impl UnwrapNotNan for std::result::Result<Float, FloatIsNan> {
     }
 }
 
-#[derive(Debug, Hash, Clone, Eq, PartialEq)]
+#[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
 pub struct Scalar {
     pub dimension: Dimension,
     pub value: Float,
@@ -182,11 +181,10 @@ impl Object for Scalar {
     // }
 
     fn addition(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = self.unpack_for_addition_or_subtraction(stack_trace, rhs)?;
 
@@ -199,11 +197,10 @@ impl Object for Scalar {
         .into())
     }
     fn subtraction(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = self.unpack_for_addition_or_subtraction(stack_trace, rhs)?;
 
@@ -216,40 +213,36 @@ impl Object for Scalar {
         .into())
     }
     fn multiply(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
         self.multiply_by_scalar(stack_trace, rhs)
             .map(|rhs| rhs.into())
     }
     fn divide(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
         self.divide_by_measurement(stack_trace, rhs)
             .map(|rhs| rhs.into())
     }
     fn unary_plus(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
-        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         Ok(self.clone().into())
     }
     fn unary_minus(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
-        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         Ok(Self {
             value: -self.value,
@@ -258,11 +251,10 @@ impl Object for Scalar {
         .into())
     }
     fn cmp(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Ordering> {
         let rhs = rhs.downcast_ref::<Self>(stack_trace)?;
         if self.dimension == rhs.dimension {
@@ -749,11 +741,11 @@ impl Scalar {
         self.dimension.is_zero_dimension() && self.dimension.ratio_type_hint.0 == 0
     }
 
-    fn unpack_for_addition_or_subtraction<'b>(
-        &'b self,
+    fn unpack_for_addition_or_subtraction(
+        self,
         stack_trace: &[SourceReference],
-        rhs: &'b Value,
-    ) -> ExpressionResult<&'b Self> {
+        rhs: Value,
+    ) -> ExpressionResult<Self> {
         if let Value::Scalar(rhs) = rhs {
             if self.dimension == rhs.dimension {
                 Ok(rhs)
@@ -783,7 +775,7 @@ mod test {
 
     #[test]
     fn addition() {
-        let product = test_run("3m + 2m").unwrap().0;
+        let product = test_run("3m + 2m").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -796,7 +788,7 @@ mod test {
 
     #[test]
     fn subtraction() {
-        let product = test_run("3m - 2m").unwrap().0;
+        let product = test_run("3m - 2m").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -809,7 +801,7 @@ mod test {
 
     #[test]
     fn multiplication() {
-        let product = test_run("3m * 2m").unwrap().0;
+        let product = test_run("3m * 2m").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -822,7 +814,7 @@ mod test {
 
     #[test]
     fn division() {
-        let product = test_run("6'm^2' / 2m").unwrap().0;
+        let product = test_run("6'm^2' / 2m").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -835,55 +827,55 @@ mod test {
 
     #[test]
     fn comparisions() {
-        let product = test_run("6m > 2m").unwrap().0;
+        let product = test_run("6m > 2m").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("2m > 6m").unwrap().0;
+        let product = test_run("2m > 6m").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("6m >= 2m").unwrap().0;
+        let product = test_run("6m >= 2m").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("6m >= 6m").unwrap().0;
+        let product = test_run("6m >= 6m").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("2m >= 6m").unwrap().0;
+        let product = test_run("2m >= 6m").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("6m == 6m").unwrap().0;
+        let product = test_run("6m == 6m").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("6m == 5m").unwrap().0;
+        let product = test_run("6m == 5m").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("6m <= 5m").unwrap().0;
+        let product = test_run("6m <= 5m").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("5m <= 5m").unwrap().0;
+        let product = test_run("5m <= 5m").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("5m <= 6m").unwrap().0;
+        let product = test_run("5m <= 6m").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("5m < 6m").unwrap().0;
+        let product = test_run("5m < 6m").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("6m < 6m").unwrap().0;
+        let product = test_run("6m < 6m").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("6m != 6m").unwrap().0;
+        let product = test_run("6m != 6m").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("6m != 5m").unwrap().0;
+        let product = test_run("6m != 5m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn conversions() {
-        let product = test_run("1m + 100cm == 2m").unwrap().0;
+        let product = test_run("1m + 100cm == 2m").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("2m * 2m == 4'm^2'").unwrap().0;
+        let product = test_run("2m * 2m == 4'm^2'").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 }

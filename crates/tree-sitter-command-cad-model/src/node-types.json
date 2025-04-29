@@ -627,7 +627,7 @@
         "required": true,
         "types": [
           {
-            "type": "identifier",
+            "type": "path",
             "named": true
           }
         ]

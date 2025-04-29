@@ -25,24 +25,19 @@ use crate::{
     execute_expression,
     execution::{
         errors::{ErrorType, ExpressionResult, Raise as _},
-        heap::{HeapKey, HeapStorage},
         logging::RuntimeLog,
         stack::Stack,
-        Heap,
     },
 };
 
 use super::{
-    MissingAttributeError, Object, ObjectClone, StaticTypeName, StructDefinition, StructMember,
-    Value, ValueType,
+    MissingAttributeError, Object, ObjectCopy, StaticTypeName, StoredValue, StructDefinition,
+    StructMember, Value, ValueType,
 };
-
-pub type DictionaryStorage = HeapStorage<HashableMap<String, Value>>;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Dictionary {
-    /// The actual storage to the dictionary lives in the heap, and we store a reference to it.
-    key: HeapKey,
+    members: HashableMap<String, StoredValue>,
 }
 
 impl Object for Dictionary {
@@ -55,15 +50,13 @@ impl Object for Dictionary {
         })
     }
 
-    fn get_attribute_ref<'h>(
+    fn get_attribute_ref(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        heap: &'h Heap,
         attribute: &str,
-    ) -> ExpressionResult<&'h Value> {
-        let members = heap.dictionaries.get(&self.key);
-        if let Some(member) = members.get(attribute) {
+    ) -> ExpressionResult<&StoredValue> {
+        if let Some(member) = self.members.get(attribute) {
             Ok(member)
         } else {
             Err(MissingAttributeError {
@@ -72,15 +65,13 @@ impl Object for Dictionary {
             .to_error(stack_trace))
         }
     }
-    fn get_attribute_mut<'h>(
+    fn get_attribute_mut(
         &mut self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        heap: &'h mut Heap,
         attribute: &str,
-    ) -> ExpressionResult<&'h mut Value> {
-        let members = heap.dictionaries.get_mut(&self.key);
-        if let Some(member) = members.get_mut(attribute) {
+    ) -> ExpressionResult<&mut StoredValue> {
+        if let Some(member) = self.members.get_mut(attribute) {
             Ok(member)
         } else {
             Err(MissingAttributeError {
@@ -89,25 +80,21 @@ impl Object for Dictionary {
             .to_error(stack_trace))
         }
     }
-
-    fn drop(self, heap: &mut Heap) {
-        if let Some(mut internal_storage) = heap.dictionaries.dereference_allocation(self.key) {
-            // That was the last reference to this dictionary.
-            // We need to drop all the content.
-            for (_name, value) in internal_storage.drain() {
-                value.drop(heap);
-            }
-        }
+    fn insert_attribute(
+        &mut self,
+        _log: &mut dyn RuntimeLog,
+        _stack_trace: &[SourceReference],
+        attribute: impl Into<String>,
+        new_value: Value,
+    ) -> ExpressionResult<()> {
+        self.members
+            .insert(attribute.into(), StoredValue::Value(new_value));
+        Ok(())
     }
 }
 
-impl ObjectClone for Dictionary {
-    fn object_clone(&self, heap: &Heap) -> Value {
-        // Get another reference to the allocation and return that.
-        let key = heap.dictionaries.reference_allocation(&self.key);
-        Self { key }.into()
-    }
-}
+// Default implementation, cannot be moved by copy.
+impl ObjectCopy for Dictionary {}
 
 impl StaticTypeName for Dictionary {
     fn static_type_name() -> &'static str {
@@ -115,38 +102,30 @@ impl StaticTypeName for Dictionary {
     }
 }
 
-impl Dictionary {
-    pub fn from_hashmap(heap: &mut Heap, map: HashMap<String, Value>) -> Self {
+impl From<HashMap<String, StoredValue>> for Dictionary {
+    fn from(map: HashMap<String, StoredValue>) -> Self {
         // HashableMap is just a wrapper around HashMap, so this has no additional cost.
-        let content = HashableMap::from(map);
+        let members = HashableMap::from(map);
 
-        let key = heap.dictionaries.new_allocation(content);
-
-        Self { key }
+        Self { members }
     }
+}
 
+impl Dictionary {
     pub fn from_ast(
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
-        heap: &mut Heap,
         ast_node: &AstNode<DictionaryConstruction>,
     ) -> ExpressionResult<Self> {
         let mut members = HashMap::with_capacity(ast_node.node.assignments.len());
 
         for assignment in ast_node.node.assignments.iter() {
             let name = assignment.node.name.node.clone();
-            let value =
-                execute_expression(log, stack_trace, stack, heap, &assignment.node.assignment)?;
+            let value = execute_expression(log, stack_trace, stack, &assignment.node.assignment)?;
 
-            if let Some(already_occupied) = members.insert(name, value) {
-                // That's an error. We need to drop all that data and then report an error.
-                already_occupied.drop(heap);
-
-                for (_name, value) in members {
-                    value.drop(heap);
-                }
-
+            if members.insert(name, StoredValue::Value(value)).is_some() {
+                // That's a duplicate member.
                 return Err(DuplicateMemberError {
                     name: assignment.node.name.node.clone(),
                 }
@@ -154,7 +133,7 @@ impl Dictionary {
             }
         }
 
-        Ok(Self::from_hashmap(heap, members))
+        Ok(Self::from(members))
     }
 }
 
@@ -182,13 +161,13 @@ mod test {
 
     #[test]
     fn build_dictionary() {
-        let (product, mut heap) = test_run("(void = ~)").unwrap();
-        let product_heap = heap.dictionaries.get(&product.as_dictionary().unwrap().key);
-        let expected = HashableMap::from(HashMap::from_iter([("void".to_string(), Void.into())]));
+        let product = test_run("(void = ~)").unwrap();
+        let expected = HashableMap::from(HashMap::from_iter([(
+            "void".to_string(),
+            StoredValue::Value(Void.into()),
+        )]));
 
-        assert_eq!(product_heap, &expected);
-
-        product.drop(&mut heap);
+        assert_eq!(product.as_dictionary().unwrap().members, expected);
     }
 
     #[test]

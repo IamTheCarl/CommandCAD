@@ -21,8 +21,7 @@ use crate::compile::SourceReference;
 use super::{
     errors::{ErrorType, ExpressionResult, Raise},
     logging::LocatedStr,
-    values::{Object, ObjectClone, Value},
-    Heap,
+    values::{StoredValue, Value},
 };
 use compact_str::CompactString;
 use std::{collections::HashMap, fmt::Display};
@@ -36,24 +35,26 @@ pub enum ScopeType {
 #[derive(Debug)]
 struct Scope {
     ty: ScopeType,
-    variables: HashMap<CompactString, Value>,
+    variables: HashMap<CompactString, StoredValue>,
 }
 
 #[derive(Debug)]
 pub struct Stack {
     scopes: Vec<Scope>,
-    prelude: HashMap<String, Value>,
+    prelude: HashMap<String, StoredValue>,
     active_scope: usize,
 }
 
 macro_rules! generate_variable_getter {
     ($self:ident, $stack_trace: ident, $name:ident, $iter:ident, $get:ident) => {{
         let mut scope_iterator = $self.scopes[..=$self.active_scope].$iter().rev();
+        let mut result = None;
 
         // Search the stack for the thing.
         for scope in &mut scope_iterator {
             if let Some(value) = scope.variables.$get($name.string) {
-                return Ok(value);
+                result = Some(value);
+                break;
             }
 
             match &scope.ty {
@@ -66,16 +67,7 @@ macro_rules! generate_variable_getter {
             }
         }
 
-        // See if we can find it in the prelude.
-        if let Some(value) = $self.prelude.$get($name.string) {
-            return Ok(value);
-        }
-
-        // We couldn't find it.
-        Err(NotInScopeError {
-            variable_name: $name.string.to_string(),
-        }
-        .to_error($stack_trace.iter().chain([&$name.location])))
+        result
     }};
 }
 
@@ -97,7 +89,7 @@ impl Display for NotInScopeError {
 }
 
 impl Stack {
-    pub fn new(prelude: HashMap<String, Value>) -> Self {
+    pub fn new(prelude: HashMap<String, StoredValue>) -> Self {
         Self {
             scopes: vec![Scope {
                 ty: ScopeType::Isolated,
@@ -108,37 +100,23 @@ impl Stack {
         }
     }
 
-    pub fn drop_prelude(&mut self, heap: &mut Heap) {
-        for (_name, object) in self.prelude.drain() {
-            object.drop(heap);
-        }
-    }
-
     pub fn scope<'s, B, R>(
         &mut self,
-        heap: &mut Heap,
-        variables_to_copy: impl IntoIterator<Item = LocatedStr<'s>>,
         stack_trace: &mut Vec<SourceReference>,
         mode: ScopeType,
         block: B,
     ) -> ExpressionResult<R>
     where
-        B: FnOnce(&mut Self, &mut Vec<SourceReference>, &mut Heap) -> R,
+        B: FnOnce(&mut Self, &mut Vec<SourceReference>) -> R,
     {
-        self.push_scope(heap, variables_to_copy.into_iter(), stack_trace, mode)?;
-        let result = block(self, stack_trace, heap);
-        self.pop_scope(heap);
+        self.push_scope(mode)?;
+        let result = block(self, stack_trace);
+        self.pop_scope();
 
         Ok(result)
     }
 
-    fn push_scope<'s>(
-        &mut self,
-        heap: &mut Heap,
-        variables_to_copy: impl Iterator<Item = LocatedStr<'s>>,
-        stack_trace: &[SourceReference],
-        mode: ScopeType,
-    ) -> ExpressionResult<()> {
+    fn push_scope<'s>(&mut self, mode: ScopeType) -> ExpressionResult<()> {
         let next_scope_index = self.active_scope + 1;
         if next_scope_index >= self.scopes.len() {
             self.scopes.push(Scope {
@@ -148,51 +126,66 @@ impl Stack {
         }
 
         self.scopes[next_scope_index].ty = mode;
-
-        for variable in variables_to_copy {
-            let value = self
-                .get_variable(stack_trace, &variable)?
-                .object_clone(heap);
-            self.scopes[next_scope_index]
-                .variables
-                .insert(variable.string.into(), value);
-        }
-
         self.active_scope = next_scope_index;
 
         Ok(())
     }
 
-    fn pop_scope(&mut self, heap: &mut Heap) {
-        for (_name, value) in self.scopes[self.active_scope].variables.drain() {
-            value.drop(heap);
-        }
+    fn pop_scope(&mut self) {
         self.active_scope -= 1;
     }
 
     pub fn insert_value(&mut self, name: impl Into<CompactString>, value: Value) {
         self.scopes[self.active_scope]
             .variables
-            .insert(name.into(), value);
+            .insert(name.into(), StoredValue::Value(value));
     }
 
+    /// Gets a reference to a variable on the stack.
     // TODO Recommending similar named variables would help users to notice typos.
     // https://crates.io/crates/levenshtein
     pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(
         &self,
         stack_trace: &[SourceReference],
         name: S,
-    ) -> ExpressionResult<&Value> {
+    ) -> ExpressionResult<&StoredValue> {
         let name = name.into();
-        generate_variable_getter!(self, stack_trace, name, iter, get)
+        if let Some(value) = generate_variable_getter!(self, stack_trace, name, iter, get) {
+            Ok(value)
+        } else {
+            // See if we can find it in the prelude.
+            if let Some(value) = self.prelude.get(name.string) {
+                return Ok(value);
+            }
+
+            // We couldn't find it.
+            Err(NotInScopeError {
+                variable_name: name.string.to_string(),
+            }
+            .to_error(stack_trace.iter().chain([&name.location])))
+        }
     }
 
+    /// Gets a mutable reference to a variable on the stack.
     pub fn get_variable_mut<'s, S: Into<LocatedStr<'s>>>(
         &mut self,
         stack_trace: &[SourceReference],
         name: S,
-    ) -> ExpressionResult<&mut Value> {
+    ) -> ExpressionResult<&mut StoredValue> {
         let name = name.into();
-        generate_variable_getter!(self, stack_trace, name, iter_mut, get_mut)
+        if let Some(value) = generate_variable_getter!(self, stack_trace, name, iter_mut, get_mut) {
+            Ok(value)
+        } else {
+            // See if we can find it in the prelude.
+            if let Some(value) = self.prelude.get_mut(name.string) {
+                Ok(value)
+            } else {
+                // We couldn't find it.
+                Err(NotInScopeError {
+                    variable_name: name.string.to_string(),
+                }
+                .to_error(stack_trace.iter().chain([&name.location])))
+            }
+        }
     }
 }

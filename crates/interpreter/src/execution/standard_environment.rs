@@ -1,27 +1,22 @@
 use std::collections::HashMap;
 
-use common_data_types::Dimension;
-
-use super::{
-    heap::Heap,
-    values::{Dictionary, Value, ValueType},
-};
+use super::values::{Dictionary, StoredValue, Value, ValueType};
 
 /// Builds standard library.
-pub fn build_prelude(heap: &mut Heap) -> HashMap<String, Value> {
-    let global = HashMap::from([("std".into(), build_std(heap).into())]);
+pub fn build_prelude() -> HashMap<String, StoredValue> {
+    let global = HashMap::from([("std".into(), build_std().into())]);
 
     global
 }
 
-fn build_std(heap: &mut Heap) -> Dictionary {
-    let std = HashMap::from([("types".into(), build_types(heap).into())]);
-    Dictionary::from_hashmap(heap, std)
+fn build_std() -> Dictionary {
+    let std = HashMap::from([("types".into(), build_types().into())]);
+    Dictionary::from(std)
 }
 
 /// Adds library for type safety.
-fn build_types(heap: &mut Heap) -> Dictionary {
-    let types = HashMap::from_iter(
+fn build_types() -> Dictionary {
+    let types: HashMap<String, StoredValue> = HashMap::from_iter(
         [
             ("Void".into(), ValueType::Void.into()),
             ("Bool".into(), ValueType::Boolean.into()),
@@ -36,10 +31,10 @@ fn build_types(heap: &mut Heap) -> Dictionary {
         .into_iter()
         .chain(build_dimension_types()),
     );
-    Dictionary::from_hashmap(heap, types)
+    Dictionary::from(types)
 }
 
-fn build_dimension_types() -> impl Iterator<Item = (String, Value)> {
+fn build_dimension_types() -> impl Iterator<Item = (String, StoredValue)> {
     units::list_named_dimensions()
         .map(|(name, dimension)| (name.into(), ValueType::Scalar(dimension).into()))
 }

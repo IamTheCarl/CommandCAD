@@ -18,7 +18,7 @@
 
 use super::{value_type::ValueType, Object, StaticTypeName};
 
-#[derive(Debug, Hash, Clone, Eq, PartialEq)]
+#[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
 pub struct Void;
 
 impl Object for Void {

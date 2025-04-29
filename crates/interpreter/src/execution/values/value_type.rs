@@ -20,25 +20,17 @@ use std::{borrow::Cow, fmt::Display, sync::Arc};
 use common_data_types::Dimension;
 
 use super::{
-    closure::Signature as ClosureSignature, Boolean, DefaultValue, Object, ObjectClone,
+    closure::Signature as ClosureSignature, Boolean, DefaultValue, Object, ObjectCopy,
     SignedInteger, StaticTypeName, UnsignedInteger, Value, Void,
 };
 
 use crate::{
     compile::{self, AstNode, SourceReference},
     execute_expression,
-    execution::{
-        errors::ExpressionResult,
-        heap::{HeapKey, HeapStorage},
-        logging::RuntimeLog,
-        stack::Stack,
-        Heap,
-    },
+    execution::{errors::ExpressionResult, logging::RuntimeLog, stack::Stack},
 };
 
-pub type StructMemberStorage = HeapStorage<Vec<StructMember>>;
-
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub enum ValueType {
     Void,
     Default,
@@ -98,22 +90,10 @@ impl StaticTypeName for ValueType {
     }
 }
 
-impl ObjectClone for ValueType {
-    fn object_clone(&self, heap: &Heap) -> Value {
-        match self {
-            Self::Void => Self::Void,
-            Self::Default => Self::Default,
-            Self::Boolean => Self::Boolean,
-            Self::SignedInteger => Self::SignedInteger,
-            Self::UnsignedInteger => Self::UnsignedInteger,
-            Self::Scalar(dimension) => Self::Scalar(*dimension),
-            Self::Closure(signature) => Self::Closure(signature),
-            Self::Dictionary(struct_definition) => {
-                Self::Dictionary(struct_definition.object_clone(heap))
-            }
-            Self::ValueType => Self::ValueType,
-        }
-        .into()
+impl ObjectCopy for ValueType {
+    fn object_copy(&self) -> Option<Value> {
+        // It's not quite as cheap as a copy but it's still cheap enough.
+        Some(self.clone().into())
     }
 }
 
@@ -129,25 +109,18 @@ impl StructMember {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
-        heap: &mut Heap,
         source: &AstNode<compile::StructMember>,
     ) -> ExpressionResult<Self> {
         let name = source.node.name.node.clone();
-        let ty = execute_expression(log, stack_trace, stack, heap, &source.node.ty)?
+        let ty = execute_expression(log, stack_trace, stack, &source.node.ty)?
             .downcast::<ValueType>(stack_trace)?;
         let default = if let Some(default) = source.node.default.as_ref() {
-            Some(execute_expression(log, stack_trace, stack, heap, default)?)
+            Some(execute_expression(log, stack_trace, stack, default)?)
         } else {
             None
         };
 
         Ok(Self { name, ty, default })
-    }
-
-    fn drop(self, heap: &mut Heap) {
-        if let Some(default) = self.default {
-            default.drop(heap);
-        }
     }
 }
 
@@ -161,9 +134,9 @@ impl Display for StructMember {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StructDefinition {
-    pub members: HeapKey,
+    pub members: Arc<Vec<StructMember>>,
     pub variadic: bool,
 }
 
@@ -172,34 +145,16 @@ impl StructDefinition {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
-        heap: &mut Heap,
         source: &AstNode<compile::StructDefinition>,
     ) -> ExpressionResult<Self> {
         let mut members = Vec::new();
         for member in source.node.members.iter() {
-            members.push(StructMember::new(log, stack_trace, stack, heap, member)?);
+            members.push(StructMember::new(log, stack_trace, stack, member)?);
         }
 
-        let members = heap.struct_members.new_allocation(members);
+        let members = Arc::new(members);
         let variadic = source.node.variadic;
         Ok(Self { members, variadic })
-    }
-
-    fn drop(self, heap: &mut Heap) {
-        if let Some(members) = heap.struct_members.dereference_allocation(self.members) {
-            for member in members {
-                member.drop(heap);
-            }
-        }
-    }
-
-    fn object_clone(&self, heap: &Heap) -> StructDefinition {
-        let members = heap.struct_members.reference_allocation(&self.members);
-
-        Self {
-            members,
-            variadic: self.variadic,
-        }
     }
 }
 

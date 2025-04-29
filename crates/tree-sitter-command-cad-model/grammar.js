@@ -241,7 +241,7 @@ module.exports = grammar({
       return choice(...operators.map((operator) => field('op', operator)));
     },
 
-    let: $ => seq('let', field('to_assign', $.identifier), '=', field('value', $.expression), ';'),
+    let: $ => seq('let', field('to_assign', $.path), '=', field('value', $.expression), ';'),
     assign: $ => seq(field('to_assign', $.path), $.assignment_operator, field('value', $.expression), ';'),
     for: $ => seq('for', field('to_assign', $.identifier), 'in', field('to_iterate', $.expression), field('to_run', $.procedural_block)),
   }

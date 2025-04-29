@@ -27,7 +27,6 @@ use crate::compile::SourceReference;
 use super::{
     errors::{ErrorType, ExpressionResult, Raise as _},
     logging::RuntimeLog,
-    Heap,
 };
 
 mod void;
@@ -49,10 +48,10 @@ mod closure;
 pub use closure::UserClosure;
 
 mod dictionary;
-pub use dictionary::{Dictionary, DictionaryStorage};
+pub use dictionary::Dictionary;
 
 mod value_type;
-pub use value_type::{StructDefinition, StructMember, StructMemberStorage, ValueType};
+pub use value_type::{StructDefinition, StructMember, ValueType};
 
 pub trait StaticTypeName {
     /// Provides the type name without having an instance of the object.
@@ -106,7 +105,7 @@ impl Display for MissingAttributeError {
 }
 
 #[enum_dispatch]
-pub trait Object: StaticTypeName + Sized + Eq + PartialEq + ObjectClone {
+pub trait Object: StaticTypeName + Sized + Eq + PartialEq + ObjectCopy {
     fn get_type(&self) -> ValueType;
 
     // fn format(
@@ -125,178 +124,165 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + ObjectClone {
     }
 
     fn and(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "logical and")
+        UnsupportedOperationError::raise(&self, stack_trace, "logical and")
     }
     fn or(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "logical or")
+        UnsupportedOperationError::raise(&self, stack_trace, "logical or")
     }
     fn xor(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "logical xor")
+        UnsupportedOperationError::raise(&self, stack_trace, "logical xor")
     }
     fn bit_and(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "binary and")
+        UnsupportedOperationError::raise(&self, stack_trace, "binary and")
     }
     fn bit_or(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "binary or")
+        UnsupportedOperationError::raise(&self, stack_trace, "binary or")
     }
     fn bit_xor(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "binary xor")
+        UnsupportedOperationError::raise(&self, stack_trace, "binary xor")
     }
     fn cmp(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Ordering> {
-        UnsupportedOperationError::raise(self, stack_trace, "compare")
+        UnsupportedOperationError::raise(&self, stack_trace, "compare")
     }
     fn eq(
-        &self,
+        self,
         log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<bool> {
-        Ok(matches!(
-            self.cmp(log, stack_trace, heap, rhs)?,
-            Ordering::Equal
-        ))
+        Ok(matches!(self.cmp(log, stack_trace, rhs)?, Ordering::Equal))
     }
     fn addition(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "addition")
+        UnsupportedOperationError::raise(&self, stack_trace, "addition")
     }
     fn subtraction(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "subtraction")
+        UnsupportedOperationError::raise(&self, stack_trace, "subtraction")
     }
     fn multiply(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "multiply")
+        UnsupportedOperationError::raise(&self, stack_trace, "multiply")
     }
     fn divide(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "divide")
+        UnsupportedOperationError::raise(&self, stack_trace, "divide")
     }
     fn floor_divide(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "floor_divide")
+        UnsupportedOperationError::raise(&self, stack_trace, "floor_divide")
     }
     fn exponent(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "exponent")
+        UnsupportedOperationError::raise(&self, stack_trace, "exponent")
     }
     fn left_shift(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "left shift")
+        UnsupportedOperationError::raise(&self, stack_trace, "left shift")
     }
     fn right_shift(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        _rhs: &Value,
+        _rhs: Value,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "right shift")
+        UnsupportedOperationError::raise(&self, stack_trace, "right shift")
     }
-    fn get_attribute_ref<'h>(
+    fn get_attribute_ref(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &'h Heap,
         attribute: &str,
-    ) -> ExpressionResult<&'h Value> {
+    ) -> ExpressionResult<&StoredValue> {
         Err(MissingAttributeError {
             name: attribute.into(),
         }
         .to_error(stack_trace))
     }
-    fn get_attribute_mut<'h>(
+    fn get_attribute_mut(
         &mut self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &'h mut Heap,
         _attribute: &str,
-    ) -> ExpressionResult<&'h mut Value> {
+    ) -> ExpressionResult<&mut StoredValue> {
         UnsupportedOperationError::raise(self, stack_trace, "set attribute")
+    }
+    fn insert_attribute(
+        &mut self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        _attribute: impl Into<String>,
+        _new_value: Value,
+    ) -> ExpressionResult<()> {
+        UnsupportedOperationError::raise(self, stack_trace, "insert attribute")
     }
     fn call(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
         _argument: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "call")
@@ -305,7 +291,6 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + ObjectClone {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
         _index: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "index")
@@ -314,33 +299,29 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + ObjectClone {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
     ) -> ExpressionResult<Box<dyn Iterator<Item = Value>>> {
         UnsupportedOperationError::raise(self, stack_trace, "iterate")
     }
     fn unary_plus(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "unary plus")
+        UnsupportedOperationError::raise(&self, stack_trace, "unary plus")
     }
     fn unary_minus(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "unary minus")
+        UnsupportedOperationError::raise(&self, stack_trace, "unary minus")
     }
     fn unary_not(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
     ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "unary not")
+        UnsupportedOperationError::raise(&self, stack_trace, "unary not")
     }
 
     // fn export(
@@ -350,25 +331,115 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + ObjectClone {
     // ) -> OperatorResult<SerializableValue> {
     //     UnsupportedOperationError::raise(self, stack_trace, "export")
     // }
-
-    fn drop(self, _heap: &mut Heap) {}
 }
 
+/// Implements and indicates the copy rules of an object.
 #[enum_dispatch]
-pub trait ObjectClone {
-    fn object_clone(&self, heap: &Heap) -> Value;
-}
-
-impl<O> ObjectClone for O
-where
-    O: Object + Clone + Into<Value>,
-{
-    fn object_clone(&self, _heap: &Heap) -> Value {
-        self.clone().into()
+pub trait ObjectCopy {
+    /// Creates a copy of the object. Returning None indicates that the object should not be
+    /// passed by copy, and instead should be moved.
+    fn object_copy(&self) -> Option<Value> {
+        None
     }
 }
 
-#[enum_dispatch(Object, ObjectClone)]
+impl<O> ObjectCopy for O
+where
+    O: Object + Copy + Into<Value>,
+{
+    fn object_copy(&self) -> Option<Value> {
+        Some(self.clone().into())
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum StoredValue {
+    Value(Value),
+    Moved {
+        /// Where in the source code it was moved.
+        location: SourceReference,
+    },
+}
+
+impl StoredValue {
+    pub fn replace(&mut self, new: Value) {
+        *self = Self::Value(new);
+    }
+
+    pub fn take(&mut self, stack_trace: &[SourceReference]) -> ExpressionResult<Value> {
+        if let Self::Value(value) = &self {
+            if let Some(value) = value.object_copy() {
+                // No need to move if it's a copy type.
+                return Ok(value);
+            }
+        }
+
+        let mut old_self = Self::Moved {
+            location: stack_trace.last().expect("Stack trace was empty").clone(),
+        };
+        std::mem::swap(self, &mut old_self);
+
+        match old_self {
+            StoredValue::Value(value) => Ok(value),
+            StoredValue::Moved { location } => {
+                Err(ValueMovedError { location }.to_error(stack_trace))
+            }
+        }
+    }
+
+    pub fn access(&self, stack_trace: &[SourceReference]) -> ExpressionResult<&Value> {
+        match self {
+            StoredValue::Value(value) => Ok(value),
+            StoredValue::Moved { location } => Err(ValueMovedError {
+                location: location.clone(),
+            }
+            .to_error(stack_trace)),
+        }
+    }
+
+    pub fn access_mut(&mut self, stack_trace: &[SourceReference]) -> ExpressionResult<&mut Value> {
+        match self {
+            StoredValue::Value(value) => Ok(value),
+            StoredValue::Moved { location } => Err(ValueMovedError {
+                location: location.clone(),
+            }
+            .to_error(stack_trace)),
+        }
+    }
+}
+
+impl std::hash::Hash for StoredValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // We only contribute to the hash if we actually contain a value.
+        if let Self::Value(value) = self {
+            core::mem::discriminant(value).hash(state);
+        }
+    }
+}
+
+impl<V> From<V> for StoredValue
+where
+    V: Into<Value>,
+{
+    fn from(value: V) -> Self {
+        Self::Value(value.into())
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ValueMovedError {
+    location: SourceReference,
+}
+
+impl ErrorType for ValueMovedError {}
+
+impl Display for ValueMovedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "value has was moved at {}", self.location)
+    }
+}
+
+#[enum_dispatch(Object, ObjectCopy)]
 #[derive(Debug, Eq, PartialEq, EnumDowncast, EnumAs)]
 pub enum Value {
     Void,

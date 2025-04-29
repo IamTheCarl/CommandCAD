@@ -16,14 +16,11 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{
-    compile::SourceReference,
-    execution::{heap::Heap, logging::RuntimeLog},
-};
+use crate::{compile::SourceReference, execution::logging::RuntimeLog};
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
 
-#[derive(Debug, Hash, Clone, Eq, PartialEq)]
+#[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
 pub struct Boolean(pub bool);
 
 impl Object for Boolean {
@@ -32,53 +29,48 @@ impl Object for Boolean {
     }
 
     fn eq(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<bool> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(self.0 == rhs.0)
     }
     fn and(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0 && rhs.0).into())
     }
 
     fn or(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0 || rhs.0).into())
     }
 
     fn xor(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self((self.0 && rhs.0) || (!self.0 && !rhs.0)).into())
     }
 
     fn unary_not(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
-        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         Ok(Self(!self.0).into())
     }

@@ -34,6 +34,6 @@ Let
     (procedural_block
       (statement
         (let
-          (identifier)
+          (path (identifier))
           (expression
             (signed_integer (integer (base_ten)))))))))

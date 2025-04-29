@@ -30,14 +30,13 @@ use crate::{
     compile::SourceReference,
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
-        heap::Heap,
         logging::RuntimeLog,
     },
 };
 
 use super::{value_type::ValueType, Object, StaticTypeName, Value};
 
-#[derive(Debug, Hash, Clone, Eq, PartialEq)]
+#[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
 pub struct Integer<I>(pub I);
 
 impl<I> From<I> for Integer<I> {
@@ -75,52 +74,47 @@ where
     }
 
     fn bit_and(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0 & rhs.0).into())
     }
     fn bit_or(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0 | rhs.0).into())
     }
     fn bit_xor(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0 ^ rhs.0).into())
     }
 
     fn cmp(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Ordering> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(self.0.cmp(&rhs.0))
     }
     fn addition(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0.checked_add(&rhs.0).ok_or_else(|| {
@@ -132,11 +126,10 @@ where
         .into())
     }
     fn subtraction(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0.checked_sub(&rhs.0).ok_or_else(|| {
@@ -148,11 +141,10 @@ where
         .into())
     }
     fn multiply(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0.checked_mul(&rhs.0).ok_or_else(|| {
@@ -164,11 +156,10 @@ where
         .into())
     }
     fn divide(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(
@@ -179,20 +170,18 @@ where
         .into())
     }
     fn floor_divide(
-        &self,
+        self,
         log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
-        self.divide(log, stack_trace, heap, rhs)
+        self.divide(log, stack_trace, rhs)
     }
     fn exponent(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
 
@@ -213,46 +202,41 @@ where
         .into())
     }
     fn left_shift(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0 << rhs.0).into())
     }
     fn right_shift(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
-        rhs: &Value,
+        rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0 >> rhs.0).into())
     }
     fn unary_plus(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
-        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         Ok(self.clone().into())
     }
     fn unary_minus(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         self.0.neg(stack_trace).into()
     }
     fn unary_not(
-        &self,
+        self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
-        _heap: &Heap,
     ) -> ExpressionResult<Value> {
         Ok(Self(!self.0).into())
     }
@@ -318,255 +302,255 @@ mod test {
 
     #[test]
     fn signed_bit_or() {
-        let product = test_run("0xAAi | 0x55i").unwrap().0;
+        let product = test_run("0xAAi | 0x55i").unwrap();
         assert_eq!(product, SignedInteger::from(0xFF).into());
     }
 
     #[test]
     fn signed_bit_and() {
-        let product = test_run("0xFFi & 0x0Fi").unwrap().0;
+        let product = test_run("0xFFi & 0x0Fi").unwrap();
         assert_eq!(product, SignedInteger::from(0x0F).into());
     }
 
     #[test]
     fn signed_bit_xor() {
-        let product = test_run("0xF0i ^ 0xFFi").unwrap().0;
+        let product = test_run("0xF0i ^ 0xFFi").unwrap();
         assert_eq!(product, SignedInteger::from(0x0F).into());
     }
 
     #[test]
     fn signed_cmp_greater_than() {
-        let product = test_run("3i > 2i").unwrap().0;
+        let product = test_run("3i > 2i").unwrap();
         assert_eq!(product, Boolean(true).into());
-        let product = test_run("2i > 3i").unwrap().0;
+        let product = test_run("2i > 3i").unwrap();
         assert_eq!(product, Boolean(false).into());
     }
 
     #[test]
     fn signed_cmp_greater_than_eq() {
-        let product = test_run("3i >= 2i").unwrap().0;
+        let product = test_run("3i >= 2i").unwrap();
         assert_eq!(product, Boolean(true).into());
-        let product = test_run("3i >= 3i").unwrap().0;
+        let product = test_run("3i >= 3i").unwrap();
         assert_eq!(product, Boolean(true).into());
-        let product = test_run("2i >= 3i").unwrap().0;
+        let product = test_run("2i >= 3i").unwrap();
         assert_eq!(product, Boolean(false).into());
     }
 
     #[test]
     fn signed_cmp_eq() {
-        let product = test_run("3i == 3i").unwrap().0;
+        let product = test_run("3i == 3i").unwrap();
         assert_eq!(product, Boolean(true).into());
-        let product = test_run("3i == 2i").unwrap().0;
+        let product = test_run("3i == 2i").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("3i != 3i").unwrap().0;
+        let product = test_run("3i != 3i").unwrap();
         assert_eq!(product, Boolean(false).into());
-        let product = test_run("3i != 2i").unwrap().0;
+        let product = test_run("3i != 2i").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn signed_cmp_less_than_eq() {
-        let product = test_run("3i <= 2i").unwrap().0;
+        let product = test_run("3i <= 2i").unwrap();
         assert_eq!(product, Boolean(false).into());
-        let product = test_run("3i <= 3i").unwrap().0;
+        let product = test_run("3i <= 3i").unwrap();
         assert_eq!(product, Boolean(true).into());
-        let product = test_run("2i <= 3i").unwrap().0;
+        let product = test_run("2i <= 3i").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn signed_cmp_less_than() {
-        let product = test_run("3i < 2i").unwrap().0;
+        let product = test_run("3i < 2i").unwrap();
         assert_eq!(product, Boolean(false).into());
-        let product = test_run("2i < 3i").unwrap().0;
+        let product = test_run("2i < 3i").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn signed_addition() {
-        let product = test_run("3i + 2i").unwrap().0;
+        let product = test_run("3i + 2i").unwrap();
         assert_eq!(product, SignedInteger::from(5).into());
     }
 
     #[test]
     fn signed_subtraction() {
-        let product = test_run("3i - 2i").unwrap().0;
+        let product = test_run("3i - 2i").unwrap();
         assert_eq!(product, SignedInteger::from(1).into());
     }
 
     #[test]
     fn signed_multiply() {
-        let product = test_run("3i * 2i").unwrap().0;
+        let product = test_run("3i * 2i").unwrap();
         assert_eq!(product, SignedInteger::from(6).into());
     }
 
     #[test]
     fn signed_divide() {
-        let product = test_run("6i / 2i").unwrap().0;
+        let product = test_run("6i / 2i").unwrap();
         assert_eq!(product, SignedInteger::from(3).into());
     }
 
     #[test]
     fn signed_floor_divide() {
-        let product = test_run("6i // 2i").unwrap().0;
+        let product = test_run("6i // 2i").unwrap();
         assert_eq!(product, SignedInteger::from(3).into());
     }
 
     #[test]
     fn signed_exponent() {
-        let product = test_run("6i ** 3i").unwrap().0;
+        let product = test_run("6i ** 3i").unwrap();
         assert_eq!(product, SignedInteger::from(216).into());
     }
 
     #[test]
     fn signed_shift_left() {
-        let product = test_run("0x0Fi << 4i").unwrap().0;
+        let product = test_run("0x0Fi << 4i").unwrap();
         assert_eq!(product, SignedInteger::from(0xF0).into());
     }
 
     #[test]
     fn signed_shift_right() {
-        let product = test_run("0xF0i >> 4i").unwrap().0;
+        let product = test_run("0xF0i >> 4i").unwrap();
         assert_eq!(product, SignedInteger::from(0x0F).into());
     }
 
     #[test]
     fn signed_unary_plus() {
-        let product = test_run("+3i").unwrap().0;
+        let product = test_run("+3i").unwrap();
         assert_eq!(product, SignedInteger::from(3).into());
     }
 
     #[test]
     fn signed_unary_minus() {
-        let product = test_run("-3i").unwrap().0;
+        let product = test_run("-3i").unwrap();
         assert_eq!(product, SignedInteger::from(-3).into());
     }
 
     #[test]
     fn signed_unary_bit_not() {
-        let product = test_run("!0xAAi").unwrap().0;
+        let product = test_run("!0xAAi").unwrap();
         assert_eq!(product, SignedInteger::from(!0xAA).into());
     }
 
     #[test]
     fn unsigned_bit_or() {
-        let product = test_run("0xAAu | 0x55u").unwrap().0;
+        let product = test_run("0xAAu | 0x55u").unwrap();
         assert_eq!(product, UnsignedInteger::from(0xFF).into());
     }
 
     #[test]
     fn unsigned_bit_and() {
-        let product = test_run("0xFFu & 0x0Fu").unwrap().0;
+        let product = test_run("0xFFu & 0x0Fu").unwrap();
         assert_eq!(product, UnsignedInteger::from(0x0F).into());
     }
 
     #[test]
     fn unsigned_bit_xor() {
-        let product = test_run("0xF0u ^ 0xFFu").unwrap().0;
+        let product = test_run("0xF0u ^ 0xFFu").unwrap();
         assert_eq!(product, UnsignedInteger::from(0x0F).into());
     }
 
     #[test]
     fn unsigned_cmp_greater_than() {
-        let product = test_run("3u > 2u").unwrap().0;
+        let product = test_run("3u > 2u").unwrap();
         assert_eq!(product, Boolean(true).into());
-        let product = test_run("2u > 3u").unwrap().0;
+        let product = test_run("2u > 3u").unwrap();
         assert_eq!(product, Boolean(false).into());
     }
 
     #[test]
     fn unsigned_cmp_greater_than_eq() {
-        let product = test_run("3u >= 2u").unwrap().0;
+        let product = test_run("3u >= 2u").unwrap();
         assert_eq!(product, Boolean(true).into());
-        let product = test_run("3u >= 3u").unwrap().0;
+        let product = test_run("3u >= 3u").unwrap();
         assert_eq!(product, Boolean(true).into());
-        let product = test_run("2u >= 3u").unwrap().0;
+        let product = test_run("2u >= 3u").unwrap();
         assert_eq!(product, Boolean(false).into());
     }
 
     #[test]
     fn unsigned_cmp_eq() {
-        let product = test_run("3u == 3u").unwrap().0;
+        let product = test_run("3u == 3u").unwrap();
         assert_eq!(product, Boolean(true).into());
-        let product = test_run("3u == 2u").unwrap().0;
+        let product = test_run("3u == 2u").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("3u != 3u").unwrap().0;
+        let product = test_run("3u != 3u").unwrap();
         assert_eq!(product, Boolean(false).into());
-        let product = test_run("3u != 2u").unwrap().0;
+        let product = test_run("3u != 2u").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn unsigned_cmp_less_than_eq() {
-        let product = test_run("3u <= 2u").unwrap().0;
+        let product = test_run("3u <= 2u").unwrap();
         assert_eq!(product, Boolean(false).into());
-        let product = test_run("3u <= 3u").unwrap().0;
+        let product = test_run("3u <= 3u").unwrap();
         assert_eq!(product, Boolean(true).into());
-        let product = test_run("2u <= 3u").unwrap().0;
+        let product = test_run("2u <= 3u").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn unsigned_cmp_less_than() {
-        let product = test_run("3u < 2u").unwrap().0;
+        let product = test_run("3u < 2u").unwrap();
         assert_eq!(product, Boolean(false).into());
-        let product = test_run("2u < 3u").unwrap().0;
+        let product = test_run("2u < 3u").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn unsigned_addition() {
-        let product = test_run("3u + 2u").unwrap().0;
+        let product = test_run("3u + 2u").unwrap();
         assert_eq!(product, UnsignedInteger::from(5).into());
     }
 
     #[test]
     fn unsigned_subtraction() {
-        let product = test_run("3u - 2u").unwrap().0;
+        let product = test_run("3u - 2u").unwrap();
         assert_eq!(product, UnsignedInteger::from(1).into());
     }
 
     #[test]
     fn unsigned_multiply() {
-        let product = test_run("3u * 2u").unwrap().0;
+        let product = test_run("3u * 2u").unwrap();
         assert_eq!(product, UnsignedInteger::from(6).into());
     }
 
     #[test]
     fn unsigned_divide() {
-        let product = test_run("6u / 2u").unwrap().0;
+        let product = test_run("6u / 2u").unwrap();
         assert_eq!(product, UnsignedInteger::from(3).into());
     }
 
     #[test]
     fn unsigned_floor_divide() {
-        let product = test_run("6u // 2u").unwrap().0;
+        let product = test_run("6u // 2u").unwrap();
         assert_eq!(product, UnsignedInteger::from(3).into());
     }
 
     #[test]
     fn unsigned_exponent() {
-        let product = test_run("6u ** 3u").unwrap().0;
+        let product = test_run("6u ** 3u").unwrap();
         assert_eq!(product, UnsignedInteger::from(216).into());
     }
 
     #[test]
     fn unsigned_shift_left() {
-        let product = test_run("0x0Fu << 4u").unwrap().0;
+        let product = test_run("0x0Fu << 4u").unwrap();
         assert_eq!(product, UnsignedInteger::from(0xF0).into());
     }
 
     #[test]
     fn unsigned_shift_right() {
-        let product = test_run("0xF0u >> 4u").unwrap().0;
+        let product = test_run("0xF0u >> 4u").unwrap();
         assert_eq!(product, UnsignedInteger::from(0x0F).into());
     }
 
     #[test]
     fn unsigned_unary_plus() {
-        let product = test_run("+3u").unwrap().0;
+        let product = test_run("+3u").unwrap();
         assert_eq!(product, UnsignedInteger::from(3).into());
     }
 
@@ -577,7 +561,7 @@ mod test {
 
     #[test]
     fn unsigned_unary_bit_not() {
-        let product = test_run("!0xAAu").unwrap().0;
+        let product = test_run("!0xAAu").unwrap();
         assert_eq!(product, UnsignedInteger::from(!0xAA).into());
     }
 }

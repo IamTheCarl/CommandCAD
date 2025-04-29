@@ -68,7 +68,7 @@ impl<'t> Parse<'t, nodes::Assign<'t>> for Assign {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct Let {
-    pub to_assign: AstNode<String>,
+    pub to_assign: AstNode<IdentityPath>,
     pub value: AstNode<Expression>,
 }
 
@@ -78,7 +78,7 @@ impl<'t> Parse<'t, nodes::Let<'t>> for Let {
         input: &'i str,
         value: nodes::Let<'t>,
     ) -> Result<AstNode<Self>, super::Error<'t, 'i>> {
-        let to_assign = String::parse(file, input, value.to_assign()?)?;
+        let to_assign = IdentityPath::parse(file, input, value.to_assign()?)?;
         let assigned_value = Expression::parse(file, input, value.value()?)?;
 
         Ok(AstNode::new(
@@ -275,7 +275,7 @@ mod test {
 
     #[test]
     fn assign_let() {
-        let root = full_compile("{ let my_value = ~; }");
+        let root = full_compile("{ let my_value.sub_value = ~; }");
         let block = root.node.as_proceduralblock().unwrap();
         let statement = &block.node.statements[0];
         let let_assign = statement.node.as_let().unwrap();
@@ -293,7 +293,24 @@ mod test {
                                 node: Let {
                                     to_assign: AstNode {
                                         reference: let_assign.node.to_assign.reference.clone(),
-                                        node: "my_value".to_string()
+                                        node: IdentityPath {
+                                            path: vec![
+                                                AstNode {
+                                                    reference: let_assign.node.to_assign.node.path
+                                                        [0]
+                                                    .reference
+                                                    .clone(),
+                                                    node: "my_value".to_string()
+                                                },
+                                                AstNode {
+                                                    reference: let_assign.node.to_assign.node.path
+                                                        [1]
+                                                    .reference
+                                                    .clone(),
+                                                    node: "sub_value".to_string()
+                                                }
+                                            ]
+                                        }
                                     },
                                     value: AstNode {
                                         reference: let_assign.node.value.reference.clone(),

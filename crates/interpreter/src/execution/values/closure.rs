@@ -20,23 +20,14 @@ use std::{fmt::Display, sync::Arc};
 
 use fortuples::fortuples;
 
-use crate::{
-    compile::{AstNode, ClosureDefinition, Expression},
-    execution::Heap,
-};
+use crate::compile::{AstNode, ClosureDefinition, Expression};
 
-use super::{Object, ObjectClone, StaticTypeName, StructDefinition, Value, ValueType};
+use super::{Object, ObjectCopy, StaticTypeName, StructDefinition, Value, ValueType};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct CapturedValue {
     pub name: String,
     pub value: Value,
-}
-
-impl CapturedValue {
-    fn drop(self, heap: &mut Heap) {
-        self.value.drop(heap);
-    }
 }
 
 /// Signature of a closure, used for type comparison.
@@ -76,10 +67,6 @@ impl Object for UserClosure {
     fn get_type(&self) -> ValueType {
         ValueType::Closure(self.data.signature.clone())
     }
-
-    fn drop(self, heap: &mut Heap) {
-        todo!()
-    }
 }
 
 impl StaticTypeName for UserClosure {
@@ -88,8 +75,8 @@ impl StaticTypeName for UserClosure {
     }
 }
 
-impl ObjectClone for UserClosure {
-    fn object_clone(&self, _heap: &Heap) -> Value {
+impl ObjectCopy for UserClosure {
+    fn object_copy(&self) -> Option<Value> {
         todo!()
     }
 }
