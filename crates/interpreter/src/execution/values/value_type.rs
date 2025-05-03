@@ -192,3 +192,9 @@ impl Display for StructDefinition {
         write!(f, ")")
     }
 }
+
+impl StaticTypeName for StructDefinition {
+    fn static_type_name() -> &'static str {
+        "Struct Definition"
+    }
+}

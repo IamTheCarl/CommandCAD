@@ -112,7 +112,7 @@ pub fn execute_expression(
             }
             compile::Expression::Boolean(ast_node) => Ok(values::Boolean(ast_node.node).into()),
             compile::Expression::ClosureDefinition(ast_node) => {
-                Ok(values::UserClosure::from_ast(ast_node).into())
+                Ok(values::UserClosure::from_ast(log, stack_trace, stack, ast_node)?.into())
             }
             compile::Expression::Default(_ast_node) => Ok(values::DefaultValue.into()),
             compile::Expression::DictionaryConstruction(ast_node) => {
@@ -551,12 +551,6 @@ mod test {
         let product =
             test_run("{ let dictionary = (a = (b = 23u)); dictionary.a.b = 32u; dictionary.a.b }")
                 .unwrap();
-        assert_eq!(product, values::UnsignedInteger::from(32).into());
-    }
-
-    #[test]
-    fn define_closure() {
-        let product = test_run("(~)[std.types] -> std.types.Void {}").unwrap();
         assert_eq!(product, values::UnsignedInteger::from(32).into());
     }
 

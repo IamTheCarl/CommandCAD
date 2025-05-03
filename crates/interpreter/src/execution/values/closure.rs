@@ -20,7 +20,16 @@ use std::{fmt::Display, sync::Arc};
 
 use fortuples::fortuples;
 
-use crate::compile::{AstNode, ClosureDefinition, Expression};
+use crate::{
+    compile::{AstNode, ClosureDefinition, Expression, SourceReference},
+    execute_expression,
+    execution::{
+        errors::{ExpressionResult, Raise},
+        logging::{LocatedStr, RuntimeLog, StackScope},
+        stack::Stack,
+        values::DowncastError,
+    },
+};
 
 use super::{Object, ObjectCopy, StaticTypeName, StructDefinition, Value, ValueType};
 
@@ -52,14 +61,82 @@ struct UserClosureInternals {
     expression: Arc<Expression>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct UserClosure {
     data: Arc<UserClosureInternals>,
 }
 
 impl UserClosure {
-    pub fn from_ast(source: &AstNode<Box<ClosureDefinition>>) -> Self {
-        todo!()
+    pub fn from_ast(
+        log: &mut dyn RuntimeLog,
+        stack_trace: &mut Vec<SourceReference>,
+        stack: &mut Stack,
+        source: &AstNode<Box<ClosureDefinition>>,
+    ) -> ExpressionResult<Self> {
+        let argument_type = stack_trace.stack_scope(
+            source.node.argument_type.reference.clone(),
+            |stack_trace| {
+                let argument_type =
+                    execute_expression(log, stack_trace, stack, &source.node.argument_type)?
+                        .downcast::<ValueType>(stack_trace)?;
+
+                if let ValueType::Dictionary(argument_type) = argument_type {
+                    Ok(argument_type)
+                } else {
+                    Err(DowncastError {
+                        expected: StructDefinition::static_type_name().into(),
+                        got: argument_type.name(),
+                    }
+                    .to_error(stack_trace.as_slice()))
+                }
+            },
+        )?;
+
+        let return_type =
+            stack_trace.stack_scope(source.node.return_type.reference.clone(), |stack_trace| {
+                execute_expression(log, stack_trace, stack, &source.node.return_type)?
+                    .downcast::<ValueType>(stack_trace)
+            })?;
+
+        let signature = Arc::new(Signature {
+            argument_type,
+            return_type,
+        });
+
+        let mut captured_values = Vec::new();
+
+        for to_capture in source.node.captures.iter() {
+            let value = stack_trace.stack_scope(
+                to_capture.reference.clone(),
+                |stack_trace: &mut Vec<SourceReference>| {
+                    stack
+                        .get_variable_mut(
+                            stack_trace,
+                            LocatedStr {
+                                // TODO should actually point to the variable name.
+                                location: stack_trace.last().unwrap().clone(),
+                                string: to_capture.node.as_str(),
+                            },
+                        )?
+                        .take(stack_trace)
+                },
+            )?;
+
+            captured_values.push(CapturedValue {
+                name: to_capture.node.clone(),
+                value,
+            });
+        }
+
+        let expression = source.node.expression.node.clone();
+
+        Ok(Self {
+            data: Arc::new(UserClosureInternals {
+                signature,
+                captured_values,
+                expression,
+            }),
+        })
     }
 }
 
@@ -77,7 +154,7 @@ impl StaticTypeName for UserClosure {
 
 impl ObjectCopy for UserClosure {
     fn object_copy(&self) -> Option<Value> {
-        todo!()
+        Some(self.clone().into())
     }
 }
 
@@ -378,3 +455,39 @@ impl ObjectCopy for UserClosure {
 //  	 }
 //      }
 //  }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::execution::test_run;
+
+    #[test]
+    fn define_closure() {
+        let product =
+            test_run("{ let value_to_capture = 5i; (,) [value_to_capture] -> std.types.Void {} }")
+                .unwrap();
+
+        let expression = product.as_userclosure().unwrap().data.expression.clone();
+
+        assert_eq!(
+            product,
+            UserClosure {
+                data: Arc::new(UserClosureInternals {
+                    signature: Arc::new(Signature {
+                        argument_type: StructDefinition {
+                            members: vec![].into(),
+                            variadic: false,
+                        },
+                        return_type: ValueType::Void,
+                    }),
+                    captured_values: vec![CapturedValue {
+                        name: "value_to_capture".into(),
+                        value: super::super::SignedInteger::from(5).into()
+                    }],
+                    expression
+                })
+            }
+            .into()
+        );
+    }
+}

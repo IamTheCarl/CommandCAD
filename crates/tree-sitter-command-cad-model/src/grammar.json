@@ -1419,7 +1419,7 @@
     },
     "struct_definition": {
       "type": "PREC_LEFT",
-      "value": -1,
+      "value": -2,
       "content": {
         "type": "SEQ",
         "members": [
@@ -1647,7 +1647,7 @@
     },
     "closure_definition": {
       "type": "PREC_LEFT",
-      "value": -2,
+      "value": 19,
       "content": {
         "type": "SEQ",
         "members": [

@@ -29,6 +29,30 @@ Closed statement
             (signed_integer (integer (base_ten)))))))))
 
 ==================
+Closed statement followed by open statement
+==================
+{
+    5i; 5i
+} 
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (closed_expression
+          (expression
+            (signed_integer
+              (integer
+                (base_ten))))))
+      (statement
+        (expression
+          (signed_integer
+            (integer
+              (base_ten))))))))
+
+==================
 Open statement
 ==================
 

@@ -258,3 +258,116 @@ value.value:value(value=value)
           (expression
             (path
               (identifier))))))))
+
+==================
+Closure as statement.
+==================
+{
+  let types = std.types;
+  (,)[types] -> std.types.Void {}
+}
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (let
+          (path
+            (identifier))
+          (expression
+            (path
+              (identifier)
+              (identifier)))))
+      (statement
+        (expression
+          (closure_definition
+            (struct_definition)
+            (closure_captured_variables
+              (identifier))
+            (path
+              (identifier)
+              (identifier)
+              (identifier))
+            (expression
+              (procedural_block))))))))
+
+==================
+Closure as statement with path as argument.
+==================
+{
+  let types = std.types;
+  types.Void[types] -> std.types.Void {}
+}
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (let
+          (path
+            (identifier))
+          (expression
+            (path
+              (identifier)
+              (identifier)))))
+      (statement
+        (expression
+          (closure_definition
+            (path
+              (identifier)
+              (identifier))
+            (closure_captured_variables
+              (identifier))
+            (path
+              (identifier)
+              (identifier)
+              (identifier))
+            (expression
+              (procedural_block))))))))
+
+==================
+Closure as assignment.
+==================
+{
+  let types = std.types;
+  let closure = (,)[types] -> std.types.Void {};
+
+  closure
+}
+
+---
+
+(source_file
+  (expression
+    (procedural_block
+      (statement
+        (let
+          (path
+            (identifier))
+          (expression
+            (path
+              (identifier)
+              (identifier)))))
+      (statement
+        (let
+          (path
+            (identifier))
+          (expression
+            (closure_definition
+              (struct_definition)
+              (closure_captured_variables
+                (identifier))
+              (path
+                (identifier)
+                (identifier)
+                (identifier))
+              (expression
+                (procedural_block))))))
+      (statement
+        (expression
+          (path
+            (identifier)))))))

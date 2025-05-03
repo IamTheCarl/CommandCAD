@@ -849,9 +849,9 @@ impl<'t> Parse<'t, nodes::DictionaryConstruction<'t>> for DictionaryConstruction
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct ClosureDefinition {
-    pub argument: AstNode<Expression>,
+    pub argument_type: AstNode<Expression>,
     pub captures: Vec<AstNode<String>>,
-    pub returns: AstNode<Expression>,
+    pub return_type: AstNode<Expression>,
     pub expression: AstNode<Arc<Expression>>,
 }
 
@@ -890,9 +890,9 @@ impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for ClosureDefinition {
             file,
             &value,
             Self {
-                argument,
+                argument_type: argument,
                 captures: identities,
-                returns,
+                return_type: returns,
                 expression,
             },
         ))
@@ -1125,14 +1125,14 @@ mod test {
         let root = full_compile("(,)[this, that] -> ~ {}");
         let closure = root.node.as_closuredefinition().unwrap();
         let closure_reference = closure.reference.clone();
-        let argument = &closure.node.argument;
+        let argument = &closure.node.argument_type;
         let argument_reference = argument.reference.clone();
 
         let captures = &closure.node.captures;
         let this_reference = captures[0].reference.clone();
         let that_reference = captures[1].reference.clone();
 
-        let returns = &closure.node.returns;
+        let returns = &closure.node.return_type;
         let returns_reference = returns.reference.clone();
         let returns_void_reference = returns.node.as_void().unwrap().reference.clone();
 
@@ -1152,7 +1152,7 @@ mod test {
                 node: Expression::ClosureDefinition(AstNode {
                     reference: closure_reference,
                     node: Box::new(ClosureDefinition {
-                        argument: AstNode {
+                        argument_type: AstNode {
                             reference: argument_reference,
                             node: Expression::StructDefinition(AstNode {
                                 reference: argument
@@ -1177,7 +1177,7 @@ mod test {
                                 node: "that".to_string()
                             }
                         ],
-                        returns: AstNode {
+                        return_type: AstNode {
                             reference: returns_reference,
                             node: Expression::Void(AstNode {
                                 reference: returns_void_reference,
