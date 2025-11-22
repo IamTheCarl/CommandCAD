@@ -278,6 +278,10 @@
           "named": true
         },
         {
+          "type": "formula",
+          "named": true
+        },
+        {
           "type": "function_call",
           "named": true
         },
@@ -323,6 +327,198 @@
         },
         {
           "type": "unsigned_integer",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "formula",
+    "named": true,
+    "fields": {
+      "lhs": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "relation": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "!=",
+            "named": false
+          },
+          {
+            "type": "<",
+            "named": false
+          },
+          {
+            "type": "<=",
+            "named": false
+          },
+          {
+            "type": "==",
+            "named": false
+          },
+          {
+            "type": ">",
+            "named": false
+          },
+          {
+            "type": ">=",
+            "named": false
+          }
+        ]
+      },
+      "rhs": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "formula_binary_expression",
+    "named": true,
+    "fields": {
+      "a": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "b": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "op": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "*",
+            "named": false
+          },
+          {
+            "type": "**",
+            "named": false
+          },
+          {
+            "type": "+",
+            "named": false
+          },
+          {
+            "type": "-",
+            "named": false
+          },
+          {
+            "type": "/",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "formula_expression",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "formula_binary_expression",
+          "named": true
+        },
+        {
+          "type": "formula_parenthesis",
+          "named": true
+        },
+        {
+          "type": "formula_unary_expression",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "scalar",
+          "named": true
+        },
+        {
+          "type": "signed_integer",
+          "named": true
+        },
+        {
+          "type": "unsigned_integer",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "formula_parenthesis",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "formula_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "formula_unary_expression",
+    "named": true,
+    "fields": {
+      "op": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "+",
+            "named": false
+          },
+          {
+            "type": "-",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "formula_expression",
           "named": true
         }
       ]
@@ -790,6 +986,10 @@
     "named": false
   },
   {
+    "type": "<<<",
+    "named": false
+  },
+  {
     "type": "<=",
     "named": false
   },
@@ -811,6 +1011,10 @@
   },
   {
     "type": ">>",
+    "named": false
+  },
+  {
+    "type": ">>>",
     "named": false
   },
   {

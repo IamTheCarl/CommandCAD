@@ -1,0 +1,52 @@
+==================
+Equal
+==================
+
+<<<1 == 1>>>
+
+---
+
+(source_file
+  (expression
+    (formula
+      (formula_expression
+        (scalar
+          (number)))
+      (formula_expression
+        (scalar
+          (number))))))
+
+==================
+Precedence
+==================
+
+<<<(a + b * c ** d) + c == 1>>>
+
+---
+
+(source_file
+  (expression
+    (formula
+      (formula_expression
+        (formula_binary_expression
+          (formula_expression
+            (formula_parenthesis
+              (formula_expression
+                (formula_binary_expression
+                  (formula_expression
+                    (identifier))
+                  (formula_expression
+                    (formula_binary_expression
+                      (formula_expression
+                        (identifier))
+                      (formula_expression
+                        (formula_binary_expression
+                          (formula_expression
+                            (identifier))
+                          (formula_expression
+                            (identifier))))))))))
+          (formula_expression
+            (identifier))))
+      (formula_expression
+        (scalar
+          (number))))))

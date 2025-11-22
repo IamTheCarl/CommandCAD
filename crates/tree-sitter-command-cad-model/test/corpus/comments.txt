@@ -17,7 +17,7 @@ Comment before closure
 ==================
 
 # There's a comment before the code.
-(,)->std.None ""
+()->std.None ""
 
 ---
 

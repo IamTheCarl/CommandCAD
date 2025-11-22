@@ -30,6 +30,64 @@ const PREC = {
   struct_def: -2,
 };
 
+const unary_operator_table = ['-', '+', '!'];
+const formula_unary_operator_table = ['-', '+'];
+
+function make_unary_expression(table, expression) {
+  return choice(...table.map((operator) => seq(
+    seq(field('op', operator), expression),
+  )));
+}
+
+const binary_operator_table = [
+  [PREC.exponential, '**'],
+
+  [PREC.multiplicative, '*'],
+  [PREC.multiplicative, '/'],
+  [PREC.multiplicative, '//'],
+
+  [PREC.additive, '+'],
+  [PREC.additive, '-'],
+
+  [PREC.shift, '<<'],
+  [PREC.shift, '>>'],
+
+  [PREC.bitand, '&'],
+  [PREC.bitor, '|'],
+  [PREC.bitxor, '^'],
+
+  [PREC.comparative, '>'],
+  [PREC.comparative, '>='],
+  [PREC.comparative, '=='],
+  [PREC.comparative, '<='],
+  [PREC.comparative, '<'],
+  [PREC.comparative, '!='],
+
+  [PREC.and, '&&'],
+  [PREC.or, '||'],
+
+  [PREC.range, '..'],
+  [PREC.range, '..='],
+];
+
+const formula_binary_operator_table = [
+  [PREC.exponential, '**'],
+
+  [PREC.multiplicative, '*'],
+  [PREC.multiplicative, '/'],
+
+  [PREC.additive, '+'],
+  [PREC.additive, '-'],
+];
+
+function make_binary_expression(table, expression) {
+  return choice(...table.map(([precedence, operator]) => prec.left(precedence, seq(
+    field('a', expression),
+    field('op', operator),
+    field('b', expression),
+  ))));
+}
+
 module.exports = grammar({
   name: "command_cad_model",
   extras: $ => [$.comment, $._whitespace],
@@ -97,51 +155,10 @@ module.exports = grammar({
       $.binary_expression,
       $.function_call,
       $.method_call,
+      $.formula
     ),
-    unary_expression: $ => prec(PREC.unary, choice(
-      seq(field('op', '-'), $.expression),
-      seq(field('op', '+'), $.expression),
-      seq(field('op', '!'), $.expression),
-    )),
-    binary_expression: $ => {
-      const table = [
-        [PREC.exponential, '**'],
-
-        [PREC.multiplicative, '*'],
-        [PREC.multiplicative, '/'],
-        [PREC.multiplicative, '//'],
-
-        [PREC.additive, '+'],
-        [PREC.additive, '-'],
-
-        [PREC.shift, '<<'],
-        [PREC.shift, '>>'],
-
-        [PREC.bitand, '&'],
-        [PREC.bitor, '|'],
-        [PREC.bitxor, '^'],
-
-        [PREC.comparative, '>'],
-        [PREC.comparative, '>='],
-        [PREC.comparative, '=='],
-        [PREC.comparative, '<='],
-        [PREC.comparative, '<'],
-        [PREC.comparative, '!='],
-
-        [PREC.and, '&&'],
-        [PREC.or, '||'],
-
-        [PREC.range, '..'],
-        [PREC.range, '..='],
-        
-      ];
-
-      return choice(...table.map(([precedence, operator]) => prec.left(precedence, seq(
-        field('a', $.expression),
-        field('op', operator),
-        field('b', $.expression),
-      ))));
-    },
+    unary_expression: $=> make_unary_expression(unary_operator_table, $.expression),
+    binary_expression: $ => make_binary_expression(binary_operator_table, $.expression),
 
     if: $ => seq('if', field('condition', $.expression), field('on_true', $.expression), seq('else', field('on_false', $.expression))),
 
@@ -165,13 +182,9 @@ module.exports = grammar({
       seq($.varadic_dots, optional(','))
     ),
     struct_definition: $ => prec.left(PREC.struct_def, seq('(',
-      choice(
-        seq(
-          field('members', repeat1(seq($.struct_member, ','))),
-          field('final_element', optional($._struct_final_element)),
-        ),
-        field('final_element', $._struct_final_element),
-        ',', // Empty struct.
+      seq(
+        optional(field('members', repeat1(seq($.struct_member, ',')))),
+        field('final_element', optional($._struct_final_element)),
       ),
       ')')),
 
@@ -187,16 +200,27 @@ module.exports = grammar({
       ')'
     ),
 
-    // closure_captured_variables: $ => seq(
-    //   '[',
-    //   seq(repeat(seq($.identifier, ',')), optional($.identifier)),
-    //   ']'
-    // ),
     closure_definition: $ => prec.left(PREC.closure, seq(
       field('argument', choice($.struct_definition, $.path)),
       '->',
       field('result', choice($.struct_definition, $.path)),
       field('expression', $.expression),
     )),
+    
+    formula: $ => seq('<<<', field('lhs', $.formula_expression), field('relation', choice(
+      '>', '>=', '==', '<=', '<', '!='
+    )), field('rhs', $.formula_expression), '>>>'),
+    formula_expression: $ => choice(
+      $.formula_parenthesis,
+      $.signed_integer,
+      $.unsigned_integer,
+      $.scalar,
+      $.identifier,
+      $.formula_unary_expression,
+      $.formula_binary_expression,
+    ),
+    formula_parenthesis: $ => seq('(', $.formula_expression, ')'),
+    formula_unary_expression: $ => make_unary_expression(formula_unary_operator_table, $.formula_expression),
+    formula_binary_expression: $ => make_binary_expression(formula_binary_operator_table, $.formula_expression),
   }
 });
