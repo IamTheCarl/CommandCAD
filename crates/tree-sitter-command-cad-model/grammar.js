@@ -94,7 +94,6 @@ module.exports = grammar({
       $.if,
       $.struct_definition,
       $.dictionary_construction,
-      $.procedural_block,
       $.closure_definition,
       $.unary_expression,
       $.binary_expression,
@@ -146,7 +145,7 @@ module.exports = grammar({
       ))));
     },
 
-    if: $ => seq('if', field('condition', $.expression), field('on_true', $.procedural_block), optional(seq('else', field('on_false', $.procedural_block)))),
+    if: $ => seq('if', field('condition', $.expression), field('on_true', $.expression), seq('else', field('on_false', $.expression))),
 
     path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
 
@@ -190,59 +189,16 @@ module.exports = grammar({
       ')'
     ),
 
-    procedural_block: $ => seq(
-      '{',
-      repeat($.statement),
-      '}'
-    ),
-
-    closure_captured_variables: $ => seq(
-      '[',
-      seq(repeat(seq($.identifier, ',')), optional($.identifier)),
-      ']'
-    ),
+    // closure_captured_variables: $ => seq(
+    //   '[',
+    //   seq(repeat(seq($.identifier, ',')), optional($.identifier)),
+    //   ']'
+    // ),
     closure_definition: $ => prec.left(PREC.closure, seq(
       field('argument', choice($.struct_definition, $.path)),
-      field('captured_variables', $.closure_captured_variables),
       '->',
       field('result', choice($.struct_definition, $.path, $.void)),
       field('expression', $.expression),
     )),
-
-    closed_expression: $ => seq($.expression, ';'),
-
-    statement: $ => choice(
-      $.assign,
-      $.let,
-      $.for,
-      $.expression,
-      $.closed_expression,
-    ),
-
-    assignment_operator: $ => {
-      let operators = [
-        '=',
-        '&=',
-        '|=',
-        '^=',
-        '&&=',
-        '||=',
-        '^^=',
-        '+=',
-        '-=',
-        '**=',
-        '*=',
-        '//=',
-        '/=',
-        '<<=',
-        '>>='
-      ];
-
-      return choice(...operators.map((operator) => field('op', operator)));
-    },
-
-    let: $ => seq('let', field('to_assign', $.path), '=', field('value', $.expression), ';'),
-    assign: $ => seq(field('to_assign', $.path), $.assignment_operator, field('value', $.expression), ';'),
-    for: $ => seq('for', field('to_assign', $.identifier), 'in', field('to_iterate', $.expression), field('to_run', $.procedural_block)),
   }
 });

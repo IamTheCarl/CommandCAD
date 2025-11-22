@@ -2,7 +2,7 @@
 Empty
 ==================
 
-(,)[] -> std.None {} 
+(,) -> std.None ~ 
 
 ---
 
@@ -10,18 +10,17 @@ Empty
   (expression
     (closure_definition
       (struct_definition)
-      (closure_captured_variables)
       (path
         (identifier)
         (identifier))
       (expression
-        (procedural_block)))))
+        (void)))))
 
 ==================
 With argument
 ==================
 
-(argument: std.types.UInt)[] -> std.None {} 
+(argument: std.types.UInt) -> std.None ~ 
 
 ---
 
@@ -37,18 +36,17 @@ With argument
                 (identifier)
                 (identifier)
                 (identifier))))))
-      (closure_captured_variables)
       (path
         (identifier)
         (identifier))
       (expression
-        (procedural_block)))))
+        (void)))))
 
 ==================
 Path for argument signature
 ==================
 
-path.to.signature[] -> std.None {} 
+path.to.signature -> std.None ~ 
 
 ---
 
@@ -59,84 +57,11 @@ path.to.signature[] -> std.None {}
         (identifier)
         (identifier)
         (identifier))
-      (closure_captured_variables)
       (path
         (identifier)
         (identifier))
       (expression
-        (procedural_block)))))
-
-==================
-Capture
-==================
-
-(,)[a, b, c] -> std.None {} 
-
----
-
-(source_file
-  (expression
-    (closure_definition
-      (struct_definition)
-      (closure_captured_variables
-        (identifier)
-        (identifier)
-        (identifier))
-      (path
-        (identifier)
-        (identifier))
-      (expression
-        (procedural_block)))))
-
-==================
-Capture,
-==================
-
-(,)[a, b, c,] -> std.None {} 
-
----
-
-(source_file
-  (expression
-    (closure_definition
-      (struct_definition)
-      (closure_captured_variables
-        (identifier)
-        (identifier)
-        (identifier))
-      (path
-        (identifier)
-        (identifier))
-      (expression
-        (procedural_block)))))
-
-==================
-With a statement
-==================
-
-(,)[] -> std.None {
-  value = 5i;
-} 
-
----
-
-(source_file
-  (expression
-    (closure_definition
-      (struct_definition)
-      (closure_captured_variables)
-      (path
-        (identifier)
-        (identifier))
-      (expression
-        (procedural_block
-          (statement
-            (assign
-              (path
-                  (identifier))
-              (assignment_operator)
-              (expression
-                (signed_integer (integer (base_ten)))))))))))
+        (void)))))
 
 ==================
 Call function
@@ -259,115 +184,3 @@ value.value:value(value=value)
             (path
               (identifier))))))))
 
-==================
-Closure as statement.
-==================
-{
-  let types = std.types;
-  (,)[types] -> std.types.Void {}
-}
-
----
-
-(source_file
-  (expression
-    (procedural_block
-      (statement
-        (let
-          (path
-            (identifier))
-          (expression
-            (path
-              (identifier)
-              (identifier)))))
-      (statement
-        (expression
-          (closure_definition
-            (struct_definition)
-            (closure_captured_variables
-              (identifier))
-            (path
-              (identifier)
-              (identifier)
-              (identifier))
-            (expression
-              (procedural_block))))))))
-
-==================
-Closure as statement with path as argument.
-==================
-{
-  let types = std.types;
-  types.Void[types] -> std.types.Void {}
-}
-
----
-
-(source_file
-  (expression
-    (procedural_block
-      (statement
-        (let
-          (path
-            (identifier))
-          (expression
-            (path
-              (identifier)
-              (identifier)))))
-      (statement
-        (expression
-          (closure_definition
-            (path
-              (identifier)
-              (identifier))
-            (closure_captured_variables
-              (identifier))
-            (path
-              (identifier)
-              (identifier)
-              (identifier))
-            (expression
-              (procedural_block))))))))
-
-==================
-Closure as assignment.
-==================
-{
-  let types = std.types;
-  let closure = (,)[types] -> std.types.Void {};
-
-  closure
-}
-
----
-
-(source_file
-  (expression
-    (procedural_block
-      (statement
-        (let
-          (path
-            (identifier))
-          (expression
-            (path
-              (identifier)
-              (identifier)))))
-      (statement
-        (let
-          (path
-            (identifier))
-          (expression
-            (closure_definition
-              (struct_definition)
-              (closure_captured_variables
-                (identifier))
-              (path
-                (identifier)
-                (identifier)
-                (identifier))
-              (expression
-                (procedural_block))))))
-      (statement
-        (expression
-          (path
-            (identifier)))))))

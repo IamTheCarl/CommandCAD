@@ -1,113 +1,5 @@
 [
   {
-    "type": "assign",
-    "named": true,
-    "fields": {
-      "to_assign": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "path",
-            "named": true
-          }
-        ]
-      },
-      "value": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "expression",
-            "named": true
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "assignment_operator",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "assignment_operator",
-    "named": true,
-    "fields": {
-      "op": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "&&=",
-            "named": false
-          },
-          {
-            "type": "&=",
-            "named": false
-          },
-          {
-            "type": "**=",
-            "named": false
-          },
-          {
-            "type": "*=",
-            "named": false
-          },
-          {
-            "type": "+=",
-            "named": false
-          },
-          {
-            "type": "-=",
-            "named": false
-          },
-          {
-            "type": "//=",
-            "named": false
-          },
-          {
-            "type": "/=",
-            "named": false
-          },
-          {
-            "type": "<<=",
-            "named": false
-          },
-          {
-            "type": "=",
-            "named": false
-          },
-          {
-            "type": ">>=",
-            "named": false
-          },
-          {
-            "type": "^=",
-            "named": false
-          },
-          {
-            "type": "^^=",
-            "named": false
-          },
-          {
-            "type": "|=",
-            "named": false
-          },
-          {
-            "type": "||=",
-            "named": false
-          }
-        ]
-      }
-    }
-  },
-  {
     "type": "base_ten",
     "named": true,
     "fields": {}
@@ -253,36 +145,6 @@
     }
   },
   {
-    "type": "closed_expression",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "expression",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "closure_captured_variables",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": false,
-      "types": [
-        {
-          "type": "identifier",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
     "type": "closure_definition",
     "named": true,
     "fields": {
@@ -296,16 +158,6 @@
           },
           {
             "type": "struct_definition",
-            "named": true
-          }
-        ]
-      },
-      "captured_variables": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "closure_captured_variables",
             "named": true
           }
         ]
@@ -454,10 +306,6 @@
           "named": true
         },
         {
-          "type": "procedural_block",
-          "named": true
-        },
-        {
           "type": "scalar",
           "named": true
         },
@@ -486,42 +334,6 @@
           "named": true
         }
       ]
-    }
-  },
-  {
-    "type": "for",
-    "named": true,
-    "fields": {
-      "to_assign": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      },
-      "to_iterate": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "expression",
-            "named": true
-          }
-        ]
-      },
-      "to_run": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "procedural_block",
-            "named": true
-          }
-        ]
-      }
     }
   },
   {
@@ -571,10 +383,10 @@
       },
       "on_false": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
-            "type": "procedural_block",
+            "type": "expression",
             "named": true
           }
         ]
@@ -584,7 +396,7 @@
         "required": true,
         "types": [
           {
-            "type": "procedural_block",
+            "type": "expression",
             "named": true
           }
         ]
@@ -616,32 +428,6 @@
           "named": true
         }
       ]
-    }
-  },
-  {
-    "type": "let",
-    "named": true,
-    "fields": {
-      "to_assign": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "path",
-            "named": true
-          }
-        ]
-      },
-      "value": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "expression",
-            "named": true
-          }
-        ]
-      }
     }
   },
   {
@@ -736,21 +522,6 @@
     }
   },
   {
-    "type": "procedural_block",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": false,
-      "types": [
-        {
-          "type": "statement",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
     "type": "scalar",
     "named": true,
     "fields": {
@@ -817,37 +588,6 @@
       "types": [
         {
           "type": "expression",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "statement",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "assign",
-          "named": true
-        },
-        {
-          "type": "closed_expression",
-          "named": true
-        },
-        {
-          "type": "expression",
-          "named": true
-        },
-        {
-          "type": "for",
-          "named": true
-        },
-        {
-          "type": "let",
           "named": true
         }
       ]
@@ -994,14 +734,6 @@
     "named": false
   },
   {
-    "type": "&&=",
-    "named": false
-  },
-  {
-    "type": "&=",
-    "named": false
-  },
-  {
     "type": "(",
     "named": false
   },
@@ -1018,19 +750,7 @@
     "named": false
   },
   {
-    "type": "**=",
-    "named": false
-  },
-  {
-    "type": "*=",
-    "named": false
-  },
-  {
     "type": "+",
-    "named": false
-  },
-  {
-    "type": "+=",
     "named": false
   },
   {
@@ -1039,10 +759,6 @@
   },
   {
     "type": "-",
-    "named": false
-  },
-  {
-    "type": "-=",
     "named": false
   },
   {
@@ -1070,19 +786,7 @@
     "named": false
   },
   {
-    "type": "//=",
-    "named": false
-  },
-  {
-    "type": "/=",
-    "named": false
-  },
-  {
     "type": ":",
-    "named": false
-  },
-  {
-    "type": ";",
     "named": false
   },
   {
@@ -1091,10 +795,6 @@
   },
   {
     "type": "<<",
-    "named": false
-  },
-  {
-    "type": "<<=",
     "named": false
   },
   {
@@ -1122,10 +822,6 @@
     "named": false
   },
   {
-    "type": ">>=",
-    "named": false
-  },
-  {
     "type": "[",
     "named": false
   },
@@ -1138,16 +834,9 @@
     "named": false
   },
   {
-    "type": "^=",
-    "named": false
-  },
-  {
-    "type": "^^=",
-    "named": false
-  },
-  {
     "type": "comment",
-    "named": true
+    "named": true,
+    "extra": true
   },
   {
     "type": "default",
@@ -1162,23 +851,11 @@
     "named": true
   },
   {
-    "type": "for",
-    "named": false
-  },
-  {
     "type": "identifier",
     "named": true
   },
   {
     "type": "if",
-    "named": false
-  },
-  {
-    "type": "in",
-    "named": false
-  },
-  {
-    "type": "let",
     "named": false
   },
   {
@@ -1202,27 +879,11 @@
     "named": true
   },
   {
-    "type": "{",
-    "named": false
-  },
-  {
     "type": "|",
     "named": false
   },
   {
-    "type": "|=",
-    "named": false
-  },
-  {
     "type": "||",
-    "named": false
-  },
-  {
-    "type": "||=",
-    "named": false
-  },
-  {
-    "type": "}",
     "named": false
   }
 ]

@@ -1,23 +1,8 @@
 ==================
-If
-==================
-
-if true {} 
-
----
-
-(source_file
-  (expression
-    (if
-      (expression
-        (boolean (true)))
-      (procedural_block))))
-
-==================
 If else
 ==================
 
-if true {} else {} 
+if true ~ else ~ 
 
 ---
 
@@ -26,14 +11,16 @@ if true {} else {}
     (if
       (expression
         (boolean (true)))
-      (procedural_block)
-      (procedural_block))))
+          (expression
+            (void))
+          (expression
+            (void)))))
 
 ==================
 With other operations
 ==================
 
-1 + if true {} 
+1 + if true ~ else ~ 
 
 ---
 
@@ -47,4 +34,7 @@ With other operations
         (if
           (expression
             (boolean (true)))
-          (procedural_block))))))
+              (expression
+                (void))
+              (expression
+                (void)))))))

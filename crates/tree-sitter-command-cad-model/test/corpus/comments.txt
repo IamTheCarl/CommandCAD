@@ -17,7 +17,7 @@ Comment before closure
 ==================
 
 # There's a comment before the code.
-(,)[]->std.None {}
+(,)->std.None ~
 
 ---
 
@@ -26,9 +26,8 @@ Comment before closure
   (expression
     (closure_definition
       (struct_definition)
-      (closure_captured_variables)
       (path
         (identifier)
         (identifier))
       (expression
-        (procedural_block)))))
+        (void)))))
