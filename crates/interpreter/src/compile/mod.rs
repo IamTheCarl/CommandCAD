@@ -1,11 +1,9 @@
 mod expressions;
-mod statements;
 
 use std::{path::PathBuf, sync::Arc};
 use type_sitter::{IncorrectKind, Node};
 
 pub use expressions::*;
-pub use statements::*;
 
 mod nodes {
     include!(concat!(env!("OUT_DIR"), "/nodes.rs"));
