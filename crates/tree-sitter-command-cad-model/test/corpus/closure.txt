@@ -2,7 +2,7 @@
 Empty
 ==================
 
-(,) -> std.None ~ 
+(,) -> std.None "" 
 
 ---
 
@@ -14,13 +14,13 @@ Empty
         (identifier)
         (identifier))
       (expression
-        (void)))))
+        (string)))))
 
 ==================
 With argument
 ==================
 
-(argument: std.types.UInt) -> std.None ~ 
+(argument: std.types.UInt) -> std.None "" 
 
 ---
 
@@ -40,13 +40,13 @@ With argument
         (identifier)
         (identifier))
       (expression
-        (void)))))
+        (string)))))
 
 ==================
 Path for argument signature
 ==================
 
-path.to.signature -> std.None ~ 
+path.to.signature -> std.None "" 
 
 ---
 
@@ -61,7 +61,7 @@ path.to.signature -> std.None ~
         (identifier)
         (identifier))
       (expression
-        (void)))))
+        (string)))))
 
 ==================
 Call function

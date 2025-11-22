@@ -2,7 +2,7 @@
 If else
 ==================
 
-if true ~ else ~ 
+if true "" else "" 
 
 ---
 
@@ -12,15 +12,15 @@ if true ~ else ~
       (expression
         (boolean (true)))
           (expression
-            (void))
+            (string))
           (expression
-            (void)))))
+            (string)))))
 
 ==================
 With other operations
 ==================
 
-1 + if true ~ else ~ 
+1 + if true "" else "" 
 
 ---
 
@@ -35,6 +35,6 @@ With other operations
           (expression
             (boolean (true)))
               (expression
-                (void))
+                (string))
               (expression
-                (void)))))))
+                (string)))))))

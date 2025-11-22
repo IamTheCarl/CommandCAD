@@ -183,10 +183,6 @@
           {
             "type": "struct_definition",
             "named": true
-          },
-          {
-            "type": "void",
-            "named": true
           }
         ]
       }
@@ -327,10 +323,6 @@
         },
         {
           "type": "unsigned_integer",
-          "named": true
-        },
-        {
-          "type": "void",
           "named": true
         }
       ]
@@ -872,10 +864,6 @@
   },
   {
     "type": "varadic_dots",
-    "named": true
-  },
-  {
-    "type": "void",
     "named": true
   },
   {

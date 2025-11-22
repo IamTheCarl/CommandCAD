@@ -3,21 +3,21 @@ Comment
 ==================
 
 # There's a comment before the code.
-~
+""
 
 ---
 
 (source_file
   (comment)
   (expression
-    (void)))
+    (string)))
 
 ==================
 Comment before closure
 ==================
 
 # There's a comment before the code.
-(,)->std.None ~
+(,)->std.None ""
 
 ---
 
@@ -30,4 +30,4 @@ Comment before closure
         (identifier)
         (identifier))
       (expression
-        (void)))))
+        (string)))))

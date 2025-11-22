@@ -42,7 +42,6 @@ module.exports = grammar({
     identifier: _ => /[a-zA-Z_][a-zA-Z0-9_]*/,
     string: _ => /\"(\\\"|[^\"])*\"/,
     default: _ => 'default',
-    void: _ => '~',
 
     base_ten: _ => /[0-9]+/,
     octal: _ => seq(token.immediate(/0o/), /[0-9]+/),
@@ -81,7 +80,6 @@ module.exports = grammar({
     ), 
 
     expression: $ => choice(
-      $.void,
       $.parenthesis,
       $.default,
       $.signed_integer,
@@ -197,7 +195,7 @@ module.exports = grammar({
     closure_definition: $ => prec.left(PREC.closure, seq(
       field('argument', choice($.struct_definition, $.path)),
       '->',
-      field('result', choice($.struct_definition, $.path, $.void)),
+      field('result', choice($.struct_definition, $.path)),
       field('expression', $.expression),
     )),
   }

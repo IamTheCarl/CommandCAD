@@ -39,10 +39,6 @@
       "type": "STRING",
       "value": "default"
     },
-    "void": {
-      "type": "STRING",
-      "value": "~"
-    },
     "base_ten": {
       "type": "PATTERN",
       "value": "[0-9]+"
@@ -345,10 +341,6 @@
     "expression": {
       "type": "CHOICE",
       "members": [
-        {
-          "type": "SYMBOL",
-          "name": "void"
-        },
         {
           "type": "SYMBOL",
           "name": "parenthesis"
@@ -1607,10 +1599,6 @@
                 {
                   "type": "SYMBOL",
                   "name": "path"
-                },
-                {
-                  "type": "SYMBOL",
-                  "name": "void"
                 }
               ]
             }
