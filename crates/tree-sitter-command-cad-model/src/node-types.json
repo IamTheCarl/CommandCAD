@@ -290,6 +290,10 @@
           "named": true
         },
         {
+          "type": "let_in",
+          "named": true
+        },
+        {
           "type": "list",
           "named": true
         },
@@ -613,6 +617,44 @@
         },
         {
           "type": "octal",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "let_in",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "let_in_assignment",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "let_in_assignment",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "identifier",
           "named": true
         }
       ]
@@ -978,6 +1020,10 @@
     "named": false
   },
   {
+    "type": ";",
+    "named": false
+  },
+  {
     "type": "<",
     "named": false
   },
@@ -1052,6 +1098,14 @@
   },
   {
     "type": "if",
+    "named": false
+  },
+  {
+    "type": "in",
+    "named": false
+  },
+  {
+    "type": "let",
     "named": false
   },
   {

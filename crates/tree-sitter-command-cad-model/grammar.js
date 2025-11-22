@@ -155,12 +155,16 @@ module.exports = grammar({
       $.binary_expression,
       $.function_call,
       $.method_call,
-      $.formula
+      $.formula,
+      $.let_in
     ),
     unary_expression: $=> make_unary_expression(unary_operator_table, $.expression),
     binary_expression: $ => make_binary_expression(binary_operator_table, $.expression),
 
     if: $ => seq('if', field('condition', $.expression), field('on_true', $.expression), seq('else', field('on_false', $.expression))),
+
+    let_in: $ => seq('let', repeat($.let_in_assignment), 'in', $.expression),
+    let_in_assignment: $ => seq($.identifier, '=', $.expression, ';'),
 
     path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
 
