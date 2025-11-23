@@ -30,7 +30,7 @@ use super::{
 };
 
 mod void;
-pub use void::Void;
+pub use void::ValueNone;
 
 mod default;
 pub use default::DefaultValue;
@@ -442,7 +442,7 @@ impl Display for ValueMovedError {
 #[enum_dispatch(Object, ObjectCopy)]
 #[derive(Debug, Eq, PartialEq, EnumDowncast, EnumAs)]
 pub enum Value {
-    Void,
+    ValueNone,
     Default(DefaultValue),
     SignedInteger,
     UnsignedInteger,
@@ -534,7 +534,7 @@ impl Value {
         Self: IntoVariant<T>,
     {
         match self {
-            Self::Void(_) => Ok(None),
+            Self::ValueNone(_) => Ok(None),
             this => Ok(Some(this.downcast::<T>(stack_trace)?)),
         }
     }

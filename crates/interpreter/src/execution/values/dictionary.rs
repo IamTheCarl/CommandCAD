@@ -157,14 +157,14 @@ impl Display for DuplicateMemberError {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::execution::{test_run, values::Void};
+    use crate::execution::{test_run, values::ValueNone};
 
     #[test]
     fn build_dictionary() {
-        let product = test_run("(void = ~)").unwrap();
+        let product = test_run("(none = std.consts.None)").unwrap();
         let expected = HashableMap::from(HashMap::from_iter([(
-            "void".to_string(),
-            StoredValue::Value(Void.into()),
+            "none".to_string(),
+            StoredValue::Value(ValueNone.into()),
         )]));
 
         assert_eq!(product.as_dictionary().unwrap().members, expected);

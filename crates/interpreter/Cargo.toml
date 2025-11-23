@@ -6,9 +6,9 @@ edition = "2021"
 [dependencies]
 common_data_types = { path = "../common_data_types" }
 units = { path = "../units" }
-tree-sitter = "0.24.4"
+tree-sitter = "0.25"
 tree-sitter-command-cad-model = { path = "../tree-sitter-command-cad-model" }
-type-sitter = "0.6"
+type-sitter = "0.8"
 unwrap-enum = "0.1.0"
 file-guard = "0.2.0"
 enum_dispatch = "0.3"
@@ -19,5 +19,5 @@ fortuples = "0.9"
 hashable-map = "0.4.0"
 
 [build-dependencies]
-type-sitter-gen = "0.6"
+type-sitter-gen = "0.8"
 tree-sitter-command-cad-model = { path = "../tree-sitter-command-cad-model" }

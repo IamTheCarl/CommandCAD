@@ -5,7 +5,7 @@ use type_sitter::{IncorrectKind, Node};
 
 pub use expressions::*;
 
-mod nodes {
+pub mod nodes {
     include!(concat!(env!("OUT_DIR"), "/nodes.rs"));
 }
 

@@ -18,26 +18,18 @@
 
 use std::{fmt::Display, sync::Arc};
 
-use fortuples::fortuples;
-
 use crate::{
     compile::{AstNode, ClosureDefinition, Expression, SourceReference},
     execute_expression,
     execution::{
         errors::{ExpressionResult, Raise},
-        logging::{LocatedStr, RuntimeLog, StackScope},
+        logging::{RuntimeLog, StackScope},
         stack::Stack,
         values::DowncastError,
     },
 };
 
 use super::{Object, ObjectCopy, StaticTypeName, StructDefinition, Value, ValueType};
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct CapturedValue {
-    pub name: String,
-    pub value: Value,
-}
 
 /// Signature of a closure, used for type comparison.
 #[derive(Debug, Eq, PartialEq)]
@@ -57,7 +49,6 @@ impl Display for Signature {
 #[derive(Debug, Eq, PartialEq)]
 struct UserClosureInternals {
     signature: Arc<Signature>,
-    captured_values: Vec<CapturedValue>,
     expression: Arc<Expression>,
 }
 
@@ -103,37 +94,11 @@ impl UserClosure {
             return_type,
         });
 
-        let mut captured_values = Vec::new();
-
-        for to_capture in source.node.captures.iter() {
-            let value = stack_trace.stack_scope(
-                to_capture.reference.clone(),
-                |stack_trace: &mut Vec<SourceReference>| {
-                    stack
-                        .get_variable_mut(
-                            stack_trace,
-                            LocatedStr {
-                                // TODO should actually point to the variable name.
-                                location: stack_trace.last().unwrap().clone(),
-                                string: to_capture.node.as_str(),
-                            },
-                        )?
-                        .take(stack_trace)
-                },
-            )?;
-
-            captured_values.push(CapturedValue {
-                name: to_capture.node.clone(),
-                value,
-            });
-        }
-
         let expression = source.node.expression.node.clone();
 
         Ok(Self {
             data: Arc::new(UserClosureInternals {
                 signature,
-                captured_values,
                 expression,
             }),
         })
@@ -463,10 +428,9 @@ mod test {
 
     #[test]
     fn define_closure() {
-        let product =
-            test_run("{ let value_to_capture = 5i; (,) [value_to_capture] -> std.types.Void {} }")
-                .unwrap();
+        let product = test_run("() -> std.types.None std.consts.None").unwrap();
 
+        dbg!(&product);
         let expression = product.as_userclosure().unwrap().data.expression.clone();
 
         assert_eq!(
@@ -478,12 +442,8 @@ mod test {
                             members: vec![].into(),
                             variadic: false,
                         },
-                        return_type: ValueType::Void,
+                        return_type: ValueType::TypeNone,
                     }),
-                    captured_values: vec![CapturedValue {
-                        name: "value_to_capture".into(),
-                        value: super::super::SignedInteger::from(5).into()
-                    }],
                     expression
                 })
             }

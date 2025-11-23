@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::execution::values::ValueNone;
+
 use super::values::{Dictionary, StoredValue, Value, ValueType};
 
 /// Builds standard library.
@@ -10,15 +12,27 @@ pub fn build_prelude() -> HashMap<String, StoredValue> {
 }
 
 fn build_std() -> Dictionary {
-    let std = HashMap::from([("types".into(), build_types().into())]);
+    let std = HashMap::from([
+        ("types".into(), build_types().into()),
+        ("consts".into(), build_consts().into()),
+    ]);
     Dictionary::from(std)
+}
+
+/// Adds library for constants.
+fn build_consts() -> Dictionary {
+    let types: HashMap<String, StoredValue> = HashMap::from_iter([(
+        "None".into(),
+        StoredValue::Value(Value::ValueNone(ValueNone)),
+    )]);
+    Dictionary::from(types)
 }
 
 /// Adds library for type safety.
 fn build_types() -> Dictionary {
     let types: HashMap<String, StoredValue> = HashMap::from_iter(
         [
-            ("Void".into(), ValueType::Void.into()),
+            ("None".into(), ValueType::TypeNone.into()),
             ("Bool".into(), ValueType::Boolean.into()),
             ("SInt".into(), ValueType::SignedInteger.into()),
             ("UInt".into(), ValueType::UnsignedInteger.into()),

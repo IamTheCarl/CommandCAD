@@ -21,7 +21,7 @@ use common_data_types::Dimension;
 
 use super::{
     closure::Signature as ClosureSignature, Boolean, DefaultValue, Object, ObjectCopy,
-    SignedInteger, StaticTypeName, UnsignedInteger, Value, Void,
+    SignedInteger, StaticTypeName, UnsignedInteger, Value, ValueNone,
 };
 
 use crate::{
@@ -32,7 +32,7 @@ use crate::{
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub enum ValueType {
-    Void,
+    TypeNone,
     Default,
     Boolean,
     SignedInteger,
@@ -52,7 +52,7 @@ impl From<StructDefinition> for ValueType {
 impl ValueType {
     pub fn name(&self) -> Cow<'static, str> {
         match self {
-            Self::Void => Void::static_type_name().into(),
+            Self::TypeNone => ValueNone::static_type_name().into(),
             Self::Default => DefaultValue::static_type_name().into(),
             Self::Boolean => Boolean::static_type_name().into(),
             Self::SignedInteger => SignedInteger::static_type_name().into(),

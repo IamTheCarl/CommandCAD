@@ -218,9 +218,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "check_keyword"
-version = "0.3.1"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3678a4fc14c47dce76127d66f9b2637ff497af665d5618f1f756f4ad1b4a5b1"
+checksum = "0dcba1e35fcf6c9350d9fb4863d87c66e5e37f1583f883560dca2c9320840bcc"
 dependencies = [
  "phf",
 ]
@@ -371,9 +371,9 @@ checksum = "3618cccc083bb987a415d85c02ca6c9994ea5b44731ec28b9ecf09658655fba9"
 
 [[package]]
 name = "convert_case"
-version = "0.6.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -461,6 +461,12 @@ name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
+
+[[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "either"
@@ -1686,6 +1692,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d"
 
 [[package]]
+name = "rustc-stable-hash"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "781442f29170c5c93b7185ad559492601acdc71d5bb0706f5868094f45cfcd08"
+
+[[package]]
 name = "rustc_version"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1778,6 +1790,7 @@ version = "1.0.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
 dependencies = [
+ "indexmap",
  "itoa",
  "memchr",
  "ryu",
@@ -2059,13 +2072,14 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter"
-version = "0.24.7"
+version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5387dffa7ffc7d2dae12b50c6f7aab8ff79d6210147c6613561fc3d474c6f75"
+checksum = "78f873475d258561b06f1c595d93308a7ed124d9977cb26b148c2084a4a3cc87"
 dependencies = [
  "cc",
  "regex",
  "regex-syntax",
+ "serde_json",
  "streaming-iterator",
  "tree-sitter-language",
 ]
@@ -2095,9 +2109,9 @@ dependencies = [
 
 [[package]]
 name = "type-sitter"
-version = "0.6.1"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07c6b4142a07c6940da2617c3c595728ec5b5df640c5545e980d90c1352abe57"
+checksum = "41d7b6c3bc4c60ecee2147ecb3cd7820fe9ee1df4251e1b2b8b5a214fe0084ba"
 dependencies = [
  "type-sitter-lib",
  "type-sitter-proc",
@@ -2105,13 +2119,14 @@ dependencies = [
 
 [[package]]
 name = "type-sitter-gen"
-version = "0.6.1"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b928ec2e0630b379a3b17c69a37d70baef172ad9fbbeb61dc1e516b1d915686"
+checksum = "95ad6a9e8aa527b2c037cd5016d6291e197c98eb6160ff09b25f2398374a3003"
 dependencies = [
  "cc",
  "check_keyword",
  "convert_case",
+ "dunce",
  "enum-map",
  "join-lazy-fmt",
  "libc",
@@ -2120,6 +2135,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
+ "rustc-stable-hash",
  "serde",
  "serde_json",
  "slice-group-by",
@@ -2131,9 +2147,9 @@ dependencies = [
 
 [[package]]
 name = "type-sitter-lib"
-version = "0.6.1"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "286d4544ef134483a555889f5d67c8a98bab5fe6c1718871eaac80a00c99d088"
+checksum = "092e2a9b5f4eb14bdd2246eb1557b2b99e67fe43be3e0411535d9483e73236b7"
 dependencies = [
  "streaming-iterator",
  "tree-sitter",
@@ -2141,9 +2157,9 @@ dependencies = [
 
 [[package]]
 name = "type-sitter-proc"
-version = "0.6.1"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad28647e19d26aac03d091758449d4ef30913145bbec602ce8fdd9e287d81802"
+checksum = "4240aa23c38a18dc53f8422374fac3d7514654ec28258ef173b53ba9bee37a6e"
 dependencies = [
  "syn 2.0.100",
  "type-sitter-gen",

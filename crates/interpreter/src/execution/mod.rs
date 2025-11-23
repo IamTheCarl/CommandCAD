@@ -18,10 +18,7 @@
 
 use std::{cmp::Ordering, fmt::Display};
 
-use crate::compile::{
-    self, AssignmentType, BinaryExpressionOperation, SourceReference, StructDefinition,
-    UnaryExpressionOperation,
-};
+use crate::compile::{self, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation};
 
 mod errors;
 mod formatting;
@@ -29,9 +26,9 @@ mod logging;
 mod stack;
 mod standard_environment;
 pub mod values;
-use errors::{ErrorType, ExpressionResult, Raise};
+use errors::{ErrorType, ExpressionResult};
 use logging::{LocatedStr, RuntimeLog, StackScope};
-use stack::{ScopeType, Stack};
+use stack::Stack;
 use values::{Object, StoredValue, Value, ValueType};
 
 fn find_value<'p, 's>(
@@ -130,9 +127,6 @@ pub fn execute_expression(
                     .into())
             }
 
-            compile::Expression::ProceduralBlock(ast_node) => {
-                execute_procedural_block(log, stack, stack_trace, ast_node)
-            }
             compile::Expression::Scalar(ast_node) => Ok(values::Scalar {
                 dimension: ast_node.node.dimension,
                 value: ast_node.node.value,
@@ -152,7 +146,6 @@ pub fn execute_expression(
             compile::Expression::UnsignedInteger(ast_node) => {
                 Ok(values::UnsignedInteger::from(ast_node.node).into())
             }
-            compile::Expression::Void(_ast_node) => Ok(values::Void.into()),
             compile::Expression::FunctionCall(ast_node) => todo!(),
             compile::Expression::MethodCall(ast_node) => todo!(),
         },
@@ -241,50 +234,6 @@ fn execute_binary_expression(
     )
 }
 
-fn execute_procedural_block(
-    log: &mut dyn RuntimeLog,
-    stack: &mut Stack,
-    stack_trace: &mut Vec<SourceReference>,
-    block: &compile::AstNode<compile::ProceduralBlock>,
-) -> ExpressionResult<Value> {
-    stack_trace.stack_scope(block.reference.clone(), |stack_trace| {
-        stack.scope(stack_trace, ScopeType::Inherited, |stack, stack_trace| {
-            let mut last_value = Value::Void(values::Void);
-
-            let mut statements = block.node.statements.iter().peekable();
-
-            while let Some(statement) = statements.next() {
-                last_value = execute_statement(log, stack, stack_trace, statement)?;
-
-                if statements.peek().is_some() {
-                    // This was not the last statement, which means it needs to produce a void
-                    // value.
-
-                    match last_value {
-                        Value::Void(_) => {
-                            // Not a problem.
-                            continue;
-                        }
-                        _ => {
-                            return Err(stack_trace.stack_scope(
-                                statement.reference.clone(),
-                                |stack_trace| {
-                                    MissingSemicolon {
-                                        actual_value_type: last_value.get_type(),
-                                    }
-                                    .to_error(stack_trace.iter())
-                                },
-                            ));
-                        }
-                    }
-                }
-            }
-
-            Ok(last_value)
-        })?
-    })
-}
-
 #[derive(Debug, Eq, PartialEq)]
 struct MissingSemicolon {
     actual_value_type: ValueType,
@@ -300,114 +249,6 @@ impl Display for MissingSemicolon {
             self.actual_value_type
         )
     }
-}
-
-fn execute_statement(
-    log: &mut dyn RuntimeLog,
-    stack: &mut Stack,
-    stack_trace: &mut Vec<SourceReference>,
-    statement: &compile::AstNode<compile::Statement>,
-) -> ExpressionResult<Value> {
-    stack_trace.stack_scope(
-        statement.reference.clone(),
-        |stack_trace| match &statement.node {
-            compile::Statement::Assign(ast_node) => {
-                let value = execute_expression(log, stack_trace, stack, &ast_node.node.value)?;
-
-                let path = &ast_node.node.to_assign.node.path;
-
-                let original_value_storage = find_value(log, stack_trace, stack, path)?;
-                let original_value = original_value_storage.take(stack_trace)?;
-                // Start with a type check.
-                if value.get_type() == original_value.get_type() {
-                    // Okay, we're good to assign the value.
-
-                    // TODO we should use a builtin function for assignment operators.
-                    let mut new_value = match ast_node.node.assignment_type.node {
-                        AssignmentType::Direct => value,
-                        AssignmentType::BitAnd => {
-                            original_value.bit_and(log, stack_trace, value)?
-                        }
-                        AssignmentType::BitOr => original_value.bit_or(log, stack_trace, value)?,
-                        AssignmentType::BitXor => {
-                            original_value.bit_xor(log, stack_trace, value)?
-                        }
-                        AssignmentType::LogicAnd => original_value.and(log, stack_trace, value)?,
-                        AssignmentType::LogicOr => original_value.or(log, stack_trace, value)?,
-                        AssignmentType::LogicXor => original_value.xor(log, stack_trace, value)?,
-                        AssignmentType::Add => original_value.addition(log, stack_trace, value)?,
-                        AssignmentType::Sub => {
-                            original_value.subtraction(log, stack_trace, value)?
-                        }
-                        AssignmentType::Exponent => {
-                            original_value.exponent(log, stack_trace, value)?
-                        }
-                        AssignmentType::Multiply => {
-                            original_value.multiply(log, stack_trace, value)?
-                        }
-                        AssignmentType::IntegerDivision => {
-                            original_value.floor_divide(log, stack_trace, value)?
-                        }
-                        AssignmentType::Division => {
-                            original_value.divide(log, stack_trace, value)?
-                        }
-                        AssignmentType::LeftShift => {
-                            original_value.left_shift(log, stack_trace, value)?
-                        }
-                        AssignmentType::RightShift => {
-                            original_value.right_shift(log, stack_trace, value)?
-                        }
-                    };
-
-                    original_value_storage.replace(new_value);
-
-                    Ok(values::Void.into())
-                } else {
-                    Err(AssignmentTypeMissmatch {
-                        expected: original_value.get_type(),
-                        got: value.get_type(),
-                    }
-                    .to_error(stack_trace.iter()))
-                }
-            }
-            compile::Statement::Let(ast_node) => {
-                let value = execute_expression(log, stack_trace, stack, &ast_node.node.value)?;
-
-                let path = &ast_node.node.to_assign.node.path;
-
-                if path.len() == 1 {
-                    // We're just going to insert onto the stack.
-                    let name = &path[0].node;
-                    stack.insert_value(name, value);
-                } else {
-                    // We are inserting the value into another value (like a dictionary).
-                    let (parent_path, name) = path.split_at(path.len() - 1);
-                    let name = &name[0];
-
-                    let parent = find_value(log, stack_trace, stack, parent_path)?;
-
-                    parent.access_mut(stack_trace)?.insert_attribute(
-                        log,
-                        stack_trace,
-                        &name.node,
-                        value,
-                    )?;
-                }
-
-                Ok(values::Void.into())
-            }
-            compile::Statement::For(ast_node) => todo!(),
-            compile::Statement::Expression(ast_node) => {
-                execute_expression(log, stack_trace, stack, ast_node)
-            }
-            compile::Statement::ClosedExpression(ast_node) => {
-                // It's the same as a normal statement, but we eat the result instead of returning
-                // it.
-                execute_expression(log, stack_trace, stack, &ast_node.node.expression)
-                    .map(|_value| values::Void.into())
-            }
-        },
-    )
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -445,12 +286,6 @@ mod test {
     use super::*;
 
     #[test]
-    fn none_type() {
-        let product = test_run("~").unwrap();
-        assert_eq!(product, values::Void.into());
-    }
-
-    #[test]
     fn default_type() {
         let product = test_run("default").unwrap();
         assert_eq!(product, values::DefaultValue.into());
@@ -475,48 +310,6 @@ mod test {
     }
 
     #[test]
-    fn empty_block() {
-        let product = test_run("{}").unwrap();
-        assert_eq!(product, values::Void.into());
-    }
-
-    #[test]
-    fn block_open_expression_statement() {
-        let product = test_run("{ 5u }").unwrap();
-        assert_eq!(product, values::UnsignedInteger::from(5).into());
-    }
-
-    #[test]
-    fn block_closed_expression_statement() {
-        let product = test_run("{ 5u; }").unwrap();
-        assert_eq!(product, values::Void.into());
-    }
-
-    #[test]
-    fn block_recursive_blocks() {
-        let product = test_run("{ { 5u } }").unwrap();
-        assert_eq!(product, values::UnsignedInteger::from(5).into());
-    }
-
-    #[test]
-    fn let_statement() {
-        let product = test_run("{ let value = 5u; value }").unwrap();
-        assert_eq!(product, values::UnsignedInteger::from(5).into());
-    }
-
-    #[test]
-    fn assign_statement() {
-        let product = test_run("{ let value = 5u; value = 4u; value }").unwrap();
-        assert_eq!(product, values::UnsignedInteger::from(4).into());
-    }
-
-    #[test]
-    fn assign_statement_with_wrong_type() {
-        // Fails because of a type mismatch.
-        test_run("{ let value = 5u; value = 4i; value }").unwrap_err();
-    }
-
-    #[test]
     fn parenthesis() {
         // Fails because of a type mismatch.
         let product = test_run("(1i + 2i) * 3i").unwrap();
@@ -525,14 +318,14 @@ mod test {
 
     #[test]
     fn struct_definition() {
-        let product = test_run("(name: std.types.Void = ~, ...)").unwrap();
+        let product = test_run("(name: std.types.None = std.consts.None, ...)").unwrap();
         assert_eq!(
             product,
             values::ValueType::Dictionary(values::StructDefinition {
                 members: Arc::new(vec![values::StructMember {
                     name: "name".into(),
-                    ty: ValueType::Void,
-                    default: Some(Value::Void(values::Void))
+                    ty: ValueType::TypeNone,
+                    default: Some(Value::ValueNone(values::ValueNone))
                 }]),
                 variadic: true
             })
@@ -542,23 +335,9 @@ mod test {
 
     #[test]
     fn nested_value_access() {
+        // FIXME we can't update this test to the new parser until after we've added the `let in`
+        // syntax.
         let product = test_run("{ let dictionary = (a = (b = 23u)); dictionary.a.b }").unwrap();
         assert_eq!(product, values::UnsignedInteger::from(23).into());
-    }
-
-    #[test]
-    fn nested_value_assignment() {
-        let product =
-            test_run("{ let dictionary = (a = (b = 23u)); dictionary.a.b = 32u; dictionary.a.b }")
-                .unwrap();
-        assert_eq!(product, values::UnsignedInteger::from(32).into());
-    }
-
-    #[test]
-    fn nested_value_creation() {
-        let product =
-            test_run("{ let dictionary = (a = ()); let dictionary.a.b = 32u; dictionary.a.b }")
-                .unwrap();
-        assert_eq!(product, values::UnsignedInteger::from(32).into());
     }
 }

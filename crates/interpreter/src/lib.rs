@@ -16,8 +16,8 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-mod compile;
-mod execution;
+pub mod compile;
+pub mod execution;
 
 pub use compile::{compile, new_parser};
 pub use execution::execute_expression;

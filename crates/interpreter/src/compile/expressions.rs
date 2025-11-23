@@ -6,7 +6,7 @@ use tree_sitter::Range;
 use type_sitter::{HasChild, Node};
 use unwrap_enum::EnumAs;
 
-use super::{nodes, AstNode, Error, Parse, Statement};
+use super::{nodes, AstNode, Error, Parse};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct InvalidUnitError<'t, 'i> {
@@ -43,14 +43,12 @@ pub enum Expression {
     List(AstNode<Vec<AstNode<Expression>>>),
     Parenthesis(Box<AstNode<Expression>>),
     Path(AstNode<IdentityPath>),
-    ProceduralBlock(AstNode<ProceduralBlock>),
     Scalar(AstNode<Scalar>),
     SignedInteger(AstNode<i64>),
     String(AstNode<String>),
     StructDefinition(AstNode<StructDefinition>),
     UnaryExpression(AstNode<Box<UnaryExpression>>),
     UnsignedInteger(AstNode<u64>),
-    Void(AstNode<()>),
     FunctionCall(AstNode<FunctionCall>),
     MethodCall(AstNode<MethodCall>),
 }
@@ -78,38 +76,6 @@ impl<'t> Parse<'t, nodes::anon_unions::Path_StructDefinition<'t>> for Expression
                     )?),
                 ))
             }
-        }
-    }
-}
-
-impl<'t> Parse<'t, nodes::anon_unions::Path_StructDefinition_Void<'t>> for Expression {
-    fn parse<'i>(
-        file: &Arc<PathBuf>,
-        input: &'i str,
-        value: nodes::anon_unions::Path_StructDefinition_Void<'t>,
-    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        match value {
-            nodes::anon_unions::Path_StructDefinition_Void::Path(path) => Ok(AstNode::new(
-                file,
-                &path,
-                Self::Path(IdentityPath::parse(file, input, path)?),
-            )),
-            nodes::anon_unions::Path_StructDefinition_Void::StructDefinition(struct_definition) => {
-                Ok(AstNode::new(
-                    file,
-                    &struct_definition,
-                    Self::StructDefinition(StructDefinition::parse(
-                        file,
-                        input,
-                        struct_definition,
-                    )?),
-                ))
-            }
-            nodes::anon_unions::Path_StructDefinition_Void::Void(void) => Ok(AstNode::new(
-                file,
-                &value,
-                Expression::Void(AstNode::new(file, &void, ())),
-            )),
         }
     }
 }
@@ -241,20 +207,6 @@ impl<'t> Parse<'t, nodes::Path<'t>> for Expression {
             file,
             &value,
             Self::Path(IdentityPath::parse(file, input, value)?),
-        ))
-    }
-}
-
-impl<'t> Parse<'t, nodes::ProceduralBlock<'t>> for Expression {
-    fn parse<'i>(
-        file: &Arc<PathBuf>,
-        input: &'i str,
-        value: nodes::ProceduralBlock<'t>,
-    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        Ok(AstNode::new(
-            file,
-            &value,
-            Self::ProceduralBlock(ProceduralBlock::parse(file, input, value)?),
         ))
     }
 }
@@ -462,9 +414,6 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
             ChildType::List(list) => Self::parse(file, input, list),
             ChildType::Parenthesis(parenthesis) => Self::parse(file, input, parenthesis),
             ChildType::Path(path) => Self::parse(file, input, path),
-            ChildType::ProceduralBlock(procedural_block) => {
-                Self::parse(file, input, procedural_block)
-            }
             ChildType::Scalar(scalar) => Self::parse(file, input, scalar),
             ChildType::SignedInteger(signed_integer) => Self::parse(file, input, signed_integer),
             ChildType::String(string) => Self::parse(file, input, string),
@@ -477,13 +426,13 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
             ChildType::UnsignedInteger(unsigned_integer) => {
                 Self::parse(file, input, unsigned_integer)
             }
-            ChildType::Void(void) => Ok(AstNode::new(
-                file,
-                &value,
-                Self::Void(AstNode::new(file, &void, ())),
-            )),
             ChildType::FunctionCall(function_call) => Self::parse(file, input, function_call),
             ChildType::MethodCall(method_call) => Self::parse(file, input, method_call),
+            _ => {
+                // TODO we need to add formula types.
+                let remember_me = 0;
+                todo!()
+            }
         }
     }
 }
@@ -572,7 +521,7 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for BinaryExpression {
         input: &'i str,
         value: nodes::BinaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        use nodes::anon_unions::NotEq_And_AndAnd_Mul_MulMul_Add_Sub_DotDot_DotDotEq_Div_DivDiv_Lt_LtLt_LtEq_EqEq_Gt_GtEq_GtGt_BitXor_Or_OrOr as Operation;
+        type Operation<'t> = nodes::anon_unions::Anon40940481278423458606720242092326701826<'t>;
 
         let operation = value.op()?;
 
@@ -735,35 +684,10 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for Scalar {
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]
-pub struct ProceduralBlock {
-    pub statements: Vec<AstNode<Statement>>,
-}
-
-impl<'t> Parse<'t, nodes::ProceduralBlock<'t>> for ProceduralBlock {
-    fn parse<'i>(
-        file: &Arc<PathBuf>,
-        input: &'i str,
-        value: nodes::ProceduralBlock<'t>,
-    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        let mut cursor = value.walk();
-        let mut statements = Vec::new();
-
-        for statement in value.statements(&mut cursor) {
-            let statement = statement?;
-            let statement = Statement::parse(file, input, statement)?;
-
-            statements.push(statement);
-        }
-
-        Ok(AstNode::new(file, &value, Self { statements }))
-    }
-}
-
-#[derive(Debug, Hash, Eq, PartialEq)]
 pub struct IfExpression {
     pub condition: AstNode<Box<Expression>>,
-    pub on_true: AstNode<ProceduralBlock>,
-    pub on_false: Option<AstNode<ProceduralBlock>>,
+    pub on_true: AstNode<Box<Expression>>,
+    pub on_false: AstNode<Box<Expression>>,
 }
 
 impl<'t> Parse<'t, nodes::If<'t>> for IfExpression {
@@ -775,15 +699,8 @@ impl<'t> Parse<'t, nodes::If<'t>> for IfExpression {
         let condition = value.condition()?;
         let condition = Expression::parse(file, input, condition)?.into_box();
 
-        let on_true = ProceduralBlock::parse(file, input, value.on_true()?)?;
-
-        let on_false = if let Some(on_false) = value.on_false() {
-            let on_false = on_false?;
-            let on_false = ProceduralBlock::parse(file, input, on_false)?;
-            Some(on_false)
-        } else {
-            None
-        };
+        let on_true = Expression::parse(file, input, value.on_true()?)?.into_box();
+        let on_false = Expression::parse(file, input, value.on_false()?)?.into_box();
 
         Ok(AstNode::new(
             file,
@@ -850,7 +767,6 @@ impl<'t> Parse<'t, nodes::DictionaryConstruction<'t>> for DictionaryConstruction
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct ClosureDefinition {
     pub argument_type: AstNode<Expression>,
-    pub captures: Vec<AstNode<String>>,
     pub return_type: AstNode<Expression>,
     pub expression: AstNode<Arc<Expression>>,
 }
@@ -863,18 +779,6 @@ impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for ClosureDefinition {
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let argument = value.argument()?;
         let argument = Expression::parse(file, input, argument)?;
-
-        let captures = value.captured_variables()?;
-        let mut cursor = captures.walk();
-        let mut identities = Vec::new();
-
-        for identity in captures.identifiers(&mut cursor) {
-            let identity = identity?;
-
-            let text = String::parse(file, input, identity)?;
-
-            identities.push(text);
-        }
 
         let returns = value.result()?;
         let returns = Expression::parse(file, input, returns)?;
@@ -891,7 +795,6 @@ impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for ClosureDefinition {
             &value,
             Self {
                 argument_type: argument,
-                captures: identities,
                 return_type: returns,
                 expression,
             },
@@ -956,9 +859,8 @@ impl<'t> Parse<'t, nodes::StructDefinition<'t>> for StructDefinition {
 
         // There can only ever be one.
         let final_member = value.final_elements(&mut cursor).next();
-
         let variadic = match final_member {
-            Some(member) => {
+            Option::Some(member) => {
                 let member = member?;
                 match member {
                     nodes::anon_unions::Comma_StructMember_VaradicDots::Comma(_comma) => false,
@@ -970,7 +872,7 @@ impl<'t> Parse<'t, nodes::StructDefinition<'t>> for StructDefinition {
                     nodes::anon_unions::Comma_StructMember_VaradicDots::VaradicDots(_) => true,
                 }
             }
-            None => false,
+            Option::None => false,
         };
 
         Ok(AstNode::new(file, &value, Self { members, variadic }))
@@ -1122,28 +1024,20 @@ mod test {
 
     #[test]
     fn closure_definition() {
-        let root = full_compile("(,)[this, that] -> ~ {}");
+        let root = full_compile("() -> std.None \"\"");
         let closure = root.node.as_closuredefinition().unwrap();
         let closure_reference = closure.reference.clone();
         let argument = &closure.node.argument_type;
         let argument_reference = argument.reference.clone();
 
-        let captures = &closure.node.captures;
-        let this_reference = captures[0].reference.clone();
-        let that_reference = captures[1].reference.clone();
-
         let returns = &closure.node.return_type;
         let returns_reference = returns.reference.clone();
-        let returns_void_reference = returns.node.as_void().unwrap().reference.clone();
+        let returns_path = returns.node.as_path().unwrap();
+        let returns_path_reference = returns_path.reference.clone();
 
         let expression = &closure.node.expression;
         let expression_reference = expression.reference.clone();
-        let block_reference = expression
-            .node
-            .as_proceduralblock()
-            .unwrap()
-            .reference
-            .clone();
+        let string_reference = expression.node.as_string().unwrap().reference.clone();
 
         assert_eq!(
             root,
@@ -1167,28 +1061,29 @@ mod test {
                                 }
                             })
                         },
-                        captures: vec![
-                            AstNode {
-                                reference: this_reference,
-                                node: "this".to_string()
-                            },
-                            AstNode {
-                                reference: that_reference,
-                                node: "that".to_string()
-                            }
-                        ],
                         return_type: AstNode {
                             reference: returns_reference,
-                            node: Expression::Void(AstNode {
-                                reference: returns_void_reference,
-                                node: ()
+                            node: Expression::Path(AstNode {
+                                reference: returns_path_reference,
+                                node: IdentityPath {
+                                    path: vec![
+                                        AstNode {
+                                            reference: returns_path.node.path[0].reference.clone(),
+                                            node: "std".into()
+                                        },
+                                        AstNode {
+                                            reference: returns_path.node.path[1].reference.clone(),
+                                            node: "None".into()
+                                        }
+                                    ]
+                                }
                             })
                         },
                         expression: AstNode {
                             reference: expression_reference,
-                            node: Arc::new(Expression::ProceduralBlock(AstNode {
-                                reference: block_reference,
-                                node: ProceduralBlock { statements: vec![] }
+                            node: Arc::new(Expression::String(AstNode {
+                                reference: string_reference,
+                                node: String::new()
                             }))
                         }
                     })
@@ -1258,54 +1153,28 @@ mod test {
     }
 
     #[test]
-    fn if_expression() {
-        let root = full_compile("if true {}");
-        let if_expression = root.node.as_if().unwrap();
-        let if_reference = if_expression.reference.clone();
-        let condition = &if_expression.node.condition;
-        let condition_reference = condition.reference.clone();
-        let boolean_reference = condition.node.as_boolean().unwrap().reference.clone();
-        let true_block_reference = if_expression.node.on_true.reference.clone();
-
-        assert_eq!(
-            root,
-            AstNode {
-                reference: root.reference.clone(),
-                node: Expression::If(AstNode {
-                    reference: if_reference,
-                    node: IfExpression {
-                        condition: AstNode {
-                            reference: condition_reference,
-                            node: Expression::Boolean(AstNode {
-                                reference: boolean_reference,
-                                node: true
-                            })
-                        }
-                        .into_box(),
-                        on_true: AstNode {
-                            reference: true_block_reference,
-                            node: ProceduralBlock { statements: vec![] }
-                        },
-                        on_false: None,
-                    }
-                })
-            }
-        );
-    }
-
-    #[test]
     fn if_else_expression() {
-        let root = full_compile("if true {} else {}");
+        let root = full_compile("if true \"true\" else \"false\"");
         let if_expression = root.node.as_if().unwrap();
         let if_reference = if_expression.reference.clone();
         let condition = &if_expression.node.condition;
         let condition_reference = condition.reference.clone();
         let boolean_reference = condition.node.as_boolean().unwrap().reference.clone();
-        let true_block_reference = if_expression.node.on_true.reference.clone();
-        let false_block_reference = if_expression
+        let true_expression_reference = if_expression.node.on_true.reference.clone();
+        let true_string_reference = if_expression
+            .node
+            .on_true
+            .node
+            .as_string()
+            .unwrap()
+            .reference
+            .clone();
+        let false_expression_reference = if_expression.node.on_false.reference.clone();
+        let false_string_reference = if_expression
             .node
             .on_false
-            .as_ref()
+            .node
+            .as_string()
             .unwrap()
             .reference
             .clone();
@@ -1326,13 +1195,21 @@ mod test {
                         }
                         .into_box(),
                         on_true: AstNode {
-                            reference: true_block_reference,
-                            node: ProceduralBlock { statements: vec![] }
-                        },
-                        on_false: Some(AstNode {
-                            reference: false_block_reference,
-                            node: ProceduralBlock { statements: vec![] }
-                        }),
+                            reference: true_expression_reference,
+                            node: Expression::String(AstNode {
+                                reference: true_string_reference,
+                                node: String::from("true")
+                            })
+                        }
+                        .into_box(),
+                        on_false: AstNode {
+                            reference: false_expression_reference,
+                            node: Expression::String(AstNode {
+                                reference: false_string_reference,
+                                node: String::from("false")
+                            })
+                        }
+                        .into_box(),
                     }
                 })
             }
@@ -1505,22 +1382,6 @@ mod test {
                             }
                         ]
                     }
-                })
-            }
-        );
-    }
-
-    #[test]
-    fn procedural_block() {
-        // An unimpressive test. The more in-depth testing gets done in statements.rs
-        let root = full_compile("{}");
-        assert_eq!(
-            root,
-            AstNode {
-                reference: root.reference.clone(),
-                node: Expression::ProceduralBlock(AstNode {
-                    reference: root.node.as_proceduralblock().unwrap().reference.clone(),
-                    node: ProceduralBlock { statements: vec![] }
                 })
             }
         );
@@ -1886,21 +1747,6 @@ mod test {
     }
 
     #[test]
-    fn void() {
-        let root = full_compile("~");
-        assert_eq!(
-            root,
-            AstNode {
-                reference: root.reference.clone(),
-                node: Expression::Void(AstNode {
-                    reference: root.node.as_void().unwrap().reference.clone(),
-                    node: ()
-                })
-            }
-        );
-    }
-
-    #[test]
     fn function_call_no_arguments() {
         let root = full_compile("a.b()");
         let call = root.node.as_functioncall().unwrap();
@@ -1944,7 +1790,7 @@ mod test {
 
     #[test]
     fn function_call_with_arguments() {
-        let root = full_compile("a.b(value = ~)");
+        let root = full_compile("a.b(value = 24u)");
         let call = root.node.as_functioncall().unwrap();
         let to_call = call.node.to_call.node.as_path().unwrap();
         let dict = &call.node.argument.node;
@@ -1990,16 +1836,16 @@ mod test {
                                                 .assignment
                                                 .reference
                                                 .clone(),
-                                            node: Expression::Void(AstNode {
+                                            node: Expression::UnsignedInteger(AstNode {
                                                 reference: dict_assignment
                                                     .node
                                                     .assignment
                                                     .node
-                                                    .as_void()
+                                                    .as_unsignedinteger()
                                                     .unwrap()
                                                     .reference
                                                     .clone(),
-                                                node: ()
+                                                node: 24u64
                                             })
                                         }
                                     }
@@ -2014,7 +1860,7 @@ mod test {
 
     #[test]
     fn method_call_no_arguments() {
-        let root = full_compile("~:c()");
+        let root = full_compile("5u:c()");
         let call = root.node.as_methodcall().unwrap();
         let to_call = &call.node.to_call;
         assert_eq!(
@@ -2026,16 +1872,16 @@ mod test {
                     node: MethodCall {
                         self_dictionary: AstNode {
                             reference: call.node.self_dictionary.reference.clone(),
-                            node: Box::new(Expression::Void(AstNode {
+                            node: Box::new(Expression::UnsignedInteger(AstNode {
                                 reference: call
                                     .node
                                     .self_dictionary
                                     .node
-                                    .as_void()
+                                    .as_unsignedinteger()
                                     .unwrap()
                                     .reference
                                     .clone(),
-                                node: ()
+                                node: 5u64
                             }))
                         },
                         to_call: AstNode {
@@ -2056,7 +1902,7 @@ mod test {
 
     #[test]
     fn method_call_with_arguments() {
-        let root = full_compile("~:c(value = ~)");
+        let root = full_compile("83u:c(value = 95u)");
         let call = root.node.as_methodcall().unwrap();
         let to_call = &call.node.to_call;
         let dict = &call.node.argument.node;
@@ -2070,16 +1916,16 @@ mod test {
                     node: MethodCall {
                         self_dictionary: AstNode {
                             reference: call.node.self_dictionary.reference.clone(),
-                            node: Box::new(Expression::Void(AstNode {
+                            node: Box::new(Expression::UnsignedInteger(AstNode {
                                 reference: call
                                     .node
                                     .self_dictionary
                                     .node
-                                    .as_void()
+                                    .as_unsignedinteger()
                                     .unwrap()
                                     .reference
                                     .clone(),
-                                node: ()
+                                node: 83u64
                             }))
                         },
                         to_call: AstNode {
@@ -2102,16 +1948,16 @@ mod test {
                                                 .assignment
                                                 .reference
                                                 .clone(),
-                                            node: Expression::Void(AstNode {
+                                            node: Expression::UnsignedInteger(AstNode {
                                                 reference: dict_assignment
                                                     .node
                                                     .assignment
                                                     .node
-                                                    .as_void()
+                                                    .as_unsignedinteger()
                                                     .unwrap()
                                                     .reference
                                                     .clone(),
-                                                node: ()
+                                                node: 95u64
                                             })
                                         }
                                     }

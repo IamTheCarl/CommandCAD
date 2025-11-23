@@ -19,15 +19,15 @@
 use super::{value_type::ValueType, Object, StaticTypeName};
 
 #[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
-pub struct Void;
+pub struct ValueNone;
 
-impl Object for Void {
+impl Object for ValueNone {
     fn get_type(&self) -> ValueType {
-        ValueType::Void
+        ValueType::TypeNone
     }
 }
 
-impl StaticTypeName for Void {
+impl StaticTypeName for ValueNone {
     fn static_type_name() -> &'static str {
         "Void"
     }
