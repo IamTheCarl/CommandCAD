@@ -5,6 +5,10 @@
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     flake-utils.url  = "github:numtide/flake-utils";
     crane.url = "github:ipetkov/crane";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -12,6 +16,7 @@
     nixpkgs,
     flake-utils,
     crane,
+    fenix,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system:
@@ -19,26 +24,18 @@
         pkgs = import nixpkgs {
           inherit system;
         };
-	craneLib = crane.mkLib pkgs;
-      in
+        fenix-pkgs = fenix.packages.${system};
+        fenix-channel = (fenix-pkgs.stable);
+	
+        craneLib = (crane.mkLib pkgs).overrideScope (final: prev: {
+          cargo = fenix-channel.cargo;
+          rustc = fenix-channel.rustc;
+        });
+      in rec
       {
-        devShells.default = with pkgs; craneLib.devShell {
-          buildInputs = [
-	    bashInteractive
-	    nodejs_24
-            tree-sitter
-            openssl
-	    pkg-config
-          ];
-
-	  shellHook = ''
-            export SHELL=${pkgs.bashInteractive}/bin/bash
-          '';
-        };
-
-	packages.default = with pkgs;
-	craneLib.buildPackage {
+	packages.default = with pkgs; craneLib.buildPackage {
           nativeBuildInputs = [
+            openssl
 	    pkg-config
           ];
 
@@ -49,6 +46,24 @@
           src = craneLib.cleanCargoSource ./.;
           strictDeps = true;
         };
+
+        devShells.default = with pkgs; pkgs.mkShell {
+          inputsFrom = [ packages.default ];
+          buildInputs = [
+	    bashInteractive
+	    nodejs_24
+            tree-sitter
+            fenix-pkgs.rust-analyzer
+            fenix-channel.rustfmt
+            fenix-channel.rustc
+            fenix-channel.cargo
+          ];
+
+	  shellHook = ''
+            export SHELL=${pkgs.bashInteractive}/bin/bash
+          '';
+        };
+
       }
     );
 }
