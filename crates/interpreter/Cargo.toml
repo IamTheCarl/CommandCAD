@@ -21,3 +21,7 @@ hashable-map = "0.4.0"
 [build-dependencies]
 type-sitter-gen = "0.8"
 tree-sitter-command-cad-model = { path = "../tree-sitter-command-cad-model" }
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+

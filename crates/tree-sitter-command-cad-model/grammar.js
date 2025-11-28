@@ -163,8 +163,8 @@ module.exports = grammar({
 
     if: $ => seq('if', field('condition', $.expression), field('on_true', $.expression), seq('else', field('on_false', $.expression))),
 
-    let_in: $ => seq('let', repeat($.let_in_assignment), 'in', $.expression),
-    let_in_assignment: $ => seq($.identifier, '=', $.expression, ';'),
+    let_in: $ => seq('let', field('assignment', repeat($.let_in_assignment)), 'in', field('expression', $.expression)),
+    let_in_assignment: $ => seq(field('ident', $.identifier), '=', field('value', $.expression), ';'),
 
     path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
 

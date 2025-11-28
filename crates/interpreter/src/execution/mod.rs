@@ -148,6 +148,7 @@ pub fn execute_expression(
             }
             compile::Expression::FunctionCall(ast_node) => todo!(),
             compile::Expression::MethodCall(ast_node) => todo!(),
+            compile::Expression::LetIn(ast_node) => todo!(),
         },
     )
 }

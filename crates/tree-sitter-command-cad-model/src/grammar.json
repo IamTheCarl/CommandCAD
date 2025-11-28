@@ -1238,10 +1238,14 @@
           "value": "let"
         },
         {
-          "type": "REPEAT",
+          "type": "FIELD",
+          "name": "assignment",
           "content": {
-            "type": "SYMBOL",
-            "name": "let_in_assignment"
+            "type": "REPEAT",
+            "content": {
+              "type": "SYMBOL",
+              "name": "let_in_assignment"
+            }
           }
         },
         {
@@ -1249,8 +1253,12 @@
           "value": "in"
         },
         {
-          "type": "SYMBOL",
-          "name": "expression"
+          "type": "FIELD",
+          "name": "expression",
+          "content": {
+            "type": "SYMBOL",
+            "name": "expression"
+          }
         }
       ]
     },
@@ -1258,16 +1266,24 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "SYMBOL",
-          "name": "identifier"
+          "type": "FIELD",
+          "name": "ident",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
         },
         {
           "type": "STRING",
           "value": "="
         },
         {
-          "type": "SYMBOL",
-          "name": "expression"
+          "type": "FIELD",
+          "name": "value",
+          "content": {
+            "type": "SYMBOL",
+            "name": "expression"
+          }
         },
         {
           "type": "STRING",

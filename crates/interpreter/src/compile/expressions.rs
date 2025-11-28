@@ -51,6 +51,7 @@ pub enum Expression {
     UnsignedInteger(AstNode<u64>),
     FunctionCall(AstNode<FunctionCall>),
     MethodCall(AstNode<MethodCall>),
+    LetIn(AstNode<LetIn>),
 }
 
 impl<'t> Parse<'t, nodes::anon_unions::Path_StructDefinition<'t>> for Expression {
@@ -386,6 +387,20 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for Expression {
     }
 }
 
+impl<'t> Parse<'t, nodes::LetIn<'t>> for Expression {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        node: nodes::LetIn<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        Ok(AstNode::new(
+            file,
+            &node,
+            Self::LetIn(LetIn::parse(file, input, node)?),
+        ))
+    }
+}
+
 impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
@@ -428,11 +443,11 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
             }
             ChildType::FunctionCall(function_call) => Self::parse(file, input, function_call),
             ChildType::MethodCall(method_call) => Self::parse(file, input, method_call),
-            _ => {
+            ChildType::Formula(formula) => {
                 // TODO we need to add formula types.
-                let remember_me = 0;
                 todo!()
             }
+            ChildType::LetIn(let_in) => Self::parse(file, input, let_in),
         }
     }
 }
@@ -927,6 +942,60 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for MethodCall {
     }
 }
 
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub struct LetInAssignment {
+    pub ident: AstNode<String>,
+    pub value: AstNode<Box<Expression>>,
+}
+
+impl<'t> Parse<'t, nodes::LetInAssignment<'t>> for LetInAssignment {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        node: nodes::LetInAssignment<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        let ident = String::parse(file, input, node.ident()?)?;
+
+        let value = Expression::parse(file, input, node.value()?)?.into_box();
+
+        Ok(AstNode::new(file, &node, Self { ident, value }))
+    }
+}
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub struct LetIn {
+    pub assignments: Vec<AstNode<LetInAssignment>>,
+    pub expression: AstNode<Box<Expression>>,
+}
+
+impl<'t> Parse<'t, nodes::LetIn<'t>> for LetIn {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        node: nodes::LetIn<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        let mut cursor = node.walk();
+        let mut assignments = Vec::new();
+
+        for assignment in node.assignments(&mut cursor) {
+            let assignment = assignment?;
+            let assignment = LetInAssignment::parse(file, input, assignment)?;
+            assignments.push(assignment);
+        }
+
+        let expression = Expression::parse(file, input, node.expression()?)?.into_box();
+
+        Ok(AstNode::new(
+            file,
+            &node,
+            Self {
+                assignments,
+                expression,
+            },
+        ))
+    }
+}
+
 pub fn new_parser() -> type_sitter::Parser<nodes::SourceFile<'static>> {
     type_sitter::Parser::new(&tree_sitter_command_cad_model::language())
         .expect("Error loading CommandCadModel grammar")
@@ -945,6 +1014,7 @@ pub fn compile<'t, 'i>(
 #[cfg(test)]
 mod test {
     use crate::compile::full_compile;
+    use pretty_assertions::{assert_eq, assert_ne};
 
     use super::*;
 
@@ -1963,6 +2033,81 @@ mod test {
                                     }
                                 }]
                             }
+                        }
+                    }
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn let_in() {
+        let root = full_compile("let value1 = 1u; value2 = 2u; in 3u");
+
+        let let_in = root.node.as_letin().unwrap();
+
+        let value1 = &let_in.node.assignments[0];
+        let value1_ident = &value1.node.ident;
+        let value1_value = &value1.node.value;
+        let value1_value_uint = &value1.node.value.node.as_unsignedinteger().unwrap();
+
+        let value2 = &let_in.node.assignments[1];
+        let value2_ident = &value2.node.ident;
+        let value2_value = &value2.node.value;
+        let value2_value_uint = &value2.node.value.node.as_unsignedinteger().unwrap();
+
+        let expression = &let_in.node.expression;
+        let expression_uint = &let_in.node.expression.node.as_unsignedinteger().unwrap();
+
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::LetIn(AstNode {
+                    reference: let_in.reference.clone(),
+                    node: LetIn {
+                        assignments: vec![
+                            AstNode {
+                                reference: value1.reference.clone(),
+                                node: LetInAssignment {
+                                    ident: AstNode {
+                                        reference: value1_ident.reference.clone(),
+                                        node: "value1".into(),
+                                    },
+                                    value: AstNode {
+                                        reference: value1_value.reference.clone(),
+                                        node: Expression::UnsignedInteger(AstNode {
+                                            reference: value1_value_uint.reference.clone(),
+                                            node: 1
+                                        }),
+                                    }
+                                    .into_box()
+                                }
+                            },
+                            AstNode {
+                                reference: value2.reference.clone(),
+                                node: LetInAssignment {
+                                    ident: AstNode {
+                                        reference: value2_ident.reference.clone(),
+                                        node: "value2".into(),
+                                    },
+                                    value: AstNode {
+                                        reference: value2_value.reference.clone(),
+                                        node: Expression::UnsignedInteger(AstNode {
+                                            reference: value2_value_uint.reference.clone(),
+                                            node: 2
+                                        }),
+                                    }
+                                    .into_box()
+                                }
+                            }
+                        ],
+                        expression: AstNode {
+                            reference: expression.reference.clone(),
+                            node: Box::new(Expression::UnsignedInteger(AstNode {
+                                reference: expression_uint.reference.clone(),
+                                node: 3
+                            }))
                         }
                     }
                 })
