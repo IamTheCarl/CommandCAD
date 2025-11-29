@@ -133,7 +133,9 @@ pub fn execute_expression(
             compile::Expression::SignedInteger(ast_node) => {
                 Ok(values::SignedInteger::from(ast_node.node).into())
             }
-            compile::Expression::String(ast_node) => todo!(),
+            compile::Expression::String(ast_node) => {
+                Ok(values::IString::from(ast_node.node.clone()).into())
+            }
             compile::Expression::StructDefinition(ast_node) => Ok(ValueType::from(
                 values::StructDefinition::new(log, stack_trace, stack, ast_node)?,
             )
@@ -361,5 +363,14 @@ mod test {
     fn let_in() {
         let product = test_run("let value = 23u; in value").unwrap();
         assert_eq!(product, values::UnsignedInteger::from(23).into());
+    }
+
+    #[test]
+    fn string() {
+        let product = test_run("\"a simple string of text\"").unwrap();
+        assert_eq!(
+            product,
+            values::IString::from("a simple string of text").into()
+        );
     }
 }

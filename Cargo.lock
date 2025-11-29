@@ -307,7 +307,7 @@ dependencies = [
  "fortuples",
  "git2",
  "glam",
- "imstr",
+ "imstr 0.2.0 (git+https://github.com/IamTheCarl/imstr)",
  "lazy_static",
  "log",
  "macros",
@@ -931,6 +931,12 @@ dependencies = [
 [[package]]
 name = "imstr"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d3441deb04ea9c6b472f313be54d585428cd6a68cdb8dcf40cf43744bec78fe"
+
+[[package]]
+name = "imstr"
+version = "0.2.0"
 source = "git+https://github.com/IamTheCarl/imstr#a679d58d06f06a8e87c8640922aa157a0f86693f"
 dependencies = [
  "nom",
@@ -957,6 +963,7 @@ dependencies = [
  "file-guard",
  "fortuples",
  "hashable-map",
+ "imstr 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits",
  "pretty_assertions",
  "tree-sitter",

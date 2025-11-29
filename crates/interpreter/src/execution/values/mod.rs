@@ -50,6 +50,9 @@ pub use closure::UserClosure;
 mod dictionary;
 pub use dictionary::Dictionary;
 
+mod string;
+pub use string::IString;
+
 mod value_type;
 pub use value_type::{StructDefinition, StructMember, ValueType};
 
@@ -329,7 +332,7 @@ pub enum Value {
     ValueType,
     Dictionary(Dictionary),
     // List(List<S>),
-    // String(SString),
+    String(IString),
     // Range(Range),
     // Closure(Closure<S>),
     // Vector2(Vector2),

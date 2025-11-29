@@ -17,6 +17,7 @@ compact_str = "0.9"
 num-traits = "0.2"
 fortuples = "0.9"
 hashable-map = "0.4.0"
+imstr = "0.2.0"
 
 [build-dependencies]
 type-sitter-gen = "0.8"
