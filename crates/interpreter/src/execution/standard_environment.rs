@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use crate::execution::values::ValueNone;
 
-use super::values::{Dictionary, StoredValue, Value, ValueType};
+use super::values::{Dictionary, Value, ValueType};
 
 /// Builds standard library.
-pub fn build_prelude() -> HashMap<String, StoredValue> {
+pub fn build_prelude() -> HashMap<String, Value> {
     let global = HashMap::from([("std".into(), build_std().into())]);
 
     global
@@ -21,16 +21,13 @@ fn build_std() -> Dictionary {
 
 /// Adds library for constants.
 fn build_consts() -> Dictionary {
-    let types: HashMap<String, StoredValue> = HashMap::from_iter([(
-        "None".into(),
-        StoredValue::Value(Value::ValueNone(ValueNone)),
-    )]);
+    let types: HashMap<String, Value> = HashMap::from_iter([("None".into(), ValueNone.into())]);
     Dictionary::from(types)
 }
 
 /// Adds library for type safety.
 fn build_types() -> Dictionary {
-    let types: HashMap<String, StoredValue> = HashMap::from_iter(
+    let types: HashMap<String, Value> = HashMap::from_iter(
         [
             ("None".into(), ValueType::TypeNone.into()),
             ("Bool".into(), ValueType::Boolean.into()),
@@ -48,7 +45,7 @@ fn build_types() -> Dictionary {
     Dictionary::from(types)
 }
 
-fn build_dimension_types() -> impl Iterator<Item = (String, StoredValue)> {
+fn build_dimension_types() -> impl Iterator<Item = (String, Value)> {
     units::list_named_dimensions()
         .map(|(name, dimension)| (name.into(), ValueType::Scalar(dimension).into()))
 }

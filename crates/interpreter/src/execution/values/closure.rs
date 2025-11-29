@@ -29,7 +29,7 @@ use crate::{
     },
 };
 
-use super::{Object, ObjectCopy, StaticTypeName, StructDefinition, Value, ValueType};
+use super::{Object, StaticTypeName, StructDefinition, ValueType};
 
 /// Signature of a closure, used for type comparison.
 #[derive(Debug, Eq, PartialEq)]
@@ -114,12 +114,6 @@ impl Object for UserClosure {
 impl StaticTypeName for UserClosure {
     fn static_type_name() -> &'static str {
         "Closure"
-    }
-}
-
-impl ObjectCopy for UserClosure {
-    fn object_copy(&self) -> Option<Value> {
-        Some(self.clone().into())
     }
 }
 

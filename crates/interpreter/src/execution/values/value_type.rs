@@ -20,8 +20,8 @@ use std::{borrow::Cow, fmt::Display, sync::Arc};
 use common_data_types::Dimension;
 
 use super::{
-    closure::Signature as ClosureSignature, Boolean, DefaultValue, Object, ObjectCopy,
-    SignedInteger, StaticTypeName, UnsignedInteger, Value, ValueNone,
+    closure::Signature as ClosureSignature, Boolean, DefaultValue, Object, SignedInteger,
+    StaticTypeName, UnsignedInteger, Value, ValueNone,
 };
 
 use crate::{
@@ -87,13 +87,6 @@ impl Object for ValueType {
 impl StaticTypeName for ValueType {
     fn static_type_name() -> &'static str {
         "ValueType"
-    }
-}
-
-impl ObjectCopy for ValueType {
-    fn object_copy(&self) -> Option<Value> {
-        // It's not quite as cheap as a copy but it's still cheap enough.
-        Some(self.clone().into())
     }
 }
 

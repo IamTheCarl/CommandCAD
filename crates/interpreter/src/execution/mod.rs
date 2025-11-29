@@ -29,18 +29,18 @@ pub mod values;
 use errors::{ErrorType, ExpressionResult};
 use logging::{LocatedStr, RuntimeLog, StackScope};
 use stack::Stack;
-use values::{Object, StoredValue, Value, ValueType};
+use values::{Object, Value, ValueType};
 
 fn find_value<'p, 's>(
     log: &mut dyn RuntimeLog,
     stack_trace: &[SourceReference],
     stack: &'s mut Stack,
     path_iter: impl IntoIterator<Item = &'p compile::AstNode<String>>,
-) -> ExpressionResult<&'s mut StoredValue> {
+) -> ExpressionResult<Value> {
     let mut path_iter = path_iter.into_iter().peekable();
     let root = path_iter.next().expect("Path is empty");
 
-    let stack_value = stack.get_variable_mut(
+    let stack_value = stack.get_variable(
         stack_trace,
         LocatedStr {
             location: root.reference.clone(),
@@ -51,7 +51,7 @@ fn find_value<'p, 's>(
     if let Some(sub_path) = path_iter.next() {
         // We need the value off the heap.
 
-        let mut value = stack_value.access_mut(stack_trace)?.get_attribute_mut(
+        let mut value = stack_value.get_attribute(
             log,
             stack_trace,
             &LocatedStr {
@@ -66,7 +66,7 @@ fn find_value<'p, 's>(
                 // That's the last element of the path. We break out early because the
                 // last one needs to be a mutable borrow.
 
-                let final_value = value.access_mut(stack_trace)?.get_attribute_mut(
+                let final_value = value.get_attribute(
                     log,
                     stack_trace,
                     &LocatedStr {
@@ -75,9 +75,9 @@ fn find_value<'p, 's>(
                     },
                 )?;
 
-                return Ok(final_value);
+                return Ok(final_value.clone());
             } else {
-                value = value.access_mut(stack_trace)?.get_attribute_mut(
+                value = value.get_attribute(
                     log,
                     stack_trace,
                     &LocatedStr {
@@ -88,10 +88,10 @@ fn find_value<'p, 's>(
             }
         }
 
-        Ok(value)
+        Ok(value.clone())
     } else {
         // We just needed the value off the stack.
-        Ok(stack_value)
+        Ok(stack_value.clone())
     }
 }
 
@@ -122,9 +122,7 @@ pub fn execute_expression(
             }
             compile::Expression::Path(ast_node) => {
                 let path_iter = ast_node.node.path.iter();
-                Ok(find_value(log, stack_trace, stack, path_iter)?
-                    .take(stack_trace)?
-                    .into())
+                Ok(find_value(log, stack_trace, stack, path_iter)?)
             }
 
             compile::Expression::Scalar(ast_node) => Ok(values::Scalar {

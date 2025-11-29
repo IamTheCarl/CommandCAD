@@ -31,13 +31,12 @@ use crate::{
 };
 
 use super::{
-    MissingAttributeError, Object, ObjectCopy, StaticTypeName, StoredValue, StructDefinition,
-    StructMember, Value, ValueType,
+    MissingAttributeError, Object, StaticTypeName, StructDefinition, StructMember, Value, ValueType,
 };
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Dictionary {
-    members: HashableMap<String, StoredValue>,
+    members: Arc<HashableMap<String, Value>>,
 }
 
 impl Object for Dictionary {
@@ -50,12 +49,12 @@ impl Object for Dictionary {
         })
     }
 
-    fn get_attribute_ref(
+    fn get_attribute(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
         attribute: &str,
-    ) -> ExpressionResult<&StoredValue> {
+    ) -> ExpressionResult<&Value> {
         if let Some(member) = self.members.get(attribute) {
             Ok(member)
         } else {
@@ -65,36 +64,7 @@ impl Object for Dictionary {
             .to_error(stack_trace))
         }
     }
-    fn get_attribute_mut(
-        &mut self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        attribute: &str,
-    ) -> ExpressionResult<&mut StoredValue> {
-        if let Some(member) = self.members.get_mut(attribute) {
-            Ok(member)
-        } else {
-            Err(MissingAttributeError {
-                name: attribute.into(),
-            }
-            .to_error(stack_trace))
-        }
-    }
-    fn insert_attribute(
-        &mut self,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-        attribute: impl Into<String>,
-        new_value: Value,
-    ) -> ExpressionResult<()> {
-        self.members
-            .insert(attribute.into(), StoredValue::Value(new_value));
-        Ok(())
-    }
 }
-
-// Default implementation, cannot be moved by copy.
-impl ObjectCopy for Dictionary {}
 
 impl StaticTypeName for Dictionary {
     fn static_type_name() -> &'static str {
@@ -102,10 +72,10 @@ impl StaticTypeName for Dictionary {
     }
 }
 
-impl From<HashMap<String, StoredValue>> for Dictionary {
-    fn from(map: HashMap<String, StoredValue>) -> Self {
+impl From<HashMap<String, Value>> for Dictionary {
+    fn from(map: HashMap<String, Value>) -> Self {
         // HashableMap is just a wrapper around HashMap, so this has no additional cost.
-        let members = HashableMap::from(map);
+        let members = Arc::new(HashableMap::from(map));
 
         Self { members }
     }
@@ -124,7 +94,7 @@ impl Dictionary {
             let name = assignment.node.name.node.clone();
             let value = execute_expression(log, stack_trace, stack, &assignment.node.assignment)?;
 
-            if members.insert(name, StoredValue::Value(value)).is_some() {
+            if members.insert(name, value).is_some() {
                 // That's a duplicate member.
                 return Err(DuplicateMemberError {
                     name: assignment.node.name.node.clone(),
@@ -162,10 +132,10 @@ mod test {
     #[test]
     fn build_dictionary() {
         let product = test_run("(none = std.consts.None)").unwrap();
-        let expected = HashableMap::from(HashMap::from_iter([(
+        let expected = Arc::new(HashableMap::from(HashMap::from_iter([(
             "none".to_string(),
-            StoredValue::Value(ValueNone.into()),
-        )]));
+            ValueNone.into(),
+        )])));
 
         assert_eq!(product.as_dictionary().unwrap().members, expected);
     }

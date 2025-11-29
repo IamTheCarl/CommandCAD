@@ -105,7 +105,7 @@ impl Display for MissingAttributeError {
 }
 
 #[enum_dispatch]
-pub trait Object: StaticTypeName + Sized + Eq + PartialEq + ObjectCopy {
+pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
     fn get_type(&self) -> ValueType;
 
     // fn format(
@@ -251,33 +251,16 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + ObjectCopy {
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "right shift")
     }
-    fn get_attribute_ref(
+    fn get_attribute(
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
         attribute: &str,
-    ) -> ExpressionResult<&StoredValue> {
+    ) -> ExpressionResult<&Value> {
         Err(MissingAttributeError {
             name: attribute.into(),
         }
         .to_error(stack_trace))
-    }
-    fn get_attribute_mut(
-        &mut self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _attribute: &str,
-    ) -> ExpressionResult<&mut StoredValue> {
-        UnsupportedOperationError::raise(self, stack_trace, "set attribute")
-    }
-    fn insert_attribute(
-        &mut self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _attribute: impl Into<String>,
-        _new_value: Value,
-    ) -> ExpressionResult<()> {
-        UnsupportedOperationError::raise(self, stack_trace, "insert attribute")
     }
     fn call(
         &self,
@@ -333,114 +316,8 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + ObjectCopy {
     // }
 }
 
-/// Implements and indicates the copy rules of an object.
-#[enum_dispatch]
-pub trait ObjectCopy {
-    /// Creates a copy of the object. Returning None indicates that the object should not be
-    /// passed by copy, and instead should be moved.
-    fn object_copy(&self) -> Option<Value> {
-        None
-    }
-}
-
-impl<O> ObjectCopy for O
-where
-    O: Object + Copy + Into<Value>,
-{
-    fn object_copy(&self) -> Option<Value> {
-        Some(self.clone().into())
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum StoredValue {
-    Value(Value),
-    Moved {
-        /// Where in the source code it was moved.
-        location: SourceReference,
-    },
-}
-
-impl StoredValue {
-    pub fn replace(&mut self, new: Value) {
-        *self = Self::Value(new);
-    }
-
-    pub fn take(&mut self, stack_trace: &[SourceReference]) -> ExpressionResult<Value> {
-        if let Self::Value(value) = &self {
-            if let Some(value) = value.object_copy() {
-                // No need to move if it's a copy type.
-                return Ok(value);
-            }
-        }
-
-        let mut old_self = Self::Moved {
-            location: stack_trace.last().expect("Stack trace was empty").clone(),
-        };
-        std::mem::swap(self, &mut old_self);
-
-        match old_self {
-            StoredValue::Value(value) => Ok(value),
-            StoredValue::Moved { location } => {
-                Err(ValueMovedError { location }.to_error(stack_trace))
-            }
-        }
-    }
-
-    pub fn access(&self, stack_trace: &[SourceReference]) -> ExpressionResult<&Value> {
-        match self {
-            StoredValue::Value(value) => Ok(value),
-            StoredValue::Moved { location } => Err(ValueMovedError {
-                location: location.clone(),
-            }
-            .to_error(stack_trace)),
-        }
-    }
-
-    pub fn access_mut(&mut self, stack_trace: &[SourceReference]) -> ExpressionResult<&mut Value> {
-        match self {
-            StoredValue::Value(value) => Ok(value),
-            StoredValue::Moved { location } => Err(ValueMovedError {
-                location: location.clone(),
-            }
-            .to_error(stack_trace)),
-        }
-    }
-}
-
-impl std::hash::Hash for StoredValue {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // We only contribute to the hash if we actually contain a value.
-        if let Self::Value(value) = self {
-            core::mem::discriminant(value).hash(state);
-        }
-    }
-}
-
-impl<V> From<V> for StoredValue
-where
-    V: Into<Value>,
-{
-    fn from(value: V) -> Self {
-        Self::Value(value.into())
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct ValueMovedError {
-    location: SourceReference,
-}
-
-impl ErrorType for ValueMovedError {}
-
-impl Display for ValueMovedError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "value has was moved at {}", self.location)
-    }
-}
-
 #[enum_dispatch(Object, ObjectCopy)]
-#[derive(Debug, Eq, PartialEq, EnumDowncast, EnumAs)]
+#[derive(Debug, Eq, PartialEq, EnumDowncast, EnumAs, Clone)]
 pub enum Value {
     ValueNone,
     Default(DefaultValue),

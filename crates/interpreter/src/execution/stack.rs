@@ -21,7 +21,7 @@ use crate::compile::SourceReference;
 use super::{
     errors::{ErrorType, ExpressionResult, Raise},
     logging::LocatedStr,
-    values::{StoredValue, Value},
+    values::Value,
 };
 use compact_str::CompactString;
 use std::{collections::HashMap, fmt::Display};
@@ -35,13 +35,13 @@ pub enum ScopeType {
 #[derive(Debug)]
 struct Scope {
     ty: ScopeType,
-    variables: HashMap<CompactString, StoredValue>,
+    variables: HashMap<CompactString, Value>,
 }
 
 #[derive(Debug)]
 pub struct Stack {
     scopes: Vec<Scope>,
-    prelude: HashMap<String, StoredValue>,
+    prelude: HashMap<String, Value>,
     active_scope: usize,
 }
 
@@ -89,7 +89,7 @@ impl Display for NotInScopeError {
 }
 
 impl Stack {
-    pub fn new(prelude: HashMap<String, StoredValue>) -> Self {
+    pub fn new(prelude: HashMap<String, Value>) -> Self {
         Self {
             scopes: vec![Scope {
                 ty: ScopeType::Isolated,
@@ -138,7 +138,7 @@ impl Stack {
     pub fn insert_value(&mut self, name: impl Into<CompactString>, value: Value) {
         self.scopes[self.active_scope]
             .variables
-            .insert(name.into(), StoredValue::Value(value));
+            .insert(name.into(), value);
     }
 
     /// Gets a reference to a variable on the stack.
@@ -148,7 +148,7 @@ impl Stack {
         &self,
         stack_trace: &[SourceReference],
         name: S,
-    ) -> ExpressionResult<&StoredValue> {
+    ) -> ExpressionResult<&Value> {
         let name = name.into();
         if let Some(value) = generate_variable_getter!(self, stack_trace, name, iter, get) {
             Ok(value)
@@ -163,29 +163,6 @@ impl Stack {
                 variable_name: name.string.to_string(),
             }
             .to_error(stack_trace.iter().chain([&name.location])))
-        }
-    }
-
-    /// Gets a mutable reference to a variable on the stack.
-    pub fn get_variable_mut<'s, S: Into<LocatedStr<'s>>>(
-        &mut self,
-        stack_trace: &[SourceReference],
-        name: S,
-    ) -> ExpressionResult<&mut StoredValue> {
-        let name = name.into();
-        if let Some(value) = generate_variable_getter!(self, stack_trace, name, iter_mut, get_mut) {
-            Ok(value)
-        } else {
-            // See if we can find it in the prelude.
-            if let Some(value) = self.prelude.get_mut(name.string) {
-                Ok(value)
-            } else {
-                // We couldn't find it.
-                Err(NotInScopeError {
-                    variable_name: name.string.to_string(),
-                }
-                .to_error(stack_trace.iter().chain([&name.location])))
-            }
         }
     }
 }
