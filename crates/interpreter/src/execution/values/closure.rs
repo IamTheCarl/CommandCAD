@@ -133,142 +133,61 @@ impl StaticTypeName for UserClosure {
     }
 }
 
-// impl<S: Span> std::fmt::Debug for UserClosure<S> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.debug_struct("UserClosure")
-//             .field("address", &Rc::as_ptr(&self.source))
-//             .finish()
-//     }
-// }
-//
-// impl<S: Span> From<&'_ Rc<Function<S>>> for UserFunction<S> {
-//     fn from(value: &'_ Rc<Function<S>>) -> Self {
-//         Self {
-//             source: Rc::clone(value),
-//         }
-//     }
-// }
-//
-// impl<S: Span> UserFunction<S> {
-//     pub fn new(source: Function<S>) -> Self {
-//         Self {
-//             source: Rc::new(source),
-//         }
-//     }
-// }
-//
-// impl<S: Span> Object<S> for UserFunction<S> {
-//     fn matches_type(
-//         &self,
-//         _ty: &VariableType<S>,
-//         _log: &mut dyn RuntimeLog<S>,
-//         _variable_name_span: &S,
-//     ) -> OperatorResult<S, bool> {
-//         Ok(false)
-//     }
-//
-//     fn call(
-//         &self,
-//         context: &mut ExecutionContext<S>,
-//         span: &S,
-//         arguments: Vec<Value<S>>,
-//         spans: &[Expression<S>],
-//     ) -> OperatorResult<S, Value<S>> {
-//         context.new_isolated_scope(|context| {
-//             run_callable_block(
-//                 context,
-//                 &self.source.named_block.callable,
-//                 arguments,
-//                 spans,
-//                 span,
-//             )
-//         })
-//     }
-// }
-//
-// impl<S: Span> PartialEq for UserFunction<S> {
-//     fn eq(&self, _other: &Self) -> bool {
-//         false
-//     }
-// }
-//
-// impl<S: Span> NamedObject for UserFunction<S> {
-//     fn static_type_name() -> &'static str {
-//         "Function"
-//     }
-// }
-//
-// pub type BuiltinFunction<S> = dyn Fn(
-//     &mut ExecutionContext<S>,
-//     &S,
-//     Vec<Value<S>>,
-//     &[Expression<S>],
-// ) -> OperatorResult<S, Value<S>>;
-//
-// pub struct BuiltinFunctionRef<S: Span>(Rc<BuiltinFunction<S>>);
-//
-// impl<S: Span> std::ops::Deref for BuiltinFunctionRef<S> {
-//     type Target = BuiltinFunction<S>;
-//
-//     fn deref(&self) -> &Self::Target {
-//         &*self.0
-//     }
-// }
-//
-// impl<S: Span> std::cmp::Eq for BuiltinFunctionRef<S> {}
-// impl<S: Span> std::cmp::PartialEq for BuiltinFunctionRef<S> {
-//     fn eq(&self, other: &Self) -> bool {
-//         std::ptr::addr_eq(Rc::as_ptr(&self.0), Rc::as_ptr(&other.0))
-//     }
-// }
-//
-// impl<S: Span> Clone for BuiltinFunctionRef<S> {
-//     fn clone(&self) -> Self {
-//         Self(Rc::clone(&self.0))
-//     }
-// }
-//
-// impl<S: Span> std::fmt::Debug for BuiltinFunctionRef<S> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         let mut debug_struct = f.debug_struct("BuiltinFunction");
-//         debug_struct.field("address", &Rc::as_ptr(&self.0));
-//         debug_struct.finish()
-//     }
-// }
-//
-// impl<S: Span> From<Box<BuiltinFunction<S>>> for BuiltinFunctionRef<S> {
-//     fn from(value: Box<BuiltinFunction<S>>) -> Self {
-//         Self(value.into())
-//     }
-// }
-//
-// impl<S: Span> Object<S> for BuiltinFunctionRef<S> {
-//     fn matches_type(
-//         &self,
-//         _ty: &VariableType<S>,
-//         _log: &mut dyn RuntimeLog<S>,
-//         _variable_name_span: &S,
-//     ) -> OperatorResult<S, bool> {
-//         Ok(false)
-//     }
-//
-//     fn call(
-//         &self,
-//         context: &mut ExecutionContext<S>,
-//         span: &S,
-//         arguments: Vec<Value<S>>,
-//         expressions: &[Expression<S>],
-//     ) -> OperatorResult<S, Value<S>> {
-//         (*self)(context, span, arguments, expressions)
-//     }
-// }
-//
-// impl<S: Span> NamedObject for BuiltinFunctionRef<S> {
-//     fn static_type_name() -> &'static str {
-//         "BuiltinFunction"
-//     }
-// }
-//
+pub type BuiltinFunctionPointer = fn(
+    &mut dyn RuntimeLog,
+    &mut Vec<SourceReference>,
+    &mut Stack,
+    Dictionary,
+) -> ExpressionResult<Value>;
+
+#[derive(Debug, Eq, Clone)]
+pub struct BuiltinFunction {
+    name: &'static str,
+    function: BuiltinFunctionPointer,
+    signature: Arc<Signature>,
+}
+
+impl PartialEq for BuiltinFunction {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.signature == other.signature
+    }
+}
+
+impl BuiltinFunction {
+    pub fn new(
+        name: &'static str,
+        signature: Arc<Signature>,
+        function: BuiltinFunctionPointer,
+    ) -> BuiltinFunction {
+        BuiltinFunction {
+            name,
+            function,
+            signature,
+        }
+    }
+}
+
+impl Object for BuiltinFunction {
+    fn get_type(&self) -> ValueType {
+        ValueType::Closure(self.signature.clone())
+    }
+
+    fn call(
+        &self,
+        log: &mut dyn RuntimeLog,
+        stack_trace: &mut Vec<SourceReference>,
+        stack: &mut Stack,
+        argument: Dictionary,
+    ) -> ExpressionResult<Value> {
+        (self.function)(log, stack_trace, stack, argument)
+    }
+}
+
+impl StaticTypeName for BuiltinFunction {
+    fn static_type_name() -> &'static str {
+        "Builtin Function"
+    }
+}
 // pub trait UnpackArguments<S: Span, Tuple> {
 //     fn unpack_arguments(
 //         span: &S,
@@ -469,5 +388,29 @@ mod test {
         )
         .unwrap();
         assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn builtin_function() {
+        let test_function = BuiltinFunction::new(
+            "test_function",
+            todo!(),
+            |log: &mut dyn RuntimeLog,
+             stack_trace: &mut Vec<SourceReference>,
+             stack: &mut Stack,
+             argument: Dictionary| Ok(UnsignedInteger::from(846).into()),
+        );
+
+        use crate::execution::standard_environment::build_prelude;
+
+        let root = crate::compile::full_compile("test_function()");
+        let prelude = build_prelude();
+        let mut stack = Stack::new(prelude);
+        stack.insert_value("test_function", test_function.into());
+
+        let product =
+            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+
+        assert_eq!(product, values::UnsignedInteger::from(846).into());
     }
 }

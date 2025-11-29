@@ -45,7 +45,7 @@ mod scalar;
 pub use scalar::Scalar;
 
 mod closure;
-pub use closure::UserClosure;
+pub use closure::{BuiltinFunction, UserClosure};
 
 mod dictionary;
 pub use dictionary::Dictionary;
@@ -330,6 +330,7 @@ pub enum Value {
     Boolean,
     Scalar,
     UserClosure,
+    BuiltinFunction,
     ValueType,
     Dictionary(Dictionary),
     // List(List<S>),

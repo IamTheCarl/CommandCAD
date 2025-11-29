@@ -49,7 +49,7 @@ pub enum Expression {
     StructDefinition(AstNode<StructDefinition>),
     UnaryExpression(AstNode<Box<UnaryExpression>>),
     UnsignedInteger(AstNode<u64>),
-    FunctionCall(AstNode<FunctionCall>),
+    FunctionCall(AstNode<Box<FunctionCall>>),
     MethodCall(AstNode<MethodCall>),
     LetIn(AstNode<Box<LetIn>>),
 }
@@ -368,7 +368,7 @@ impl<'t> Parse<'t, nodes::FunctionCall<'t>> for Expression {
         Ok(AstNode::new(
             file,
             &value,
-            Self::FunctionCall(FunctionCall::parse(file, input, value)?),
+            Self::FunctionCall(FunctionCall::parse(file, input, value)?.into_box()),
         ))
     }
 }
