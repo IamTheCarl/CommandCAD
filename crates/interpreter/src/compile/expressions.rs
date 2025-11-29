@@ -783,7 +783,7 @@ impl<'t> Parse<'t, nodes::DictionaryConstruction<'t>> for DictionaryConstruction
 pub struct ClosureDefinition {
     pub argument_type: AstNode<Expression>,
     pub return_type: AstNode<Expression>,
-    pub expression: AstNode<Arc<Expression>>,
+    pub expression: Arc<AstNode<Expression>>,
 }
 
 impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for ClosureDefinition {
@@ -800,10 +800,10 @@ impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for ClosureDefinition {
 
         let expression = value.expression()?;
         let expression = Expression::parse(file, input, expression)?;
-        let expression = AstNode {
+        let expression = Arc::new(AstNode {
             reference: expression.reference,
-            node: Arc::new(expression.node),
-        };
+            node: expression.node,
+        });
 
         Ok(AstNode::new(
             file,
@@ -896,7 +896,7 @@ impl<'t> Parse<'t, nodes::StructDefinition<'t>> for StructDefinition {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct FunctionCall {
-    pub to_call: AstNode<Box<Expression>>,
+    pub to_call: AstNode<Expression>,
     pub argument: AstNode<DictionaryConstruction>,
 }
 
@@ -906,7 +906,7 @@ impl<'t> Parse<'t, nodes::FunctionCall<'t>> for FunctionCall {
         input: &'i str,
         value: nodes::FunctionCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        let to_call = Expression::parse(file, input, value.to_call()?)?.into_box();
+        let to_call = Expression::parse(file, input, value.to_call()?)?;
         let argument = DictionaryConstruction::parse(file, input, value.argument()?)?;
 
         Ok(AstNode::new(file, &value, Self { to_call, argument }))
@@ -1149,13 +1149,13 @@ mod test {
                                 }
                             })
                         },
-                        expression: AstNode {
+                        expression: Arc::new(AstNode {
                             reference: expression_reference,
-                            node: Arc::new(Expression::String(AstNode {
+                            node: Expression::String(AstNode {
                                 reference: string_reference,
                                 node: String::new()
-                            }))
-                        }
+                            })
+                        })
                     })
                 })
             }
@@ -1827,10 +1827,10 @@ mod test {
                 reference: root.reference.clone(),
                 node: Expression::FunctionCall(AstNode {
                     reference: call.reference.clone(),
-                    node: FunctionCall {
+                    node: Box::new(FunctionCall {
                         to_call: AstNode {
                             reference: call.node.to_call.reference.clone(),
-                            node: Box::new(Expression::Path(AstNode {
+                            node: Expression::Path(AstNode {
                                 reference: to_call.reference.clone(),
                                 node: IdentityPath {
                                     path: vec![
@@ -1844,7 +1844,7 @@ mod test {
                                         }
                                     ]
                                 }
-                            }))
+                            })
                         },
                         argument: AstNode {
                             reference: call.node.argument.reference.clone(),
@@ -1852,7 +1852,7 @@ mod test {
                                 assignments: vec![]
                             }
                         }
-                    }
+                    })
                 })
             }
         );
@@ -1871,10 +1871,10 @@ mod test {
                 reference: root.reference.clone(),
                 node: Expression::FunctionCall(AstNode {
                     reference: call.reference.clone(),
-                    node: FunctionCall {
+                    node: Box::new(FunctionCall {
                         to_call: AstNode {
                             reference: call.node.to_call.reference.clone(),
-                            node: Box::new(Expression::Path(AstNode {
+                            node: Expression::Path(AstNode {
                                 reference: to_call.reference.clone(),
                                 node: IdentityPath {
                                     path: vec![
@@ -1888,7 +1888,7 @@ mod test {
                                         }
                                     ]
                                 }
-                            }))
+                            })
                         },
                         argument: AstNode {
                             reference: call.node.argument.reference.clone(),
@@ -1922,7 +1922,7 @@ mod test {
                                 }]
                             }
                         }
-                    }
+                    })
                 })
             }
         );

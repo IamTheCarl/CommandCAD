@@ -43,6 +43,38 @@ With argument
         (string)))))
 
 ==================
+With Binary Expression
+==================
+
+(argument: std.types.UInt) -> std.None a + b 
+
+---
+
+(source_file
+  (expression
+    (closure_definition
+      (struct_definition
+        (struct_member
+          (identifier)
+          (declaration_type
+            (expression
+              (path
+                (identifier)
+                (identifier)
+                (identifier))))))
+      (path
+        (identifier)
+        (identifier))
+      (expression
+        (binary_expression
+          (expression
+            (path
+              (identifier)))
+          (expression
+            (path
+              (identifier))))))))
+
+==================
 Path for argument signature
 ==================
 

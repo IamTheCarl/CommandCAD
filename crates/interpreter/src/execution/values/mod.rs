@@ -22,7 +22,7 @@ use enum_dispatch::enum_dispatch;
 use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
 use unwrap_enum::EnumAs;
 
-use crate::compile::SourceReference;
+use crate::{compile::SourceReference, execution::stack::Stack};
 
 use super::{
     errors::{ErrorType, ExpressionResult, Raise as _},
@@ -268,8 +268,9 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
     fn call(
         &self,
         _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _argument: Value,
+        stack_trace: &mut Vec<SourceReference>,
+        _stack: &mut Stack,
+        _argument: Dictionary,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "call")
     }

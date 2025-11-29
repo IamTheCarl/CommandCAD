@@ -1632,7 +1632,7 @@
     },
     "closure_definition": {
       "type": "PREC_LEFT",
-      "value": 19,
+      "value": -1,
       "content": {
         "type": "SEQ",
         "members": [

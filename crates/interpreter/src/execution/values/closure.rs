@@ -24,8 +24,8 @@ use crate::{
     execution::{
         errors::{ExpressionResult, Raise},
         logging::{RuntimeLog, StackScope},
-        stack::Stack,
-        values::DowncastError,
+        stack::{ScopeType, Stack},
+        values::{Dictionary, DowncastError, Value},
     },
 };
 
@@ -40,7 +40,7 @@ pub struct Signature {
 
 impl Display for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}[...] -> {}", self.argument_type, self.return_type)
+        write!(f, "{} -> {}", self.argument_type, self.return_type)
     }
 }
 
@@ -49,7 +49,7 @@ impl Display for Signature {
 #[derive(Debug, Eq, PartialEq)]
 struct UserClosureInternals {
     signature: Arc<Signature>,
-    expression: Arc<Expression>,
+    expression: Arc<AstNode<Expression>>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -94,7 +94,7 @@ impl UserClosure {
             return_type,
         });
 
-        let expression = source.node.expression.node.clone();
+        let expression = source.node.expression.clone();
 
         Ok(Self {
             data: Arc::new(UserClosureInternals {
@@ -108,6 +108,22 @@ impl UserClosure {
 impl Object for UserClosure {
     fn get_type(&self) -> ValueType {
         ValueType::Closure(self.data.signature.clone())
+    }
+
+    fn call(
+        &self,
+        log: &mut dyn RuntimeLog,
+        stack_trace: &mut Vec<SourceReference>,
+        stack: &mut Stack,
+        argument: Dictionary,
+    ) -> ExpressionResult<Value> {
+        stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
+            for (name, value) in argument.iter() {
+                stack.insert_value(name, value.clone());
+            }
+
+            execute_expression(log, stack_trace, stack, &self.data.expression)
+        })?
     }
 }
 
@@ -418,7 +434,8 @@ impl StaticTypeName for UserClosure {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::execution::test_run;
+    use crate::execution::{test_run, values, values::UnsignedInteger};
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn define_closure() {
@@ -443,5 +460,14 @@ mod test {
             }
             .into()
         );
+    }
+
+    #[test]
+    fn call_closure() {
+        let product = test_run(
+            "let my_function = (a: std.types.UInt) -> std.types.UInt: a + 2u; in my_function(a = 3u)",
+        )
+        .unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
     }
 }

@@ -146,7 +146,9 @@ pub fn execute_expression(
             compile::Expression::UnsignedInteger(ast_node) => {
                 Ok(values::UnsignedInteger::from(ast_node.node).into())
             }
-            compile::Expression::FunctionCall(ast_node) => todo!(),
+            compile::Expression::FunctionCall(ast_node) => {
+                execute_function_call(log, stack_trace, stack, ast_node)
+            }
             compile::Expression::MethodCall(ast_node) => todo!(),
             compile::Expression::LetIn(ast_node) => {
                 execute_let_in(log, stack_trace, stack, ast_node)
@@ -170,6 +172,18 @@ fn execute_unary_expression(
             UnaryExpressionOperation::Not => value.unary_not(log, stack_trace),
         }
     })
+}
+
+fn execute_function_call(
+    log: &mut dyn RuntimeLog,
+    stack_trace: &mut Vec<SourceReference>,
+    stack: &mut Stack,
+    call: &compile::AstNode<Box<compile::FunctionCall>>,
+) -> ExpressionResult<Value> {
+    let to_call = execute_expression(log, stack_trace, stack, &call.node.to_call)?;
+    let argument = values::Dictionary::from_ast(log, stack_trace, stack, &call.node.argument)?;
+
+    to_call.call(log, stack_trace, stack, argument)
 }
 
 fn execute_let_in(

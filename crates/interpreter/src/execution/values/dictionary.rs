@@ -105,6 +105,10 @@ impl Dictionary {
 
         Ok(Self::from(members))
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {
+        self.members.iter()
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]

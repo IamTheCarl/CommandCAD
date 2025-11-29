@@ -8,7 +8,6 @@
 // @ts-check
 
 const PREC = {
-  closure: 19,
   struct_member: 18,
   unit: 17,
   method_call: 16,
@@ -27,6 +26,7 @@ const PREC = {
   or: 2,
   range: 1,
   assign: 0,
+  closure: -1,
   struct_def: -2,
 };
 
