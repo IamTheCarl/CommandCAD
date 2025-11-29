@@ -51,7 +51,7 @@ pub enum Expression {
     UnsignedInteger(AstNode<u64>),
     FunctionCall(AstNode<FunctionCall>),
     MethodCall(AstNode<MethodCall>),
-    LetIn(AstNode<LetIn>),
+    LetIn(AstNode<Box<LetIn>>),
 }
 
 impl<'t> Parse<'t, nodes::anon_unions::Path_StructDefinition<'t>> for Expression {
@@ -396,7 +396,7 @@ impl<'t> Parse<'t, nodes::LetIn<'t>> for Expression {
         Ok(AstNode::new(
             file,
             &node,
-            Self::LetIn(LetIn::parse(file, input, node)?),
+            Self::LetIn(LetIn::parse(file, input, node)?.into_box()),
         ))
     }
 }
@@ -945,7 +945,7 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for MethodCall {
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct LetInAssignment {
     pub ident: AstNode<String>,
-    pub value: AstNode<Box<Expression>>,
+    pub value: AstNode<Expression>,
 }
 
 impl<'t> Parse<'t, nodes::LetInAssignment<'t>> for LetInAssignment {
@@ -956,7 +956,7 @@ impl<'t> Parse<'t, nodes::LetInAssignment<'t>> for LetInAssignment {
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let ident = String::parse(file, input, node.ident()?)?;
 
-        let value = Expression::parse(file, input, node.value()?)?.into_box();
+        let value = Expression::parse(file, input, node.value()?)?;
 
         Ok(AstNode::new(file, &node, Self { ident, value }))
     }
@@ -965,7 +965,7 @@ impl<'t> Parse<'t, nodes::LetInAssignment<'t>> for LetInAssignment {
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct LetIn {
     pub assignments: Vec<AstNode<LetInAssignment>>,
-    pub expression: AstNode<Box<Expression>>,
+    pub expression: AstNode<Expression>,
 }
 
 impl<'t> Parse<'t, nodes::LetIn<'t>> for LetIn {
@@ -983,7 +983,7 @@ impl<'t> Parse<'t, nodes::LetIn<'t>> for LetIn {
             assignments.push(assignment);
         }
 
-        let expression = Expression::parse(file, input, node.expression()?)?.into_box();
+        let expression = Expression::parse(file, input, node.expression()?)?;
 
         Ok(AstNode::new(
             file,
@@ -1014,7 +1014,7 @@ pub fn compile<'t, 'i>(
 #[cfg(test)]
 mod test {
     use crate::compile::full_compile;
-    use pretty_assertions::{assert_eq, assert_ne};
+    use pretty_assertions::assert_eq;
 
     use super::*;
 
@@ -2063,54 +2063,55 @@ mod test {
             root,
             AstNode {
                 reference: root.reference.clone(),
-                node: Expression::LetIn(AstNode {
-                    reference: let_in.reference.clone(),
-                    node: LetIn {
-                        assignments: vec![
-                            AstNode {
-                                reference: value1.reference.clone(),
-                                node: LetInAssignment {
-                                    ident: AstNode {
-                                        reference: value1_ident.reference.clone(),
-                                        node: "value1".into(),
-                                    },
-                                    value: AstNode {
-                                        reference: value1_value.reference.clone(),
-                                        node: Expression::UnsignedInteger(AstNode {
-                                            reference: value1_value_uint.reference.clone(),
-                                            node: 1
-                                        }),
+                node: Expression::LetIn(
+                    AstNode {
+                        reference: let_in.reference.clone(),
+                        node: LetIn {
+                            assignments: vec![
+                                AstNode {
+                                    reference: value1.reference.clone(),
+                                    node: LetInAssignment {
+                                        ident: AstNode {
+                                            reference: value1_ident.reference.clone(),
+                                            node: "value1".into(),
+                                        },
+                                        value: AstNode {
+                                            reference: value1_value.reference.clone(),
+                                            node: Expression::UnsignedInteger(AstNode {
+                                                reference: value1_value_uint.reference.clone(),
+                                                node: 1
+                                            }),
+                                        }
                                     }
-                                    .into_box()
-                                }
-                            },
-                            AstNode {
-                                reference: value2.reference.clone(),
-                                node: LetInAssignment {
-                                    ident: AstNode {
-                                        reference: value2_ident.reference.clone(),
-                                        node: "value2".into(),
-                                    },
-                                    value: AstNode {
-                                        reference: value2_value.reference.clone(),
-                                        node: Expression::UnsignedInteger(AstNode {
-                                            reference: value2_value_uint.reference.clone(),
-                                            node: 2
-                                        }),
+                                },
+                                AstNode {
+                                    reference: value2.reference.clone(),
+                                    node: LetInAssignment {
+                                        ident: AstNode {
+                                            reference: value2_ident.reference.clone(),
+                                            node: "value2".into(),
+                                        },
+                                        value: AstNode {
+                                            reference: value2_value.reference.clone(),
+                                            node: Expression::UnsignedInteger(AstNode {
+                                                reference: value2_value_uint.reference.clone(),
+                                                node: 2
+                                            }),
+                                        }
                                     }
-                                    .into_box()
                                 }
+                            ],
+                            expression: AstNode {
+                                reference: expression.reference.clone(),
+                                node: Expression::UnsignedInteger(AstNode {
+                                    reference: expression_uint.reference.clone(),
+                                    node: 3
+                                })
                             }
-                        ],
-                        expression: AstNode {
-                            reference: expression.reference.clone(),
-                            node: Box::new(Expression::UnsignedInteger(AstNode {
-                                reference: expression_uint.reference.clone(),
-                                node: 3
-                            }))
                         }
                     }
-                })
+                    .into_box()
+                )
             }
         );
     }

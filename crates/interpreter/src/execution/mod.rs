@@ -148,7 +148,9 @@ pub fn execute_expression(
             }
             compile::Expression::FunctionCall(ast_node) => todo!(),
             compile::Expression::MethodCall(ast_node) => todo!(),
-            compile::Expression::LetIn(ast_node) => todo!(),
+            compile::Expression::LetIn(ast_node) => {
+                execute_let_in(log, stack_trace, stack, ast_node)
+            }
         },
     )
 }
@@ -167,6 +169,23 @@ fn execute_unary_expression(
             UnaryExpressionOperation::Sub => value.unary_minus(log, stack_trace),
             UnaryExpressionOperation::Not => value.unary_not(log, stack_trace),
         }
+    })
+}
+
+fn execute_let_in(
+    log: &mut dyn RuntimeLog,
+    stack_trace: &mut Vec<SourceReference>,
+    stack: &mut Stack,
+    expression: &compile::AstNode<Box<compile::LetIn>>,
+) -> ExpressionResult<Value> {
+    stack_trace.stack_scope(expression.reference.clone(), |stack_trace| {
+        for assignment in expression.node.assignments.iter() {
+            let value = execute_expression(log, stack_trace, stack, &assignment.node.value)?;
+            stack.insert_value(assignment.node.ident.node.clone(), value);
+        }
+
+        let node = &expression.node;
+        execute_expression(log, stack_trace, stack, &node.expression)
     })
 }
 
@@ -336,9 +355,13 @@ mod test {
 
     #[test]
     fn nested_value_access() {
-        // FIXME we can't update this test to the new parser until after we've added the `let in`
-        // syntax.
-        let product = test_run("{ let dictionary = (a = (b = 23u)); dictionary.a.b }").unwrap();
+        let product = test_run("let dictionary = (a = (b = 23u)); in dictionary.a.b").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(23).into());
+    }
+
+    #[test]
+    fn let_in() {
+        let product = test_run("let value = 23u; in value").unwrap();
         assert_eq!(product, values::UnsignedInteger::from(23).into());
     }
 }
