@@ -315,7 +315,8 @@ pub(crate) fn test_run(input: &str) -> ExpressionResult<Value> {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
+    use hashable_map::HashableMap;
+    use std::{collections::HashMap, sync::Arc};
 
     use super::*;
 
@@ -356,11 +357,13 @@ mod test {
         assert_eq!(
             product,
             values::ValueType::Dictionary(values::StructDefinition {
-                members: Arc::new(vec![values::StructMember {
-                    name: "name".into(),
-                    ty: ValueType::TypeNone,
-                    default: Some(Value::ValueNone(values::ValueNone))
-                }]),
+                members: Arc::new(HashableMap::from(HashMap::from([(
+                    "name".into(),
+                    values::StructMember {
+                        ty: ValueType::TypeNone,
+                        default: Some(Value::ValueNone(values::ValueNone))
+                    }
+                )]))),
                 variadic: true
             })
             .into()

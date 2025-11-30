@@ -29,6 +29,6 @@ impl Object for ValueNone {
 
 impl StaticTypeName for ValueNone {
     fn static_type_name() -> &'static str {
-        "Void"
+        "None"
     }
 }

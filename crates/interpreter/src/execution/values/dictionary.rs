@@ -34,19 +34,26 @@ use super::{
     MissingAttributeError, Object, StaticTypeName, StructDefinition, StructMember, Value, ValueType,
 };
 
+#[derive(Debug, Eq)]
+struct DictionaryData {
+    members: HashableMap<String, Value>,
+    struct_def: StructDefinition,
+}
+
+impl PartialEq for DictionaryData {
+    fn eq(&self, other: &Self) -> bool {
+        self.members == other.members
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Dictionary {
-    members: Arc<HashableMap<String, Value>>,
+    data: Arc<DictionaryData>,
 }
 
 impl Object for Dictionary {
     fn get_type(&self) -> ValueType {
-        static MEMBERS: std::sync::OnceLock<Arc<Vec<StructMember>>> = std::sync::OnceLock::new();
-
-        ValueType::Dictionary(StructDefinition {
-            members: MEMBERS.get_or_init(|| Arc::new(vec![])).clone(),
-            variadic: true,
-        })
+        self.data.struct_def.clone().into()
     }
 
     fn get_attribute(
@@ -55,7 +62,7 @@ impl Object for Dictionary {
         stack_trace: &[SourceReference],
         attribute: &str,
     ) -> ExpressionResult<&Value> {
-        if let Some(member) = self.members.get(attribute) {
+        if let Some(member) = self.data.members.get(attribute) {
             Ok(member)
         } else {
             Err(MissingAttributeError {
@@ -74,14 +81,35 @@ impl StaticTypeName for Dictionary {
 
 impl From<HashMap<String, Value>> for Dictionary {
     fn from(map: HashMap<String, Value>) -> Self {
-        // HashableMap is just a wrapper around HashMap, so this has no additional cost.
-        let members = Arc::new(HashableMap::from(map));
+        let mut struct_members = HashMap::with_capacity(map.len());
 
-        Self { members }
+        for (name, value) in map.iter() {
+            let member = StructMember {
+                ty: value.get_type(),
+                default: None,
+            };
+
+            struct_members.insert(name.clone(), member);
+        }
+
+        // HashableMap is just a wrapper around HashMap, so this has no additional cost.
+        let data = Arc::new(DictionaryData {
+            members: HashableMap::from(map),
+            struct_def: StructDefinition {
+                members: Arc::new(HashableMap::from(struct_members)),
+                variadic: false,
+            },
+        });
+
+        Self { data }
     }
 }
 
 impl Dictionary {
+    pub fn struct_def(&self) -> &StructDefinition {
+        &self.data.struct_def
+    }
+
     pub fn from_ast(
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
@@ -107,7 +135,7 @@ impl Dictionary {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {
-        self.members.iter()
+        self.data.members.iter()
     }
 }
 
@@ -136,12 +164,24 @@ mod test {
     #[test]
     fn build_dictionary() {
         let product = test_run("(none = std.consts.None)").unwrap();
-        let expected = Arc::new(HashableMap::from(HashMap::from_iter([(
-            "none".to_string(),
-            ValueNone.into(),
-        )])));
+        let expected = Arc::new(DictionaryData {
+            members: HashableMap::from(HashMap::from_iter([(
+                "none".to_string(),
+                ValueNone.into(),
+            )])),
+            struct_def: StructDefinition {
+                members: Arc::new(HashableMap::from(HashMap::from([(
+                    "none".into(),
+                    StructMember {
+                        ty: ValueType::TypeNone,
+                        default: None,
+                    },
+                )]))),
+                variadic: false,
+            },
+        });
 
-        assert_eq!(product.as_dictionary().unwrap().members, expected);
+        assert_eq!(product.as_dictionary().unwrap().data, expected);
     }
 
     #[test]

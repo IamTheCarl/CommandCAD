@@ -34,8 +34,8 @@ use super::{Object, StaticTypeName, StructDefinition, ValueType};
 /// Signature of a closure, used for type comparison.
 #[derive(Debug, Eq, PartialEq)]
 pub struct Signature {
-    argument_type: StructDefinition,
-    return_type: ValueType,
+    pub argument_type: StructDefinition,
+    pub return_type: ValueType,
 }
 
 impl Display for Signature {
@@ -117,12 +117,26 @@ impl Object for UserClosure {
         stack: &mut Stack,
         argument: Dictionary,
     ) -> ExpressionResult<Value> {
+        self.data
+            .signature
+            .argument_type
+            .check_other_qualifies(argument.struct_def())
+            .map_err(|error| error.to_error(stack_trace.iter()))?;
+
         stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
             for (name, value) in argument.iter() {
                 stack.insert_value(name, value.clone());
             }
 
-            execute_expression(log, stack_trace, stack, &self.data.expression)
+            let result = execute_expression(log, stack_trace, stack, &self.data.expression)?;
+
+            self.data
+                .signature
+                .return_type
+                .check_other_qualifies(&result.get_type())
+                .map_err(|error| error.to_error(stack_trace.iter()))?;
+
+            Ok(result)
         })?
     }
 }
@@ -354,13 +368,13 @@ impl StaticTypeName for BuiltinFunction {
 mod test {
     use super::*;
     use crate::execution::{test_run, values, values::UnsignedInteger};
+    use hashable_map::HashableMap;
     use pretty_assertions::assert_eq;
 
     #[test]
     fn define_closure() {
         let product = test_run("() -> std.types.None std.consts.None").unwrap();
 
-        dbg!(&product);
         let expression = product.as_userclosure().unwrap().data.expression.clone();
 
         assert_eq!(
@@ -369,7 +383,7 @@ mod test {
                 data: Arc::new(UserClosureInternals {
                     signature: Arc::new(Signature {
                         argument_type: StructDefinition {
-                            members: vec![].into(),
+                            members: HashableMap::new().into(),
                             variadic: false,
                         },
                         return_type: ValueType::TypeNone,
@@ -388,6 +402,22 @@ mod test {
         )
         .unwrap();
         assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn call_closure_bad_args() {
+        test_run(
+            "let my_function = (a: std.types.UInt) -> std.types.UInt: a + 2u; in my_function(a = 3i)",
+        )
+        .unwrap_err();
+    }
+
+    #[test]
+    fn call_closure_bad_result() {
+        test_run(
+            "let my_function = (a: std.types.UInt) -> std.types.UInt: \"test\"; in my_function(a = 3u)",
+        )
+        .unwrap_err();
     }
 
     #[test]
