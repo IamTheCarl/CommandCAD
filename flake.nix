@@ -61,6 +61,7 @@
 
 	  shellHook = ''
             export SHELL=${pkgs.bashInteractive}/bin/bash
+            export NIX_HARDENING_ENABLE=""
           '';
         };
 
