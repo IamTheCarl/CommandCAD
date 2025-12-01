@@ -123,6 +123,8 @@ impl Object for UserClosure {
             .check_other_qualifies(argument.struct_def())
             .map_err(|error| error.to_error(stack_trace.iter()))?;
 
+        let argument = self.data.signature.argument_type.fill_defaults(argument);
+
         stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
             for (name, value) in argument.iter() {
                 stack.insert_value(name, value.clone());
@@ -419,6 +421,15 @@ mod test {
             "let my_function = (a: std.types.UInt) -> std.types.UInt: \"test\"; in my_function(a = 3u)",
         )
         .unwrap_err();
+    }
+
+    #[test]
+    fn call_closure_default_value() {
+        let product = test_run(
+            "let my_function = (a: std.types.UInt = 3u) -> std.types.UInt: a + 2u; in my_function()",
+        )
+        .unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
     }
 
     #[test]

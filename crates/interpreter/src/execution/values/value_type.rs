@@ -32,6 +32,7 @@ use crate::{
         errors::{ErrorType, ExpressionResult},
         logging::RuntimeLog,
         stack::Stack,
+        values::{dictionary::DictionaryData, Dictionary},
     },
 };
 
@@ -156,7 +157,7 @@ impl StaticTypeName for ValueType {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct StructMember {
     pub ty: ValueType,
     pub default: Option<Value>,
@@ -215,6 +216,33 @@ impl StructDefinition {
         Ok(Self { members, variadic })
     }
 
+    pub fn fill_defaults(&self, dictionary: Dictionary) -> Dictionary {
+        let data = Arc::unwrap_or_clone(dictionary.data);
+
+        let mut members = data.members;
+        let struct_def_variadic = data.struct_def.variadic;
+        let mut struct_def_members = Arc::unwrap_or_clone(data.struct_def.members);
+
+        for (name, member) in self.members.iter() {
+            if let Some(default_value) = &member.default {
+                if members.get(name).is_none() {
+                    members.insert(name.clone(), default_value.clone());
+                    struct_def_members.insert(name.clone(), member.clone());
+                }
+            }
+        }
+
+        Dictionary {
+            data: Arc::new(DictionaryData {
+                members,
+                struct_def: StructDefinition {
+                    members: Arc::new(struct_def_members),
+                    variadic: struct_def_variadic,
+                },
+            }),
+        }
+    }
+
     pub fn check_other_qualifies(
         &self,
         other: &StructDefinition,
@@ -231,13 +259,15 @@ impl StructDefinition {
                     });
                 }
             } else {
-                errors.push(MissmatchedField {
-                    name: name.clone(),
-                    error: TypeQualificationError::This {
-                        expected: member.ty.clone(),
-                        got: ValueType::TypeNone,
-                    },
-                });
+                if member.default.is_none() {
+                    errors.push(MissmatchedField {
+                        name: name.clone(),
+                        error: TypeQualificationError::This {
+                            expected: member.ty.clone(),
+                            got: ValueType::TypeNone,
+                        },
+                    });
+                }
             }
         }
 

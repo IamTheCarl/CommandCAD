@@ -34,10 +34,10 @@ use super::{
     MissingAttributeError, Object, StaticTypeName, StructDefinition, StructMember, Value, ValueType,
 };
 
-#[derive(Debug, Eq)]
-struct DictionaryData {
-    members: HashableMap<String, Value>,
-    struct_def: StructDefinition,
+#[derive(Clone, Debug, Eq)]
+pub(crate) struct DictionaryData {
+    pub members: HashableMap<String, Value>,
+    pub struct_def: StructDefinition,
 }
 
 impl PartialEq for DictionaryData {
@@ -48,7 +48,7 @@ impl PartialEq for DictionaryData {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Dictionary {
-    data: Arc<DictionaryData>,
+    pub(crate) data: Arc<DictionaryData>,
 }
 
 impl Object for Dictionary {
