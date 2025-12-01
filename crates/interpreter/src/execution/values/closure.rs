@@ -370,6 +370,7 @@ mod test {
     use crate::execution::{test_run, values, values::UnsignedInteger};
     use hashable_map::HashableMap;
     use pretty_assertions::assert_eq;
+    use std::collections::HashMap;
 
     #[test]
     fn define_closure() {
@@ -424,11 +425,14 @@ mod test {
     fn builtin_function() {
         let test_function = BuiltinFunction::new(
             "test_function",
-            todo!(),
-            |log: &mut dyn RuntimeLog,
-             stack_trace: &mut Vec<SourceReference>,
-             stack: &mut Stack,
-             argument: Dictionary| Ok(UnsignedInteger::from(846).into()),
+            Arc::new(Signature {
+                argument_type: StructDefinition::from(HashMap::new()),
+                return_type: ValueType::UnsignedInteger,
+            }),
+            |_log: &mut dyn RuntimeLog,
+             _stack_trace: &mut Vec<SourceReference>,
+             _stack: &mut Stack,
+             _argument: Dictionary| Ok(UnsignedInteger::from(846).into()),
         );
 
         use crate::execution::standard_environment::build_prelude;

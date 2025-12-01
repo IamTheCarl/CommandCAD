@@ -306,6 +306,15 @@ impl StaticTypeName for StructDefinition {
     }
 }
 
+impl From<HashMap<String, StructMember>> for StructDefinition {
+    fn from(map: HashMap<String, StructMember>) -> Self {
+        Self {
+            members: Arc::new(HashableMap::from(map)),
+            variadic: false,
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct MissmatchedField {
     pub name: String,
