@@ -1640,17 +1640,8 @@
             "type": "FIELD",
             "name": "argument",
             "content": {
-              "type": "CHOICE",
-              "members": [
-                {
-                  "type": "SYMBOL",
-                  "name": "struct_definition"
-                },
-                {
-                  "type": "SYMBOL",
-                  "name": "path"
-                }
-              ]
+              "type": "SYMBOL",
+              "name": "struct_definition"
             }
           },
           {

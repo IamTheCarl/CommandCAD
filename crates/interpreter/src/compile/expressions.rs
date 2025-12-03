@@ -781,7 +781,7 @@ impl<'t> Parse<'t, nodes::DictionaryConstruction<'t>> for DictionaryConstruction
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct ClosureDefinition {
-    pub argument_type: AstNode<Expression>,
+    pub argument_type: AstNode<StructDefinition>,
     pub return_type: AstNode<Expression>,
     pub expression: Arc<AstNode<Expression>>,
 }
@@ -793,7 +793,7 @@ impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for ClosureDefinition {
         value: nodes::ClosureDefinition<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let argument = value.argument()?;
-        let argument = Expression::parse(file, input, argument)?;
+        let argument = StructDefinition::parse(file, input, argument)?;
 
         let returns = value.result()?;
         let returns = Expression::parse(file, input, returns)?;
@@ -1118,18 +1118,10 @@ mod test {
                     node: Box::new(ClosureDefinition {
                         argument_type: AstNode {
                             reference: argument_reference,
-                            node: Expression::StructDefinition(AstNode {
-                                reference: argument
-                                    .node
-                                    .as_structdefinition()
-                                    .unwrap()
-                                    .reference
-                                    .clone(),
-                                node: StructDefinition {
-                                    members: vec![],
-                                    variadic: false
-                                }
-                            })
+                            node: StructDefinition {
+                                members: vec![],
+                                variadic: false
+                            }
                         },
                         return_type: AstNode {
                             reference: returns_reference,

@@ -205,7 +205,7 @@ module.exports = grammar({
     ),
 
     closure_definition: $ => prec.left(PREC.closure, seq(
-      field('argument', choice($.struct_definition, $.path)),
+      field('argument', $.struct_definition),
       '->',
       field('result', choice($.struct_definition, $.path)),
       field('expression', $.expression),

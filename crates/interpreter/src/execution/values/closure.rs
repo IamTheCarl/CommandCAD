@@ -18,14 +18,17 @@
 
 use std::{fmt::Display, sync::Arc};
 
+use hashable_map::HashableMap;
+
 use crate::{
     compile::{AstNode, ClosureDefinition, Expression, SourceReference},
     execute_expression,
     execution::{
         errors::{ExpressionResult, Raise},
+        find_value,
         logging::{RuntimeLog, StackScope},
         stack::{ScopeType, Stack},
-        values::{Dictionary, DowncastError, Value},
+        values::{Dictionary, Value},
     },
 };
 
@@ -44,11 +47,174 @@ impl Display for Signature {
     }
 }
 
+fn find_all_variable_accesses_in_closure_capture(
+    closure: &crate::compile::ClosureDefinition,
+    mut access_collector: &mut dyn FnMut(&AstNode<String>) -> ExpressionResult<()>,
+) -> ExpressionResult<()> {
+    let argument_names: Vec<&String> = {
+        let mut argument_names = Vec::with_capacity(closure.argument_type.node.members.len());
+
+        for argument in closure.argument_type.node.members.iter() {
+            argument_names.push(&argument.node.name.node);
+        }
+
+        // We typically won't have more than 6 arguments, so a binary search will typically
+        // outperform a hashset.
+        argument_names.sort();
+
+        argument_names
+    };
+
+    find_all_variable_accesses_in_expression(
+        &closure.expression.node,
+        &mut move |variable_name| {
+            if argument_names.binary_search(&&variable_name.node).is_err() {
+                // This is not an argument, which means it must be captured from the environment.
+                access_collector(variable_name)?;
+            }
+
+            Ok(())
+        },
+    )?;
+
+    Ok(())
+}
+
+fn find_all_variable_accesses_in_dictionary_construction(
+    dictionary_construction: &crate::compile::DictionaryConstruction,
+    access_collector: &mut dyn FnMut(&AstNode<String>) -> ExpressionResult<()>,
+) -> ExpressionResult<()> {
+    for assignment in dictionary_construction.assignments.iter() {
+        find_all_variable_accesses_in_expression(
+            &assignment.node.assignment.node,
+            access_collector,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn find_all_variable_accesses_in_expression(
+    expression: &Expression,
+    access_collector: &mut dyn FnMut(&AstNode<String>) -> ExpressionResult<()>,
+) -> ExpressionResult<()> {
+    match expression {
+        Expression::BinaryExpression(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node.a.node, access_collector)?;
+            find_all_variable_accesses_in_expression(&ast_node.node.b.node, access_collector)?;
+
+            Ok(())
+        }
+        Expression::ClosureDefinition(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.return_type.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_closure_capture(&ast_node.node, access_collector)?;
+
+            Ok(())
+        }
+        Expression::DictionaryConstruction(ast_node) => {
+            find_all_variable_accesses_in_dictionary_construction(&ast_node.node, access_collector)
+        }
+        Expression::If(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.condition.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.on_true.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.on_false.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::List(ast_node) => {
+            for expression in ast_node.node.iter() {
+                find_all_variable_accesses_in_expression(&expression.node, access_collector)?;
+            }
+
+            Ok(())
+        }
+        Expression::Parenthesis(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node, access_collector)
+        }
+        Expression::Path(ast_node) => {
+            // Only the top most parent matters.
+            access_collector(&ast_node.node.path[0])
+        }
+        Expression::StructDefinition(ast_node) => {
+            for member in ast_node.node.members.iter() {
+                find_all_variable_accesses_in_expression(&member.node.ty.node, access_collector)?;
+                if let Some(default) = member.node.default.as_ref() {
+                    find_all_variable_accesses_in_expression(&default.node, access_collector)?;
+                }
+            }
+
+            Ok(())
+        }
+        Expression::UnaryExpression(ast_node) => find_all_variable_accesses_in_expression(
+            &ast_node.node.expression.node,
+            access_collector,
+        ),
+        Expression::FunctionCall(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.to_call.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_dictionary_construction(
+                &ast_node.node.argument.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::MethodCall(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.self_dictionary.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_dictionary_construction(
+                &ast_node.node.argument.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::LetIn(ast_node) => {
+            for assignment in ast_node.node.assignments.iter() {
+                find_all_variable_accesses_in_expression(
+                    &assignment.node.value.node,
+                    access_collector,
+                )?;
+            }
+
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.expression.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::Boolean(_)
+        | Expression::Default(_)
+        | Expression::Scalar(_)
+        | Expression::SignedInteger(_)
+        | Expression::String(_)
+        | Expression::UnsignedInteger(_) => Ok(()),
+    }
+}
+
 /// Closures are immutable, meaning that all copies can reference the same data.
 /// This is that common data.
 #[derive(Debug, Eq, PartialEq)]
 struct UserClosureInternals {
     signature: Arc<Signature>,
+    captured_values: HashableMap<String, Value>,
     expression: Arc<AstNode<Expression>>,
 }
 
@@ -68,18 +234,9 @@ impl UserClosure {
             source.node.argument_type.reference.clone(),
             |stack_trace| {
                 let argument_type =
-                    execute_expression(log, stack_trace, stack, &source.node.argument_type)?
-                        .downcast::<ValueType>(stack_trace)?;
+                    StructDefinition::new(log, stack_trace, stack, &source.node.argument_type)?;
 
-                if let ValueType::Dictionary(argument_type) = argument_type {
-                    Ok(argument_type)
-                } else {
-                    Err(DowncastError {
-                        expected: StructDefinition::static_type_name().into(),
-                        got: argument_type.name(),
-                    }
-                    .to_error(stack_trace.as_slice()))
-                }
+                Ok(argument_type)
             },
         )?;
 
@@ -96,9 +253,19 @@ impl UserClosure {
 
         let expression = source.node.expression.clone();
 
+        let mut captured_values = HashableMap::new();
+        find_all_variable_accesses_in_closure_capture(&source.node, &mut |field_name| {
+            let value = find_value(log, stack_trace, stack, [field_name])?;
+
+            captured_values.insert(field_name.node.clone(), value);
+
+            Ok(())
+        })?;
+
         Ok(Self {
             data: Arc::new(UserClosureInternals {
                 signature,
+                captured_values,
                 expression,
             }),
         })
@@ -127,6 +294,10 @@ impl Object for UserClosure {
 
         stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
             for (name, value) in argument.iter() {
+                stack.insert_value(name, value.clone());
+            }
+
+            for (name, value) in self.data.captured_values.iter() {
                 stack.insert_value(name, value.clone());
             }
 
@@ -313,7 +484,7 @@ mod test {
 
     #[test]
     fn define_closure() {
-        let product = test_run("() -> std.types.None std.consts.None").unwrap();
+        let product = test_run("() -> std.types.UInt 1u").unwrap();
 
         let expression = product.as_userclosure().unwrap().data.expression.clone();
 
@@ -326,8 +497,9 @@ mod test {
                             members: HashableMap::new().into(),
                             variadic: false,
                         },
-                        return_type: ValueType::TypeNone,
+                        return_type: ValueType::UnsignedInteger,
                     }),
+                    captured_values: HashableMap::new(),
                     expression
                 })
             }
@@ -367,6 +539,14 @@ mod test {
         )
         .unwrap();
         assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn call_closure_captured_variable() {
+        let product =
+            test_run("let value = 3u; my_function = (input: std.types.UInt) -> std.types.UInt: value + input; in my_function(input = 4u)")
+                .unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(7).into());
     }
 
     #[test]

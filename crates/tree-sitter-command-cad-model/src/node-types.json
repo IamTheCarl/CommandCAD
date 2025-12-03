@@ -153,10 +153,6 @@
         "required": true,
         "types": [
           {
-            "type": "path",
-            "named": true
-          },
-          {
             "type": "struct_definition",
             "named": true
           }

@@ -75,27 +75,6 @@ With Binary Expression
               (identifier))))))))
 
 ==================
-Path for argument signature
-==================
-
-path.to.signature -> std.None "" 
-
----
-
-(source_file
-  (expression
-    (closure_definition
-      (path
-        (identifier)
-        (identifier)
-        (identifier))
-      (path
-        (identifier)
-        (identifier))
-      (expression
-        (string)))))
-
-==================
 Call function
 ==================
 
