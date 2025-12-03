@@ -149,43 +149,139 @@ impl StaticTypeName for UserClosure {
     }
 }
 
-pub type BuiltinFunctionPointer = fn(
-    &mut dyn RuntimeLog,
-    &mut Vec<SourceReference>,
-    &mut Stack,
-    Dictionary,
-) -> ExpressionResult<Value>;
+pub trait Callable {
+    fn call(
+        &self,
+        runtime: &mut dyn RuntimeLog,
+        stack_trace: &mut Vec<SourceReference>,
+        stack: &mut Stack,
+        argument: Dictionary,
+    ) -> ExpressionResult<Value>;
 
-#[derive(Debug, Eq, Clone)]
-pub struct BuiltinFunction {
-    name: &'static str,
-    function: BuiltinFunctionPointer,
-    signature: Arc<Signature>,
+    fn name(&self) -> &str;
+
+    fn signature(&self) -> &Arc<Signature>;
 }
 
-impl PartialEq for BuiltinFunction {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.signature == other.signature
+macro_rules! build_member_from_sig {
+    ($name:ident: $ty:ident) => {
+        (
+            String::from(stringify!($name)),
+            crate::execution::values::value_type::StructMember {
+                ty: ValueType::$ty,
+                default: None,
+            },
+        )
+    };
+    ($name:ident: $ty:ident = $default:expr) => {
+        (
+            String::from(stringify!($name)),
+            crate::execution::values::value_type::StructMember {
+                ty: ValueType::$ty,
+                default: Some($default),
+            },
+        )
+    };
+}
+
+macro_rules! build_argument_signature_list {
+    ($($arg:ident: $ty:ident $(= $default:expr)?),*) => {{
+        let list: [(String, crate::execution::values::value_type::StructMember); _] = [$(build_member_from_sig!($arg: $ty $(= $default)?),)*];
+        list
+    }};
+}
+
+macro_rules! build_function {
+    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) $code:block) => {
+        build_function!($name ($log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack $(, $($arg: $ty $(= $default)?),*)?) -> ValueType::TypeNone $code)
+    };
+    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
+        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<Value>> {
+            function: F,
+            signature: Arc<crate::execution::values::closure::Signature>,
+        }
+
+        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<Value>> Callable for BuiltFunction<F> {
+            fn call(
+                &self,
+                runtime: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                stack: &mut Stack,
+                argument: Dictionary,
+            ) -> ExpressionResult<Value> {
+                self.signature
+                    .argument_type
+                    .check_other_qualifies(argument.struct_def())
+                    .map_err(|error| error.to_error(stack_trace.iter()))?;
+
+                // Argument is potentially unused if we take no arguments.
+                let mut _argument = self.signature.argument_type.fill_defaults(argument);
+
+                let _data = Arc::make_mut(&mut _argument.data);
+                $($(let $arg: $ty = _data.members.remove(stringify!($arg))
+                        .expect("Argument was not present after argument check.").downcast(stack_trace)?;)*)?
+
+                    (self.function)(runtime, stack_trace, stack $(, $($arg),*)?)
+            }
+
+            fn name(&self) -> &str {
+                stringify!($name)
+            }
+
+            fn signature(&self) -> &Arc<Signature> {
+                &self.signature
+            }
+        }
+
+        let members = std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from(build_argument_signature_list!($($($arg: $ty $(= $default)?),*)?))));
+
+        crate::execution::values::closure::BuiltinFunction {
+            callable: Arc::new(BuiltFunction {
+            function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack $(, $($arg: $ty),*)?| -> ExpressionResult<Value> { $code },
+            signature: std::sync::Arc::new(Signature {
+                argument_type: StructDefinition {
+                    members,
+                    variadic: false,
+                },
+                return_type: $return_type
+            }),
+        })
+        }
+    }};
+}
+
+#[derive(Clone)]
+pub struct BuiltinFunction {
+    callable: Arc<dyn Callable>,
+}
+
+impl std::fmt::Debug for BuiltinFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BuiltinFunction")
+            .field("name", &self.callable.name())
+            .field("signature", self.callable.signature())
+            .finish()
     }
 }
 
 impl BuiltinFunction {
-    pub fn new(
-        name: &'static str,
-        signature: Arc<Signature>,
-        function: BuiltinFunctionPointer,
-    ) -> BuiltinFunction {
-        BuiltinFunction {
-            name,
-            function,
-            signature,
-        }
+    pub fn new(function: Arc<dyn Callable>) -> BuiltinFunction {
+        BuiltinFunction { callable: function }
+    }
+}
+
+impl Eq for BuiltinFunction {}
+
+impl PartialEq for BuiltinFunction {
+    fn eq(&self, other: &Self) -> bool {
+        self.callable.signature() == other.callable.signature()
+            && self.callable.name() == other.callable.name()
     }
 }
 
 impl Object for BuiltinFunction {
     fn get_type(&self) -> ValueType {
-        ValueType::Closure(self.signature.clone())
+        ValueType::Closure(self.callable.signature().clone())
     }
 
     fn call(
@@ -195,7 +291,7 @@ impl Object for BuiltinFunction {
         stack: &mut Stack,
         argument: Dictionary,
     ) -> ExpressionResult<Value> {
-        (self.function)(log, stack_trace, stack, argument)
+        self.callable.call(log, stack_trace, stack, argument)
     }
 }
 
@@ -204,175 +300,16 @@ impl StaticTypeName for BuiltinFunction {
         "Builtin Function"
     }
 }
-// pub trait UnpackArguments<S: Span, Tuple> {
-//     fn unpack_arguments(
-//         span: &S,
-//         arguments: Vec<Value<S>>,
-//         expressions: &[Expression<S>],
-//     ) -> OperatorResult<S, Tuple>;
-//
-//     fn unpack_arguments_optional(
-//         _span: &S,
-//         arguments: Vec<Value<S>>,
-//         expressions: &[Expression<S>],
-//     ) -> OperatorResult<S, Tuple>;
-// }
-//
-// #[rustfmt::skip]
-// fortuples! {
-//     impl<S> UnpackArguments<S, #Tuple> for #Tuple
-//     where
-// 	S: Span,
-//         #(#Member: NamedObject),*
-// 	#(Value<S>: TryInto<#Member>),*
-//     {
-// 	fn unpack_arguments(
-//             _span: &S,
-//             mut arguments: Vec<Value<S>>,
-//             expressions: &[Expression<S>],
-// 	) -> OperatorResult<S, #Tuple> {
-// 	    arguments.reverse();
-// 	    let mut expression_iter = expressions.iter();
-//
-// 	    #(let casey::lower!(#Member) = {
-// 		if let Some(value) = arguments.pop() {
-// 		    value.downcast(expression_iter.next().unwrap().get_span()).map_err(|f| f.make_from_function_call())?
-// 		} else {
-// 		    return Err(Failure::MissingArguments(_span.clone()).make_from_function_call());
-// 		}
-// 	    };)*
-//
-// 	    if let Some(extra_expression) = expression_iter.next() {
-// 		Err(Failure::TooManyArguments(extra_expression.get_span().clone()).make_from_function_call())
-// 	    } else {
-// 		Ok((#(casey::lower!(#Member)),*))
-// 	    }
-// 	}
-//
-// 	fn unpack_arguments_optional(
-//             _span: &S,
-//             mut arguments: Vec<Value<S>>,
-//             expressions: &[Expression<S>],
-// 	) -> OperatorResult<S, #Tuple> {
-// 	    arguments.reverse();
-// 	    let mut expression_iter = expressions.iter();
-//
-// 	    #(let casey::lower!(#Member) = {
-// 		if let Some(value) = arguments.pop() {
-// 		    value.downcast(expression_iter.next().unwrap().get_span()).map_err(|f| f.make_from_function_call())?
-// 		} else {
-// 		    Value::<S>::from(NoneType).downcast(_span)?
-// 		}
-// 	    };)*
-//
-// 	    if let Some(extra_expression) = expression_iter.next() {
-// 		Err(Failure::TooManyArguments(extra_expression.get_span().clone()).make_from_function_call())
-// 	    } else {
-// 		Ok((#(casey::lower!(#Member)),*))
-// 	    }
-// 	}
-//     }
-// }
-//
-// pub trait AutoCall<S, T>
-// where
-//     S: Span,
-// {
-//     type Unpacker: UnpackArguments<S, T>;
-//
-//     fn auto_call(
-//         self,
-//         context: &mut ExecutionContext<S>,
-//         span: &S,
-//         arguments: Vec<Value<S>>,
-//         expressions: &[Expression<S>],
-//     ) -> OperatorResult<S, Value<S>>;
-//
-//     fn auto_call_optional(
-//         self,
-//         context: &mut ExecutionContext<S>,
-//         span: &S,
-//         arguments: Vec<Value<S>>,
-//         expressions: &[Expression<S>],
-//     ) -> OperatorResult<S, Value<S>>;
-// }
-//
-// #[rustfmt::skip]
-// fortuples! {
-//     impl<S, F> AutoCall<S, #Tuple> for F
-//     where
-// 	S: Span,
-// 	#(#Member: NamedObject),*
-//         #(Value<S>: TryInto<#Member>),*
-// 	F: FnOnce(&mut ExecutionContext<S>, &S, #(#Member),*) -> OperatorResult<S, Value<S>>,
-//     {
-// 	type Unpacker = #Tuple;
-//
-// 	fn auto_call(
-//             self,
-//             context: &mut ExecutionContext<S>,
-//             span: &S,
-//             arguments: Vec<Value<S>>,
-//             expressions: &[Expression<S>],
-// 	) -> OperatorResult<S, Value<S>> {
-//             let (#(casey::lower!(#Member)),*) = Self::Unpacker::unpack_arguments(span, arguments, expressions)?;
-//
-//             (self)(context, span, #(casey::lower!(#Member)),*)
-// 	}
-//
-// 	fn auto_call_optional(
-//             self,
-//             context: &mut ExecutionContext<S>,
-//             span: &S,
-//             arguments: Vec<Value<S>>,
-//             expressions: &[Expression<S>],
-// 	) -> OperatorResult<S, Value<S>> {
-//             let (#(casey::lower!(#Member)),*) = Self::Unpacker::unpack_arguments_optional(span, arguments, expressions)?;
-//
-//             (self)(context, span, #(casey::lower!(#Member)),*)
-// 	}
-//     }
-// }
-//
-// pub trait IntoBuiltinFunction<S: Span, T>: AutoCall<S, T> {
-//     fn into_builtin_function(self) -> BuiltinFunctionRef<S>;
-//     fn into_builtin_function_optional(self) -> BuiltinFunctionRef<S>;
-// }
-//
-// #[rustfmt::skip]
-//  fortuples! {
-//      impl<S, F> IntoBuiltinFunction<S, #Tuple> for F
-//      where
-//  	S: Span,
-//  	F: Fn(&mut ExecutionContext<S>, &S, #(#Member),*) -> OperatorResult<S, Value<S>> + Clone + 'static,
-//  	#(#Member: NamedObject),*
-//          #(Value<S>: TryInto<#Member>),*
-//      {
-//  	 fn into_builtin_function(self) -> BuiltinFunctionRef<S> {
-// 	     let function: Box<BuiltinFunction<S>> = Box::new(move |context: &mut ExecutionContext<S>, span: &S, arguments: Vec<Value<S>>, expressions: &[Expression<S>]| -> OperatorResult<S, Value<S>> {
-//  		 self.clone().auto_call(context, span, arguments, expressions)
-//  	     });
-//
-// 	     BuiltinFunctionRef::from(function)
-//  	 }
-//
-//  	 fn into_builtin_function_optional(self) -> BuiltinFunctionRef<S> {
-// 	     let function: Box<BuiltinFunction<S>> = Box::new(move |context: &mut ExecutionContext<S>, span: &S, arguments: Vec<Value<S>>, expressions: &[Expression<S>]| -> OperatorResult<S, Value<S>> {
-//  		 self.clone().auto_call_optional(context, span, arguments, expressions)
-//  	     });
-//
-// 	     BuiltinFunctionRef::from(function)
-//  	 }
-//      }
-//  }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::execution::{test_run, values, values::UnsignedInteger};
+    use crate::execution::{
+        test_run,
+        values::{self, StructMember, UnsignedInteger, ValueNone},
+    };
     use hashable_map::HashableMap;
     use pretty_assertions::assert_eq;
-    use std::collections::HashMap;
 
     #[test]
     fn define_closure() {
@@ -433,17 +370,107 @@ mod test {
     }
 
     #[test]
-    fn builtin_function() {
-        let test_function = BuiltinFunction::new(
-            "test_function",
-            Arc::new(Signature {
-                argument_type: StructDefinition::from(HashMap::new()),
-                return_type: ValueType::UnsignedInteger,
-            }),
-            |_log: &mut dyn RuntimeLog,
-             _stack_trace: &mut Vec<SourceReference>,
-             _stack: &mut Stack,
-             _argument: Dictionary| Ok(UnsignedInteger::from(846).into()),
+    fn build_argument_signature() {
+        assert_eq!(build_argument_signature_list!(), []);
+        assert_eq!(
+            build_argument_signature_list!(value: SignedInteger),
+            [(
+                String::from("value"),
+                StructMember {
+                    ty: ValueType::SignedInteger,
+                    default: None
+                }
+            )]
+        );
+        assert_eq!(
+            build_argument_signature_list!(value: UnsignedInteger),
+            [(
+                String::from("value"),
+                StructMember {
+                    ty: ValueType::UnsignedInteger,
+                    default: None
+                }
+            )]
+        );
+        assert_eq!(
+            build_argument_signature_list!(value: UnsignedInteger = UnsignedInteger::from(23).into()),
+            [(
+                String::from("value"),
+                StructMember {
+                    ty: ValueType::UnsignedInteger,
+                    default: Some(Value::UnsignedInteger(23.into()))
+                }
+            )]
+        );
+
+        assert_eq!(
+            build_argument_signature_list!(value: UnsignedInteger, value1: SignedInteger),
+            [
+                (
+                    String::from("value"),
+                    StructMember {
+                        ty: ValueType::UnsignedInteger,
+                        default: None
+                    }
+                ),
+                (
+                    String::from("value1"),
+                    StructMember {
+                        ty: ValueType::SignedInteger,
+                        default: None
+                    }
+                )
+            ]
+        );
+
+        assert_eq!(
+            build_argument_signature_list!(value: UnsignedInteger = UnsignedInteger::from(32).into(), value1: SignedInteger),
+            [
+                (
+                    String::from("value"),
+                    StructMember {
+                        ty: ValueType::UnsignedInteger,
+                        default: Some(UnsignedInteger::from(32).into())
+                    }
+                ),
+                (
+                    String::from("value1"),
+                    StructMember {
+                        ty: ValueType::SignedInteger,
+                        default: None
+                    }
+                )
+            ]
+        );
+    }
+
+    #[test]
+    fn builtin_function_no_args_no_result() {
+        let test_function = build_function!(
+            test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack) {
+                Ok(ValueNone.into())
+            }
+        );
+
+        use crate::execution::standard_environment::build_prelude;
+
+        let root = crate::compile::full_compile("test_function()");
+        let prelude = build_prelude();
+        let mut stack = Stack::new(prelude);
+        stack.insert_value("test_function", test_function.into());
+
+        let product =
+            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+
+        assert_eq!(product, values::ValueNone.into());
+    }
+
+    #[test]
+    fn builtin_function_no_args() {
+        let test_function = build_function!(
+            test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack) -> ValueType::UnsignedInteger {
+                Ok(values::UnsignedInteger::from(846).into())
+            }
         );
 
         use crate::execution::standard_environment::build_prelude;
@@ -457,5 +484,70 @@ mod test {
             execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
 
         assert_eq!(product, values::UnsignedInteger::from(846).into());
+    }
+
+    #[test]
+    fn builtin_function_with_args() {
+        let test_function = build_function!(
+            test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, a: UnsignedInteger, b: UnsignedInteger) -> ValueType::UnsignedInteger {
+                Ok(values::UnsignedInteger::from(a.0 + b.0).into())
+            }
+        );
+
+        use crate::execution::standard_environment::build_prelude;
+
+        let root = crate::compile::full_compile("test_function(a = 1u, b = 2u)");
+        let prelude = build_prelude();
+        let mut stack = Stack::new(prelude);
+        stack.insert_value("test_function", test_function.into());
+
+        let product =
+            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+
+        assert_eq!(product, values::UnsignedInteger::from(3).into());
+    }
+
+    #[test]
+    fn builtin_function_with_default_value() {
+        let test_function = build_function!(
+            test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, a: UnsignedInteger, b: UnsignedInteger = UnsignedInteger::from(2).into()) -> ValueType::UnsignedInteger {
+                Ok(values::UnsignedInteger::from(a.0 + b.0).into())
+            }
+        );
+
+        use crate::execution::standard_environment::build_prelude;
+
+        let root = crate::compile::full_compile("test_function(a = 1u)");
+        let prelude = build_prelude();
+        let mut stack = Stack::new(prelude);
+        stack.insert_value("test_function", test_function.into());
+
+        let product =
+            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+
+        assert_eq!(product, values::UnsignedInteger::from(3).into());
+    }
+
+    #[test]
+    fn builtin_function_captured_value() {
+        let b = 2;
+
+        let test_function = build_function!(
+            test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, a: UnsignedInteger) -> ValueType::UnsignedInteger {
+                Ok(values::UnsignedInteger::from(a.0 + b).into())
+            }
+        );
+
+        use crate::execution::standard_environment::build_prelude;
+
+        let root = crate::compile::full_compile("test_function(a = 1u)");
+        let prelude = build_prelude();
+        let mut stack = Stack::new(prelude);
+        stack.insert_value("test_function", test_function.into());
+
+        let product =
+            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+
+        assert_eq!(product, values::UnsignedInteger::from(3).into());
     }
 }

@@ -961,7 +961,6 @@ dependencies = [
  "enum_dispatch",
  "enum_downcast",
  "file-guard",
- "fortuples",
  "hashable-map",
  "imstr 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits",

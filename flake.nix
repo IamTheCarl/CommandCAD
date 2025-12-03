@@ -57,6 +57,7 @@
             fenix-channel.rustfmt
             fenix-channel.rustc
             fenix-channel.cargo
+            cargo-expand
           ];
 
 	  shellHook = ''
