@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, fmt::Display};
+use std::cmp::Ordering;
 
 use crate::compile::{self, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation};
 
@@ -26,7 +26,7 @@ mod logging;
 mod stack;
 mod standard_environment;
 pub mod values;
-use errors::{ErrorType, ExpressionResult};
+use errors::ExpressionResult;
 use logging::{LocatedStr, RuntimeLog, StackScope};
 use stack::Stack;
 use values::{Object, Value, ValueType};
@@ -266,40 +266,6 @@ fn execute_binary_expression(
             }
         },
     )
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct MissingSemicolon {
-    actual_value_type: ValueType,
-}
-
-impl ErrorType for MissingSemicolon {}
-
-impl Display for MissingSemicolon {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Expected void type, found `{}`. Are you missing a semicolon?",
-            self.actual_value_type
-        )
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct AssignmentTypeMissmatch {
-    expected: ValueType,
-    got: ValueType,
-}
-
-impl ErrorType for AssignmentTypeMissmatch {}
-
-impl Display for AssignmentTypeMissmatch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "When assigning a new value to an already defined variable, you cannot change the variable's type. This variable's type was `{}`, but you tried to assign it a value with a `{}` typing.", self.expected, self.got
-        )
-    }
 }
 
 #[cfg(test)]
