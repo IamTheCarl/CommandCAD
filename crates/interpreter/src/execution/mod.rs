@@ -383,6 +383,12 @@ mod test {
     }
 
     #[test]
+    fn let_in_self_ref() {
+        let product = test_run("let value = 23u; value2 = value + 2u; in value2").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(25).into());
+    }
+
+    #[test]
     fn string() {
         let product = test_run("\"a simple string of text\"").unwrap();
         assert_eq!(
