@@ -26,7 +26,7 @@ use crate::{
     execution::{
         errors::{ErrorType, ExpressionResult, Raise as _},
         logging::RuntimeLog,
-        stack::Stack,
+        stack::{ScopeType, Stack},
     },
 };
 
@@ -118,18 +118,25 @@ impl Dictionary {
     ) -> ExpressionResult<Self> {
         let mut members = HashMap::with_capacity(ast_node.node.assignments.len());
 
-        for assignment in ast_node.node.assignments.iter() {
-            let name = assignment.node.name.node.clone();
-            let value = execute_expression(log, stack_trace, stack, &assignment.node.assignment)?;
+        stack.scope(stack_trace, ScopeType::Inherited, |stack, stack_trace| {
+            for assignment in ast_node.node.assignments.iter() {
+                let name = assignment.node.name.node.clone();
+                let value =
+                    execute_expression(log, stack_trace, stack, &assignment.node.assignment)?;
 
-            if members.insert(name, value).is_some() {
-                // That's a duplicate member.
-                return Err(DuplicateMemberError {
-                    name: assignment.node.name.node.clone(),
+                if members.insert(name.clone(), value.clone()).is_some() {
+                    // That's a duplicate member.
+                    return Err(DuplicateMemberError {
+                        name: assignment.node.name.node.clone(),
+                    }
+                    .to_error(stack_trace.iter().chain([&assignment.reference])));
                 }
-                .to_error(stack_trace.iter().chain([&assignment.reference])));
+
+                stack.insert_value(name, value);
             }
-        }
+
+            Ok(())
+        })??;
 
         Ok(Self::from(members))
     }
@@ -159,7 +166,7 @@ impl Display for DuplicateMemberError {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::execution::{test_run, values::ValueNone};
+    use crate::execution::{test_run, values};
 
     #[test]
     fn build_dictionary() {
@@ -167,7 +174,7 @@ mod test {
         let expected = Arc::new(DictionaryData {
             members: HashableMap::from(HashMap::from_iter([(
                 "none".to_string(),
-                ValueNone.into(),
+                values::ValueNone.into(),
             )])),
             struct_def: StructDefinition {
                 members: Arc::new(HashableMap::from(HashMap::from([(
@@ -193,5 +200,11 @@ mod test {
     #[test]
     fn non_existant_member() {
         test_run("(void = ()).does_not_exist").unwrap_err();
+    }
+
+    #[test]
+    fn reference_own_member() {
+        let product = test_run("let d = (one = 1u, two = one + 1u); in d.two").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(2).into());
     }
 }
