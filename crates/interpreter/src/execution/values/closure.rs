@@ -364,9 +364,6 @@ macro_rules! build_argument_signature_list {
 }
 
 macro_rules! build_function {
-    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) $code:block) => {
-        build_function!($name ($log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack $(, $($arg: $ty $(= $default)?),*)?) -> ValueType::TypeNone $code)
-    };
     ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
         struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<Value>> {
             function: F,
@@ -410,6 +407,71 @@ macro_rules! build_function {
         crate::execution::values::closure::BuiltinFunction {
             callable: Arc::new(BuiltFunction {
             function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack $(, $($arg: $ty),*)?| -> ExpressionResult<Value> { $code },
+            signature: std::sync::Arc::new(Signature {
+                argument_type: StructDefinition {
+                    members,
+                    variadic: false,
+                },
+                return_type: $return_type
+            }),
+        })
+        }
+    }};
+}
+
+macro_rules! build_method {
+    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:ty $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
+        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<Value>> {
+            function: F,
+            signature: Arc<crate::execution::values::closure::Signature>,
+        }
+
+        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<Value>> Callable for BuiltFunction<F> {
+            fn call(
+                &self,
+                runtime: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                stack: &mut Stack,
+                argument: Dictionary,
+            ) -> ExpressionResult<Value> {
+
+                let this = stack.get_variable(
+                    stack_trace,
+                    crate::execution::logging::LocatedStr {
+                        location: stack_trace.last().unwrap().clone(),
+                        string: "self",
+                    },
+                )?.downcast_ref::<$this_type>(stack_trace)?.clone();
+
+                self.signature
+                    .argument_type
+                    .check_other_qualifies(argument.struct_def())
+                    .map_err(|error| error.to_error(stack_trace.iter()))?;
+
+                // Argument is potentially unused if we take no arguments.
+                let mut _argument = self.signature.argument_type.fill_defaults(argument);
+
+                let _data = Arc::make_mut(&mut _argument.data);
+                $($(let $arg: $ty = _data.members.remove(stringify!($arg))
+                        .expect("Argument was not present after argument check.").downcast(stack_trace)?;)*)?
+
+                    (self.function)(runtime, stack_trace, stack, this $(, $($arg),*)?)
+            }
+
+            fn name(&self) -> &str {
+                stringify!($name)
+            }
+
+            fn signature(&self) -> &Arc<Signature> {
+                &self.signature
+            }
+        }
+
+        let members = std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from(build_argument_signature_list!($($($arg: $ty $(= $default)?),*)?))));
+
+        crate::execution::values::closure::BuiltinFunction {
+            callable: Arc::new(BuiltFunction {
+            function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $this: $this_type $(, $($arg: $ty),*)?| -> ExpressionResult<Value> { $code },
             signature: std::sync::Arc::new(Signature {
                 argument_type: StructDefinition {
                     members,
@@ -478,7 +540,7 @@ mod test {
     use super::*;
     use crate::execution::{
         test_run,
-        values::{self, StructMember, UnsignedInteger, ValueNone},
+        values::{self, StructMember, UnsignedInteger},
     };
     use hashable_map::HashableMap;
     use pretty_assertions::assert_eq;
@@ -635,27 +697,6 @@ mod test {
     }
 
     #[test]
-    fn builtin_function_no_args_no_result() {
-        let test_function = build_function!(
-            test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack) {
-                Ok(ValueNone.into())
-            }
-        );
-
-        use crate::execution::standard_environment::build_prelude;
-
-        let root = crate::compile::full_compile("test_function()");
-        let prelude = build_prelude();
-        let mut stack = Stack::new(prelude);
-        stack.insert_value("test_function", test_function.into());
-
-        let product =
-            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
-
-        assert_eq!(product, values::ValueNone.into());
-    }
-
-    #[test]
     fn builtin_function_no_args() {
         let test_function = build_function!(
             test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack) -> ValueType::UnsignedInteger {
@@ -739,5 +780,53 @@ mod test {
             execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
 
         assert_eq!(product, values::UnsignedInteger::from(3).into());
+    }
+
+    #[test]
+    fn builtin_method() {
+        let test_method = build_method!(
+            test_method(log: &mut dyn RuntimeLog, stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, this: Dictionary) -> ValueType::UnsignedInteger {
+                this.get_attribute(log, stack_trace, "value").cloned()
+            }
+        );
+
+        use crate::execution::standard_environment::build_prelude;
+
+        let root = crate::compile::full_compile(
+            "let object = (value = 5u, test_method = provided_test_method); in object:test_method()",
+        );
+        let prelude = build_prelude();
+        let mut stack = Stack::new(prelude);
+        stack.insert_value("provided_test_method", test_method.into());
+
+        let product =
+            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn builtin_method_with_argument() {
+        let test_method = build_method!(
+            test_method(log: &mut dyn RuntimeLog, stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, this: Dictionary, to_add: UnsignedInteger) -> ValueType::UnsignedInteger {
+                let value: &UnsignedInteger = this.get_attribute(log, stack_trace, "value")?.downcast_ref(stack_trace)?;
+
+                Ok(values::UnsignedInteger::from(value.0 + to_add.0).into())
+            }
+        );
+
+        use crate::execution::standard_environment::build_prelude;
+
+        let root = crate::compile::full_compile(
+            "let object = (value = 5u, test_method = provided_test_method); in object:test_method(to_add = 10u)",
+        );
+        let prelude = build_prelude();
+        let mut stack = Stack::new(prelude);
+        stack.insert_value("provided_test_method", test_method.into());
+
+        let product =
+            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+
+        assert_eq!(product, values::UnsignedInteger::from(15).into());
     }
 }
