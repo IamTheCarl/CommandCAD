@@ -143,7 +143,7 @@ fn find_all_variable_accesses_in_expression(
         Expression::Parenthesis(ast_node) => {
             find_all_variable_accesses_in_expression(&ast_node.node, access_collector)
         }
-        Expression::Path(ast_node) => {
+        Expression::IdentityPath(ast_node) => {
             // Only the top most parent matters.
             access_collector(&ast_node.node.path[0])
         }
@@ -205,7 +205,8 @@ fn find_all_variable_accesses_in_expression(
         | Expression::Scalar(_)
         | Expression::SignedInteger(_)
         | Expression::String(_)
-        | Expression::UnsignedInteger(_) => Ok(()),
+        | Expression::UnsignedInteger(_)
+        | Expression::SelfPath(_) => Ok(()),
     }
 }
 
@@ -292,7 +293,7 @@ impl Object for UserClosure {
 
         let argument = self.data.signature.argument_type.fill_defaults(argument);
 
-        stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
+        stack.scope(stack_trace, ScopeType::Inherited, |stack, stack_trace| {
             for (name, value) in argument.iter() {
                 stack.insert_value(name, value.clone());
             }
@@ -547,6 +548,15 @@ mod test {
             test_run("let value = 3u; my_function = (input: std.types.UInt) -> std.types.UInt: value + input; in my_function(input = 4u)")
                 .unwrap();
         assert_eq!(product, values::UnsignedInteger::from(7).into());
+    }
+
+    #[test]
+    fn call_custom_method() {
+        let product = test_run(
+            "let object = (value = 5u, method = () -> std.types.UInt: self.value;); in object:method()",
+        )
+        .unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
     }
 
     #[test]

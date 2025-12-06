@@ -22,7 +22,7 @@ Single
   (expression
     (list
       (expression
-        (path
+        (identity_path
           (identifier))))))
 
 ==================
@@ -37,16 +37,16 @@ Multi
   (expression
     (list
       (expression
-        (path
+        (identity_path
           (identifier)))
       (expression
-        (path
+        (identity_path
           (identifier)))
       (expression
-        (path
+        (identity_path
           (identifier)))
       (expression
-        (path
+        (identity_path
           (identifier))))))
 
 ==================
@@ -61,14 +61,14 @@ Multi with comma at the end
   (expression
     (list
       (expression
-        (path
+        (identity_path
           (identifier)))
       (expression
-        (path
+        (identity_path
           (identifier)))
       (expression
-        (path
+        (identity_path
           (identifier)))
       (expression
-        (path
+        (identity_path
           (identifier))))))

@@ -173,7 +173,7 @@
         "required": true,
         "types": [
           {
-            "type": "path",
+            "type": "identity_path",
             "named": true
           },
           {
@@ -282,6 +282,10 @@
           "named": true
         },
         {
+          "type": "identity_path",
+          "named": true
+        },
+        {
           "type": "if",
           "named": true
         },
@@ -302,11 +306,11 @@
           "named": true
         },
         {
-          "type": "path",
+          "type": "scalar",
           "named": true
         },
         {
-          "type": "scalar",
+          "type": "self_path",
           "named": true
         },
         {
@@ -556,6 +560,21 @@
     "fields": {}
   },
   {
+    "type": "identity_path",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "if",
     "named": true,
     "fields": {
@@ -747,21 +766,6 @@
     }
   },
   {
-    "type": "path",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "identifier",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
     "type": "scalar",
     "named": true,
     "fields": {
@@ -799,6 +803,32 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "self_path",
+    "named": true,
+    "fields": {
+      "identifier": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "self",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1117,6 +1147,10 @@
   {
     "type": "let",
     "named": false
+  },
+  {
+    "type": "self",
+    "named": true
   },
   {
     "type": "string",

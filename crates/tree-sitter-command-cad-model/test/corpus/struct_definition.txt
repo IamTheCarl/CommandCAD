@@ -25,7 +25,7 @@ One
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier))))))))
 
@@ -44,7 +44,7 @@ One,
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier))))))))
 
@@ -89,7 +89,7 @@ One, ...
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier)))))
       (varadic_dots))))
@@ -109,7 +109,7 @@ One, ...,
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier)))))
       (varadic_dots))))
@@ -129,14 +129,14 @@ One, two
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier)))))
       (struct_member
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier))))))))
 
@@ -155,14 +155,14 @@ One, two,
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier)))))
       (struct_member
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier))))))))
 
@@ -181,14 +181,14 @@ One, two, ...,
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier)))))
       (struct_member
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier)))))
       (varadic_dots))))
@@ -208,11 +208,11 @@ Default
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier))))
         (expression
-          (path
+          (identity_path
             (identifier)))))))
 
 ==================
@@ -230,9 +230,9 @@ Default,
         (identifier)
         (declaration_type
           (expression
-            (path
+            (identity_path
               (identifier)
               (identifier))))
         (expression
-          (path
+          (identity_path
             (identifier)))))))

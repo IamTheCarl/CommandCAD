@@ -100,6 +100,7 @@ module.exports = grammar({
     identifier: _ => /[a-zA-Z_][a-zA-Z0-9_]*/,
     string: _ => /\"(\\\"|[^\"])*\"/,
     default: _ => 'default',
+    self: _ => 'self',
 
     base_ten: _ => /[0-9]+/,
     octal: _ => seq(token.immediate(/0o/), /[0-9]+/),
@@ -145,7 +146,8 @@ module.exports = grammar({
       $.scalar,
       $.boolean,
       $.string,
-      $.path,
+      $.identity_path,
+      $.self_path,
       $.list,
       $.if,
       $.struct_definition,
@@ -166,7 +168,8 @@ module.exports = grammar({
     let_in: $ => seq('let', field('assignment', repeat($.let_in_assignment)), 'in', field('expression', $.expression)),
     let_in_assignment: $ => seq(field('ident', $.identifier), '=', field('value', $.expression), ';'),
 
-    path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
+    identity_path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
+    self_path: $ => seq($.self, repeat(seq('.', field('identifier', $.identifier)))),
 
     declaration_type: $ => seq(':', $.expression),
 
@@ -207,7 +210,7 @@ module.exports = grammar({
     closure_definition: $ => prec.left(PREC.closure, seq(
       field('argument', $.struct_definition),
       '->',
-      field('result', choice($.struct_definition, $.path)),
+      field('result', choice($.struct_definition, $.identity_path)),
       field('expression', $.expression),
     )),
     

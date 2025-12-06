@@ -42,7 +42,8 @@ pub enum Expression {
     If(AstNode<IfExpression>),
     List(AstNode<Vec<AstNode<Expression>>>),
     Parenthesis(Box<AstNode<Expression>>),
-    Path(AstNode<IdentityPath>),
+    IdentityPath(AstNode<IdentityPath>),
+    SelfPath(AstNode<SelfPath>),
     Scalar(AstNode<Scalar>),
     SignedInteger(AstNode<i64>),
     String(AstNode<String>),
@@ -50,33 +51,31 @@ pub enum Expression {
     UnaryExpression(AstNode<Box<UnaryExpression>>),
     UnsignedInteger(AstNode<u64>),
     FunctionCall(AstNode<Box<FunctionCall>>),
-    MethodCall(AstNode<MethodCall>),
+    MethodCall(AstNode<Box<MethodCall>>),
     LetIn(AstNode<Box<LetIn>>),
 }
 
-impl<'t> Parse<'t, nodes::anon_unions::Path_StructDefinition<'t>> for Expression {
+impl<'t> Parse<'t, nodes::anon_unions::IdentityPath_StructDefinition<'t>> for Expression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::anon_unions::Path_StructDefinition<'t>,
+        value: nodes::anon_unions::IdentityPath_StructDefinition<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         match value {
-            nodes::anon_unions::Path_StructDefinition::Path(path) => Ok(AstNode::new(
-                file,
-                &path,
-                Self::Path(IdentityPath::parse(file, input, path)?),
-            )),
-            nodes::anon_unions::Path_StructDefinition::StructDefinition(struct_definition) => {
+            nodes::anon_unions::IdentityPath_StructDefinition::IdentityPath(path) => {
                 Ok(AstNode::new(
                     file,
-                    &struct_definition,
-                    Self::StructDefinition(StructDefinition::parse(
-                        file,
-                        input,
-                        struct_definition,
-                    )?),
+                    &path,
+                    Self::IdentityPath(IdentityPath::parse(file, input, path)?),
                 ))
             }
+            nodes::anon_unions::IdentityPath_StructDefinition::StructDefinition(
+                struct_definition,
+            ) => Ok(AstNode::new(
+                file,
+                &struct_definition,
+                Self::StructDefinition(StructDefinition::parse(file, input, struct_definition)?),
+            )),
         }
     }
 }
@@ -198,16 +197,30 @@ impl<'t> Parse<'t, nodes::Parenthesis<'t>> for Expression {
     }
 }
 
-impl<'t> Parse<'t, nodes::Path<'t>> for Expression {
+impl<'t> Parse<'t, nodes::IdentityPath<'t>> for Expression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::Path<'t>,
+        value: nodes::IdentityPath<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         Ok(AstNode::new(
             file,
             &value,
-            Self::Path(IdentityPath::parse(file, input, value)?),
+            Self::IdentityPath(IdentityPath::parse(file, input, value)?),
+        ))
+    }
+}
+
+impl<'t> Parse<'t, nodes::SelfPath<'t>> for Expression {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::SelfPath<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        Ok(AstNode::new(
+            file,
+            &value,
+            Self::SelfPath(SelfPath::parse(file, input, value)?),
         ))
     }
 }
@@ -382,7 +395,7 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for Expression {
         Ok(AstNode::new(
             file,
             &value,
-            Self::MethodCall(MethodCall::parse(file, input, value)?),
+            Self::MethodCall(MethodCall::parse(file, input, value)?.into_box()),
         ))
     }
 }
@@ -428,7 +441,8 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
             ChildType::If(if_expression) => Self::parse(file, input, if_expression),
             ChildType::List(list) => Self::parse(file, input, list),
             ChildType::Parenthesis(parenthesis) => Self::parse(file, input, parenthesis),
-            ChildType::Path(path) => Self::parse(file, input, path),
+            ChildType::IdentityPath(path) => Self::parse(file, input, path),
+            ChildType::SelfPath(path) => Self::parse(file, input, path),
             ChildType::Scalar(scalar) => Self::parse(file, input, scalar),
             ChildType::SignedInteger(signed_integer) => Self::parse(file, input, signed_integer),
             ChildType::String(string) => Self::parse(file, input, string),
@@ -593,15 +607,40 @@ pub struct IdentityPath {
     pub path: Vec<AstNode<String>>,
 }
 
-impl<'t> Parse<'t, nodes::Path<'t>> for IdentityPath {
+impl<'t> Parse<'t, nodes::IdentityPath<'t>> for IdentityPath {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::Path<'t>,
+        value: nodes::IdentityPath<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let mut cursor = value.walk();
         let mut path = Vec::new();
 
+        for ident in value.identifiers(&mut cursor) {
+            let ident = ident?;
+            let text = String::parse(file, input, ident)?;
+
+            path.push(text);
+        }
+
+        Ok(AstNode::new(file, &value, Self { path }))
+    }
+}
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub struct SelfPath {
+    pub path: Vec<AstNode<String>>,
+}
+
+impl<'t> Parse<'t, nodes::SelfPath<'t>> for SelfPath {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::SelfPath<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        let mut path = Vec::new();
+
+        let mut cursor = value.walk();
         for ident in value.identifiers(&mut cursor) {
             let ident = ident?;
             let text = String::parse(file, input, ident)?;
@@ -915,7 +954,7 @@ impl<'t> Parse<'t, nodes::FunctionCall<'t>> for FunctionCall {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct MethodCall {
-    pub self_dictionary: AstNode<Box<Expression>>,
+    pub self_dictionary: AstNode<Expression>,
     pub to_call: AstNode<String>,
     pub argument: AstNode<DictionaryConstruction>,
 }
@@ -926,7 +965,7 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for MethodCall {
         input: &'i str,
         value: nodes::MethodCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        let self_dictionary = Expression::parse(file, input, value.self_dictionary()?)?.into_box();
+        let self_dictionary = Expression::parse(file, input, value.self_dictionary()?)?;
         let to_call = String::parse(file, input, value.to_call()?)?;
         let argument = DictionaryConstruction::parse(file, input, value.argument()?)?;
 
@@ -1102,7 +1141,7 @@ mod test {
 
         let returns = &closure.node.return_type;
         let returns_reference = returns.reference.clone();
-        let returns_path = returns.node.as_path().unwrap();
+        let returns_path = returns.node.as_identitypath().unwrap();
         let returns_path_reference = returns_path.reference.clone();
 
         let expression = &closure.node.expression;
@@ -1125,7 +1164,7 @@ mod test {
                         },
                         return_type: AstNode {
                             reference: returns_reference,
-                            node: Expression::Path(AstNode {
+                            node: Expression::IdentityPath(AstNode {
                                 reference: returns_path_reference,
                                 node: IdentityPath {
                                     path: vec![
@@ -1390,9 +1429,9 @@ mod test {
     }
 
     #[test]
-    fn local_path() {
+    fn identity_path() {
         let root = full_compile("this.thang");
-        let path = root.node.as_path().unwrap();
+        let path = root.node.as_identitypath().unwrap();
         let this = &path.node.path[0];
         let thang = &path.node.path[1];
 
@@ -1400,7 +1439,7 @@ mod test {
             root,
             AstNode {
                 reference: root.reference.clone(),
-                node: Expression::Path(AstNode {
+                node: Expression::IdentityPath(AstNode {
                     reference: path.reference.clone(),
                     node: IdentityPath {
                         path: vec![
@@ -1420,9 +1459,9 @@ mod test {
     }
 
     #[test]
-    fn argument_path() {
-        let root = full_compile("@.this.thang");
-        let path = root.node.as_path().unwrap();
+    fn self_path() {
+        let root = full_compile("self.this.thang");
+        let path = root.node.as_selfpath().unwrap();
         let this = &path.node.path[0];
         let thang = &path.node.path[1];
 
@@ -1430,9 +1469,9 @@ mod test {
             root,
             AstNode {
                 reference: root.reference.clone(),
-                node: Expression::Path(AstNode {
+                node: Expression::SelfPath(AstNode {
                     reference: path.reference.clone(),
-                    node: IdentityPath {
+                    node: SelfPath {
                         path: vec![
                             AstNode {
                                 reference: this.reference.clone(),
@@ -1623,11 +1662,11 @@ mod test {
         let struct_definition = root.node.as_structdefinition().unwrap();
         let members = &struct_definition.node.members;
         let one = &members[0];
-        let one_ty = one.node.ty.node.as_path().unwrap();
+        let one_ty = one.node.ty.node.as_identitypath().unwrap();
         let two = &members[1];
-        let two_ty = two.node.ty.node.as_path().unwrap();
+        let two_ty = two.node.ty.node.as_identitypath().unwrap();
         let two_default = two.node.default.as_ref().unwrap();
-        let two_default_path = two_default.node.as_path().unwrap();
+        let two_default_path = two_default.node.as_identitypath().unwrap();
 
         assert!(struct_definition.node.variadic);
         assert_eq!(members.len(), 2);
@@ -1644,7 +1683,7 @@ mod test {
                     },
                     ty: AstNode {
                         reference: one.node.ty.reference.clone(),
-                        node: Expression::Path(AstNode {
+                        node: Expression::IdentityPath(AstNode {
                             reference: one_ty.reference.clone(),
                             node: IdentityPath {
                                 path: vec![
@@ -1675,7 +1714,7 @@ mod test {
                     },
                     ty: AstNode {
                         reference: two.node.ty.reference.clone(),
-                        node: Expression::Path(AstNode {
+                        node: Expression::IdentityPath(AstNode {
                             reference: two_ty.reference.clone(),
                             node: IdentityPath {
                                 path: vec![
@@ -1693,7 +1732,7 @@ mod test {
                     },
                     default: Some(AstNode {
                         reference: two_default.reference.clone(),
-                        node: Expression::Path(AstNode {
+                        node: Expression::IdentityPath(AstNode {
                             reference: two_default_path.reference.clone(),
                             node: IdentityPath {
                                 path: vec![AstNode {
@@ -1812,7 +1851,7 @@ mod test {
     fn function_call_no_arguments() {
         let root = full_compile("a.b()");
         let call = root.node.as_functioncall().unwrap();
-        let to_call = call.node.to_call.node.as_path().unwrap();
+        let to_call = call.node.to_call.node.as_identitypath().unwrap();
         assert_eq!(
             root,
             AstNode {
@@ -1822,7 +1861,7 @@ mod test {
                     node: Box::new(FunctionCall {
                         to_call: AstNode {
                             reference: call.node.to_call.reference.clone(),
-                            node: Expression::Path(AstNode {
+                            node: Expression::IdentityPath(AstNode {
                                 reference: to_call.reference.clone(),
                                 node: IdentityPath {
                                     path: vec![
@@ -1854,7 +1893,7 @@ mod test {
     fn function_call_with_arguments() {
         let root = full_compile("a.b(value = 24u)");
         let call = root.node.as_functioncall().unwrap();
-        let to_call = call.node.to_call.node.as_path().unwrap();
+        let to_call = call.node.to_call.node.as_identitypath().unwrap();
         let dict = &call.node.argument.node;
         let dict_assignment = &dict.assignments[0];
         assert_eq!(
@@ -1866,7 +1905,7 @@ mod test {
                     node: Box::new(FunctionCall {
                         to_call: AstNode {
                             reference: call.node.to_call.reference.clone(),
-                            node: Expression::Path(AstNode {
+                            node: Expression::IdentityPath(AstNode {
                                 reference: to_call.reference.clone(),
                                 node: IdentityPath {
                                     path: vec![
@@ -1931,10 +1970,10 @@ mod test {
                 reference: root.reference.clone(),
                 node: Expression::MethodCall(AstNode {
                     reference: call.reference.clone(),
-                    node: MethodCall {
+                    node: Box::new(MethodCall {
                         self_dictionary: AstNode {
                             reference: call.node.self_dictionary.reference.clone(),
-                            node: Box::new(Expression::UnsignedInteger(AstNode {
+                            node: Expression::UnsignedInteger(AstNode {
                                 reference: call
                                     .node
                                     .self_dictionary
@@ -1944,7 +1983,7 @@ mod test {
                                     .reference
                                     .clone(),
                                 node: 5u64
-                            }))
+                            })
                         },
                         to_call: AstNode {
                             reference: to_call.reference.clone(),
@@ -1956,7 +1995,7 @@ mod test {
                                 assignments: vec![]
                             }
                         }
-                    }
+                    })
                 })
             }
         );
@@ -1975,10 +2014,10 @@ mod test {
                 reference: root.reference.clone(),
                 node: Expression::MethodCall(AstNode {
                     reference: call.reference.clone(),
-                    node: MethodCall {
+                    node: Box::new(MethodCall {
                         self_dictionary: AstNode {
                             reference: call.node.self_dictionary.reference.clone(),
-                            node: Box::new(Expression::UnsignedInteger(AstNode {
+                            node: Expression::UnsignedInteger(AstNode {
                                 reference: call
                                     .node
                                     .self_dictionary
@@ -1988,7 +2027,7 @@ mod test {
                                     .reference
                                     .clone(),
                                 node: 83u64
-                            }))
+                            })
                         },
                         to_call: AstNode {
                             reference: to_call.reference.clone(),
@@ -2026,7 +2065,7 @@ mod test {
                                 }]
                             }
                         }
-                    }
+                    })
                 })
             }
         );

@@ -10,7 +10,7 @@ Empty
   (expression
     (closure_definition
       (struct_definition)
-      (path
+      (identity_path
         (identifier)
         (identifier))
       (expression
@@ -32,11 +32,11 @@ With argument
           (identifier)
           (declaration_type
             (expression
-              (path
+              (identity_path
                 (identifier)
                 (identifier)
                 (identifier))))))
-      (path
+      (identity_path
         (identifier)
         (identifier))
       (expression
@@ -58,20 +58,20 @@ With Binary Expression
           (identifier)
           (declaration_type
             (expression
-              (path
+              (identity_path
                 (identifier)
                 (identifier)
                 (identifier))))))
-      (path
+      (identity_path
         (identifier)
         (identifier))
       (expression
         (binary_expression
           (expression
-            (path
+            (identity_path
               (identifier)))
           (expression
-            (path
+            (identity_path
               (identifier))))))))
 
 ==================
@@ -86,13 +86,13 @@ value(value=value)
   (expression
     (function_call
       (expression
-        (path
+        (identity_path
           (identifier)))
       (dictionary_construction
         (dictionary_member_assignment
           (identifier)
           (expression
-            (path
+            (identity_path
               (identifier))))))))
 
 ==================
@@ -107,7 +107,7 @@ value()
   (expression
     (function_call
       (expression
-        (path
+        (identity_path
           (identifier)))
       (dictionary_construction))))
 
@@ -123,14 +123,14 @@ value.value(value=value)
   (expression
     (function_call
       (expression
-        (path
+        (identity_path
           (identifier)
           (identifier)))
       (dictionary_construction
         (dictionary_member_assignment
           (identifier)
           (expression
-            (path
+            (identity_path
               (identifier))))))))
 
 ==================
@@ -145,14 +145,14 @@ value:value(value=value)
   (expression
     (method_call
       (expression
-        (path
+        (identity_path
           (identifier)))
       (identifier)
       (dictionary_construction
         (dictionary_member_assignment
           (identifier)
           (expression
-            (path
+            (identity_path
               (identifier))))))))
 
 ==================
@@ -167,7 +167,7 @@ value:value()
   (expression
     (method_call
       (expression
-        (path
+        (identity_path
           (identifier)))
       (identifier)
       (dictionary_construction))))
@@ -184,7 +184,7 @@ value.value:value(value=value)
   (expression
     (method_call
       (expression
-        (path
+        (identity_path
           (identifier)
           (identifier)))
       (identifier)
@@ -192,6 +192,6 @@ value.value:value(value=value)
         (dictionary_member_assignment
           (identifier)
           (expression
-            (path
+            (identity_path
               (identifier))))))))
 

@@ -16,24 +16,24 @@ Precedence
               (expression
                 (binary_expression
                   (expression
-                    (path
+                    (identity_path
                       (identifier)))
                   (expression
                     (binary_expression
                       (expression
-                        (path
+                        (identity_path
                           (identifier)))
                       (expression
                         (binary_expression
                           (expression
-                            (path
+                            (identity_path
                               (identifier)))
                           (expression
-                            (path
+                            (identity_path
                               (identifier)))))))))
               (expression
-                (path
+                (identity_path
                   (identifier)))))))
       (expression
-        (path
+        (identity_path
           (identifier))))))

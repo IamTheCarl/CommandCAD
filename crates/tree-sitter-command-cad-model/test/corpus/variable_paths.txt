@@ -8,8 +8,25 @@ this.is.a.test
 
 (source_file
 (expression
-  (path
+  (identity_path
     (identifier)
     (identifier)
     (identifier)
     (identifier))))
+
+==================
+Self Path
+==================
+
+self.this.is.a.test
+
+---
+
+(source_file
+  (expression
+    (self_path
+      (self)
+      (identifier)
+      (identifier)
+      (identifier)
+      (identifier))))

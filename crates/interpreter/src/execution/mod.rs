@@ -18,7 +18,12 @@
 
 use std::cmp::Ordering;
 
-use crate::compile::{self, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation};
+use crate::{
+    compile::{
+        self, AstNode, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation,
+    },
+    execution::{stack::ScopeType, values::Dictionary},
+};
 
 mod errors;
 mod formatting;
@@ -120,8 +125,16 @@ pub fn execute_expression(
             compile::Expression::Parenthesis(ast_node) => {
                 execute_expression(log, stack_trace, stack, &ast_node)
             }
-            compile::Expression::Path(ast_node) => {
+            compile::Expression::IdentityPath(ast_node) => {
                 let path_iter = ast_node.node.path.iter();
+                Ok(find_value(log, stack_trace, stack, path_iter)?)
+            }
+            compile::Expression::SelfPath(ast_node) => {
+                let self_code = AstNode {
+                    reference: ast_node.reference.clone(),
+                    node: String::from("self"),
+                };
+                let path_iter = [&self_code].into_iter().chain(ast_node.node.path.iter());
                 Ok(find_value(log, stack_trace, stack, path_iter)?)
             }
 
@@ -149,7 +162,9 @@ pub fn execute_expression(
             compile::Expression::FunctionCall(ast_node) => {
                 execute_function_call(log, stack_trace, stack, ast_node)
             }
-            compile::Expression::MethodCall(ast_node) => todo!(),
+            compile::Expression::MethodCall(ast_node) => {
+                execute_method_call(log, stack_trace, stack, ast_node)
+            }
             compile::Expression::LetIn(ast_node) => {
                 execute_let_in(log, stack_trace, stack, ast_node)
             }
@@ -183,7 +198,28 @@ fn execute_function_call(
     let to_call = execute_expression(log, stack_trace, stack, &call.node.to_call)?;
     let argument = values::Dictionary::from_ast(log, stack_trace, stack, &call.node.argument)?;
 
-    to_call.call(log, stack_trace, stack, argument)
+    stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
+        to_call.call(log, stack_trace, stack, argument)
+    })?
+}
+
+fn execute_method_call(
+    log: &mut dyn RuntimeLog,
+    stack_trace: &mut Vec<SourceReference>,
+    stack: &mut Stack,
+    call: &compile::AstNode<Box<compile::MethodCall>>,
+) -> ExpressionResult<Value> {
+    let self_dictionary = execute_expression(log, stack_trace, stack, &call.node.self_dictionary)?;
+    let to_call = self_dictionary
+        .get_attribute(log, stack_trace, &call.node.to_call.node)?
+        .clone();
+    let argument = values::Dictionary::from_ast(log, stack_trace, stack, &call.node.argument)?;
+
+    stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
+        stack.insert_value("self", self_dictionary);
+
+        to_call.call(log, stack_trace, stack, argument)
+    })?
 }
 
 fn execute_let_in(
