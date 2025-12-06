@@ -375,6 +375,15 @@ impl Display for DowncastError {
     }
 }
 
+impl IntoVariant<Self> for Value {
+    fn into_variant(self) -> Result<Self, Self>
+    where
+        Self: Sized,
+    {
+        Ok(self)
+    }
+}
+
 impl Value {
     pub fn downcast_ref<T>(&self, stack_trace: &[SourceReference]) -> ExpressionResult<&T>
     where

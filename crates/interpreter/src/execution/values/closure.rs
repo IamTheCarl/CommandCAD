@@ -321,7 +321,7 @@ impl StaticTypeName for UserClosure {
     }
 }
 
-pub trait Callable {
+pub trait Callable: Sync + Send {
     fn call(
         &self,
         runtime: &mut dyn RuntimeLog,
@@ -335,6 +335,7 @@ pub trait Callable {
     fn signature(&self) -> &Arc<Signature>;
 }
 
+#[macro_export]
 macro_rules! build_member_from_sig {
     ($name:ident: $ty:ident) => {
         (
@@ -356,28 +357,31 @@ macro_rules! build_member_from_sig {
     };
 }
 
+#[macro_export]
 macro_rules! build_argument_signature_list {
     ($($arg:ident: $ty:ident $(= $default:expr)?),*) => {{
-        let list: [(String, crate::execution::values::value_type::StructMember); _] = [$(build_member_from_sig!($arg: $ty $(= $default)?),)*];
+        let list: [(String, crate::execution::values::value_type::StructMember); _] = [$($crate::build_member_from_sig!($arg: $ty $(= $default)?),)*];
         list
     }};
 }
 
+#[macro_export]
 macro_rules! build_function {
     ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
-        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<Value>> {
+        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value>> {
             function: F,
             signature: Arc<crate::execution::values::closure::Signature>,
         }
 
-        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<Value>> Callable for BuiltFunction<F> {
+        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value> + Send + Sync> crate::execution::values::closure::Callable for BuiltFunction<F> {
             fn call(
                 &self,
                 runtime: &mut dyn RuntimeLog,
                 stack_trace: &mut Vec<SourceReference>,
                 stack: &mut Stack,
                 argument: Dictionary,
-            ) -> ExpressionResult<Value> {
+            ) -> crate::execution::errors::ExpressionResult<crate::execution::values::Value> {
+                use crate::execution::errors::Raise;
                 self.signature
                     .argument_type
                     .check_other_qualifies(argument.struct_def())
@@ -397,7 +401,7 @@ macro_rules! build_function {
                 stringify!($name)
             }
 
-            fn signature(&self) -> &Arc<Signature> {
+            fn signature(&self) -> &Arc<crate::execution::values::closure::Signature> {
                 &self.signature
             }
         }
@@ -406,7 +410,7 @@ macro_rules! build_function {
 
         crate::execution::values::closure::BuiltinFunction {
             callable: Arc::new(BuiltFunction {
-            function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack $(, $($arg: $ty),*)?| -> ExpressionResult<Value> { $code },
+            function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack $(, $($arg: $ty),*)?| -> ExpressionResult<crate::execution::values::Value> { $code },
             signature: std::sync::Arc::new(Signature {
                 argument_type: StructDefinition {
                     members,
@@ -419,21 +423,23 @@ macro_rules! build_function {
     }};
 }
 
+#[macro_export]
 macro_rules! build_method {
     ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:ty $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
-        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<Value>> {
+        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value>> {
             function: F,
             signature: Arc<crate::execution::values::closure::Signature>,
         }
 
-        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<Value>> Callable for BuiltFunction<F> {
+        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value> + Send + Sync> crate::execution::values::closure::Callable for BuiltFunction<F> {
             fn call(
                 &self,
                 runtime: &mut dyn RuntimeLog,
                 stack_trace: &mut Vec<SourceReference>,
                 stack: &mut Stack,
                 argument: Dictionary,
-            ) -> ExpressionResult<Value> {
+            ) -> crate::execution::errors::ExpressionResult<crate::execution::values::Value> {
+                use crate::execution::errors::Raise;
 
                 let this = stack.get_variable(
                     stack_trace,
@@ -462,18 +468,18 @@ macro_rules! build_method {
                 stringify!($name)
             }
 
-            fn signature(&self) -> &Arc<Signature> {
+            fn signature(&self) -> &Arc<crate::execution::values::closure::Signature> {
                 &self.signature
             }
         }
 
-        let members = std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from(build_argument_signature_list!($($($arg: $ty $(= $default)?),*)?))));
+        let members = std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from($crate::build_argument_signature_list!($($($arg: $ty $(= $default)?),*)?))));
 
         crate::execution::values::closure::BuiltinFunction {
             callable: Arc::new(BuiltFunction {
             function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $this: $this_type $(, $($arg: $ty),*)?| -> ExpressionResult<Value> { $code },
-            signature: std::sync::Arc::new(Signature {
-                argument_type: StructDefinition {
+            signature: std::sync::Arc::new(crate::execution::values::closure::Signature {
+                argument_type: crate::execution::values::StructDefinition {
                     members,
                     variadic: false,
                 },
@@ -486,7 +492,7 @@ macro_rules! build_method {
 
 #[derive(Clone)]
 pub struct BuiltinFunction {
-    callable: Arc<dyn Callable>,
+    pub callable: Arc<dyn Callable>,
 }
 
 impl std::fmt::Debug for BuiltinFunction {

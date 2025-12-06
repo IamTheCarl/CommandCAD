@@ -26,13 +26,14 @@ use super::{
 };
 
 use crate::{
+    build_method,
     compile::{self, AstNode, SourceReference},
     execute_expression,
     execution::{
         errors::{ErrorType, ExpressionResult},
         logging::RuntimeLog,
         stack::Stack,
-        values::{dictionary::DictionaryData, Dictionary},
+        values::{self, dictionary::DictionaryData, Dictionary},
     },
 };
 
@@ -69,7 +70,6 @@ impl ValueType {
         }
     }
 
-    // TODO we need to expose this method to the user.
     pub fn check_other_qualifies(
         &self,
         value_type: &ValueType,
@@ -148,6 +148,33 @@ impl Object for ValueType {
         let rhs: Self = rhs.downcast(stack_trace)?;
 
         Ok(Self::MultiType(Box::new(self), Box::new(rhs)).into())
+    }
+
+    fn get_attribute(
+        &self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        attribute: &str,
+    ) -> ExpressionResult<&Value> {
+        match attribute {
+            // pub fn check_other_qualifies(
+            //     &self,
+            //     value_type: &ValueType,
+            // ) -> Result<(), TypeQualificationError> {
+            "qualify" => {
+                static METHOD: std::sync::OnceLock<values::BuiltinFunction> =
+                    std::sync::OnceLock::new();
+                let value = METHOD.get_or_init(|| {
+                    build_method!(
+                        ValueType_qualify(log: &mut dyn RuntimeLog, stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, this: Dictionary, to_qualify: Value) -> ValueType::TypeNone {
+
+                            Ok(values::ValueNone.into())
+                        }
+                    )
+                });
+                Ok(value.into())
+            }
+        }
     }
 }
 
