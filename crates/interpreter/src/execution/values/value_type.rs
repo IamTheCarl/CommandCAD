@@ -26,15 +26,15 @@ use super::{
 };
 
 use crate::{
-    build_method,
     compile::{self, AstNode, SourceReference},
     execute_expression,
     execution::{
-        errors::{ErrorType, ExpressionResult},
+        errors::{ErrorType, ExpressionResult, Raise},
         logging::RuntimeLog,
         stack::Stack,
-        values::{self, dictionary::DictionaryData, Dictionary},
+        values::{self, dictionary::DictionaryData, Dictionary, MissingAttributeError},
     },
+    static_method,
 };
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -49,6 +49,7 @@ pub enum ValueType {
     Dictionary(StructDefinition),
     ValueType,
     MultiType(Box<ValueType>, Box<ValueType>),
+    Value,
 }
 
 impl From<StructDefinition> for ValueType {
@@ -114,6 +115,7 @@ impl ValueType {
                     }),
                 }
             }
+            (Self::Value, _) => Ok(()),
             (expected, got) => Err(TypeQualificationError::This {
                 expected: expected.clone(),
                 got: got.clone(),
@@ -157,23 +159,39 @@ impl Object for ValueType {
         attribute: &str,
     ) -> ExpressionResult<&Value> {
         match attribute {
-            // pub fn check_other_qualifies(
-            //     &self,
-            //     value_type: &ValueType,
-            // ) -> Result<(), TypeQualificationError> {
             "qualify" => {
-                static METHOD: std::sync::OnceLock<values::BuiltinFunction> =
-                    std::sync::OnceLock::new();
-                let value = METHOD.get_or_init(|| {
-                    build_method!(
-                        ValueType_qualify(log: &mut dyn RuntimeLog, stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, this: Dictionary, to_qualify: Value) -> ValueType::TypeNone {
-
-                            Ok(values::ValueNone.into())
-                        }
-                    )
-                });
-                Ok(value.into())
+                let value = static_method!(
+                    ValueType_qualify(
+                        _log: &mut dyn RuntimeLog,
+                        stack_trace: &mut Vec<SourceReference>,
+                        _stack: &mut Stack,
+                        this: ValueType,
+                        to_qualify: Value) -> ValueType::TypeNone
+                    {
+                        this.check_other_qualifies(&to_qualify.get_type()).map_err(|error| error.to_error(stack_trace.iter()))?;
+                        Ok(values::ValueNone.into())
+                    }
+                );
+                Ok(value)
             }
+            "try_qualify" => {
+                let value = static_method!(
+                    ValueType_qualify(
+                        _log: &mut dyn RuntimeLog,
+                        _stack_trace: &mut Vec<SourceReference>,
+                        _stack: &mut Stack,
+                        this: ValueType,
+                        to_qualify: Value) -> ValueType::TypeNone
+                    {
+                        Ok(values::Boolean(this.check_other_qualifies(&to_qualify.get_type()).is_ok()).into())
+                    }
+                );
+                Ok(value)
+            }
+            _ => Err(MissingAttributeError {
+                name: attribute.into(),
+            }
+            .to_error(stack_trace)),
         }
     }
 }
@@ -421,6 +439,8 @@ impl Display for TypeQualificationError {
 
 #[cfg(test)]
 mod test {
+    use pretty_assertions::assert_eq;
+
     use crate::execution::test_run;
 
     use super::*;
@@ -610,5 +630,63 @@ mod test {
         value_type
             .check_other_qualifies(&ValueType::Boolean)
             .unwrap_err();
+    }
+
+    #[test]
+    fn value_type_any_value() {
+        ValueType::Value
+            .check_other_qualifies(&ValueType::TypeNone)
+            .unwrap();
+
+        ValueType::Value
+            .check_other_qualifies(&ValueType::Boolean)
+            .unwrap();
+
+        ValueType::Value
+            .check_other_qualifies(&ValueType::SignedInteger)
+            .unwrap();
+
+        ValueType::Value
+            .check_other_qualifies(&ValueType::UnsignedInteger)
+            .unwrap();
+
+        ValueType::Value
+            .check_other_qualifies(&ValueType::Scalar(Dimension::length()))
+            .unwrap();
+
+        let closure = test_run("() -> std.types.None std.consts.None").unwrap();
+        let closure = closure.as_userclosure().unwrap();
+
+        ValueType::Value
+            .check_other_qualifies(&closure.get_type())
+            .unwrap();
+
+        let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
+        let dictionary = dictionary.as_dictionary().unwrap();
+
+        ValueType::Value
+            .check_other_qualifies(&dictionary.get_type())
+            .unwrap();
+
+        ValueType::Value
+            .check_other_qualifies(&ValueType::ValueType)
+            .unwrap();
+    }
+
+    #[test]
+    fn try_qualify_method() {
+        let result = test_run("std.types.Bool:try_qualify(to_qualify = true)").unwrap();
+        assert_eq!(result, values::Boolean(true).into());
+
+        let result = test_run("std.types.Bool:try_qualify(to_qualify = 5u)").unwrap();
+        assert_eq!(result, values::Boolean(false).into());
+    }
+
+    #[test]
+    fn qualify_method() {
+        let result = test_run("std.types.Bool:qualify(to_qualify = true)").unwrap();
+        assert_eq!(result, values::ValueNone.into());
+
+        test_run("std.types.Bool:qualify(to_qualify = 5u)").unwrap_err();
     }
 }

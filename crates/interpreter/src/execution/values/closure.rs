@@ -341,7 +341,7 @@ macro_rules! build_member_from_sig {
         (
             String::from(stringify!($name)),
             crate::execution::values::value_type::StructMember {
-                ty: ValueType::$ty,
+                ty: crate::execution::values::ValueType::$ty,
                 default: None,
             },
         )
@@ -350,7 +350,7 @@ macro_rules! build_member_from_sig {
         (
             String::from(stringify!($name)),
             crate::execution::values::value_type::StructMember {
-                ty: ValueType::$ty,
+                ty: crate::execution::values::ValueType::$ty,
                 default: Some($default),
             },
         )
@@ -487,6 +487,14 @@ macro_rules! build_method {
             }),
         })
         }
+    }};
+}
+
+#[macro_export]
+macro_rules! static_method {
+    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:ty $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
+        static METHOD: std::sync::OnceLock<values::Value> = std::sync::OnceLock::new();
+        METHOD.get_or_init(|| crate::build_method!($name ($log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code).into())
     }};
 }
 
