@@ -31,6 +31,7 @@ use crate::{
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
         logging::RuntimeLog,
+        values::StaticType,
     },
 };
 
@@ -239,6 +240,15 @@ where
         _stack_trace: &[SourceReference],
     ) -> ExpressionResult<Value> {
         Ok(Self(!self.0).into())
+    }
+}
+
+impl<I> StaticType for Integer<I>
+where
+    I: GetType,
+{
+    fn static_type() -> ValueType {
+        I::get_type()
     }
 }
 

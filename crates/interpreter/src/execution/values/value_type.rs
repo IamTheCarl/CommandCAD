@@ -32,7 +32,7 @@ use crate::{
         errors::{ErrorType, ExpressionResult, Raise},
         logging::RuntimeLog,
         stack::Stack,
-        values::{self, dictionary::DictionaryData, Dictionary, MissingAttributeError},
+        values::{self, dictionary::DictionaryData, Dictionary, IString, MissingAttributeError},
     },
     static_method,
 };
@@ -47,9 +47,10 @@ pub enum ValueType {
     Scalar(Dimension),
     Closure(Arc<ClosureSignature>),
     Dictionary(StructDefinition),
+    String,
     ValueType,
     MultiType(Box<ValueType>, Box<ValueType>),
-    Value,
+    Any,
 }
 
 impl From<StructDefinition> for ValueType {
@@ -67,6 +68,7 @@ impl ValueType {
             Self::SignedInteger => SignedInteger::static_type_name().into(),
             Self::UnsignedInteger => UnsignedInteger::static_type_name().into(),
             Self::Scalar(dimension) => units::get_dimension_name(dimension).into(),
+            Self::String => IString::static_type_name().into(),
             _ => format!("{}", self).into(),
         }
     }
@@ -115,7 +117,7 @@ impl ValueType {
                     }),
                 }
             }
-            (Self::Value, _) => Ok(()),
+            (Self::Any, _) => Ok(()),
             (expected, got) => Err(TypeQualificationError::This {
                 expected: expected.clone(),
                 got: got.clone(),
@@ -176,12 +178,12 @@ impl Object for ValueType {
             }
             "try_qualify" => {
                 let value = static_method!(
-                    ValueType_qualify(
+                    ValueType_try_qualify(
                         _log: &mut dyn RuntimeLog,
                         _stack_trace: &mut Vec<SourceReference>,
                         _stack: &mut Stack,
                         this: ValueType,
-                        to_qualify: Value) -> ValueType::TypeNone
+                        to_qualify: Value) -> ValueType::Boolean
                     {
                         Ok(values::Boolean(this.check_other_qualifies(&to_qualify.get_type()).is_ok()).into())
                     }
@@ -634,41 +636,41 @@ mod test {
 
     #[test]
     fn value_type_any_value() {
-        ValueType::Value
+        ValueType::Any
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap();
 
-        ValueType::Value
+        ValueType::Any
             .check_other_qualifies(&ValueType::Boolean)
             .unwrap();
 
-        ValueType::Value
+        ValueType::Any
             .check_other_qualifies(&ValueType::SignedInteger)
             .unwrap();
 
-        ValueType::Value
+        ValueType::Any
             .check_other_qualifies(&ValueType::UnsignedInteger)
             .unwrap();
 
-        ValueType::Value
+        ValueType::Any
             .check_other_qualifies(&ValueType::Scalar(Dimension::length()))
             .unwrap();
 
         let closure = test_run("() -> std.types.None std.consts.None").unwrap();
         let closure = closure.as_userclosure().unwrap();
 
-        ValueType::Value
+        ValueType::Any
             .check_other_qualifies(&closure.get_type())
             .unwrap();
 
         let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
         let dictionary = dictionary.as_dictionary().unwrap();
 
-        ValueType::Value
+        ValueType::Any
             .check_other_qualifies(&dictionary.get_type())
             .unwrap();
 
-        ValueType::Value
+        ValueType::Any
             .check_other_qualifies(&ValueType::ValueType)
             .unwrap();
     }

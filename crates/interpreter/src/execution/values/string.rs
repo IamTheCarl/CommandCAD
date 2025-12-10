@@ -18,7 +18,16 @@
 
 use imstr::ImString;
 
-use crate::{compile::SourceReference, execution::logging::RuntimeLog};
+use crate::{
+    build_closure_signature, build_closure_type,
+    compile::SourceReference,
+    execution::{
+        errors::Raise,
+        logging::RuntimeLog,
+        values::{MissingAttributeError, StaticType, UserClosure},
+    },
+    static_method,
+};
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
 
@@ -40,12 +49,61 @@ impl Object for IString {
         Ok(self.0 == rhs.0)
     }
 
-    // TODO we need to add a bunch of manipulation methods to this.
+    fn get_attribute(
+        &self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        attribute: &str,
+    ) -> ExpressionResult<&Value> {
+        build_closure_type!(MapClosure(character: IString) -> ValueType::Any);
+        build_closure_type!(FoldClosure(previous: Value, character: IString) -> ValueType::Any);
+
+        match attribute {
+            "map" => {
+                let value = static_method!(
+                    String_map(
+                        _log: &mut dyn RuntimeLog,
+                        stack_trace: &mut Vec<SourceReference>,
+                        _stack: &mut Stack,
+                        this: ValueType,
+                        for_each: MapClosure) -> ValueType::TypeNone
+                    {
+                        todo!()
+                    }
+                );
+                Ok(value)
+            }
+            "fold" => {
+                let value = static_method!(
+                    String_map(
+                        _log: &mut dyn RuntimeLog,
+                        stack_trace: &mut Vec<SourceReference>,
+                        _stack: &mut Stack,
+                        this: ValueType,
+                        for_each: FoldClosure) -> ValueType::TypeNone
+                    {
+                        todo!()
+                    }
+                );
+                Ok(value)
+            }
+            _ => Err(MissingAttributeError {
+                name: attribute.into(),
+            }
+            .to_error(stack_trace)),
+        }
+    }
 }
 
 impl StaticTypeName for IString {
     fn static_type_name() -> &'static str {
         "String"
+    }
+}
+
+impl StaticType for IString {
+    fn static_type() -> ValueType {
+        ValueType::String
     }
 }
 

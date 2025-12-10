@@ -16,6 +16,8 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::execution::values::StaticType;
+
 use super::{value_type::ValueType, Object, StaticTypeName};
 
 #[derive(Debug, Eq, Clone, Copy, PartialEq, Hash)]
@@ -30,5 +32,11 @@ impl Object for DefaultValue {
 impl StaticTypeName for DefaultValue {
     fn static_type_name() -> &'static str {
         "Default"
+    }
+}
+
+impl StaticType for DefaultValue {
+    fn static_type() -> ValueType {
+        ValueType::Default
     }
 }

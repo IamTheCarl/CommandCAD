@@ -62,6 +62,14 @@ pub trait StaticTypeName {
     fn static_type_name() -> &'static str;
 }
 
+pub trait StaticType {
+    // Provites the TypeValue without having an instance of the object.
+    // This is used for type checking built-in functions and methods.
+    // Not all types provide this, and thus, not all types can be used with
+    // built in functions.
+    fn static_type() -> ValueType;
+}
+
 #[derive(Debug, Eq, PartialEq)]
 struct UnsupportedOperationError {
     pub type_name: Cow<'static, str>,
@@ -358,6 +366,12 @@ pub enum Value {
 impl StaticTypeName for Value {
     fn static_type_name() -> &'static str {
         "Value"
+    }
+}
+
+impl StaticType for Value {
+    fn static_type() -> ValueType {
+        ValueType::Any
     }
 }
 

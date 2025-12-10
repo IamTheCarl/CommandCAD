@@ -16,7 +16,10 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{compile::SourceReference, execution::logging::RuntimeLog};
+use crate::{
+    compile::SourceReference,
+    execution::{logging::RuntimeLog, values::StaticType},
+};
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
 
@@ -79,5 +82,11 @@ impl Object for Boolean {
 impl StaticTypeName for Boolean {
     fn static_type_name() -> &'static str {
         "Boolean"
+    }
+}
+
+impl StaticType for Boolean {
+    fn static_type() -> ValueType {
+        ValueType::Boolean
     }
 }

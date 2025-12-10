@@ -27,6 +27,7 @@ use crate::{
         errors::{ErrorType, ExpressionResult, Raise as _},
         logging::RuntimeLog,
         stack::{ScopeType, Stack},
+        values::StaticType,
     },
 };
 
@@ -78,6 +79,9 @@ impl StaticTypeName for Dictionary {
         "Dictionary"
     }
 }
+
+// TODO we should derive StaticType for structs that can be used to automatically unpack
+// dictionaries.
 
 impl From<HashMap<String, Value>> for Dictionary {
     fn from(map: HashMap<String, Value>) -> Self {

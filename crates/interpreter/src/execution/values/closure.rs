@@ -337,20 +337,20 @@ pub trait Callable: Sync + Send {
 
 #[macro_export]
 macro_rules! build_member_from_sig {
-    ($name:ident: $ty:ident) => {
+    ($name:ident: $ty:ty) => {
         (
             String::from(stringify!($name)),
             crate::execution::values::value_type::StructMember {
-                ty: crate::execution::values::ValueType::$ty,
+                ty: <$ty as crate::execution::values::StaticType>::static_type(),
                 default: None,
             },
         )
     };
-    ($name:ident: $ty:ident = $default:expr) => {
+    ($name:ident: $ty:ty = $default:expr) => {
         (
             String::from(stringify!($name)),
             crate::execution::values::value_type::StructMember {
-                ty: crate::execution::values::ValueType::$ty,
+                ty: <$ty as crate::execution::values::StaticType>::static_type(),
                 default: Some($default),
             },
         )
@@ -359,18 +359,77 @@ macro_rules! build_member_from_sig {
 
 #[macro_export]
 macro_rules! build_argument_signature_list {
-    ($($arg:ident: $ty:ident $(= $default:expr)?),*) => {{
+    ($($arg:ident: $ty:path $(= $default:expr)?),*) => {{
         let list: [(String, crate::execution::values::value_type::StructMember); _] = [$($crate::build_member_from_sig!($arg: $ty $(= $default)?),)*];
         list
     }};
 }
 
 #[macro_export]
+macro_rules! build_closure_signature {
+    (($($arg:ident: $ty:path $(= $default:expr)?),*) -> $return_type:path) => {{
+        let members = std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from($crate::build_argument_signature_list!($($arg: $ty $(= $default)?),*))));
+
+        std::sync::Arc::new(crate::execution::values::closure::Signature {
+            argument_type: crate::execution::values::StructDefinition {
+                members,
+                variadic: false,
+            },
+            return_type: $return_type,
+        })
+    }};
+}
+
+#[macro_export]
+macro_rules! build_closure_type {
+    ($name:ident($($arg:ident: $ty:path $(= $default:expr)?),*) -> $return_type:path) => {
+        struct $name(pub UserClosure);
+
+        impl $crate::execution::values::StaticType for $name {
+            fn static_type() -> $crate::execution::values::ValueType {
+                static TYPE: std::sync::OnceLock<std::sync::Arc<crate::execution::values::closure::Signature>>
+                    = std::sync::OnceLock::new();
+                let signature = TYPE.get_or_init(|| build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type));
+
+                $crate::execution::values::ValueType::Closure(signature.clone())
+            }
+        }
+
+        impl $crate::execution::values::StaticTypeName for $name {
+            fn static_type_name() -> &'static str {
+                "Closure"
+            }
+        }
+
+
+        impl enum_downcast::IntoVariant<$name> for $crate::execution::values::Value {
+            fn into_variant(self) -> Result<$name, $crate::execution::values::Value> {
+                Ok($name(self.into_variant()?))
+            }
+        }
+
+        impl Into<UserClosure> for $name {
+            fn into(self) -> UserClosure {
+                self.0
+            }
+        }
+
+        impl std::ops::Deref for $name {
+            type Target = UserClosure;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! build_function {
-    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
+    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
         struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value>> {
             function: F,
-            signature: Arc<crate::execution::values::closure::Signature>,
+            signature: std::sync::Arc<crate::execution::values::closure::Signature>,
         }
 
         impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value> + Send + Sync> crate::execution::values::closure::Callable for BuiltFunction<F> {
@@ -379,7 +438,7 @@ macro_rules! build_function {
                 runtime: &mut dyn RuntimeLog,
                 stack_trace: &mut Vec<SourceReference>,
                 stack: &mut Stack,
-                argument: Dictionary,
+                argument: crate::execution::values::Dictionary,
             ) -> crate::execution::errors::ExpressionResult<crate::execution::values::Value> {
                 use crate::execution::errors::Raise;
                 self.signature
@@ -390,7 +449,7 @@ macro_rules! build_function {
                 // Argument is potentially unused if we take no arguments.
                 let mut _argument = self.signature.argument_type.fill_defaults(argument);
 
-                let _data = Arc::make_mut(&mut _argument.data);
+                let _data = std::sync::Arc::make_mut(&mut _argument.data);
                 $($(let $arg: $ty = _data.members.remove(stringify!($arg))
                         .expect("Argument was not present after argument check.").downcast(stack_trace)?;)*)?
 
@@ -401,23 +460,15 @@ macro_rules! build_function {
                 stringify!($name)
             }
 
-            fn signature(&self) -> &Arc<crate::execution::values::closure::Signature> {
+            fn signature(&self) -> &std::sync::Arc<crate::execution::values::closure::Signature> {
                 &self.signature
             }
         }
 
-        let members = std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from(build_argument_signature_list!($($($arg: $ty $(= $default)?),*)?))));
-
         crate::execution::values::closure::BuiltinFunction {
-            callable: Arc::new(BuiltFunction {
+            callable: std::sync::Arc::new(BuiltFunction {
             function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack $(, $($arg: $ty),*)?| -> ExpressionResult<crate::execution::values::Value> { $code },
-            signature: std::sync::Arc::new(Signature {
-                argument_type: StructDefinition {
-                    members,
-                    variadic: false,
-                },
-                return_type: $return_type
-            }),
+            signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
         })
         }
     }};
@@ -425,19 +476,19 @@ macro_rules! build_function {
 
 #[macro_export]
 macro_rules! build_method {
-    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:ty $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
-        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value>> {
+    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:path $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
+        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut crate::execution::Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value>> {
             function: F,
-            signature: Arc<crate::execution::values::closure::Signature>,
+            signature: std::sync::Arc<crate::execution::values::closure::Signature>,
         }
 
-        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value> + Send + Sync> crate::execution::values::closure::Callable for BuiltFunction<F> {
+        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut crate::execution::Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value> + Send + Sync> crate::execution::values::closure::Callable for BuiltFunction<F> {
             fn call(
                 &self,
                 runtime: &mut dyn RuntimeLog,
                 stack_trace: &mut Vec<SourceReference>,
-                stack: &mut Stack,
-                argument: Dictionary,
+                stack: &mut crate::execution::Stack,
+                argument: crate::execution::values::Dictionary,
             ) -> crate::execution::errors::ExpressionResult<crate::execution::values::Value> {
                 use crate::execution::errors::Raise;
 
@@ -457,7 +508,7 @@ macro_rules! build_method {
                 // Argument is potentially unused if we take no arguments.
                 let mut _argument = self.signature.argument_type.fill_defaults(argument);
 
-                let _data = Arc::make_mut(&mut _argument.data);
+                let _data = std::sync::Arc::make_mut(&mut _argument.data);
                 $($(let $arg: $ty = _data.members.remove(stringify!($arg))
                         .expect("Argument was not present after argument check.").downcast(stack_trace)?;)*)?
 
@@ -468,23 +519,15 @@ macro_rules! build_method {
                 stringify!($name)
             }
 
-            fn signature(&self) -> &Arc<crate::execution::values::closure::Signature> {
+            fn signature(&self) -> &std::sync::Arc<crate::execution::values::closure::Signature> {
                 &self.signature
             }
         }
 
-        let members = std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from($crate::build_argument_signature_list!($($($arg: $ty $(= $default)?),*)?))));
-
         crate::execution::values::closure::BuiltinFunction {
-            callable: Arc::new(BuiltFunction {
-            function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $this: $this_type $(, $($arg: $ty),*)?| -> ExpressionResult<Value> { $code },
-            signature: std::sync::Arc::new(crate::execution::values::closure::Signature {
-                argument_type: crate::execution::values::StructDefinition {
-                    members,
-                    variadic: false,
-                },
-                return_type: $return_type
-            }),
+            callable: std::sync::Arc::new(BuiltFunction {
+            function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut crate::execution::Stack, $this: $this_type $(, $($arg: $ty),*)?| -> ExpressionResult<Value> { $code },
+            signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
         })
         }
     }};
@@ -492,9 +535,9 @@ macro_rules! build_method {
 
 #[macro_export]
 macro_rules! static_method {
-    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:ty $(, $($arg:ident: $ty:ident $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
-        static METHOD: std::sync::OnceLock<values::Value> = std::sync::OnceLock::new();
-        METHOD.get_or_init(|| crate::build_method!($name ($log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code).into())
+    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:path $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
+        static METHOD: std::sync::OnceLock<crate::execution::values::Value> = std::sync::OnceLock::new();
+        METHOD.get_or_init(|| $crate::build_method!($name ($log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code).into())
     }};
 }
 
@@ -554,7 +597,7 @@ mod test {
     use super::*;
     use crate::execution::{
         test_run,
-        values::{self, StructMember, UnsignedInteger},
+        values::{self, SignedInteger, StructMember, UnsignedInteger},
     };
     use hashable_map::HashableMap;
     use pretty_assertions::assert_eq;
