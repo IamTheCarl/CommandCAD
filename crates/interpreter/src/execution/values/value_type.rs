@@ -47,6 +47,7 @@ pub enum ValueType {
     Scalar(Dimension),
     Closure(Arc<ClosureSignature>),
     Dictionary(StructDefinition),
+    List(Option<Box<ValueType>>),
     String,
     ValueType,
     MultiType(Box<ValueType>, Box<ValueType>),
@@ -70,6 +71,15 @@ impl ValueType {
             Self::Scalar(dimension) => units::get_dimension_name(dimension).into(),
             Self::String => IString::static_type_name().into(),
             _ => format!("{}", self).into(),
+        }
+    }
+
+    pub fn merge(self, rhs: ValueType) -> Self {
+        // Do not merge if you already accept this type.
+        if self.check_other_qualifies(&rhs).is_err() {
+            Self::MultiType(Box::new(self), Box::new(rhs))
+        } else {
+            self
         }
     }
 
@@ -133,6 +143,8 @@ impl Display for ValueType {
             Self::Closure(signature) => write!(f, "{}", signature),
             Self::Dictionary(definition) => write!(f, "{}", definition),
             Self::MultiType(left, right) => write!(f, "{left} | {right}"),
+            Self::List(Some(ty)) => write!(f, "[{ty}]"),
+            Self::List(Option::None) => write!(f, "[]"),
             _ => write!(f, "{}", self.name()),
         }
     }
@@ -151,7 +163,7 @@ impl Object for ValueType {
     ) -> ExpressionResult<Value> {
         let rhs: Self = rhs.downcast(stack_trace)?;
 
-        Ok(Self::MultiType(Box::new(self), Box::new(rhs)).into())
+        Ok(self.merge(rhs).into())
     }
 
     fn get_attribute(

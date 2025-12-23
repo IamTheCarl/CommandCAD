@@ -50,6 +50,9 @@ pub use closure::{BuiltinFunction, UserClosure};
 mod dictionary;
 pub use dictionary::Dictionary;
 
+mod list;
+pub use list::List;
+
 mod string;
 pub use string::IString;
 
@@ -341,7 +344,7 @@ pub enum Value {
     BuiltinFunction,
     ValueType,
     Dictionary(Dictionary),
-    // List(List<S>),
+    List(List),
     String(IString),
     // Range(Range),
     // Closure(Closure<S>),

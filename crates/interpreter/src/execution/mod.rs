@@ -121,7 +121,9 @@ pub fn execute_expression(
                 Ok(values::Dictionary::from_ast(log, stack_trace, stack, ast_node)?.into())
             }
             compile::Expression::If(ast_node) => todo!(),
-            compile::Expression::List(ast_node) => todo!(),
+            compile::Expression::List(ast_node) => {
+                Ok(values::List::from_ast(log, stack_trace, stack, ast_node)?.into())
+            }
             compile::Expression::Parenthesis(ast_node) => {
                 execute_expression(log, stack_trace, stack, &ast_node)
             }
