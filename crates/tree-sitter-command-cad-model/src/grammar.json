@@ -35,10 +35,6 @@
       "type": "PATTERN",
       "value": "\\\"(\\\\\\\"|[^\\\"])*\\\""
     },
-    "default": {
-      "type": "STRING",
-      "value": "default"
-    },
     "self": {
       "type": "STRING",
       "value": "self"
@@ -348,10 +344,6 @@
         {
           "type": "SYMBOL",
           "name": "parenthesis"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "default"
         },
         {
           "type": "SYMBOL",

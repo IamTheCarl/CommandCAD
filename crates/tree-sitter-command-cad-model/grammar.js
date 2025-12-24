@@ -99,7 +99,6 @@ module.exports = grammar({
     _whitespace: _ => /\s/,
     identifier: _ => /[a-zA-Z_][a-zA-Z0-9_]*/,
     string: _ => /\"(\\\"|[^\"])*\"/,
-    default: _ => 'default',
     self: _ => 'self',
 
     base_ten: _ => /[0-9]+/,
@@ -140,7 +139,6 @@ module.exports = grammar({
 
     expression: $ => choice(
       $.parenthesis,
-      $.default,
       $.signed_integer,
       $.unsigned_integer,
       $.scalar,

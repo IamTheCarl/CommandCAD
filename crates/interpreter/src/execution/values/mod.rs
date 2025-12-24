@@ -32,9 +32,6 @@ use super::{
 mod void;
 pub use void::ValueNone;
 
-mod default;
-pub use default::DefaultValue;
-
 mod boolean;
 pub use boolean::Boolean;
 
@@ -335,7 +332,6 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
 #[derive(Debug, Eq, PartialEq, EnumDowncast, EnumAs, Clone)]
 pub enum Value {
     ValueNone,
-    Default(DefaultValue),
     SignedInteger,
     UnsignedInteger,
     Boolean,

@@ -266,10 +266,6 @@
           "named": true
         },
         {
-          "type": "default",
-          "named": true
-        },
-        {
           "type": "dictionary_construction",
           "named": true
         },
@@ -1119,10 +1115,6 @@
     "type": "comment",
     "named": true,
     "extra": true
-  },
-  {
-    "type": "default",
-    "named": true
   },
   {
     "type": "else",

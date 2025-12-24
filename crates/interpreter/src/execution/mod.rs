@@ -22,7 +22,7 @@ use crate::{
     compile::{
         self, AstNode, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation,
     },
-    execution::{stack::ScopeType, values::Dictionary},
+    execution::stack::ScopeType,
 };
 
 mod errors;
@@ -116,7 +116,6 @@ pub fn execute_expression(
             compile::Expression::ClosureDefinition(ast_node) => {
                 Ok(values::UserClosure::from_ast(log, stack_trace, stack, ast_node)?.into())
             }
-            compile::Expression::Default(_ast_node) => Ok(values::DefaultValue.into()),
             compile::Expression::DictionaryConstruction(ast_node) => {
                 Ok(values::Dictionary::from_ast(log, stack_trace, stack, ast_node)?.into())
             }
@@ -323,12 +322,6 @@ mod test {
     use std::{collections::HashMap, sync::Arc};
 
     use super::*;
-
-    #[test]
-    fn default_type() {
-        let product = test_run("default").unwrap();
-        assert_eq!(product, values::DefaultValue.into());
-    }
 
     #[test]
     fn boolean_type() {

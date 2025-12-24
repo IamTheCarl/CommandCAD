@@ -201,7 +201,6 @@ fn find_all_variable_accesses_in_expression(
             Ok(())
         }
         Expression::Boolean(_)
-        | Expression::Default(_)
         | Expression::Scalar(_)
         | Expression::SignedInteger(_)
         | Expression::String(_)

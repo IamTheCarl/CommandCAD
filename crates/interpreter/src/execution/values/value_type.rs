@@ -21,8 +21,8 @@ use common_data_types::Dimension;
 use hashable_map::HashableMap;
 
 use super::{
-    closure::Signature as ClosureSignature, Boolean, DefaultValue, Object, SignedInteger,
-    StaticTypeName, UnsignedInteger, Value, ValueNone,
+    closure::Signature as ClosureSignature, Boolean, Object, SignedInteger, StaticTypeName,
+    UnsignedInteger, Value, ValueNone,
 };
 
 use crate::{
@@ -40,7 +40,6 @@ use crate::{
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub enum ValueType {
     TypeNone,
-    Default,
     Boolean,
     SignedInteger,
     UnsignedInteger,
@@ -64,7 +63,6 @@ impl ValueType {
     pub fn name(&self) -> Cow<'static, str> {
         match self {
             Self::TypeNone => ValueNone::static_type_name().into(),
-            Self::Default => DefaultValue::static_type_name().into(),
             Self::Boolean => Boolean::static_type_name().into(),
             Self::SignedInteger => SignedInteger::static_type_name().into(),
             Self::UnsignedInteger => UnsignedInteger::static_type_name().into(),

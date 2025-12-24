@@ -37,7 +37,6 @@ pub enum Expression {
     BinaryExpression(AstNode<Box<BinaryExpression>>),
     Boolean(AstNode<bool>),
     ClosureDefinition(AstNode<Box<ClosureDefinition>>),
-    Default(AstNode<()>),
     DictionaryConstruction(AstNode<DictionaryConstruction>),
     If(AstNode<IfExpression>),
     List(AstNode<Vec<AstNode<Expression>>>),
@@ -430,11 +429,6 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
             ChildType::ClosureDefinition(closure_definition) => {
                 Self::parse(file, input, closure_definition)
             }
-            ChildType::Default(default) => Ok(AstNode::new(
-                file,
-                &default,
-                Self::Default(AstNode::new(file, &default, ())),
-            )),
             ChildType::DictionaryConstruction(dictionary_construction) => {
                 Self::parse(file, input, dictionary_construction)
             }
@@ -1188,21 +1182,6 @@ mod test {
                             })
                         })
                     })
-                })
-            }
-        );
-    }
-
-    #[test]
-    fn default() {
-        let root = full_compile("default");
-        assert_eq!(
-            root,
-            AstNode {
-                reference: root.reference.clone(),
-                node: Expression::Default(AstNode {
-                    reference: root.node.as_default().unwrap().reference.clone(),
-                    node: ()
                 })
             }
         );
