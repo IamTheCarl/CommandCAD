@@ -24,6 +24,7 @@ use crate::{
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
         logging::RuntimeLog,
+        values::StaticType,
     },
 };
 
@@ -52,7 +53,7 @@ pub struct Scalar {
 
 impl Object for Scalar {
     fn get_type(&self) -> ValueType {
-        ValueType::Scalar(self.dimension)
+        ValueType::Scalar(Some(self.dimension))
     }
 
     fn type_name(&self) -> Cow<'static, str> {
@@ -681,6 +682,12 @@ impl Object for Scalar {
 impl StaticTypeName for Scalar {
     fn static_type_name() -> &'static str {
         "Scalar"
+    }
+}
+
+impl StaticType for Scalar {
+    fn static_type() -> ValueType {
+        ValueType::Scalar(None)
     }
 }
 

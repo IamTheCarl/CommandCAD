@@ -120,6 +120,9 @@ module.exports = grammar({
     _unit: $ => choice($.identifier, $.unit_quote),
 
     scalar: $ => prec.left(PREC.unit, seq($._float, field('unit', optional($._unit)))),
+    vector2: $ => seq('<(', field('x', $.expression), ',', field('y', $.expression), ')>'),
+    vector3: $ => seq('<(', field('x', $.expression), ',', field('y', $.expression), ',', field('z', $.expression), ')>'),
+    vector4: $ => seq('<(', field('x', $.expression), ',', field('y', $.expression), ',', field('z', $.expression), ',', field('w', $.expression), ')>'),
 
     true: $ => 'true',
     false: $ => 'false',
@@ -142,6 +145,9 @@ module.exports = grammar({
       $.signed_integer,
       $.unsigned_integer,
       $.scalar,
+      $.vector2,
+      $.vector3,
+      $.vector4,
       $.boolean,
       $.string,
       $.identity_path,

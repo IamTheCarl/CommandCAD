@@ -328,6 +328,18 @@
         {
           "type": "unsigned_integer",
           "named": true
+        },
+        {
+          "type": "vector2",
+          "named": true
+        },
+        {
+          "type": "vector3",
+          "named": true
+        },
+        {
+          "type": "vector4",
+          "named": true
         }
       ]
     }
@@ -984,6 +996,114 @@
     }
   },
   {
+    "type": "vector2",
+    "named": true,
+    "fields": {
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "vector3",
+    "named": true,
+    "fields": {
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "z": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "vector4",
+    "named": true,
+    "fields": {
+      "w": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "z": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "!",
     "named": false
   },
@@ -1005,6 +1125,10 @@
   },
   {
     "type": ")",
+    "named": false
+  },
+  {
+    "type": ")>",
     "named": false
   },
   {
@@ -1061,6 +1185,10 @@
   },
   {
     "type": "<",
+    "named": false
+  },
+  {
+    "type": "<(",
     "named": false
   },
   {

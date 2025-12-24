@@ -17,6 +17,8 @@ compact_str = "0.9"
 num-traits = "0.2"
 hashable-map = "0.4.0"
 imstr = "0.2.0"
+nalgebra = "0.34.1"
+stack = "0.4.0"
 
 [build-dependencies]
 type-sitter-gen = "0.8"

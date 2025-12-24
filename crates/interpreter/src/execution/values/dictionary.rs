@@ -62,9 +62,9 @@ impl Object for Dictionary {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
         attribute: &str,
-    ) -> ExpressionResult<&Value> {
+    ) -> ExpressionResult<Value> {
         if let Some(member) = self.data.members.get(attribute) {
-            Ok(member)
+            Ok(member.clone())
         } else {
             Err(MissingAttributeError {
                 name: attribute.into(),

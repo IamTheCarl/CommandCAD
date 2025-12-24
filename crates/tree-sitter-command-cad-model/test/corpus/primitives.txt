@@ -215,3 +215,75 @@ Scalar with quoted unit that would not work as an identifier
     (scalar
       (number)
       (unit_quote))))
+
+==================
+Vector2
+==================
+
+<(1m, 2m)>
+
+---
+
+(source_file
+  (expression
+    (vector2
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier))))))
+
+==================
+Vector3
+==================
+
+<(1m, 2m, 3m)>
+
+---
+
+(source_file
+  (expression
+    (vector3
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier))))))
+
+==================
+Vector4
+==================
+
+<(1m, 2m, 3m, 4m)>
+
+---
+
+(source_file
+  (expression
+    (vector4
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier))))))

@@ -144,6 +144,15 @@ pub fn execute_expression(
                 value: ast_node.node.value,
             }
             .into()),
+            compile::Expression::Vector2(vector) => {
+                Ok(values::Vector2::from_ast(log, stack_trace, stack, vector)?.into())
+            }
+            compile::Expression::Vector3(vector) => {
+                Ok(values::Vector3::from_ast(log, stack_trace, stack, vector)?.into())
+            }
+            compile::Expression::Vector4(vector) => {
+                Ok(values::Vector4::from_ast(log, stack_trace, stack, vector)?.into())
+            }
             compile::Expression::SignedInteger(ast_node) => {
                 Ok(values::SignedInteger::from(ast_node.node).into())
             }
@@ -253,10 +262,13 @@ fn execute_binary_expression(
             let value_a = execute_expression(log, stack_trace, stack, &node.a)?;
             let value_b = execute_expression(log, stack_trace, stack, &node.b)?;
             match node.operation.node {
-                BinaryExpressionOperation::NotEq => Ok(values::Boolean(!matches!(
-                    value_a.cmp(log, stack_trace, value_b)?,
-                    Ordering::Equal
-                ))
+                BinaryExpressionOperation::NotEq => Ok(values::Boolean(
+                    !value_a
+                        .clone()
+                        .cmp(log, stack_trace, value_b.clone())
+                        .map(|ord| matches!(ord, Ordering::Equal))
+                        .or_else(|_| value_a.eq(log, stack_trace, value_b))?,
+                )
                 .into()),
                 BinaryExpressionOperation::And => value_a.bit_and(log, stack_trace, value_b),
                 BinaryExpressionOperation::AndAnd => value_a.and(log, stack_trace, value_b),
@@ -281,10 +293,13 @@ fn execute_binary_expression(
                     Ordering::Less | Ordering::Equal
                 ))
                 .into()),
-                BinaryExpressionOperation::EqEq => Ok(values::Boolean(matches!(
-                    value_a.cmp(log, stack_trace, value_b)?,
-                    Ordering::Equal
-                ))
+                BinaryExpressionOperation::EqEq => Ok(values::Boolean(
+                    value_a
+                        .clone()
+                        .cmp(log, stack_trace, value_b.clone())
+                        .map(|ord| matches!(ord, Ordering::Equal))
+                        .or_else(|_| value_a.eq(log, stack_trace, value_b))?,
+                )
                 .into()),
                 BinaryExpressionOperation::Gt => Ok(values::Boolean(matches!(
                     value_a.cmp(log, stack_trace, value_b)?,

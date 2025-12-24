@@ -43,12 +43,15 @@ pub enum ValueType {
     Boolean,
     SignedInteger,
     UnsignedInteger,
-    Scalar(Dimension),
+    Scalar(Option<Dimension>),
     Closure(Arc<ClosureSignature>),
     Dictionary(StructDefinition),
     List(Option<Box<ValueType>>),
     String,
     ValueType,
+    Vector2(Option<Dimension>),
+    Vector3(Option<Dimension>),
+    Vector4(Option<Dimension>),
     MultiType(Box<ValueType>, Box<ValueType>),
     Any,
 }
@@ -66,7 +69,20 @@ impl ValueType {
             Self::Boolean => Boolean::static_type_name().into(),
             Self::SignedInteger => SignedInteger::static_type_name().into(),
             Self::UnsignedInteger => UnsignedInteger::static_type_name().into(),
-            Self::Scalar(dimension) => units::get_dimension_name(dimension).into(),
+            Self::Scalar(Some(dimension)) => units::get_dimension_name(dimension).into(),
+            Self::Scalar(Option::None) => "Scalar".into(),
+            Self::Vector2(Some(dimension)) => {
+                format!("Vector2<{}>", units::get_dimension_name(dimension)).into()
+            }
+            Self::Vector3(Some(dimension)) => {
+                format!("Vector3<{}>", units::get_dimension_name(dimension)).into()
+            }
+            Self::Vector4(Some(dimension)) => {
+                format!("Vector4<{}>", units::get_dimension_name(dimension)).into()
+            }
+            Self::Vector2(Option::None) => "Vector2".into(),
+            Self::Vector3(Option::None) => "Vector3".into(),
+            Self::Vector4(Option::None) => "Vector4".into(),
             Self::String => IString::static_type_name().into(),
             _ => format!("{}", self).into(),
         }
@@ -90,7 +106,10 @@ impl ValueType {
             (Self::Boolean, Self::Boolean) => Ok(()),
             (Self::SignedInteger, Self::SignedInteger) => Ok(()),
             (Self::UnsignedInteger, Self::UnsignedInteger) => Ok(()),
-            (Self::Scalar(our_dimension), Self::Scalar(their_dimension)) => {
+            (Self::Scalar(Some(our_dimension)), Self::Scalar(Some(their_dimension)))
+            | (Self::Vector2(Some(our_dimension)), Self::Vector2(Some(their_dimension)))
+            | (Self::Vector3(Some(our_dimension)), Self::Vector3(Some(their_dimension)))
+            | (Self::Vector4(Some(our_dimension)), Self::Vector4(Some(their_dimension))) => {
                 if our_dimension == their_dimension {
                     Ok(())
                 } else {
@@ -100,6 +119,10 @@ impl ValueType {
                     })
                 }
             }
+            (Self::Scalar(Option::None), Self::Scalar(_)) => Ok(()),
+            (Self::Vector2(Option::None), Self::Vector2(_)) => Ok(()),
+            (Self::Vector3(Option::None), Self::Vector3(_)) => Ok(()),
+            (Self::Vector4(Option::None), Self::Vector4(_)) => Ok(()),
             (Self::Closure(our_signature), Self::Closure(their_signature)) => {
                 our_signature
                     .argument_type
@@ -169,7 +192,7 @@ impl Object for ValueType {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
         attribute: &str,
-    ) -> ExpressionResult<&Value> {
+    ) -> ExpressionResult<Value> {
         match attribute {
             "qualify" => {
                 let value = static_method!(
@@ -184,7 +207,7 @@ impl Object for ValueType {
                         Ok(values::ValueNone.into())
                     }
                 );
-                Ok(value)
+                Ok(value.clone())
             }
             "try_qualify" => {
                 let value = static_method!(
@@ -198,7 +221,7 @@ impl Object for ValueType {
                         Ok(values::Boolean(this.check_other_qualifies(&to_qualify.get_type()).is_ok()).into())
                     }
                 );
-                Ok(value)
+                Ok(value.clone())
             }
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
@@ -503,15 +526,76 @@ mod test {
 
     #[test]
     fn type_scalar() {
-        ValueType::Scalar(Dimension::length())
-            .check_other_qualifies(&ValueType::Scalar(Dimension::length()))
+        ValueType::Scalar(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::Scalar(Some(Dimension::length())))
             .unwrap();
 
-        ValueType::Scalar(Dimension::length())
-            .check_other_qualifies(&ValueType::Scalar(Dimension::area()))
+        ValueType::Scalar(None)
+            .check_other_qualifies(&ValueType::Scalar(Some(Dimension::length())))
+            .unwrap();
+
+        ValueType::Scalar(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::Scalar(Some(Dimension::area())))
             .unwrap_err();
 
-        ValueType::Scalar(Dimension::length())
+        ValueType::Scalar(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::TypeNone)
+            .unwrap_err();
+    }
+
+    #[test]
+    fn type_vector2() {
+        ValueType::Vector2(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::Vector2(Some(Dimension::length())))
+            .unwrap();
+
+        ValueType::Vector2(None)
+            .check_other_qualifies(&ValueType::Vector2(Some(Dimension::length())))
+            .unwrap();
+
+        ValueType::Vector2(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::Vector2(Some(Dimension::area())))
+            .unwrap_err();
+
+        ValueType::Vector2(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::TypeNone)
+            .unwrap_err();
+    }
+
+    #[test]
+    fn type_vector3() {
+        ValueType::Vector3(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::Vector3(Some(Dimension::length())))
+            .unwrap();
+
+        ValueType::Vector3(None)
+            .check_other_qualifies(&ValueType::Vector3(Some(Dimension::length())))
+            .unwrap();
+
+        ValueType::Vector3(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::Vector3(Some(Dimension::area())))
+            .unwrap_err();
+
+        ValueType::Vector3(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::TypeNone)
+            .unwrap_err();
+    }
+
+    #[test]
+    fn type_vector4() {
+        ValueType::Vector4(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::Vector4(Some(Dimension::length())))
+            .unwrap();
+
+        ValueType::Vector4(None)
+            .check_other_qualifies(&ValueType::Vector4(Some(Dimension::length())))
+            .unwrap();
+
+        ValueType::Vector4(Some(Dimension::length()))
+            .check_other_qualifies(&ValueType::Vector4(Some(Dimension::area())))
+            .unwrap_err();
+
+        ValueType::Vector4(Some(Dimension::length()))
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap_err();
     }
@@ -547,6 +631,19 @@ mod test {
         let structure = structure.as_valuetype().unwrap();
 
         let dictionary = test_run("(a = std.consts.None)").unwrap();
+        let dictionary = dictionary.as_dictionary().unwrap();
+
+        structure
+            .check_other_qualifies(&dictionary.get_type())
+            .unwrap();
+    }
+
+    #[test]
+    fn type_dictionary_with_length() {
+        let structure = test_run("(a: std.scalar.Length)").unwrap();
+        let structure = structure.as_valuetype().unwrap();
+
+        let dictionary = test_run("(a = 1m)").unwrap();
         let dictionary = dictionary.as_dictionary().unwrap();
 
         structure
@@ -663,7 +760,7 @@ mod test {
             .unwrap();
 
         ValueType::Any
-            .check_other_qualifies(&ValueType::Scalar(Dimension::length()))
+            .check_other_qualifies(&ValueType::Scalar(Some(Dimension::length())))
             .unwrap();
 
         let closure = test_run("() -> std.types.None std.consts.None").unwrap();

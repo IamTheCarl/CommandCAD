@@ -41,6 +41,9 @@ pub use integer::{SignedInteger, UnsignedInteger};
 mod scalar;
 pub use scalar::Scalar;
 
+mod vector;
+pub use vector::{Vector2, Vector3, Vector4};
+
 mod closure;
 pub use closure::{BuiltinFunction, UserClosure};
 
@@ -267,7 +270,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
         attribute: &str,
-    ) -> ExpressionResult<&Value> {
+    ) -> ExpressionResult<Value> {
         Err(MissingAttributeError {
             name: attribute.into(),
         }
@@ -344,9 +347,9 @@ pub enum Value {
     String(IString),
     // Range(Range),
     // Closure(Closure<S>),
-    // Vector2(Vector2),
-    // Vector3(Vector3),
-    // Vector4(Vector4),
+    Vector2(Vector2),
+    Vector3(Vector3),
+    Vector4(Vector4),
     // Transform2D,
     // Transform3D,
     // Quaternion,

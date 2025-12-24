@@ -37,3 +37,41 @@ Precedence
       (expression
         (identity_path
           (identifier))))))
+
+==================
+Vectors
+==================
+
+<(a, b)> + <(a, b)> == <(a, b)>
+
+---
+
+(source_file
+  (expression
+    (binary_expression
+      (expression
+        (binary_expression
+          (expression
+            (vector2
+              (expression
+                (identity_path
+                  (identifier)))
+              (expression
+                (identity_path
+                  (identifier)))))
+          (expression
+            (vector2
+              (expression
+                (identity_path
+                  (identifier)))
+              (expression
+                (identity_path
+                  (identifier)))))))
+      (expression
+        (vector2
+          (expression
+            (identity_path
+              (identifier)))
+          (expression
+            (identity_path
+              (identifier))))))))

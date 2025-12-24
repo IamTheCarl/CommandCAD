@@ -44,6 +44,9 @@ pub enum Expression {
     IdentityPath(AstNode<IdentityPath>),
     SelfPath(AstNode<SelfPath>),
     Scalar(AstNode<Scalar>),
+    Vector2(AstNode<Box<Vector2>>),
+    Vector3(AstNode<Box<Vector3>>),
+    Vector4(AstNode<Box<Vector4>>),
     SignedInteger(AstNode<i64>),
     String(AstNode<String>),
     StructDefinition(AstNode<StructDefinition>),
@@ -234,6 +237,48 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for Expression {
             file,
             &value,
             Self::Scalar(Scalar::parse(file, input, value)?),
+        ))
+    }
+}
+
+impl<'t> Parse<'t, nodes::Vector2<'t>> for Expression {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::Vector2<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        Ok(AstNode::new(
+            file,
+            &value,
+            Self::Vector2(Vector2::parse(file, input, value)?.into_box()),
+        ))
+    }
+}
+
+impl<'t> Parse<'t, nodes::Vector3<'t>> for Expression {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::Vector3<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        Ok(AstNode::new(
+            file,
+            &value,
+            Self::Vector3(Vector3::parse(file, input, value)?.into_box()),
+        ))
+    }
+}
+
+impl<'t> Parse<'t, nodes::Vector4<'t>> for Expression {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::Vector4<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        Ok(AstNode::new(
+            file,
+            &value,
+            Self::Vector4(Vector4::parse(file, input, value)?.into_box()),
         ))
     }
 }
@@ -438,6 +483,9 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
             ChildType::IdentityPath(path) => Self::parse(file, input, path),
             ChildType::SelfPath(path) => Self::parse(file, input, path),
             ChildType::Scalar(scalar) => Self::parse(file, input, scalar),
+            ChildType::Vector2(vector) => Self::parse(file, input, vector),
+            ChildType::Vector3(vector) => Self::parse(file, input, vector),
+            ChildType::Vector4(vector) => Self::parse(file, input, vector),
             ChildType::SignedInteger(signed_integer) => Self::parse(file, input, signed_integer),
             ChildType::String(string) => Self::parse(file, input, string),
             ChildType::StructDefinition(struct_definition) => {
@@ -728,6 +776,84 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for Scalar {
                 value: scale_value,
             },
         ))
+    }
+}
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub struct Vector2 {
+    pub x: AstNode<Expression>,
+    pub y: AstNode<Expression>,
+}
+
+impl<'t> Parse<'t, nodes::Vector2<'t>> for Vector2 {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::Vector2<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        let x = value.x()?;
+        let x = Expression::parse(file, input, x)?;
+
+        let y = value.y()?;
+        let y = Expression::parse(file, input, y)?;
+
+        Ok(AstNode::new(file, &value, Self { x, y }))
+    }
+}
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub struct Vector3 {
+    pub x: AstNode<Expression>,
+    pub y: AstNode<Expression>,
+    pub z: AstNode<Expression>,
+}
+
+impl<'t> Parse<'t, nodes::Vector3<'t>> for Vector3 {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::Vector3<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        let x = value.x()?;
+        let x = Expression::parse(file, input, x)?;
+
+        let y = value.y()?;
+        let y = Expression::parse(file, input, y)?;
+
+        let z = value.z()?;
+        let z = Expression::parse(file, input, z)?;
+
+        Ok(AstNode::new(file, &value, Self { x, y, z }))
+    }
+}
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub struct Vector4 {
+    pub x: AstNode<Expression>,
+    pub y: AstNode<Expression>,
+    pub z: AstNode<Expression>,
+    pub w: AstNode<Expression>,
+}
+
+impl<'t> Parse<'t, nodes::Vector4<'t>> for Vector4 {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::Vector4<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        let x = value.x()?;
+        let x = Expression::parse(file, input, x)?;
+
+        let y = value.y()?;
+        let y = Expression::parse(file, input, y)?;
+
+        let z = value.z()?;
+        let z = Expression::parse(file, input, z)?;
+
+        let w = value.w()?;
+        let w = Expression::parse(file, input, w)?;
+
+        Ok(AstNode::new(file, &value, Self { x, y, z, w }))
     }
 }
 
@@ -2122,6 +2248,168 @@ mod test {
                     }
                     .into_box()
                 )
+            }
+        );
+    }
+
+    #[test]
+    fn vector2() {
+        let root = full_compile("<(1.0, 2.0)>");
+        let vector = root.node.as_vector2().unwrap();
+        let x = &vector.node.x;
+        let x_scalar = x.node.as_scalar().unwrap();
+        let y = &vector.node.y;
+        let y_scalar = y.node.as_scalar().unwrap();
+
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::Vector2(AstNode {
+                    reference: vector.reference.clone(),
+                    node: Box::new(Vector2 {
+                        x: AstNode {
+                            reference: x.reference.clone(),
+                            node: Expression::Scalar(AstNode {
+                                reference: x_scalar.reference.clone(),
+                                node: Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(1.0).unwrap()
+                                }
+                            })
+                        },
+                        y: AstNode {
+                            reference: y.reference.clone(),
+                            node: Expression::Scalar(AstNode {
+                                reference: y_scalar.reference.clone(),
+                                node: Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(2.0).unwrap()
+                                }
+                            })
+                        }
+                    })
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn vector3() {
+        let root = full_compile("<(1.0, 2.0, 3.0)>");
+        let vector = root.node.as_vector3().unwrap();
+        let x = &vector.node.x;
+        let x_scalar = x.node.as_scalar().unwrap();
+        let y = &vector.node.y;
+        let y_scalar = y.node.as_scalar().unwrap();
+        let z = &vector.node.z;
+        let z_scalar = z.node.as_scalar().unwrap();
+
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::Vector3(AstNode {
+                    reference: vector.reference.clone(),
+                    node: Box::new(Vector3 {
+                        x: AstNode {
+                            reference: x.reference.clone(),
+                            node: Expression::Scalar(AstNode {
+                                reference: x_scalar.reference.clone(),
+                                node: Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(1.0).unwrap()
+                                }
+                            })
+                        },
+                        y: AstNode {
+                            reference: y.reference.clone(),
+                            node: Expression::Scalar(AstNode {
+                                reference: y_scalar.reference.clone(),
+                                node: Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(2.0).unwrap()
+                                }
+                            })
+                        },
+                        z: AstNode {
+                            reference: z.reference.clone(),
+                            node: Expression::Scalar(AstNode {
+                                reference: z_scalar.reference.clone(),
+                                node: Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(3.0).unwrap()
+                                }
+                            })
+                        }
+                    })
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn vector4() {
+        let root = full_compile("<(1.0, 2.0, 3.0, 4.0)>");
+        let vector = root.node.as_vector4().unwrap();
+        let x = &vector.node.x;
+        let x_scalar = x.node.as_scalar().unwrap();
+        let y = &vector.node.y;
+        let y_scalar = y.node.as_scalar().unwrap();
+        let z = &vector.node.z;
+        let z_scalar = z.node.as_scalar().unwrap();
+        let w = &vector.node.w;
+        let w_scalar = w.node.as_scalar().unwrap();
+
+        assert_eq!(
+            root,
+            AstNode {
+                reference: root.reference.clone(),
+                node: Expression::Vector4(AstNode {
+                    reference: vector.reference.clone(),
+                    node: Box::new(Vector4 {
+                        x: AstNode {
+                            reference: x.reference.clone(),
+                            node: Expression::Scalar(AstNode {
+                                reference: x_scalar.reference.clone(),
+                                node: Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(1.0).unwrap()
+                                }
+                            })
+                        },
+                        y: AstNode {
+                            reference: y.reference.clone(),
+                            node: Expression::Scalar(AstNode {
+                                reference: y_scalar.reference.clone(),
+                                node: Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(2.0).unwrap()
+                                }
+                            })
+                        },
+                        z: AstNode {
+                            reference: z.reference.clone(),
+                            node: Expression::Scalar(AstNode {
+                                reference: z_scalar.reference.clone(),
+                                node: Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(3.0).unwrap()
+                                }
+                            })
+                        },
+                        w: AstNode {
+                            reference: w.reference.clone(),
+                            node: Expression::Scalar(AstNode {
+                                reference: w_scalar.reference.clone(),
+                                node: Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(4.0).unwrap()
+                                }
+                            })
+                        }
+                    })
+                })
             }
         );
     }

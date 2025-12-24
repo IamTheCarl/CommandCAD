@@ -202,6 +202,9 @@ fn find_all_variable_accesses_in_expression(
         }
         Expression::Boolean(_)
         | Expression::Scalar(_)
+        | Expression::Vector2(_)
+        | Expression::Vector3(_)
+        | Expression::Vector4(_)
         | Expression::SignedInteger(_)
         | Expression::String(_)
         | Expression::UnsignedInteger(_)
@@ -339,7 +342,7 @@ macro_rules! build_member_from_sig {
     ($name:ident: $ty:ty) => {
         (
             String::from(stringify!($name)),
-            crate::execution::values::value_type::StructMember {
+            $crate::execution::values::value_type::StructMember {
                 ty: <$ty as crate::execution::values::StaticType>::static_type(),
                 default: None,
             },
@@ -348,7 +351,7 @@ macro_rules! build_member_from_sig {
     ($name:ident: $ty:ty = $default:expr) => {
         (
             String::from(stringify!($name)),
-            crate::execution::values::value_type::StructMember {
+            $crate::execution::values::value_type::StructMember {
                 ty: <$ty as crate::execution::values::StaticType>::static_type(),
                 default: Some($default),
             },
@@ -382,13 +385,14 @@ macro_rules! build_closure_signature {
 #[macro_export]
 macro_rules! build_closure_type {
     ($name:ident($($arg:ident: $ty:path $(= $default:expr)?),*) -> $return_type:path) => {
-        struct $name(pub UserClosure);
+        struct $name(pub $crate::execution::values::UserClosure);
 
         impl $crate::execution::values::StaticType for $name {
             fn static_type() -> $crate::execution::values::ValueType {
-                static TYPE: std::sync::OnceLock<std::sync::Arc<crate::execution::values::closure::Signature>>
-                    = std::sync::OnceLock::new();
-                let signature = TYPE.get_or_init(|| build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type));
+                static TYPE: std::sync::OnceLock<
+                    std::sync::Arc<crate::execution::values::closure::Signature>,
+                > = std::sync::OnceLock::new();
+                let signature = TYPE.get_or_init(|| $crate::build_closure_signature!(($($arg: $ty $(= $default)?),*) -> $return_type));
 
                 $crate::execution::values::ValueType::Closure(signature.clone())
             }
@@ -400,27 +404,26 @@ macro_rules! build_closure_type {
             }
         }
 
-
         impl enum_downcast::IntoVariant<$name> for $crate::execution::values::Value {
             fn into_variant(self) -> Result<$name, $crate::execution::values::Value> {
                 Ok($name(self.into_variant()?))
             }
         }
 
-        impl Into<UserClosure> for $name {
-            fn into(self) -> UserClosure {
+        impl Into<$crate::execution::values::UserClosure> for $name {
+            fn into(self) -> $crate::execution::values::UserClosure {
                 self.0
             }
         }
 
         impl std::ops::Deref for $name {
-            type Target = UserClosure;
+            type Target = $crate::execution::values::UserClosure;
 
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
         }
-    }
+    };
 }
 
 #[macro_export]
@@ -475,29 +478,34 @@ macro_rules! build_function {
 
 #[macro_export]
 macro_rules! build_method {
-    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:path $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
-        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut crate::execution::Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value>> {
+    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
+        struct BuiltFunction<S, F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut crate::execution::Stack, S $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value>> {
             function: F,
             signature: std::sync::Arc<crate::execution::values::closure::Signature>,
+            _self_type: std::marker::PhantomData<S>
         }
 
-        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut crate::execution::Stack, $this_type $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value> + Send + Sync> crate::execution::values::closure::Callable for BuiltFunction<F> {
+        impl<S, F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut $crate::execution::Stack, S $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync> $crate::execution::values::closure::Callable for BuiltFunction<S, F>
+        where
+            S: Send + Sync + Clone + StaticTypeName,
+            $crate::execution::values::Value: enum_downcast::AsVariant<S>
+        {
             fn call(
                 &self,
                 runtime: &mut dyn RuntimeLog,
                 stack_trace: &mut Vec<SourceReference>,
-                stack: &mut crate::execution::Stack,
-                argument: crate::execution::values::Dictionary,
-            ) -> crate::execution::errors::ExpressionResult<crate::execution::values::Value> {
-                use crate::execution::errors::Raise;
+                stack: &mut $crate::execution::Stack,
+                argument: $crate::execution::values::Dictionary,
+            ) -> $crate::execution::errors::ExpressionResult<$crate::execution::values::Value> {
+                use $crate::execution::errors::Raise;
 
                 let this = stack.get_variable(
                     stack_trace,
-                    crate::execution::logging::LocatedStr {
+                    $crate::execution::logging::LocatedStr {
                         location: stack_trace.last().unwrap().clone(),
                         string: "self",
                     },
-                )?.downcast_ref::<$this_type>(stack_trace)?.clone();
+                )?.downcast_ref::<S>(stack_trace)?.clone();
 
                 self.signature
                     .argument_type
@@ -518,16 +526,18 @@ macro_rules! build_method {
                 stringify!($name)
             }
 
-            fn signature(&self) -> &std::sync::Arc<crate::execution::values::closure::Signature> {
+            fn signature(&self) -> &std::sync::Arc<$crate::execution::values::closure::Signature> {
                 &self.signature
             }
         }
 
-        crate::execution::values::closure::BuiltinFunction {
+        $crate::execution::values::closure::BuiltinFunction {
             callable: std::sync::Arc::new(BuiltFunction {
-            function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut crate::execution::Stack, $this: $this_type $(, $($arg: $ty),*)?| -> ExpressionResult<Value> { $code },
-            signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
-        })
+                function:
+                    move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut $crate::execution::Stack, $this: $this_type $(, $($arg: $ty),*)?| -> $crate::execution::ExpressionResult<Value> { $code },
+                signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
+                _self_type: std::marker::PhantomData
+            })
         }
     }};
 }
@@ -842,7 +852,7 @@ mod test {
     fn builtin_method() {
         let test_method = build_method!(
             test_method(log: &mut dyn RuntimeLog, stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, this: Dictionary) -> ValueType::UnsignedInteger {
-                this.get_attribute(log, stack_trace, "value").cloned()
+                this.get_attribute(log, stack_trace, "value")
             }
         );
 
@@ -865,7 +875,7 @@ mod test {
     fn builtin_method_with_argument() {
         let test_method = build_method!(
             test_method(log: &mut dyn RuntimeLog, stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, this: Dictionary, to_add: UnsignedInteger) -> ValueType::UnsignedInteger {
-                let value: &UnsignedInteger = this.get_attribute(log, stack_trace, "value")?.downcast_ref(stack_trace)?;
+                let value: UnsignedInteger = this.get_attribute(log, stack_trace, "value")?.downcast(stack_trace)?;
 
                 Ok(values::UnsignedInteger::from(value.0 + to_add.0).into())
             }

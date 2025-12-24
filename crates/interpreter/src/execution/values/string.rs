@@ -54,7 +54,7 @@ impl Object for IString {
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
         attribute: &str,
-    ) -> ExpressionResult<&Value> {
+    ) -> ExpressionResult<Value> {
         build_closure_type!(MapClosure(character: IString) -> ValueType::Any);
         build_closure_type!(FoldClosure(previous: Value, character: IString) -> ValueType::Any);
 
@@ -71,7 +71,7 @@ impl Object for IString {
                         todo!()
                     }
                 );
-                Ok(value)
+                Ok(value.clone())
             }
             "fold" => {
                 let value = static_method!(
@@ -85,7 +85,7 @@ impl Object for IString {
                         todo!()
                     }
                 );
-                Ok(value)
+                Ok(value.clone())
             }
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
