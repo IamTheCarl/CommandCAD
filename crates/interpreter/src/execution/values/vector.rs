@@ -1369,9 +1369,7 @@ mod test {
         let product = test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        let notice_me = 0;
-        // TODO we can't implement this test until we have working if statements.
-        // test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if (c == 0m) 1m else 1 'm^2')").unwrap();
+        test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
     
     #[test]
@@ -1382,9 +1380,7 @@ mod test {
         let product = test_run("<(0m, 1m, 2m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        let notice_me = 0;
-        // TODO we can't implement this test until we have working if statements.
-        // test_run("<(0m, 1m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if (c == 0m) 1m else 1 'm^2')").unwrap_err();
+        test_run("<(0m, 1m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
     
     #[test]
@@ -1395,9 +1391,7 @@ mod test {
         let product = test_run("<(0m, 1m, 2m, 3m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        let notice_me = 0;
-        // TODO we can't implement this test until we have working if statements.
-        // test_run("<(0m, 1m, 1m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if (c == 0m) 1m else 1 'm^2')").unwrap_err();
+        test_run("<(0m, 1m, 1m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
     
     #[test]
