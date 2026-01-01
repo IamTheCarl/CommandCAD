@@ -1277,6 +1277,10 @@
     "named": true
   },
   {
+    "type": "then ",
+    "named": false
+  },
+  {
     "type": "true",
     "named": true
   },

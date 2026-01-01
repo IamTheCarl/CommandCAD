@@ -2,7 +2,7 @@
 If else
 ==================
 
-if true "" else "" 
+if true then "" else "" 
 
 ---
 
@@ -20,7 +20,7 @@ if true "" else ""
 With other operations
 ==================
 
-1 + if true "" else "" 
+1 + if true then "" else "" 
 
 ---
 

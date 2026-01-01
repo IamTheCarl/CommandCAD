@@ -1351,6 +1351,10 @@
           }
         },
         {
+          "type": "STRING",
+          "value": "then "
+        },
+        {
           "type": "FIELD",
           "name": "on_true",
           "content": {
@@ -1359,21 +1363,16 @@
           }
         },
         {
-          "type": "SEQ",
-          "members": [
-            {
-              "type": "STRING",
-              "value": "else"
-            },
-            {
-              "type": "FIELD",
-              "name": "on_false",
-              "content": {
-                "type": "SYMBOL",
-                "name": "expression"
-              }
-            }
-          ]
+          "type": "STRING",
+          "value": "else"
+        },
+        {
+          "type": "FIELD",
+          "name": "on_false",
+          "content": {
+            "type": "SYMBOL",
+            "name": "expression"
+          }
         }
       ]
     },

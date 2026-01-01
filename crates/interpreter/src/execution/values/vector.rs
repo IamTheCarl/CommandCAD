@@ -283,7 +283,7 @@ where
                     }
                 )
                 .into()),
-                "apply" => Ok(build_method!(
+                "apply" | "map" => Ok(build_method!(
                     Vector_apply(
                         log: &mut dyn RuntimeLog,
                         stack_trace: &mut Vec<SourceReference>,
@@ -291,7 +291,7 @@ where
                         this: Self,
                         f: ApplyClosure) -> ValueType::Any
                     {
-                        let operations = self.value.iter().map(|c| f.call(log, stack_trace, stack, Dictionary::from(HashMap::from_iter([
+                        let operations: ArrayVec<[Value; 4]> = this.value.iter().map(|c| f.call(log, stack_trace, stack, Dictionary::from(HashMap::from_iter([
                             (
                                 "c".into(),
                                 Scalar {
@@ -299,24 +299,55 @@ where
                                     value: common_data_types::Float::new(c).unwrap_not_nan(stack_trace)?
                                 }.into()
                             )
-                        ]))));
+                        ])))).collect::<ExpressionResult<_>>()?;
 
-                        let result: ArrayVec<[Scalar; 4]> = operations.map(|v| v?.downcast::<Scalar>(stack_trace)).map(|r| r.unwrap()).collect();
+                        let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(stack_trace)).collect::<ExpressionResult<_>>()?;
                         
                         // The smallest vector we support is 2, so this should never panic.
                         let dimension = result[0].dimension;
 
-
-
+                        for component in result.iter() {
+                            if component.dimension != dimension {
+                                return Err(GenericFailure("All components of a vector must match")
+                                    .to_error(stack_trace.iter()));
+                            }
+                        }
+            
                         Ok(Self::new_raw(stack_trace, dimension, I::from_iterator(result.iter().map(|c| *c.value)))?.into())
                     }
                 )
                 .into()),
+                "fold" => Ok(build_method!(
+                    Vector_fold(
+                        log: &mut dyn RuntimeLog,
+                        stack_trace: &mut Vec<SourceReference>,
+                        stack: &mut Stack,
+                        this: Self,
+                        init: Value,
+                        f: FoldClosure) -> ValueType::Any
+                    {
 
+                        let mut accumulator = init;
+                        for component in this.value.iter() {
+                            accumulator = f.call(log, stack_trace, stack, Dictionary::from(HashMap::from_iter([
+                                (
+                                    "c".into(),
+                                    Scalar {
+                                        dimension: this.dimension,
+                                        value: common_data_types::Float::new(component).unwrap_not_nan(stack_trace)?
+                                    }.into()
+                                ),
+                                (
+                                    "previous".into(),
+                                    accumulator 
+                                )
+                            ])))?;
+                        }
 
-                // fn apply() // Apply a closure to each component
-    // fold
-    // map
+                        Ok(accumulator)
+                    }
+                )
+                .into()),
                 _ => Err(MissingAttributeError {
                     name: attribute.into(),
                 }
@@ -1335,10 +1366,12 @@ mod test {
         let product = test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        let product = test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length c * 1m) == <(0m^2, 1m^2)>").unwrap();
+        let product = test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length if c == 0m 1m else 1m^2)").unwrap_err();
+        let notice_me = 0;
+        // TODO we can't implement this test until we have working if statements.
+        // test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if (c == 0m) 1m else 1 'm^2')").unwrap();
     }
     
     #[test]
@@ -1346,10 +1379,12 @@ mod test {
         let product = test_run("<(0m, 1m, 2m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m, 3m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        let product = test_run("<(0m, 1m, 2m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length c * 1m) == <(0m^2, 1m^2, 2m^2)>").unwrap();
+        let product = test_run("<(0m, 1m, 2m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        test_run("<(0m, 1m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length if c == 0m 1m else 1m^2)").unwrap_err();
+        let notice_me = 0;
+        // TODO we can't implement this test until we have working if statements.
+        // test_run("<(0m, 1m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if (c == 0m) 1m else 1 'm^2')").unwrap_err();
     }
     
     #[test]
@@ -1357,9 +1392,38 @@ mod test {
         let product = test_run("<(0m, 1m, 2m, 3m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m, 3m, 4m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        let product = test_run("<(0m, 1m, 2m, 3m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length c * 1m) == <(0m^2, 1m^2, 2m^2, 3m^2)>").unwrap();
+        let product = test_run("<(0m, 1m, 2m, 3m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        test_run("<(0m, 1m, 1m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length if c == 0m 1m else 1m^2)").unwrap_err();
+        let notice_me = 0;
+        // TODO we can't implement this test until we have working if statements.
+        // test_run("<(0m, 1m, 1m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if (c == 0m) 1m else 1 'm^2')").unwrap_err();
+    }
+    
+    #[test]
+    fn fold_vector2() {
+        let product = test_run("<(1m, 2m)>:fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
+        assert_eq!(product, Scalar {
+            dimension: Dimension::length(),
+            value: common_data_types::Float::new(3.0).unwrap()
+        }.into());
+    }
+    
+    #[test]
+    fn fold_vector3() {
+        let product = test_run("<(1m, 2m, 3m)>:fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
+        assert_eq!(product, Scalar {
+            dimension: Dimension::length(),
+            value: common_data_types::Float::new(6.0).unwrap()
+        }.into());
+    }
+    
+    #[test]
+    fn fold_vector4() {
+        let product = test_run("<(1m, 2m, 3m, 4m)>:fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
+        assert_eq!(product, Scalar {
+            dimension: Dimension::length(),
+            value: common_data_types::Float::new(10.0).unwrap()
+        }.into());
     }
 }

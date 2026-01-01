@@ -119,7 +119,9 @@ pub fn execute_expression(
             compile::Expression::DictionaryConstruction(ast_node) => {
                 Ok(values::Dictionary::from_ast(log, stack_trace, stack, ast_node)?.into())
             }
-            compile::Expression::If(ast_node) => todo!(),
+            compile::Expression::If(ast_node) => {
+                execute_if_expression(log, stack_trace, stack, ast_node)
+            }
             compile::Expression::List(ast_node) => {
                 Ok(values::List::from_ast(log, stack_trace, stack, ast_node)?.into())
             }
@@ -320,6 +322,25 @@ fn execute_binary_expression(
     )
 }
 
+pub fn execute_if_expression(
+    log: &mut dyn RuntimeLog,
+    stack_trace: &mut Vec<SourceReference>,
+    stack: &mut Stack,
+    expression: &compile::AstNode<Box<compile::IfExpression>>,
+) -> ExpressionResult<Value> {
+    let condition = execute_expression(log, stack_trace, stack, &expression.node.condition)?
+        .downcast::<values::Boolean>(stack_trace)?
+        .0;
+
+    let expression = if condition {
+        &expression.node.on_true
+    } else {
+        &expression.node.on_false
+    };
+
+    execute_expression(log, stack_trace, stack, expression)
+}
+
 #[cfg(test)]
 pub(crate) fn test_run(input: &str) -> ExpressionResult<Value> {
     use standard_environment::build_prelude;
@@ -407,5 +428,14 @@ mod test {
             product,
             values::IString::from("a simple string of text").into()
         );
+    }
+
+    #[test]
+    fn if_expression() {
+        let product = test_run("if true then 1u else 2u").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(1).into());
+
+        let product = test_run("if false then 1u else 2u").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(2).into());
     }
 }

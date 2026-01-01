@@ -38,7 +38,7 @@ pub enum Expression {
     Boolean(AstNode<bool>),
     ClosureDefinition(AstNode<Box<ClosureDefinition>>),
     DictionaryConstruction(AstNode<DictionaryConstruction>),
-    If(AstNode<IfExpression>),
+    If(AstNode<Box<IfExpression>>),
     List(AstNode<Vec<AstNode<Expression>>>),
     Parenthesis(Box<AstNode<Expression>>),
     IdentityPath(AstNode<IdentityPath>),
@@ -156,7 +156,7 @@ impl<'t> Parse<'t, nodes::If<'t>> for Expression {
         Ok(AstNode::new(
             file,
             &value,
-            Self::If(IfExpression::parse(file, input, value)?),
+            Self::If(IfExpression::parse(file, input, value)?.into_box()),
         ))
     }
 }
@@ -859,9 +859,9 @@ impl<'t> Parse<'t, nodes::Vector4<'t>> for Vector4 {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct IfExpression {
-    pub condition: AstNode<Box<Expression>>,
-    pub on_true: AstNode<Box<Expression>>,
-    pub on_false: AstNode<Box<Expression>>,
+    pub condition: AstNode<Expression>,
+    pub on_true: AstNode<Expression>,
+    pub on_false: AstNode<Expression>,
 }
 
 impl<'t> Parse<'t, nodes::If<'t>> for IfExpression {
@@ -871,10 +871,10 @@ impl<'t> Parse<'t, nodes::If<'t>> for IfExpression {
         value: nodes::If<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let condition = value.condition()?;
-        let condition = Expression::parse(file, input, condition)?.into_box();
+        let condition = Expression::parse(file, input, condition)?;
 
-        let on_true = Expression::parse(file, input, value.on_true()?)?.into_box();
-        let on_false = Expression::parse(file, input, value.on_false()?)?.into_box();
+        let on_true = Expression::parse(file, input, value.on_true()?)?;
+        let on_false = Expression::parse(file, input, value.on_false()?)?;
 
         Ok(AstNode::new(
             file,
@@ -1360,7 +1360,7 @@ mod test {
 
     #[test]
     fn if_else_expression() {
-        let root = full_compile("if true \"true\" else \"false\"");
+        let root = full_compile("if true then \"true\" else \"false\"");
         let if_expression = root.node.as_if().unwrap();
         let if_reference = if_expression.reference.clone();
         let condition = &if_expression.node.condition;
@@ -1391,32 +1391,29 @@ mod test {
                 reference: root.reference.clone(),
                 node: Expression::If(AstNode {
                     reference: if_reference,
-                    node: IfExpression {
+                    node: Box::new(IfExpression {
                         condition: AstNode {
                             reference: condition_reference,
                             node: Expression::Boolean(AstNode {
                                 reference: boolean_reference,
                                 node: true
                             })
-                        }
-                        .into_box(),
+                        },
                         on_true: AstNode {
                             reference: true_expression_reference,
                             node: Expression::String(AstNode {
                                 reference: true_string_reference,
                                 node: String::from("true")
                             })
-                        }
-                        .into_box(),
+                        },
                         on_false: AstNode {
                             reference: false_expression_reference,
                             node: Expression::String(AstNode {
                                 reference: false_string_reference,
                                 node: String::from("false")
                             })
-                        }
-                        .into_box(),
-                    }
+                        },
+                    })
                 })
             }
         );
