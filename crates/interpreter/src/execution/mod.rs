@@ -345,7 +345,7 @@ pub fn execute_if_expression(
 pub(crate) fn test_run(input: &str) -> ExpressionResult<Value> {
     use standard_environment::build_prelude;
 
-    let root = compile::full_compile(input);
+    let root = dbg!(compile::full_compile(input));
     let prelude = build_prelude();
     let mut stack = Stack::new(prelude);
 

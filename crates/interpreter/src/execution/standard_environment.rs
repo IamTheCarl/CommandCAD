@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use common_data_types::Dimension;
+use common_data_types::{Dimension, Float};
 
-use crate::execution::values::ValueNone;
+use crate::execution::values::{Scalar, ValueNone};
 
 use super::values::{Dictionary, Value, ValueType};
 
@@ -39,7 +39,17 @@ fn build_std() -> Dictionary {
 
 /// Adds library for constants.
 fn build_consts() -> Dictionary {
-    let types: HashMap<String, Value> = HashMap::from_iter([("None".into(), ValueNone.into())]);
+    let types: HashMap<String, Value> = HashMap::from_iter([
+        ("None".into(), ValueNone.into()),
+        (
+            "Infinity".into(),
+            Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(common_data_types::RawFloat::INFINITY).expect("Infinity was NaN"),
+            }
+            .into(),
+        ),
+    ]);
     Dictionary::from(types)
 }
 

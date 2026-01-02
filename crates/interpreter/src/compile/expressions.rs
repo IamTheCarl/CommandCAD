@@ -2063,7 +2063,7 @@ mod test {
 
     #[test]
     fn method_call_no_arguments() {
-        let root = full_compile("5u:c()");
+        let root = full_compile("5u::c()");
         let call = root.node.as_methodcall().unwrap();
         let to_call = &call.node.to_call;
         assert_eq!(
@@ -2105,7 +2105,7 @@ mod test {
 
     #[test]
     fn method_call_with_arguments() {
-        let root = full_compile("83u:c(value = 95u)");
+        let root = full_compile("83u::c(value = 95u)");
         let call = root.node.as_methodcall().unwrap();
         let to_call = &call.node.to_call;
         let dict = &call.node.argument.node;

@@ -681,7 +681,7 @@ mod test {
     #[test]
     fn call_custom_method() {
         let product = test_run(
-            "let object = (value = 5u, method = () -> std.types.UInt: self.value;); in object:method()",
+            "let object = (value = 5u, method = () -> std.types.UInt: self.value;); in object::method()",
         )
         .unwrap();
         assert_eq!(product, values::UnsignedInteger::from(5).into());
@@ -859,7 +859,7 @@ mod test {
         use crate::execution::standard_environment::build_prelude;
 
         let root = crate::compile::full_compile(
-            "let object = (value = 5u, test_method = provided_test_method); in object:test_method()",
+            "let object = (value = 5u, test_method = provided_test_method); in object::test_method()",
         );
         let prelude = build_prelude();
         let mut stack = Stack::new(prelude);
@@ -884,7 +884,7 @@ mod test {
         use crate::execution::standard_environment::build_prelude;
 
         let root = crate::compile::full_compile(
-            "let object = (value = 5u, test_method = provided_test_method); in object:test_method(to_add = 10u)",
+            "let object = (value = 5u, test_method = provided_test_method); in object::test_method(to_add = 10u)",
         );
         let prelude = build_prelude();
         let mut stack = Stack::new(prelude);

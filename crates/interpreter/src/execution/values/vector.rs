@@ -1194,209 +1194,209 @@ mod test {
 
     #[test]
     fn abs_vector2() {
-        let product = test_run("<(-1m, -2m)>:abs() == <(1m, 2m)>").unwrap();
+        let product = test_run("<(-1m, -2m)>::abs() == <(1m, 2m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn abs_vector3() {
-        let product = test_run("<(-1m, -2m, -3m)>:abs() == <(1m, 2m, 3m)>").unwrap();
+        let product = test_run("<(-1m, -2m, -3m)>::abs() == <(1m, 2m, 3m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn abs_vector4() {
-        let product = test_run("<(-1m, -2m, -3m, -4m)>:abs() == <(1m, 2m, 3m, 4m)>").unwrap();
+        let product = test_run("<(-1m, -2m, -3m, -4m)>::abs() == <(1m, 2m, 3m, 4m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn add_scalar_vector2() {
-        let product = test_run("<(1m, 2m)>:add_scalar(value = 1m) == <(2m, 3m)>").unwrap();
+        let product = test_run("<(1m, 2m)>::add_scalar(value = 1m) == <(2m, 3m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn add_scalar_vector3() {
-        let product = test_run("<(1m, 2m, 3m)>:add_scalar(value = 1m) == <(2m, 3m, 4m)>").unwrap();
+        let product = test_run("<(1m, 2m, 3m)>::add_scalar(value = 1m) == <(2m, 3m, 4m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn add_scalar_vector4() {
         let product =
-            test_run("<(1m, 2m, 3m, 4m)>:add_scalar(value = 1m) == <(2m, 3m, 4m, 5m)>").unwrap();
+            test_run("<(1m, 2m, 3m, 4m)>::add_scalar(value = 1m) == <(2m, 3m, 4m, 5m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn amax_vector2() {
-        let product = test_run("<(1m, 2m)>:amax() == 2m").unwrap();
+        let product = test_run("<(1m, 2m)>::amax() == 2m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn amax_vector3() {
-        let product = test_run("<(1m, 2m, 3m)>:amax() == 3m").unwrap();
+        let product = test_run("<(1m, 2m, 3m)>::amax() == 3m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn amax_vector4() {
-        let product = test_run("<(1m, 2m, 3m, 4m)>:amax() == 4m").unwrap();
+        let product = test_run("<(1m, 2m, 3m, 4m)>::amax() == 4m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn dot_vector2() {
-        let product = test_run("<(1m, 0m)>:dot(rhs = <(0.5m, 10m)>) == 0.5m").unwrap();
+        let product = test_run("<(1m, 0m)>::dot(rhs = <(0.5m, 10m)>) == 0.5m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn dot_vector3() {
-        let product = test_run("<(1m, 0m, 0m)>:dot(rhs = <(0.5m, 10m, 10m)>) == 0.5m").unwrap();
+        let product = test_run("<(1m, 0m, 0m)>::dot(rhs = <(0.5m, 10m, 10m)>) == 0.5m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn dot_vector4() {
         let product =
-            test_run("<(1m, 0m, 0m, 0m)>:dot(rhs = <(0.5m, 10m, 10m, 10m)>) == 0.5m").unwrap();
+            test_run("<(1m, 0m, 0m, 0m)>::dot(rhs = <(0.5m, 10m, 10m, 10m)>) == 0.5m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn norm_vector2() {
-        let product = test_run("<(1m, 0m)>:norm() == 1m").unwrap();
+        let product = test_run("<(1m, 0m)>::norm() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn norm_vector3() {
-        let product = test_run("<(1m, 0m, 0m)>:norm() == 1m").unwrap();
+        let product = test_run("<(1m, 0m, 0m)>::norm() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn norm_vector4() {
-        let product = test_run("<(1m, 0m, 0m, 0m)>:norm() == 1m").unwrap();
+        let product = test_run("<(1m, 0m, 0m, 0m)>::norm() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn length_vector2() {
-        let product = test_run("<(1m, 0m)>:length() == 1m").unwrap();
+        let product = test_run("<(1m, 0m)>::length() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn length_vector3() {
-        let product = test_run("<(1m, 0m, 0m)>:length() == 1m").unwrap();
+        let product = test_run("<(1m, 0m, 0m)>::length() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn length_vector4() {
-        let product = test_run("<(1m, 0m, 0m, 0m)>:length() == 1m").unwrap();
+        let product = test_run("<(1m, 0m, 0m, 0m)>::length() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn normalize_vector2() {
-        let product = test_run("<(5m, 0m)>:normalize() == <(1, 0)>").unwrap();
+        let product = test_run("<(5m, 0m)>::normalize() == <(1, 0)>").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn normalize_vector3() {
-        let product = test_run("<(5m, 0m, 0m)>:normalize() == <(1, 0, 0)>").unwrap();
+        let product = test_run("<(5m, 0m, 0m)>::normalize() == <(1, 0, 0)>").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn normalize_vector4() {
-        let product = test_run("<(5m, 0m, 0m, 0m)>:normalize() == <(1, 0, 0, 0)>").unwrap();
+        let product = test_run("<(5m, 0m, 0m, 0m)>::normalize() == <(1, 0, 0, 0)>").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn normalize_zero_vector2() {
-        test_run("<(0m, 0m)>:normalize()").unwrap_err();
+        test_run("<(0m, 0m)>::normalize()").unwrap_err();
     }
 
     #[test]
     fn normalize_zero_vector3() {
-        test_run("<(0m, 0m, 0m)>:normalize()").unwrap_err();
+        test_run("<(0m, 0m, 0m)>::normalize()").unwrap_err();
     }
 
     #[test]
     fn normalize_zero_vector4() {
-        test_run("<(0m, 0m, 0m, 0m)>:normalize()").unwrap_err();
+        test_run("<(0m, 0m, 0m, 0m)>::normalize()").unwrap_err();
     }
 
     #[test]
     fn cross_vector3() {
         let product =
-            test_run("<(1m, 0m, 0m)>:cross(rhs = <(0m, 1m, 0m)>) == <(0m, 0m, 1m)>").unwrap();
+            test_run("<(1m, 0m, 0m)>::cross(rhs = <(0m, 1m, 0m)>) == <(0m, 0m, 1m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn angle_vector2() {
-        let product = test_run("<(1m, 0m)>:angle(other = <(0m, 1m)>) - 90deg < 0.001deg").unwrap();
+        let product = test_run("<(1m, 0m)>::angle(other = <(0m, 1m)>) - 90deg < 0.001deg").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn angle_vector3() {
-        let product = test_run("<(1m, 0m, 0m)>:angle(other = <(0m, 1m, 0m)>) - 90deg < 0.001deg").unwrap();
+        let product = test_run("<(1m, 0m, 0m)>::angle(other = <(0m, 1m, 0m)>) - 90deg < 0.001deg").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn angle_vector4() {
         let product =
-            test_run("<(1m, 0m, 0m, 0m)>:angle(other = <(0m, 1m, 0m, 0m)>) - 90deg < 0.001deg").unwrap();
+            test_run("<(1m, 0m, 0m, 0m)>::angle(other = <(0m, 1m, 0m, 0m)>) - 90deg < 0.001deg").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
     
     #[test]
     fn apply_vector2() {
-        let product = test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m)>").unwrap();
+        let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        let product = test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2')>").unwrap();
+        let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        test_run("<(0m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
     
     #[test]
     fn apply_vector3() {
-        let product = test_run("<(0m, 1m, 2m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m, 3m)>").unwrap();
+        let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m, 3m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        let product = test_run("<(0m, 1m, 2m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2')>").unwrap();
+        let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        test_run("<(0m, 1m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        test_run("<(0m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
     
     #[test]
     fn apply_vector4() {
-        let product = test_run("<(0m, 1m, 2m, 3m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m, 3m, 4m)>").unwrap();
+        let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m, 3m, 4m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        let product = test_run("<(0m, 1m, 2m, 3m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2')>").unwrap();
+        let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
         
-        test_run("<(0m, 1m, 1m, 1m)>:apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        test_run("<(0m, 1m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
     
     #[test]
     fn fold_vector2() {
-        let product = test_run("<(1m, 2m)>:fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
+        let product = test_run("<(1m, 2m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
         assert_eq!(product, Scalar {
             dimension: Dimension::length(),
             value: common_data_types::Float::new(3.0).unwrap()
@@ -1405,7 +1405,7 @@ mod test {
     
     #[test]
     fn fold_vector3() {
-        let product = test_run("<(1m, 2m, 3m)>:fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
+        let product = test_run("<(1m, 2m, 3m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
         assert_eq!(product, Scalar {
             dimension: Dimension::length(),
             value: common_data_types::Float::new(6.0).unwrap()
@@ -1414,7 +1414,7 @@ mod test {
     
     #[test]
     fn fold_vector4() {
-        let product = test_run("<(1m, 2m, 3m, 4m)>:fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
+        let product = test_run("<(1m, 2m, 3m, 4m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
         assert_eq!(product, Scalar {
             dimension: Dimension::length(),
             value: common_data_types::Float::new(10.0).unwrap()

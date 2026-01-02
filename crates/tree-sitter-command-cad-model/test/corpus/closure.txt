@@ -137,7 +137,7 @@ value.value(value=value)
 Call method
 ==================
 
-value:value(value=value)
+value::value(value=value)
 
 ---
 
@@ -159,7 +159,7 @@ value:value(value=value)
 Call method no arguments
 ==================
 
-value:value()
+value::value()
 
 ---
 
@@ -176,7 +176,7 @@ value:value()
 Call method deep in tree
 ==================
 
-value.value:value(value=value)
+value.value::value(value=value)
 
 ---
 
@@ -194,4 +194,23 @@ value.value:value(value=value)
           (expression
             (identity_path
               (identifier))))))))
+
+==================
+Call method inside parenthasis
+==================
+
+(value::value())
+
+---
+
+(source_file
+  (expression
+    (parenthesis
+      (expression
+        (method_call
+          (expression
+            (identity_path
+              (identifier)))
+          (identifier)
+          (dictionary_construction))))))
 

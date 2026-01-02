@@ -136,7 +136,7 @@ module.exports = grammar({
     
     method_call: $ => seq(
       prec.left(PREC.method_call, seq(
-        field('self_dictionary', $.expression), ':', field('to_call', $.identifier), field("argument", $.dictionary_construction) 
+        field('self_dictionary', $.expression), '::', field('to_call', $.identifier), field("argument", $.dictionary_construction) 
       ))
     ), 
 

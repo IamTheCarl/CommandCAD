@@ -784,18 +784,18 @@ mod test {
 
     #[test]
     fn try_qualify_method() {
-        let result = test_run("std.types.Bool:try_qualify(to_qualify = true)").unwrap();
+        let result = test_run("std.types.Bool::try_qualify(to_qualify = true)").unwrap();
         assert_eq!(result, values::Boolean(true).into());
 
-        let result = test_run("std.types.Bool:try_qualify(to_qualify = 5u)").unwrap();
+        let result = test_run("std.types.Bool::try_qualify(to_qualify = 5u)").unwrap();
         assert_eq!(result, values::Boolean(false).into());
     }
 
     #[test]
     fn qualify_method() {
-        let result = test_run("std.types.Bool:qualify(to_qualify = true)").unwrap();
+        let result = test_run("std.types.Bool::qualify(to_qualify = true)").unwrap();
         assert_eq!(result, values::ValueNone.into());
 
-        test_run("std.types.Bool:qualify(to_qualify = 5u)").unwrap_err();
+        test_run("std.types.Bool::qualify(to_qualify = 5u)").unwrap_err();
     }
 }
