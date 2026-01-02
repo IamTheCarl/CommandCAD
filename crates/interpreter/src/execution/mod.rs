@@ -278,8 +278,6 @@ fn execute_binary_expression(
                 BinaryExpressionOperation::MulMul => value_a.exponent(log, stack_trace, value_b),
                 BinaryExpressionOperation::Add => value_a.addition(log, stack_trace, value_b),
                 BinaryExpressionOperation::Sub => value_a.subtraction(log, stack_trace, value_b),
-                BinaryExpressionOperation::DotDot => todo!(),
-                BinaryExpressionOperation::DotDotEq => todo!(),
                 BinaryExpressionOperation::Div => value_a.divide(log, stack_trace, value_b),
                 BinaryExpressionOperation::DivDiv => {
                     value_a.floor_divide(log, stack_trace, value_b)

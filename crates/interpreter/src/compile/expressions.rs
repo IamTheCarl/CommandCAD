@@ -563,8 +563,6 @@ pub enum BinaryExpressionOperation {
     MulMul,
     Add,
     Sub,
-    DotDot,
-    DotDotEq,
     Div,
     DivDiv,
     Lt,
@@ -592,7 +590,7 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for BinaryExpression {
         input: &'i str,
         value: nodes::BinaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        type Operation<'t> = nodes::anon_unions::Anon40940481278423458606720242092326701826<'t>;
+        type Operation<'t> = nodes::anon_unions::NotEq_And_AndAnd_Mul_MulMul_Add_Sub_Div_DivDiv_Lt_LtLt_LtEq_EqEq_Gt_GtEq_GtGt_BitXor_Or_OrOr<'t>;
 
         let operation = value.op()?;
 
@@ -610,12 +608,6 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for BinaryExpression {
             }
             Operation::Add(add) => AstNode::new(file, &add, BinaryExpressionOperation::Add),
             Operation::Sub(sub) => AstNode::new(file, &sub, BinaryExpressionOperation::Sub),
-            Operation::DotDot(dot_dot) => {
-                AstNode::new(file, &dot_dot, BinaryExpressionOperation::DotDot)
-            }
-            Operation::DotDotEq(dot_dot_eq) => {
-                AstNode::new(file, &dot_dot_eq, BinaryExpressionOperation::DotDotEq)
-            }
             Operation::Div(div) => AstNode::new(file, &div, BinaryExpressionOperation::Div),
             Operation::DivDiv(div_div) => {
                 AstNode::new(file, &div_div, BinaryExpressionOperation::DivDiv)

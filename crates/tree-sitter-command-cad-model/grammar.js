@@ -8,23 +8,22 @@
 // @ts-check
 
 const PREC = {
-  struct_member: 18,
-  unit: 17,
-  method_call: 16,
-  function_call: 15,
-  field: 14,
-  unary: 12,
-  exponential: 11,
-  multiplicative: 10,
-  additive: 9,
-  shift: 8,
-  bitand: 7,
-  bitxor: 6,
-  bitor: 5,
-  comparative: 4,
-  and: 3,
-  or: 2,
-  range: 1,
+  struct_member: 16,
+  unit: 15,
+  method_call: 14,
+  function_call: 13,
+  field: 12,
+  unary: 11,
+  exponential: 10,
+  multiplicative: 9,
+  additive: 8,
+  shift: 7,
+  bitand: 6,
+  bitxor: 5,
+  bitor: 4,
+  comparative: 3,
+  and: 2,
+  or: 1,
   assign: 0,
   closure: -1,
   struct_def: -2,
@@ -65,9 +64,6 @@ const binary_operator_table = [
 
   [PREC.and, '&&'],
   [PREC.or, '||'],
-
-  [PREC.range, '..'],
-  [PREC.range, '..='],
 ];
 
 const formula_binary_operator_table = [
