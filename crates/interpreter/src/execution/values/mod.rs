@@ -45,7 +45,7 @@ mod vector;
 pub use vector::{Vector2, Vector3, Vector4};
 
 mod closure;
-pub use closure::{BuiltinFunction, UserClosure};
+pub use closure::{BuiltinCallableDatabase, BuiltinFunction, UserClosure};
 
 mod dictionary;
 pub use dictionary::Dictionary;
@@ -120,7 +120,7 @@ impl Display for MissingAttributeError {
 
 #[enum_dispatch]
 pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
-    fn get_type(&self) -> ValueType;
+    fn get_type(&self, callable_database: &BuiltinCallableDatabase) -> ValueType;
 
     // fn format(
     //     &self,
@@ -269,6 +269,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _callable_database: &BuiltinCallableDatabase,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         Err(MissingAttributeError {
@@ -281,6 +282,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         _log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         _stack: &mut Stack,
+        _callable_database: &BuiltinCallableDatabase,
         _argument: Dictionary,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "call")

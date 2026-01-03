@@ -31,7 +31,7 @@ use crate::{
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
         logging::RuntimeLog,
-        values::StaticType,
+        values::{closure::BuiltinCallableDatabase, StaticType},
     },
 };
 
@@ -70,7 +70,7 @@ where
     Self: StaticTypeName + Into<Value>,
     Value: AsVariant<Self>,
 {
-    fn get_type(&self) -> ValueType {
+    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
         I::get_type()
     }
 

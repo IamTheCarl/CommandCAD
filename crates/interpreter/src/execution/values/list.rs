@@ -19,7 +19,11 @@
 use crate::{
     compile::{AstNode, Expression, SourceReference},
     execute_expression,
-    execution::{logging::RuntimeLog, stack::Stack, values::StaticType},
+    execution::{
+        logging::RuntimeLog,
+        stack::Stack,
+        values::{closure::BuiltinCallableDatabase, StaticType},
+    },
 };
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
@@ -41,34 +45,33 @@ impl List {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         ast_node: &AstNode<Vec<AstNode<Expression>>>,
     ) -> ExpressionResult<Self> {
         let values: ExpressionResult<Vec<Value>> = ast_node
             .node
             .iter()
-            .map(|expression| execute_expression(log, stack_trace, stack, expression))
+            .map(|expression| execute_expression(log, stack_trace, stack, database, expression))
             .collect();
 
-        Ok(List::from_iter(values?))
+        Ok(List::from_iter(database, values?))
     }
-}
 
-impl FromIterator<Value> for List {
-    fn from_iter<I>(iterator: I) -> Self
+    pub fn from_iter<I>(database: &BuiltinCallableDatabase, iterator: I) -> Self
     where
         I: IntoIterator<Item = Value>,
     {
         let values: Vec<_> = iterator.into_iter().collect();
 
-        let internal_type = if let Some(initial_type) = values.first().map(|first| first.get_type())
-        {
-            Some(values.iter().fold(initial_type, |accumulated, next| {
-                accumulated.merge(next.get_type())
-            }))
-        } else {
-            // This is an empty list.
-            None
-        };
+        let internal_type =
+            if let Some(initial_type) = values.first().map(|first| first.get_type(database)) {
+                Some(values.iter().fold(initial_type, |accumulated, next| {
+                    accumulated.merge(next.get_type(database))
+                }))
+            } else {
+                // This is an empty list.
+                None
+            };
 
         Self {
             internal_type,
@@ -78,7 +81,7 @@ impl FromIterator<Value> for List {
 }
 
 impl Object for List {
-    fn get_type(&self) -> ValueType {
+    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
         ValueType::List(self.internal_type.clone().map(Box::new))
     }
 
@@ -115,46 +118,59 @@ mod test {
 
     #[test]
     fn create_empty() {
+        let database = BuiltinCallableDatabase::default();
         let product = test_run("[]").unwrap();
-        assert_eq!(product, List::from_iter([]).into());
+        assert_eq!(product, List::from_iter(&database, []).into());
     }
 
     #[test]
     fn create() {
+        let database = BuiltinCallableDatabase::default();
         let product = test_run("[1u, 2u, 3u]").unwrap();
         assert_eq!(
             product,
-            List::from_iter([
-                values::UnsignedInteger::from(1).into(),
-                values::UnsignedInteger::from(2).into(),
-                values::UnsignedInteger::from(3).into()
-            ])
+            List::from_iter(
+                &database,
+                [
+                    values::UnsignedInteger::from(1).into(),
+                    values::UnsignedInteger::from(2).into(),
+                    values::UnsignedInteger::from(3).into()
+                ]
+            )
             .into()
         );
     }
 
     #[test]
     fn create_multi_type() {
+        let database = BuiltinCallableDatabase::default();
         let product = test_run("[1u, 2i, 3u]").unwrap();
         assert_eq!(
             product,
-            List::from_iter([
-                values::UnsignedInteger::from(1).into(),
-                values::SignedInteger::from(2).into(),
-                values::UnsignedInteger::from(3).into()
-            ])
+            List::from_iter(
+                &database,
+                [
+                    values::UnsignedInteger::from(1).into(),
+                    values::SignedInteger::from(2).into(),
+                    values::UnsignedInteger::from(3).into()
+                ]
+            )
             .into()
         );
     }
 
     #[test]
     fn type_detection() {
+        let database = BuiltinCallableDatabase::default();
         assert_eq!(
-            List::from_iter([
-                values::UnsignedInteger::from(1).into(),
-                values::SignedInteger::from(2).into(),
-                values::UnsignedInteger::from(3).into()
-            ])
+            List::from_iter(
+                &database,
+                [
+                    values::UnsignedInteger::from(1).into(),
+                    values::SignedInteger::from(2).into(),
+                    values::UnsignedInteger::from(3).into()
+                ]
+            )
             .internal_type,
             Some(ValueType::MultiType(
                 Box::new(ValueType::UnsignedInteger),

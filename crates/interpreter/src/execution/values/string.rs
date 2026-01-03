@@ -19,14 +19,12 @@
 use imstr::ImString;
 
 use crate::{
-    build_closure_signature, build_closure_type,
     compile::SourceReference,
     execution::{
         errors::Raise,
         logging::RuntimeLog,
-        values::{MissingAttributeError, StaticType, UserClosure},
+        values::{closure::BuiltinCallableDatabase, MissingAttributeError, StaticType},
     },
-    static_method,
 };
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
@@ -35,7 +33,7 @@ use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Val
 pub struct IString(pub ImString);
 
 impl Object for IString {
-    fn get_type(&self) -> ValueType {
+    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
         ValueType::Boolean
     }
 
@@ -53,40 +51,41 @@ impl Object for IString {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        database: &BuiltinCallableDatabase,
         attribute: &str,
     ) -> ExpressionResult<Value> {
-        build_closure_type!(MapClosure(character: IString) -> ValueType::Any);
-        build_closure_type!(FoldClosure(previous: Value, character: IString) -> ValueType::Any);
+        // build_closure_type!(MapClosure(character: IString) -> ValueType::Any);
+        // build_closure_type!(FoldClosure(previous: Value, character: IString) -> ValueType::Any);
 
         match attribute {
-            "map" => {
-                let value = static_method!(
-                    String_map(
-                        _log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: ValueType,
-                        for_each: MapClosure) -> ValueType::TypeNone
-                    {
-                        todo!()
-                    }
-                );
-                Ok(value.clone())
-            }
-            "fold" => {
-                let value = static_method!(
-                    String_map(
-                        _log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: ValueType,
-                        for_each: FoldClosure) -> ValueType::TypeNone
-                    {
-                        todo!()
-                    }
-                );
-                Ok(value.clone())
-            }
+            // "map" => {
+            //     let value = static_method!(
+            //         String_map(
+            //             _log: &mut dyn RuntimeLog,
+            //             stack_trace: &mut Vec<SourceReference>,
+            //             _stack: &mut Stack,
+            //             this: ValueType,
+            //             for_each: MapClosure) -> ValueType::TypeNone
+            //         {
+            //             todo!()
+            //         }
+            //     );
+            //     Ok(value.clone())
+            // }
+            // "fold" => {
+            //     let value = static_method!(
+            //         String_map(
+            //             _log: &mut dyn RuntimeLog,
+            //             stack_trace: &mut Vec<SourceReference>,
+            //             _stack: &mut Stack,
+            //             this: ValueType,
+            //             for_each: FoldClosure) -> ValueType::TypeNone
+            //         {
+            //             todo!()
+            //         }
+            //     );
+            //     Ok(value.clone())
+            // }
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }

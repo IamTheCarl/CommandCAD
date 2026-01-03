@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fmt::Display, sync::Arc};
+use std::{any::TypeId, collections::HashMap, fmt::Display, sync::Arc};
 
 use hashable_map::HashableMap;
 
@@ -28,11 +28,99 @@ use crate::{
         find_value,
         logging::{RuntimeLog, StackScope},
         stack::{ScopeType, Stack},
-        values::{Dictionary, Value},
+        values::{Dictionary, MissingAttributeError, Value},
     },
 };
 
 use super::{Object, StaticTypeName, StructDefinition, ValueType};
+
+#[derive(Debug, Default)]
+pub struct BuiltinCallableDatabase {
+    callables: HashMap<TypeId, CallableStorage>,
+    names: HashMap<String, TypeId>,
+}
+
+impl BuiltinCallableDatabase {
+    pub fn new() -> Self {
+        let mut database = Self::default();
+
+        super::scalar::register_methods(&mut database);
+        super::vector::register_methods(&mut database);
+        super::value_type::register_methods(&mut database);
+
+        database
+    }
+
+    fn register_internal<T: 'static>(
+        &mut self,
+        forward: Box<dyn BuiltinCallable>,
+        inverse: Option<TypeId>,
+    ) {
+        if self
+            .names
+            .insert(forward.name().to_string(), TypeId::of::<T>())
+            .is_some()
+        {
+            panic!("Duplicate bultin function name: {}", forward.name());
+        }
+
+        if self
+            .callables
+            .insert(
+                TypeId::of::<T>(),
+                CallableStorage {
+                    forward,
+                    reverse: inverse,
+                },
+            )
+            .is_some()
+        {
+            panic!("Duplicate bultin function tag: {:?}", TypeId::of::<T>());
+        }
+    }
+
+    pub fn register<T: 'static>(&mut self, callable: Box<dyn BuiltinCallable>) {
+        self.register_internal::<T>(callable, Option::None);
+    }
+
+    pub fn register_with_inverse<ForwardT: 'static, InverseT: 'static>(
+        &mut self,
+        forward: Box<dyn BuiltinCallable>,
+        inverse: Box<dyn BuiltinCallable>,
+    ) {
+        self.register_internal::<ForwardT>(forward, Some(TypeId::of::<InverseT>()));
+        self.register_internal::<InverseT>(inverse, Some(TypeId::of::<ForwardT>()));
+    }
+
+    fn get_forward(&self, id: TypeId) -> &CallableStorage {
+        self.callables
+            .get(&id)
+            .expect("Forward callable was not present")
+    }
+
+    fn get_inverse(&self, id: TypeId) -> Option<TypeId> {
+        let forward = self
+            .callables
+            .get(&id)
+            .expect("Forward callable was not present");
+
+        forward.reverse.clone()
+    }
+}
+
+#[derive(Debug)]
+struct CallableStorage {
+    forward: Box<dyn BuiltinCallable>,
+    reverse: Option<TypeId>,
+}
+
+impl std::ops::Deref for CallableStorage {
+    type Target = dyn BuiltinCallable;
+
+    fn deref(&self) -> &Self::Target {
+        self.forward.as_ref()
+    }
+}
 
 /// Signature of a closure, used for type comparison.
 #[derive(Debug, Eq, PartialEq)]
@@ -231,13 +319,19 @@ impl UserClosure {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         source: &AstNode<Box<ClosureDefinition>>,
     ) -> ExpressionResult<Self> {
         let argument_type = stack_trace.stack_scope(
             source.node.argument_type.reference.clone(),
             |stack_trace| {
-                let argument_type =
-                    StructDefinition::new(log, stack_trace, stack, &source.node.argument_type)?;
+                let argument_type = StructDefinition::new(
+                    log,
+                    stack_trace,
+                    stack,
+                    database,
+                    &source.node.argument_type,
+                )?;
 
                 Ok(argument_type)
             },
@@ -245,7 +339,7 @@ impl UserClosure {
 
         let return_type =
             stack_trace.stack_scope(source.node.return_type.reference.clone(), |stack_trace| {
-                execute_expression(log, stack_trace, stack, &source.node.return_type)?
+                execute_expression(log, stack_trace, stack, database, &source.node.return_type)?
                     .downcast::<ValueType>(stack_trace)
             })?;
 
@@ -258,7 +352,7 @@ impl UserClosure {
 
         let mut captured_values = HashableMap::new();
         find_all_variable_accesses_in_closure_capture(&source.node, &mut |field_name| {
-            let value = find_value(log, stack_trace, stack, [field_name])?;
+            let value = find_value(log, stack_trace, stack, database, [field_name])?;
 
             captured_values.insert(field_name.node.clone(), value);
 
@@ -276,7 +370,7 @@ impl UserClosure {
 }
 
 impl Object for UserClosure {
-    fn get_type(&self) -> ValueType {
+    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
         ValueType::Closure(self.data.signature.clone())
     }
 
@@ -285,6 +379,7 @@ impl Object for UserClosure {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         argument: Dictionary,
     ) -> ExpressionResult<Value> {
         self.data
@@ -304,12 +399,13 @@ impl Object for UserClosure {
                 stack.insert_value(name, value.clone());
             }
 
-            let result = execute_expression(log, stack_trace, stack, &self.data.expression)?;
+            let result =
+                execute_expression(log, stack_trace, stack, database, &self.data.expression)?;
 
             self.data
                 .signature
                 .return_type
-                .check_other_qualifies(&result.get_type())
+                .check_other_qualifies(&result.get_type(database))
                 .map_err(|error| error.to_error(stack_trace.iter()))?;
 
             Ok(result)
@@ -323,18 +419,28 @@ impl StaticTypeName for UserClosure {
     }
 }
 
-pub trait Callable: Sync + Send {
+pub trait BuiltinCallable: Sync + Send {
     fn call(
         &self,
         runtime: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         argument: Dictionary,
     ) -> ExpressionResult<Value>;
 
     fn name(&self) -> &str;
 
     fn signature(&self) -> &Arc<Signature>;
+}
+
+impl std::fmt::Debug for dyn BuiltinCallable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Builtin")
+            .field("name", &self.name())
+            .field("signature", self.signature())
+            .finish()
+    }
 }
 
 #[macro_export]
@@ -362,29 +468,29 @@ macro_rules! build_member_from_sig {
 #[macro_export]
 macro_rules! build_argument_signature_list {
     ($($arg:ident: $ty:path $(= $default:expr)?),*) => {{
-        let list: [(String, crate::execution::values::value_type::StructMember); _] = [$($crate::build_member_from_sig!($arg: $ty $(= $default)?),)*];
+        let list: [(String, $crate::execution::values::value_type::StructMember); _] = [$($crate::build_member_from_sig!($arg: $ty $(= $default)?),)*];
         list
     }};
 }
 
 #[macro_export]
 macro_rules! build_closure_signature {
-    (($($arg:ident: $ty:path $(= $default:expr)?),*) -> $return_type:path) => {{
+    (($($arg:ident: $ty:path $(= $default:expr)?),*) -> $return_type:ty) => {{
         let members = std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from($crate::build_argument_signature_list!($($arg: $ty $(= $default)?),*))));
 
-        std::sync::Arc::new(crate::execution::values::closure::Signature {
+        std::sync::Arc::new($crate::execution::values::closure::Signature {
             argument_type: crate::execution::values::StructDefinition {
                 members,
                 variadic: false,
             },
-            return_type: $return_type,
+            return_type: <$return_type as $crate::execution::values::StaticType>::static_type(),
         })
     }};
 }
 
 #[macro_export]
 macro_rules! build_closure_type {
-    ($name:ident($($arg:ident: $ty:path $(= $default:expr)?),*) -> $return_type:path) => {
+    ($name:ident($($arg:ident: $ty:path $(= $default:expr)?),*) -> $return_type:ty) => {
         struct $name(pub $crate::execution::values::UserClosure);
 
         impl $crate::execution::values::StaticType for $name {
@@ -427,22 +533,23 @@ macro_rules! build_closure_type {
 }
 
 #[macro_export]
-macro_rules! build_function {
-    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
-        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value>> {
+macro_rules! build_function_callable {
+    ($name:literal ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $database:ident: &BuiltinCallableDatabase $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block) => {{
+        struct BuiltFunction<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack, &BuiltinCallableDatabase $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value>> {
             function: F,
-            signature: std::sync::Arc<crate::execution::values::closure::Signature>,
+            signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
         }
 
-        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value> + Send + Sync> crate::execution::values::closure::Callable for BuiltFunction<F> {
+        impl<F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut Stack, &BuiltinCallableDatabase $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F> {
             fn call(
                 &self,
                 runtime: &mut dyn RuntimeLog,
                 stack_trace: &mut Vec<SourceReference>,
                 stack: &mut Stack,
-                argument: crate::execution::values::Dictionary,
-            ) -> crate::execution::errors::ExpressionResult<crate::execution::values::Value> {
-                use crate::execution::errors::Raise;
+                database: &BuiltinCallableDatabase,
+                argument: $crate::execution::values::Dictionary,
+            ) -> $crate::execution::errors::ExpressionResult<$crate::execution::values::Value> {
+                use $crate::execution::errors::Raise;
                 self.signature
                     .argument_type
                     .check_other_qualifies(argument.struct_def())
@@ -455,37 +562,56 @@ macro_rules! build_function {
                 $($(let $arg: $ty = _data.members.remove(stringify!($arg))
                         .expect("Argument was not present after argument check.").downcast(stack_trace)?;)*)?
 
-                    (self.function)(runtime, stack_trace, stack $(, $($arg),*)?)
+                    (self.function)(runtime, stack_trace, stack, database $(, $($arg),*)?)
             }
 
             fn name(&self) -> &str {
-                stringify!($name)
+                $name
             }
 
-            fn signature(&self) -> &std::sync::Arc<crate::execution::values::closure::Signature> {
+            fn signature(&self) -> &std::sync::Arc<$crate::execution::values::closure::Signature> {
                 &self.signature
             }
         }
 
-        crate::execution::values::closure::BuiltinFunction {
-            callable: std::sync::Arc::new(BuiltFunction {
-            function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack $(, $($arg: $ty),*)?| -> ExpressionResult<crate::execution::values::Value> { $code },
+        BuiltFunction {
+            function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $database: &BuiltinCallableDatabase $(, $($arg: $ty),*)?| -> ExpressionResult<$crate::execution::values::Value> { let result: $return_type = $code?; Ok(result.into()) },
             signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
-        })
         }
     }};
 }
 
 #[macro_export]
-macro_rules! build_method {
-    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
-        struct BuiltFunction<S, F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut crate::execution::Stack, S $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value>> {
+macro_rules! build_function {
+    ($database:ident,
+        forward = $ident:ident, $name:literal, ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $call_database:ident: &BuiltinCallableDatabase $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block
+    ) => {{
+        let callable = $crate::build_function_callable!($name ($log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $call_database: &BuiltinCallableDatabase $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code);
+
+        $database.register::<$ident>(Box::new(callable))
+    }};
+    ($database:ident,
+        forward = $forward_ident:ident, $forward_name:literal, ($forward_log:ident: &mut dyn RuntimeLog, $forward_stack_trace:ident: &mut Vec<SourceReference>, $forward_stack:ident: &mut Stack, $forward_database:ident: &BuiltinCallableDatabase $(, $($forward_arg:ident: $forward_ty:path $(= $forward_default:expr)?),+)?) -> $forward_return_type:ty $forward_code:block,
+        reverse = $reverse_ident:ident, $reverse_name:literal, ($reverse_log:ident: &mut dyn RuntimeLog, $reverse_stack_trace:ident: &mut Vec<SourceReference>, $reverse_stack:ident: &mut Stack, $reverse_database:ident: &BuiltinCallableDatabase $(, $($reverse_arg:ident: $reverse_ty:path $(= $reverse_default:expr)?),+)?) -> $reverse_return_type:ty $reverse_code:block
+    ) => {{
+        let forward = $crate::build_function_callable!($forward_name ($forward_log: &mut dyn RuntimeLog, $forward_stack_trace: &mut Vec<SourceReference>, $forward_stack: &mut Stack, $forward_database: &BuiltinCallableDatabase $(, $($forward_arg: $forward_ty $(= $forward_default)?),+)?) -> $forward_return_type $forward_code);
+        let reverse = $crate::build_function_callable!($reverse_name ($reverse_log: &mut dyn RuntimeLog, $reverse_stack_trace: &mut Vec<SourceReference>, $reverse_stack: &mut Stack, $reverse_database: &BuiltinCallableDatabase $(, $($reverse_arg: $reverse_ty $(= $reverse_default)?),+)?) -> $reverse_return_type $reverse_code);
+
+        $database.register_with_inverse::<$forward_ident, $reverse_ident>(Box::new(forward), Box::new(reverse))
+    }};
+}
+
+#[macro_export]
+macro_rules! build_method_callable {
+    ($name:expr, ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $database:ident: &BuiltinCallableDatabase, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block) => {{
+        struct BuiltFunction<S, F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut crate::execution::Stack, &BuiltinCallableDatabase, S $(, $($ty),*)?) -> ExpressionResult<crate::execution::values::Value>> {
             function: F,
             signature: std::sync::Arc<crate::execution::values::closure::Signature>,
+            name: String,
             _self_type: std::marker::PhantomData<S>
         }
 
-        impl<S, F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut $crate::execution::Stack, S $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync> $crate::execution::values::closure::Callable for BuiltFunction<S, F>
+        impl<S, F: Fn(&mut dyn RuntimeLog, &mut Vec<SourceReference>, &mut $crate::execution::Stack, &BuiltinCallableDatabase, S $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<S, F>
         where
             S: Send + Sync + Clone + StaticTypeName,
             $crate::execution::values::Value: enum_downcast::AsVariant<S>
@@ -495,6 +621,7 @@ macro_rules! build_method {
                 runtime: &mut dyn RuntimeLog,
                 stack_trace: &mut Vec<SourceReference>,
                 stack: &mut $crate::execution::Stack,
+                database: &BuiltinCallableDatabase,
                 argument: $crate::execution::values::Dictionary,
             ) -> $crate::execution::errors::ExpressionResult<$crate::execution::values::Value> {
                 use $crate::execution::errors::Raise;
@@ -519,11 +646,11 @@ macro_rules! build_method {
                 $($(let $arg: $ty = _data.members.remove(stringify!($arg))
                         .expect("Argument was not present after argument check.").downcast(stack_trace)?;)*)?
 
-                    (self.function)(runtime, stack_trace, stack, this $(, $($arg),*)?)
+                    (self.function)(runtime, stack_trace, stack, database, this $(, $($arg),*)?)
             }
 
             fn name(&self) -> &str {
-                stringify!($name)
+                &self.name
             }
 
             fn signature(&self) -> &std::sync::Arc<$crate::execution::values::closure::Signature> {
@@ -531,57 +658,47 @@ macro_rules! build_method {
             }
         }
 
-        $crate::execution::values::closure::BuiltinFunction {
-            callable: std::sync::Arc::new(BuiltFunction {
-                function:
-                    move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut $crate::execution::Stack, $this: $this_type $(, $($arg: $ty),*)?| -> $crate::execution::ExpressionResult<Value> { $code },
-                signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
-                _self_type: std::marker::PhantomData
-            })
+        BuiltFunction {
+            function: move |$log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $database: &BuiltinCallableDatabase, $this: $this_type $(, $($arg: $ty),*)?| -> ExpressionResult<$crate::execution::values::Value> { let result: $return_type = $code?; Ok(result.into()) },
+            signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
+            name: $name.into(),
+            _self_type: std::marker::PhantomData
         }
     }};
 }
 
 #[macro_export]
-macro_rules! static_method {
-    ($name:ident ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $this:ident: $this_type:path $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block) => {{
-        static METHOD: std::sync::OnceLock<crate::execution::values::Value> = std::sync::OnceLock::new();
-        METHOD.get_or_init(|| $crate::build_method!($name ($log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code).into())
+macro_rules! build_method {
+    ($database:ident,
+        forward = $ident:ty, $name:expr, ($log:ident: &mut dyn RuntimeLog, $stack_trace:ident: &mut Vec<SourceReference>, $stack:ident: &mut Stack, $call_database:ident: &BuiltinCallableDatabase, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block
+    ) => {{
+        let callable = $crate::build_method_callable!($name, ($log: &mut dyn RuntimeLog, $stack_trace: &mut Vec<SourceReference>, $stack: &mut Stack, $call_database: &BuiltinCallableDatabase, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code);
+
+        $database.register::<$ident>(Box::new(callable))
+    }};
+    ($database:ident,
+        forward = $forward_ident:ty, $forward_name:expr, ($forward_log:ident: &mut dyn RuntimeLog, $forward_stack_trace:ident: &mut Vec<SourceReference>, $forward_stack:ident: &mut Stack, $forward_call_database:ident: &BuiltinCallableDatabase, $forward_this:ident: $forward_this_type:ty $(, $($forward_arg:ident: $forward_ty:path $(= $forward_default:expr)?),+)?) -> $forward_return_type:path $forward_code:block,
+        reverse = $reverse_ident:ty, $reverse_name:expr, ($reverse_log:ident: &mut dyn RuntimeLog, $reverse_stack_trace:ident: &mut Vec<SourceReference>, $reverse_stack:ident: &mut Stack, $reverse_call_database:ident: &BuiltinCallableDatabase, $reverse_this:ident: $reverse_this_type:ty $(, $($reverse_arg:ident: $reverse_ty:path $(= $reverse_default:expr)?),+)?) -> $reverse_return_type:path $reverse_code:block
+    ) => {{
+        let forward = $crate::build_method_callable!($forward_name, ($forward_log: &mut dyn RuntimeLog, $forward_stack_trace: &mut Vec<SourceReference>, $forward_stack: &mut Stack, $forward_call_database: &BuiltinCallableDatabase, $forward_this: $forward_this_type $(, $($forward_arg: $forward_ty $(= $forward_default)?),+)?) -> $forward_return_type $forward_code);
+        let reverse = $crate::build_method_callable!($reverse_name, ($reverse_log: &mut dyn RuntimeLog, $reverse_stack_trace: &mut Vec<SourceReference>, $reverse_stack: &mut Stack, $reverse_call_database: &BuiltinCallableDatabase, $reverse_this: $reverse_this_type $(, $($reverse_arg: $reverse_ty $(= $reverse_default)?),+)?) -> $reverse_return_type $reverse_code);
+
+        $database.register_with_inverse::<$forward_ident, $reverse_ident>(Box::new(forward), Box::new(reverse))
     }};
 }
 
-#[derive(Clone)]
-pub struct BuiltinFunction {
-    pub callable: Arc<dyn Callable>,
-}
-
-impl std::fmt::Debug for BuiltinFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BuiltinFunction")
-            .field("name", &self.callable.name())
-            .field("signature", self.callable.signature())
-            .finish()
-    }
-}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuiltinFunction(pub TypeId);
 
 impl BuiltinFunction {
-    pub fn new(function: Arc<dyn Callable>) -> BuiltinFunction {
-        BuiltinFunction { callable: function }
-    }
-}
-
-impl Eq for BuiltinFunction {}
-
-impl PartialEq for BuiltinFunction {
-    fn eq(&self, other: &Self) -> bool {
-        self.callable.signature() == other.callable.signature()
-            && self.callable.name() == other.callable.name()
+    pub fn new<T: 'static>() -> Self {
+        Self(TypeId::of::<T>())
     }
 }
 
 impl Object for BuiltinFunction {
-    fn get_type(&self) -> ValueType {
-        ValueType::Closure(self.callable.signature().clone())
+    fn get_type(&self, callable_database: &BuiltinCallableDatabase) -> ValueType {
+        ValueType::Closure(callable_database.get_forward(self.0).signature().clone())
     }
 
     fn call(
@@ -589,9 +706,39 @@ impl Object for BuiltinFunction {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        callable_database: &BuiltinCallableDatabase,
         argument: Dictionary,
     ) -> ExpressionResult<Value> {
-        self.callable.call(log, stack_trace, stack, argument)
+        callable_database.get_forward(self.0).call(
+            log,
+            stack_trace,
+            stack,
+            callable_database,
+            argument,
+        )
+    }
+
+    // TODO the user should be able to get the inverse function.
+    fn get_attribute(
+        &self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        callable_database: &BuiltinCallableDatabase,
+        attribute: &str,
+    ) -> ExpressionResult<Value> {
+        match attribute {
+            "inverse" => {
+                if let Some(inverse) = callable_database.get_inverse(self.0) {
+                    Ok(BuiltinFunction(inverse).into())
+                } else {
+                    todo!()
+                }
+            }
+            _ => Err(MissingAttributeError {
+                name: attribute.into(),
+            }
+            .to_error(stack_trace)),
+        }
     }
 }
 
@@ -764,95 +911,224 @@ mod test {
 
     #[test]
     fn builtin_function_no_args() {
-        let test_function = build_function!(
-            test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack) -> ValueType::UnsignedInteger {
-                Ok(values::UnsignedInteger::from(846).into())
+        let mut database = BuiltinCallableDatabase::default();
+
+        struct TestFunction;
+        build_function!(
+            database,
+            forward = TestFunction, "test_function", (
+                _log: &mut dyn RuntimeLog,
+                _stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase
+            ) -> UnsignedInteger            {
+                Ok(values::UnsignedInteger::from(846))
             }
         );
 
         use crate::execution::standard_environment::build_prelude;
 
         let root = crate::compile::full_compile("test_function()");
-        let prelude = build_prelude();
+        let prelude = build_prelude(&database);
         let mut stack = Stack::new(prelude);
-        stack.insert_value("test_function", test_function.into());
+        stack.insert_value(
+            "test_function",
+            BuiltinFunction::new::<TestFunction>().into(),
+        );
 
-        let product =
-            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut stack,
+            &database,
+            &root,
+        )
+        .unwrap();
 
         assert_eq!(product, values::UnsignedInteger::from(846).into());
     }
 
     #[test]
     fn builtin_function_with_args() {
-        let test_function = build_function!(
-            test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, a: UnsignedInteger, b: UnsignedInteger) -> ValueType::UnsignedInteger {
-                Ok(values::UnsignedInteger::from(a.0 + b.0).into())
+        let mut database = BuiltinCallableDatabase::default();
+
+        struct TestFunction;
+        build_function!(
+            database,
+            forward = TestFunction, "test_function", (
+                _log: &mut dyn RuntimeLog,
+                _stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                a: UnsignedInteger,
+                b: UnsignedInteger
+            ) -> UnsignedInteger {
+                Ok(values::UnsignedInteger::from(a.0 + b.0))
             }
         );
 
         use crate::execution::standard_environment::build_prelude;
 
         let root = crate::compile::full_compile("test_function(a = 1u, b = 2u)");
-        let prelude = build_prelude();
+        let prelude = build_prelude(&database);
         let mut stack = Stack::new(prelude);
-        stack.insert_value("test_function", test_function.into());
+        stack.insert_value(
+            "test_function",
+            BuiltinFunction::new::<TestFunction>().into(),
+        );
 
-        let product =
-            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut stack,
+            &database,
+            &root,
+        )
+        .unwrap();
 
         assert_eq!(product, values::UnsignedInteger::from(3).into());
     }
 
     #[test]
+    fn builtin_function_with_inverse() {
+        let mut database = BuiltinCallableDatabase::default();
+
+        struct TestFunction;
+        struct TestInverse;
+        build_function!(
+            database,
+            forward = TestFunction, "test_function", (
+                _log: &mut dyn RuntimeLog,
+                _stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                input: UnsignedInteger
+            ) -> UnsignedInteger {
+                Ok(values::UnsignedInteger::from(input.0 + 1))
+            },
+            reverse = TestInverse, "test_inverse", (
+                _log: &mut dyn RuntimeLog,
+                _stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                input: UnsignedInteger
+            ) -> UnsignedInteger {
+                Ok(values::UnsignedInteger::from(input.0 - 1))
+            }
+        );
+
+        use crate::execution::standard_environment::build_prelude;
+
+        let root = crate::compile::full_compile("test_inverse(input = test_function(input = 1u))");
+        let prelude = build_prelude(&database);
+        let mut stack = Stack::new(prelude);
+        stack.insert_value(
+            "test_function",
+            BuiltinFunction::new::<TestFunction>().into(),
+        );
+        stack.insert_value("test_inverse", BuiltinFunction::new::<TestInverse>().into());
+
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut stack,
+            &database,
+            &root,
+        )
+        .unwrap();
+
+        assert_eq!(product, values::UnsignedInteger::from(1).into());
+    }
+
+    #[test]
     fn builtin_function_with_default_value() {
-        let test_function = build_function!(
-            test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, a: UnsignedInteger, b: UnsignedInteger = UnsignedInteger::from(2).into()) -> ValueType::UnsignedInteger {
-                Ok(values::UnsignedInteger::from(a.0 + b.0).into())
+        let mut database = BuiltinCallableDatabase::default();
+        struct TestFunction;
+        build_function!(
+            database,
+            forward = TestFunction, "test_function", (
+                _log: &mut dyn RuntimeLog,
+                _stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                a: UnsignedInteger,
+                b: UnsignedInteger = UnsignedInteger::from(2).into()
+            ) -> UnsignedInteger {
+                Ok(values::UnsignedInteger::from(a.0 + b.0))
             }
         );
 
         use crate::execution::standard_environment::build_prelude;
 
         let root = crate::compile::full_compile("test_function(a = 1u)");
-        let prelude = build_prelude();
+        let prelude = build_prelude(&database);
         let mut stack = Stack::new(prelude);
-        stack.insert_value("test_function", test_function.into());
+        stack.insert_value(
+            "test_function",
+            BuiltinFunction::new::<TestFunction>().into(),
+        );
 
-        let product =
-            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut stack,
+            &database,
+            &root,
+        )
+        .unwrap();
 
         assert_eq!(product, values::UnsignedInteger::from(3).into());
     }
 
     #[test]
     fn builtin_function_captured_value() {
+        let mut database = BuiltinCallableDatabase::default();
         let b = 2;
 
-        let test_function = build_function!(
-            test_function(_log: &mut dyn RuntimeLog, _stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, a: UnsignedInteger) -> ValueType::UnsignedInteger {
-                Ok(values::UnsignedInteger::from(a.0 + b).into())
+        struct TestFunction;
+        build_function!(
+            database,
+            forward = TestFunction, "test_function", (
+                _log: &mut dyn RuntimeLog,
+                _stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                a: UnsignedInteger
+            ) -> UnsignedInteger {
+                Ok(values::UnsignedInteger::from(a.0 + b))
             }
         );
 
         use crate::execution::standard_environment::build_prelude;
 
         let root = crate::compile::full_compile("test_function(a = 1u)");
-        let prelude = build_prelude();
+        let prelude = build_prelude(&database);
         let mut stack = Stack::new(prelude);
-        stack.insert_value("test_function", test_function.into());
+        stack.insert_value(
+            "test_function",
+            BuiltinFunction::new::<TestFunction>().into(),
+        );
 
-        let product =
-            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut stack,
+            &database,
+            &root,
+        )
+        .unwrap();
 
         assert_eq!(product, values::UnsignedInteger::from(3).into());
     }
 
     #[test]
     fn builtin_method() {
-        let test_method = build_method!(
-            test_method(log: &mut dyn RuntimeLog, stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, this: Dictionary) -> ValueType::UnsignedInteger {
-                this.get_attribute(log, stack_trace, "value")
+        let mut database = BuiltinCallableDatabase::default();
+        struct TestMethod;
+        build_method!(
+            database,
+            forward = TestMethod, "test_method", (log: &mut dyn RuntimeLog, stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, database: &BuiltinCallableDatabase, this: Dictionary) -> Value {
+                this.get_attribute(log, stack_trace, database, "value")
             }
         );
 
@@ -861,23 +1137,43 @@ mod test {
         let root = crate::compile::full_compile(
             "let object = (value = 5u, test_method = provided_test_method); in object::test_method()",
         );
-        let prelude = build_prelude();
+        let prelude = build_prelude(&database);
         let mut stack = Stack::new(prelude);
-        stack.insert_value("provided_test_method", test_method.into());
+        stack.insert_value(
+            "provided_test_method",
+            BuiltinFunction::new::<TestMethod>().into(),
+        );
 
-        let product =
-            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut stack,
+            &database,
+            &root,
+        )
+        .unwrap();
 
         assert_eq!(product, values::UnsignedInteger::from(5).into());
     }
 
     #[test]
     fn builtin_method_with_argument() {
-        let test_method = build_method!(
-            test_method(log: &mut dyn RuntimeLog, stack_trace: &mut Vec<SourceReference>, _stack: &mut Stack, this: Dictionary, to_add: UnsignedInteger) -> ValueType::UnsignedInteger {
-                let value: UnsignedInteger = this.get_attribute(log, stack_trace, "value")?.downcast(stack_trace)?;
+        let mut database = BuiltinCallableDatabase::default();
+        struct TestMethod;
 
-                Ok(values::UnsignedInteger::from(value.0 + to_add.0).into())
+        build_method!(
+            database,
+            forward = TestMethod, "test_method", (
+                log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                database: &BuiltinCallableDatabase,
+                this: Dictionary,
+                to_add: UnsignedInteger
+            ) -> UnsignedInteger {
+                let value: UnsignedInteger = this.get_attribute(log, stack_trace, database, "value")?.downcast(stack_trace)?;
+
+                Ok(values::UnsignedInteger::from(value.0 + to_add.0))
             }
         );
 
@@ -886,13 +1182,84 @@ mod test {
         let root = crate::compile::full_compile(
             "let object = (value = 5u, test_method = provided_test_method); in object::test_method(to_add = 10u)",
         );
-        let prelude = build_prelude();
-        let mut stack = Stack::new(prelude);
-        stack.insert_value("provided_test_method", test_method.into());
 
-        let product =
-            execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root).unwrap();
+        let prelude = build_prelude(&database);
+        let mut stack = Stack::new(prelude);
+        stack.insert_value(
+            "provided_test_method",
+            BuiltinFunction::new::<TestMethod>().into(),
+        );
+
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut stack,
+            &database,
+            &root,
+        )
+        .unwrap();
 
         assert_eq!(product, values::UnsignedInteger::from(15).into());
+    }
+
+    #[test]
+    fn builtin_method_with_inverse() {
+        let mut database = BuiltinCallableDatabase::default();
+        struct TestMethod;
+        struct InverseMethod;
+        build_method!(
+            database,
+            forward = TestMethod, "test_method", (
+                log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                database: &BuiltinCallableDatabase,
+                this: Dictionary,
+                input: UnsignedInteger
+            ) -> UnsignedInteger {
+                let value: UnsignedInteger = this.get_attribute(log, stack_trace, database, "value")?.downcast(stack_trace)?;
+
+                Ok(UnsignedInteger::from(input.0 + value.0))
+            },
+            reverse = InverseMethod, "reverse_method", (
+                log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                database: &BuiltinCallableDatabase,
+                this: Dictionary,
+                input: UnsignedInteger
+            ) -> UnsignedInteger {
+                let value: UnsignedInteger = this.get_attribute(log, stack_trace, database, "value")?.downcast(stack_trace)?;
+
+                Ok(UnsignedInteger::from(input.0 - value.0))
+            }
+        );
+
+        use crate::execution::standard_environment::build_prelude;
+
+        let root = crate::compile::full_compile(
+            "let object = (value = 5u, test_method = provided_test_method, inverse_method = provided_inverse_method); in object::inverse_method(input = object::test_method(input = 2u))",
+        );
+        let prelude = build_prelude(&database);
+        let mut stack = Stack::new(prelude);
+        stack.insert_value(
+            "provided_test_method",
+            BuiltinFunction::new::<TestMethod>().into(),
+        );
+        stack.insert_value(
+            "provided_inverse_method",
+            BuiltinFunction::new::<InverseMethod>().into(),
+        );
+
+        let product = execute_expression(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut stack,
+            &database,
+            &root,
+        )
+        .unwrap();
+
+        assert_eq!(product, values::UnsignedInteger::from(2).into());
     }
 }

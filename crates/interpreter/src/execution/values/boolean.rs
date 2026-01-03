@@ -18,7 +18,10 @@
 
 use crate::{
     compile::SourceReference,
-    execution::{logging::RuntimeLog, values::StaticType},
+    execution::{
+        logging::RuntimeLog,
+        values::{closure::BuiltinCallableDatabase, StaticType},
+    },
 };
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
@@ -27,7 +30,7 @@ use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Val
 pub struct Boolean(pub bool);
 
 impl Object for Boolean {
-    fn get_type(&self) -> ValueType {
+    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
         ValueType::Boolean
     }
 

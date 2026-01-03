@@ -1061,6 +1061,7 @@ dependencies = [
  "imstr 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "nalgebra 0.34.1",
  "num-traits",
+ "paste",
  "pretty_assertions",
  "stack",
  "tree-sitter",

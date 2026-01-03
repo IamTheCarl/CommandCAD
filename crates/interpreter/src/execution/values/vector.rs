@@ -1,23 +1,25 @@
 use common_data_types::Dimension;
 use enum_downcast::{AsVariant, IntoVariant};
 use nalgebra::{Dim, RawStorage};
-use stack::ArrayVec;
 
 use crate::{
-    build_closure_type, build_method, compile::{self, AstNode, SourceReference}, execute_expression, execution::{
+    build_closure_type, build_method,
+    compile::{self, AstNode, SourceReference},
+    execute_expression,
+    execution::{
         errors::{ExpressionResult, GenericFailure, Raise as _},
         logging::RuntimeLog,
         stack::Stack,
         values::{
-            Dictionary, DowncastError, MissingAttributeError, Object, Scalar, StaticType, StaticTypeName, Value, ValueType, scalar::UnwrapNotNan
+            closure::BuiltinCallableDatabase, scalar::UnwrapNotNan, BuiltinFunction, DowncastError,
+            MissingAttributeError, Object, Scalar, StaticType, StaticTypeName, Value, ValueType,
         },
-    }
+    },
 };
 
 use std::{
     hash::Hash,
     ops::{Add, Div, Mul, Neg, Sub},
-    collections::HashMap,
 };
 
 type Float = f64;
@@ -40,7 +42,7 @@ where
     Self: StaticTypeName + Into<Value>,
     Value: IntoVariant<Self> + AsVariant<Self>,
 {
-    fn get_type(&self) -> ValueType {
+    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
         I::get_type(self.dimension)
     }
 
@@ -123,6 +125,7 @@ where
         &self,
         log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         if let Some(value) =
@@ -131,222 +134,46 @@ where
         {
             Ok(value)
         } else {
-
-            const ANY_SCALAR: ValueType = ValueType::Scalar(None);
-            build_closure_type!(ApplyClosure(c: Scalar) -> ANY_SCALAR);
-            build_closure_type!(MapClosure(c: Scalar) -> ANY_SCALAR);
-            build_closure_type!(FoldClosure(previous: Scalar, c: Scalar) -> ANY_SCALAR);
-
             match attribute {
-                "abs" => Ok(build_method!(
-                    Vector_abs(
-                        _log: &mut dyn RuntimeLog,
-                        _stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: Self) -> ValueType::Any
-                    {
-                        let value = this.value.abs();
-
-                        Ok(Self {
-                            dimension: this.dimension,
-                            value
-                        }.into())
-                    }
-                )
+                "abs" => Ok(BuiltinFunction::new::<
+                    <<I as VectorInternalType>::MethodSet as methods::MethodSet>::Abs,
+                >()
                 .into()),
-                "add_scalar" => Ok(build_method!(
-                    Vector_add_scalar(
-                        _log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: Self,
-                        value: Scalar) -> ValueType::Any
-                    {
-                        if this.dimension == value.dimension {
-                            let value = this.value.add_scalar(*value.value);
-
-                            Ok(Self {
-                                dimension: this.dimension,
-                                value
-                            }.into())
-                        } else {
-                            Err(DowncastError {
-                                expected: this.type_name(),
-                                got: value.type_name(),
-                            }
-                            .to_error(stack_trace.iter()))
-                        }
-                    }
-                )
+                "add_scalar" => Ok(BuiltinFunction::new::<
+                    <<I as VectorInternalType>::MethodSet as methods::MethodSet>::AddScalar,
+                >()
                 .into()),
-                "amax" => Ok(build_method!(
-                    Vector_amax(
-                        _log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: Self) -> ValueType::Any
-                    {
-                        let value = common_data_types::Float::new(this.value.amax()).unwrap_not_nan(stack_trace)?;
-
-                        Ok(Scalar {
-                            dimension: this.dimension,
-                            value
-                        }.into())
-                    }
-                )
+                "amax" => Ok(BuiltinFunction::new::<
+                    <<I as VectorInternalType>::MethodSet as methods::MethodSet>::AMax,
+                >()
                 .into()),
-                "amin" => Ok(build_method!(
-                    Vector_amin(
-                        _log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: Self) -> ValueType::Any
-                    {
-                        let value = common_data_types::Float::new(this.value.amin()).unwrap_not_nan(stack_trace)?;
-
-                        Ok(Scalar {
-                            dimension: this.dimension,
-                            value
-                        }.into())
-                    }
-                )
+                "amin" => Ok(BuiltinFunction::new::<
+                    <<I as VectorInternalType>::MethodSet as methods::MethodSet>::AMin,
+                >()
                 .into()),
-                "dot" => Ok(build_method!(
-                    Vector_dot(
-                        _log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: Self,
-                        rhs: Value) -> ValueType::TypeNone
-                    {
-                        let rhs = rhs.downcast::<Self>(stack_trace)?;
-                        if this.dimension == rhs.dimension {
-                            let value = common_data_types::Float::new(this.value.dot(&rhs.value)).unwrap_not_nan(stack_trace)?;
-
-                            Ok(Scalar {
-                                dimension: this.dimension,
-                                value
-                            }.into())
-                        } else {
-                            Err(DowncastError {
-                                expected: this.type_name(),
-                                got: rhs.type_name(),
-                            }
-                            .to_error(stack_trace.iter()))
-                        }
-                    }
-                )
+                "dot" => Ok(BuiltinFunction::new::<
+                    <<I as VectorInternalType>::MethodSet as methods::MethodSet>::Dot,
+                >()
                 .into()),
-                "norm" | "length" => Ok(build_method!(
-                    Vector_norm(
-                        _log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: Self) -> ValueType::Any
-                    {
-                        let value = common_data_types::Float::new(this.value.norm()).unwrap_not_nan(stack_trace)?;
-
-                        Ok(Scalar {
-                            dimension: this.dimension,
-                            value
-                        }.into())
-                    }
-                )
+                "norm" | "length" => Ok(BuiltinFunction::new::<
+                    <<I as VectorInternalType>::MethodSet as methods::MethodSet>::Norm,
+                >()
                 .into()),
-                "normalize" => Ok(build_method!(
-                    Vector_normalize(
-                        _log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: Self) -> ValueType::Any
-                    {
-                        let value = this.value.normalize();
-                        Ok(Self::new_raw(stack_trace, Dimension::zero(), value)?.into())
-                    }
-                )
+                "normalize" => Ok(BuiltinFunction::new::<
+                    <<I as VectorInternalType>::MethodSet as methods::MethodSet>::Normalize,
+                >()
                 .into()),
-                "angle" => Ok(build_method!(
-                    Vector_angle(
-                        _log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: Self,
-                        other: Value) -> ValueType::Any
-                    {
-                        let other = other.downcast::<Self>(stack_trace)?;
-                        let value = common_data_types::Float::new(this.value.angle(&other.value)).unwrap_not_nan(stack_trace)?;
-                        
-                        Ok(Scalar {
-                            dimension: Dimension::angle(),
-                            value
-                        }.into())
-                    }
-                )
+                "angle" => Ok(BuiltinFunction::new::<
+                    <<I as VectorInternalType>::MethodSet as methods::MethodSet>::Angle,
+                >()
                 .into()),
-                "apply" | "map" => Ok(build_method!(
-                    Vector_apply(
-                        log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        stack: &mut Stack,
-                        this: Self,
-                        f: ApplyClosure) -> ValueType::Any
-                    {
-                        let operations: ArrayVec<[Value; 4]> = this.value.iter().map(|c| f.call(log, stack_trace, stack, Dictionary::from(HashMap::from_iter([
-                            (
-                                "c".into(),
-                                Scalar {
-                                    dimension: this.dimension,
-                                    value: common_data_types::Float::new(c).unwrap_not_nan(stack_trace)?
-                                }.into()
-                            )
-                        ])))).collect::<ExpressionResult<_>>()?;
-
-                        let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(stack_trace)).collect::<ExpressionResult<_>>()?;
-                        
-                        // The smallest vector we support is 2, so this should never panic.
-                        let dimension = result[0].dimension;
-
-                        for component in result.iter() {
-                            if component.dimension != dimension {
-                                return Err(GenericFailure("All components of a vector must match")
-                                    .to_error(stack_trace.iter()));
-                            }
-                        }
-            
-                        Ok(Self::new_raw(stack_trace, dimension, I::from_iterator(result.iter().map(|c| *c.value)))?.into())
-                    }
-                )
+                "apply" | "map" => Ok(BuiltinFunction::new::<
+                    <<I as VectorInternalType>::MethodSet as methods::MethodSet>::Map,
+                >()
                 .into()),
-                "fold" => Ok(build_method!(
-                    Vector_fold(
-                        log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        stack: &mut Stack,
-                        this: Self,
-                        init: Value,
-                        f: FoldClosure) -> ValueType::Any
-                    {
-
-                        let mut accumulator = init;
-                        for component in this.value.iter() {
-                            accumulator = f.call(log, stack_trace, stack, Dictionary::from(HashMap::from_iter([
-                                (
-                                    "c".into(),
-                                    Scalar {
-                                        dimension: this.dimension,
-                                        value: common_data_types::Float::new(component).unwrap_not_nan(stack_trace)?
-                                    }.into()
-                                ),
-                                (
-                                    "previous".into(),
-                                    accumulator 
-                                )
-                            ])))?;
-                        }
-
-                        Ok(accumulator)
-                    }
-                )
+                "fold" => Ok(BuiltinFunction::new::<
+                    <<I as VectorInternalType>::MethodSet as methods::MethodSet>::Fold,
+                >()
                 .into()),
                 _ => Err(MissingAttributeError {
                     name: attribute.into(),
@@ -377,9 +204,10 @@ where
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         ast_node: &AstNode<Box<I::NodeType>>,
     ) -> ExpressionResult<Self> {
-        I::from_ast(log, stack_trace, stack, ast_node)
+        I::from_ast(log, stack_trace, stack, database, ast_node)
     }
 
     fn new_raw(
@@ -431,6 +259,320 @@ where
     }
 }
 
+mod methods {
+    use stack::ArrayVec;
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::{
+        build_method,
+        execution::values::{BuiltinCallableDatabase, Dictionary},
+    };
+
+    pub trait MethodSet {
+        type Abs;
+        type AddScalar;
+        type AMax;
+        type AMin;
+        type Dot;
+        type Norm;
+        type Normalize;
+        type Angle;
+        type Map;
+        type Fold;
+    }
+
+    macro_rules! build_method_set {
+        ($name:ident) => {
+            paste::paste! {
+                pub struct [<$name Abs>];
+                pub struct [<$name AddScalar>];
+                pub struct [<$name AMax>];
+                pub struct [<$name AMin>];
+                pub struct [<$name Dot>];
+                pub struct [<$name Norm>];
+                pub struct [<$name Normalize>];
+                pub struct [<$name Angle>];
+                pub struct [<$name Map>];
+                pub struct [<$name Fold>];
+
+                pub struct [<$name MethodSet>];
+                impl MethodSet for [<$name MethodSet>] {
+                    type Abs = [<$name Abs>];
+                    type AddScalar = [<$name AddScalar>];
+                    type AMax = [<$name AMax>];
+                    type AMin = [<$name AMin>];
+                    type Dot = [<$name Dot>];
+                    type Norm = [<$name Norm>];
+                    type Normalize = [<$name Normalize>];
+                    type Angle = [<$name Angle>];
+                    type Map = [<$name Map>];
+                    type Fold = [<$name Fold>];
+                }
+            }
+        };
+    }
+
+    build_method_set!(Vector2);
+    build_method_set!(Vector3);
+    build_method_set!(Vector4);
+
+    pub struct Vector3Cross;
+
+    pub fn register_methods<I, M>(database: &mut BuiltinCallableDatabase, dimension: usize)
+    where
+        I: VectorInternalType,
+        Vector<I>: StaticTypeName + Into<Value>,
+        Value: IntoVariant<Vector<I>> + AsVariant<Vector<I>>,
+        M: MethodSet + 'static,
+    {
+        build_closure_type!(MapClosure(c: Scalar) -> Scalar);
+        build_closure_type!(FoldClosure(previous: Scalar, c: Scalar) -> Scalar);
+
+        build_method!(
+            database,
+            forward = M::Abs, format!("Vector{dimension}::abs"), (
+                _log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                this: Vector<I>) -> Vector<I>
+            {
+                let value = this.value.abs();
+                Vector::new_raw(stack_trace, this.dimension, value)
+            }
+        );
+        build_method!(
+            database,
+            forward = M::AddScalar, format!("Vector{dimension}::add_scalar"), (
+                _log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                this: Vector<I>,
+                value: Scalar) -> Vector<I>
+            {
+                if this.dimension == value.dimension {
+                    let value = this.value.add_scalar(*value.value);
+                    Vector::new_raw(stack_trace, this.dimension, value)
+                } else {
+                    Err(DowncastError {
+                        expected: this.type_name(),
+                        got: value.type_name(),
+                    }
+                    .to_error(stack_trace.iter()))
+                }
+            }
+        );
+        build_method!(
+            database,
+            forward = M::AMax, format!("Vector{dimension}::amax"), (
+                _log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                this: Vector<I>) -> Scalar
+            {
+                let value = common_data_types::Float::new(this.value.amax()).unwrap_not_nan(stack_trace)?;
+
+                Ok(Scalar {
+                    dimension: this.dimension,
+                    value
+                })
+            }
+        );
+        build_method!(
+            database,
+            forward = M::AMin, format!("Vector{dimension}::amin"), (
+                _log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                this: Vector<I>) -> Scalar
+            {
+                let value = common_data_types::Float::new(this.value.amin()).unwrap_not_nan(stack_trace)?;
+
+                Ok(Scalar {
+                    dimension: this.dimension,
+                    value
+                })
+            }
+        );
+        build_method!(
+            database,
+            forward = M::Dot, format!("Vector{dimension}::dot"), (
+                _log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                this: Vector<I>,
+                rhs: Value) -> Scalar
+            {
+                let rhs = rhs.downcast::<Vector<I>>(stack_trace)?;
+                if this.dimension == rhs.dimension {
+                    let value = common_data_types::Float::new(this.value.dot(&rhs.value)).unwrap_not_nan(stack_trace)?;
+
+                    Ok(Scalar {
+                        dimension: this.dimension,
+                        value
+                    })
+                } else {
+                    Err(DowncastError {
+                        expected: this.type_name(),
+                        got: rhs.type_name(),
+                    }
+                    .to_error(stack_trace.iter()))
+                }
+            }
+        );
+        build_method!(
+            database,
+            forward = M::Norm, format!("Vector{dimension}::norm"),(
+                _log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                this: Vector<I>) -> Scalar
+            {
+                let value = common_data_types::Float::new(this.value.norm()).unwrap_not_nan(stack_trace)?;
+
+                Ok(Scalar {
+                    dimension: this.dimension,
+                    value
+                })
+            }
+        );
+        build_method!(
+            database,
+            forward = M::Normalize, format!("Vector{dimension}::normalize"),(
+                _log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                this: Vector<I>) -> Vector<I>
+            {
+                let value = this.value.normalize();
+                Vector::<I>::new_raw(stack_trace, Dimension::zero(), value)
+            }
+        );
+        build_method!(
+            database,
+            forward = M::Angle, format!("Vector{dimension}::angle"),(
+                _log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                _stack: &mut Stack,
+                _database: &BuiltinCallableDatabase,
+                this: Vector<I>,
+                other: Value) -> Scalar
+            {
+                let other = other.downcast::<Vector<I>>(stack_trace)?;
+                let value = common_data_types::Float::new(this.value.angle(&other.value)).unwrap_not_nan(stack_trace)?;
+
+                Ok(Scalar {
+                    dimension: Dimension::angle(),
+                    value
+                })
+            }
+        );
+        build_method!(
+            database,
+            forward = M::Map, format!("Vector{dimension}::map"),(
+                log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                stack: &mut Stack,
+                database: &BuiltinCallableDatabase,
+                this: Vector<I>,
+                f: MapClosure) -> Vector<I>
+            {
+                let operations: ArrayVec<[Value; 4]> = this.value.iter().map(|c| f.call(log, stack_trace, stack, database, Dictionary::new(database, HashMap::from_iter([
+                    (
+                        "c".into(),
+                        Scalar {
+                            dimension: this.dimension,
+                            value: common_data_types::Float::new(c).unwrap_not_nan(stack_trace)?
+                        }.into()
+                    )
+                ])))).collect::<ExpressionResult<_>>()?;
+
+                let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(stack_trace)).collect::<ExpressionResult<_>>()?;
+
+                // The smallest vector we support is 2, so this should never panic.
+                let dimension = result[0].dimension;
+
+                for component in result.iter() {
+                    if component.dimension != dimension {
+                        return Err(GenericFailure("All components of a vector must match")
+                            .to_error(stack_trace.iter()));
+                    }
+                }
+
+                Ok(Vector::<I>::new_raw(stack_trace, dimension, I::from_iterator(result.iter().map(|c| *c.value)))?)
+            }
+        );
+        build_method!(
+            database,
+            forward = M::Fold, format!("Vector{dimension}::fold"),(
+                log: &mut dyn RuntimeLog,
+                stack_trace: &mut Vec<SourceReference>,
+                stack: &mut Stack,
+                database: &BuiltinCallableDatabase,
+                this: Vector<I>,
+                init: Value,
+                f: FoldClosure) -> Value
+            {
+
+                let mut accumulator = init;
+                for component in this.value.iter() {
+                    accumulator = f.call(log, stack_trace, stack, database, Dictionary::new(database, HashMap::from_iter([
+                        (
+                            "c".into(),
+                            Scalar {
+                                dimension: this.dimension,
+                                value: common_data_types::Float::new(component).unwrap_not_nan(stack_trace)?
+                            }.into()
+                        ),
+                        (
+                            "previous".into(),
+                            accumulator
+                        )
+                    ])))?;
+                }
+
+                Ok(accumulator)
+            }
+        );
+    }
+}
+
+pub fn register_methods(database: &mut BuiltinCallableDatabase) {
+    methods::register_methods::<nalgebra::Vector2<Float>, methods::Vector2MethodSet>(database, 2);
+    methods::register_methods::<nalgebra::Vector3<Float>, methods::Vector3MethodSet>(database, 3);
+    methods::register_methods::<nalgebra::Vector4<Float>, methods::Vector4MethodSet>(database, 4);
+
+    build_method!(
+        database,
+        forward = methods::Vector3Cross, "Vector3::cross", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Vector3,
+            rhs: Vector3) -> Vector3
+        {
+            if this.dimension == rhs.dimension {
+                let value = this.value.cross(&rhs.value);
+                Vector3::new_raw(stack_trace, this.dimension, value)
+            } else {
+                Err(DowncastError {
+                    expected: this.type_name(),
+                    got: rhs.type_name(),
+                }
+                .to_error(stack_trace.iter()))
+            }
+        }
+    );
+}
+
 pub trait VectorInternalType:
     Add<Self, Output = Self>
     + Div<Float, Output = Self>
@@ -449,6 +591,7 @@ pub trait VectorInternalType:
 {
     type BuildFrom;
     type NodeType;
+    type MethodSet: methods::MethodSet;
 
     fn get_type(dimension: Dimension) -> ValueType;
     fn build(value: Self::BuildFrom) -> Self;
@@ -456,6 +599,7 @@ pub trait VectorInternalType:
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         ast_node: &AstNode<Box<Self::NodeType>>,
     ) -> ExpressionResult<Vector<Self>>;
     fn from_iterator<I>(iterator: I) -> Self
@@ -497,8 +641,8 @@ where
 }
 
 macro_rules! get_component {
-    ($log:ident, $stack_trace:ident, $stack:ident, $ast_node:ident, $c:ident) => {
-        execute_expression($log, $stack_trace, $stack, &$ast_node.node.$c)?
+    ($log:ident, $stack_trace:ident, $stack:ident, $database:ident, $ast_node:ident, $c:ident) => {
+        execute_expression($log, $stack_trace, $stack, $database, &$ast_node.node.$c)?
             .downcast::<Scalar>($stack_trace)?
     };
 }
@@ -506,6 +650,7 @@ macro_rules! get_component {
 impl VectorInternalType for nalgebra::Vector2<Float> {
     type BuildFrom = [Float; 2];
     type NodeType = compile::Vector2;
+    type MethodSet = methods::Vector2MethodSet;
 
     fn get_type(dimension: Dimension) -> ValueType {
         ValueType::Vector2(Some(dimension))
@@ -519,10 +664,11 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         ast_node: &AstNode<Box<Self::NodeType>>,
     ) -> ExpressionResult<Vector<Self>> {
-        let x = get_component!(log, stack_trace, stack, ast_node, x);
-        let y = get_component!(log, stack_trace, stack, ast_node, y);
+        let x = get_component!(log, stack_trace, stack, database, ast_node, x);
+        let y = get_component!(log, stack_trace, stack, database, ast_node, y);
 
         if x.dimension == y.dimension {
             Ok(Vector {
@@ -534,10 +680,11 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
                 .to_error(stack_trace.iter()))
         }
     }
-    
+
     fn from_iterator<I>(iterator: I) -> Self
     where
-        I: IntoIterator<Item = Float> {
+        I: IntoIterator<Item = Float>,
+    {
         Self::from_iterator(iterator)
     }
 
@@ -598,7 +745,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
     fn angle(&self, other: &Self) -> Float {
         nalgebra::Vector2::angle(self, other)
     }
-    
+
     fn iter(&self) -> impl Iterator<Item = Float> {
         self.iter().copied()
     }
@@ -618,6 +765,7 @@ impl StaticType for nalgebra::Vector2<Float> {
 impl VectorInternalType for nalgebra::Vector3<Float> {
     type BuildFrom = [Float; 3];
     type NodeType = compile::Vector3;
+    type MethodSet = methods::Vector3MethodSet;
 
     fn get_type(dimension: Dimension) -> ValueType {
         ValueType::Vector3(Some(dimension))
@@ -631,11 +779,12 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         ast_node: &AstNode<Box<Self::NodeType>>,
     ) -> ExpressionResult<Vector<Self>> {
-        let x = get_component!(log, stack_trace, stack, ast_node, x);
-        let y = get_component!(log, stack_trace, stack, ast_node, y);
-        let z = get_component!(log, stack_trace, stack, ast_node, z);
+        let x = get_component!(log, stack_trace, stack, database, ast_node, x);
+        let y = get_component!(log, stack_trace, stack, database, ast_node, y);
+        let z = get_component!(log, stack_trace, stack, database, ast_node, z);
 
         if x.dimension == y.dimension && x.dimension == z.dimension {
             Ok(Vector {
@@ -647,10 +796,11 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
                 .to_error(stack_trace.iter()))
         }
     }
-    
+
     fn from_iterator<I>(iterator: I) -> Self
     where
-        I: IntoIterator<Item = Float> {
+        I: IntoIterator<Item = Float>,
+    {
         Self::from_iterator(iterator)
     }
 
@@ -683,33 +833,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
                 }
                 .into(),
             )),
-            "cross" => {
-                let vector_type = ValueType::Vector3(Some(dimension));
-
-                Ok(Some(
-                    build_method!(
-                        Vector_normalize(
-                            _log: &mut dyn RuntimeLog,
-                            stack_trace: &mut Vec<SourceReference>,
-                            _stack: &mut Stack,
-                            this: Vector3,
-                            rhs: Vector3) -> vector_type
-                        {
-                            if this.dimension == rhs.dimension {
-                                let value = this.value.cross(&rhs.value);
-                                Ok(Vector3::new_raw(stack_trace, this.dimension, value)?.into())
-                            } else {
-                                Err(DowncastError {
-                                    expected: this.type_name(),
-                                    got: rhs.type_name(),
-                                }
-                                .to_error(stack_trace.iter()))
-                            }
-                        }
-                    )
-                    .into(),
-                ))
-            }
+            "cross" => Ok(Some(BuiltinFunction::new::<methods::Vector3Cross>().into())),
             _ => Ok(None),
         }
     }
@@ -745,7 +869,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
     fn angle(&self, other: &Self) -> Float {
         nalgebra::Vector3::angle(self, other)
     }
-    
+
     fn iter(&self) -> impl Iterator<Item = Float> {
         self.iter().copied()
     }
@@ -765,6 +889,7 @@ impl StaticType for nalgebra::Vector3<Float> {
 impl VectorInternalType for nalgebra::Vector4<Float> {
     type BuildFrom = [Float; 4];
     type NodeType = compile::Vector4;
+    type MethodSet = methods::Vector4MethodSet;
 
     fn get_type(dimension: Dimension) -> ValueType {
         ValueType::Vector4(Some(dimension))
@@ -778,12 +903,13 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         ast_node: &AstNode<Box<Self::NodeType>>,
     ) -> ExpressionResult<Vector<Self>> {
-        let x = get_component!(log, stack_trace, stack, ast_node, x);
-        let y = get_component!(log, stack_trace, stack, ast_node, y);
-        let z = get_component!(log, stack_trace, stack, ast_node, z);
-        let w = get_component!(log, stack_trace, stack, ast_node, w);
+        let x = get_component!(log, stack_trace, stack, database, ast_node, x);
+        let y = get_component!(log, stack_trace, stack, database, ast_node, y);
+        let z = get_component!(log, stack_trace, stack, database, ast_node, z);
+        let w = get_component!(log, stack_trace, stack, database, ast_node, w);
 
         if x.dimension == y.dimension && x.dimension == z.dimension && x.dimension == w.dimension {
             Ok(Vector {
@@ -795,10 +921,11 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
                 .to_error(stack_trace.iter()))
         }
     }
-    
+
     fn from_iterator<I>(iterator: I) -> Self
     where
-        I: IntoIterator<Item = Float> {
+        I: IntoIterator<Item = Float>,
+    {
         Self::from_iterator(iterator)
     }
 
@@ -872,7 +999,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
     fn angle(&self, other: &Self) -> Float {
         nalgebra::Vector4::angle(self, other)
     }
-    
+
     fn iter(&self) -> impl Iterator<Item = Float> {
         self.iter().copied()
     }
@@ -1350,74 +1477,88 @@ mod test {
 
     #[test]
     fn angle_vector3() {
-        let product = test_run("<(1m, 0m, 0m)>::angle(other = <(0m, 1m, 0m)>) - 90deg < 0.001deg").unwrap();
+        let product =
+            test_run("<(1m, 0m, 0m)>::angle(other = <(0m, 1m, 0m)>) - 90deg < 0.001deg").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn angle_vector4() {
         let product =
-            test_run("<(1m, 0m, 0m, 0m)>::angle(other = <(0m, 1m, 0m, 0m)>) - 90deg < 0.001deg").unwrap();
+            test_run("<(1m, 0m, 0m, 0m)>::angle(other = <(0m, 1m, 0m, 0m)>) - 90deg < 0.001deg")
+                .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn apply_vector2() {
         let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
-    
+
     #[test]
     fn apply_vector3() {
         let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m, 3m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         test_run("<(0m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
-    
+
     #[test]
     fn apply_vector4() {
         let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m, 3m, 4m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         test_run("<(0m, 1m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
-    
+
     #[test]
     fn fold_vector2() {
         let product = test_run("<(1m, 2m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
-        assert_eq!(product, Scalar {
-            dimension: Dimension::length(),
-            value: common_data_types::Float::new(3.0).unwrap()
-        }.into());
+        assert_eq!(
+            product,
+            Scalar {
+                dimension: Dimension::length(),
+                value: common_data_types::Float::new(3.0).unwrap()
+            }
+            .into()
+        );
     }
-    
+
     #[test]
     fn fold_vector3() {
         let product = test_run("<(1m, 2m, 3m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
-        assert_eq!(product, Scalar {
-            dimension: Dimension::length(),
-            value: common_data_types::Float::new(6.0).unwrap()
-        }.into());
+        assert_eq!(
+            product,
+            Scalar {
+                dimension: Dimension::length(),
+                value: common_data_types::Float::new(6.0).unwrap()
+            }
+            .into()
+        );
     }
-    
+
     #[test]
     fn fold_vector4() {
         let product = test_run("<(1m, 2m, 3m, 4m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
-        assert_eq!(product, Scalar {
-            dimension: Dimension::length(),
-            value: common_data_types::Float::new(10.0).unwrap()
-        }.into());
+        assert_eq!(
+            product,
+            Scalar {
+                dimension: Dimension::length(),
+                value: common_data_types::Float::new(10.0).unwrap()
+            }
+            .into()
+        );
     }
 }

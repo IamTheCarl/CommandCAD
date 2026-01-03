@@ -26,15 +26,18 @@ use super::{
 };
 
 use crate::{
+    build_method,
     compile::{self, AstNode, SourceReference},
     execute_expression,
     execution::{
         errors::{ErrorType, ExpressionResult, Raise},
         logging::RuntimeLog,
         stack::Stack,
-        values::{self, dictionary::DictionaryData, Dictionary, IString, MissingAttributeError},
+        values::{
+            self, closure::BuiltinCallableDatabase, dictionary::DictionaryData, BuiltinFunction,
+            Dictionary, IString, MissingAttributeError,
+        },
     },
-    static_method,
 };
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -172,7 +175,7 @@ impl Display for ValueType {
 }
 
 impl Object for ValueType {
-    fn get_type(&self) -> ValueType {
+    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
         ValueType::ValueType
     }
 
@@ -191,38 +194,12 @@ impl Object for ValueType {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         match attribute {
-            "qualify" => {
-                let value = static_method!(
-                    ValueType_qualify(
-                        _log: &mut dyn RuntimeLog,
-                        stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: ValueType,
-                        to_qualify: Value) -> ValueType::TypeNone
-                    {
-                        this.check_other_qualifies(&to_qualify.get_type()).map_err(|error| error.to_error(stack_trace.iter()))?;
-                        Ok(values::ValueNone.into())
-                    }
-                );
-                Ok(value.clone())
-            }
-            "try_qualify" => {
-                let value = static_method!(
-                    ValueType_try_qualify(
-                        _log: &mut dyn RuntimeLog,
-                        _stack_trace: &mut Vec<SourceReference>,
-                        _stack: &mut Stack,
-                        this: ValueType,
-                        to_qualify: Value) -> ValueType::Boolean
-                    {
-                        Ok(values::Boolean(this.check_other_qualifies(&to_qualify.get_type()).is_ok()).into())
-                    }
-                );
-                Ok(value.clone())
-            }
+            "qualify" => Ok(BuiltinFunction::new::<methods::Qualify>().into()),
+            "try_qualify" => Ok(BuiltinFunction::new::<methods::TryQualify>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -237,6 +214,42 @@ impl StaticTypeName for ValueType {
     }
 }
 
+mod methods {
+    pub struct Qualify;
+    pub struct TryQualify;
+}
+
+pub fn register_methods(database: &mut BuiltinCallableDatabase) {
+    build_method!(
+        database,
+        forward = methods::Qualify, "ValueType::qualify", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            database: &BuiltinCallableDatabase,
+            this: ValueType,
+            to_qualify: Value) -> ValueNone
+        {
+            this.check_other_qualifies(&to_qualify.get_type(database)).map_err(|error| error.to_error(stack_trace.iter()))?;
+            Ok(values::ValueNone)
+        }
+    );
+
+    build_method!(
+        database,
+        forward = methods::TryQualify, "ValueType::try_qualify", (
+            _log: &mut dyn RuntimeLog,
+            _stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            database: &BuiltinCallableDatabase,
+            this: ValueType,
+            to_qualify: Value) -> values::Boolean
+        {
+            Ok(values::Boolean(this.check_other_qualifies(&to_qualify.get_type(database)).is_ok()))
+        }
+    );
+}
+
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct StructMember {
     pub ty: ValueType,
@@ -248,12 +261,19 @@ impl StructMember {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         source: &AstNode<compile::StructMember>,
     ) -> ExpressionResult<Self> {
-        let ty = execute_expression(log, stack_trace, stack, &source.node.ty)?
+        let ty = execute_expression(log, stack_trace, stack, database, &source.node.ty)?
             .downcast::<ValueType>(stack_trace)?;
         let default = if let Some(default) = source.node.default.as_ref() {
-            Some(execute_expression(log, stack_trace, stack, default)?)
+            Some(execute_expression(
+                log,
+                stack_trace,
+                stack,
+                database,
+                default,
+            )?)
         } else {
             None
         };
@@ -283,12 +303,16 @@ impl StructDefinition {
         log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
         source: &AstNode<compile::StructDefinition>,
     ) -> ExpressionResult<Self> {
         let mut members = HashMap::new();
         for member in source.node.members.iter() {
             let name = member.node.name.node.clone();
-            members.insert(name, StructMember::new(log, stack_trace, stack, member)?);
+            members.insert(
+                name,
+                StructMember::new(log, stack_trace, stack, database, member)?,
+            );
         }
 
         let members = Arc::new(HashableMap::from(members));
@@ -605,9 +629,11 @@ mod test {
         let closure = test_run("() -> std.types.None std.consts.None").unwrap();
         let closure = closure.as_userclosure().unwrap();
 
+        let database = BuiltinCallableDatabase::default();
+
         closure
-            .get_type()
-            .check_other_qualifies(&closure.get_type())
+            .get_type(&database)
+            .check_other_qualifies(&closure.get_type(&database))
             .unwrap();
     }
 
@@ -619,9 +645,11 @@ mod test {
         let dictionary = test_run("()").unwrap();
         let dictionary = dictionary.as_dictionary().unwrap();
 
+        let database = BuiltinCallableDatabase::default();
+
         structure
-            .get_type()
-            .check_other_qualifies(&dictionary.get_type())
+            .get_type(&database)
+            .check_other_qualifies(&dictionary.get_type(&database))
             .unwrap();
     }
 
@@ -633,8 +661,10 @@ mod test {
         let dictionary = test_run("(a = std.consts.None)").unwrap();
         let dictionary = dictionary.as_dictionary().unwrap();
 
+        let database = BuiltinCallableDatabase::default();
+
         structure
-            .check_other_qualifies(&dictionary.get_type())
+            .check_other_qualifies(&dictionary.get_type(&database))
             .unwrap();
     }
 
@@ -646,8 +676,10 @@ mod test {
         let dictionary = test_run("(a = 1m)").unwrap();
         let dictionary = dictionary.as_dictionary().unwrap();
 
+        let database = BuiltinCallableDatabase::default();
+
         structure
-            .check_other_qualifies(&dictionary.get_type())
+            .check_other_qualifies(&dictionary.get_type(&database))
             .unwrap();
     }
 
@@ -659,8 +691,10 @@ mod test {
         let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
         let dictionary = dictionary.as_dictionary().unwrap();
 
+        let database = BuiltinCallableDatabase::default();
+
         structure
-            .check_other_qualifies(&dictionary.get_type())
+            .check_other_qualifies(&dictionary.get_type(&database))
             .unwrap_err();
     }
 
@@ -672,8 +706,10 @@ mod test {
         let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
         let dictionary = dictionary.as_dictionary().unwrap();
 
+        let database = BuiltinCallableDatabase::default();
+
         structure
-            .check_other_qualifies(&dictionary.get_type())
+            .check_other_qualifies(&dictionary.get_type(&database))
             .unwrap();
     }
 
@@ -685,8 +721,10 @@ mod test {
         let dictionary = test_run("(a = (b = std.consts.None))").unwrap();
         let dictionary = dictionary.as_dictionary().unwrap();
 
+        let database = BuiltinCallableDatabase::default();
+
         structure
-            .check_other_qualifies(&dictionary.get_type())
+            .check_other_qualifies(&dictionary.get_type(&database))
             .unwrap();
     }
 
@@ -766,15 +804,19 @@ mod test {
         let closure = test_run("() -> std.types.None std.consts.None").unwrap();
         let closure = closure.as_userclosure().unwrap();
 
+        let database = BuiltinCallableDatabase::default();
+
         ValueType::Any
-            .check_other_qualifies(&closure.get_type())
+            .check_other_qualifies(&closure.get_type(&database))
             .unwrap();
 
         let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
         let dictionary = dictionary.as_dictionary().unwrap();
 
+        let database = BuiltinCallableDatabase::default();
+
         ValueType::Any
-            .check_other_qualifies(&dictionary.get_type())
+            .check_other_qualifies(&dictionary.get_type(&database))
             .unwrap();
 
         ValueType::Any

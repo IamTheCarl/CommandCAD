@@ -20,13 +20,17 @@ use std::{borrow::Cow, cmp::Ordering, f64::consts::PI};
 use common_data_types::{Dimension, Float, FloatIsNan};
 
 use crate::{
+    build_method,
     compile::SourceReference,
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
         logging::RuntimeLog,
-        values::{self, MissingAttributeError, StaticType, Vector2},
+        values::{
+            self, closure::BuiltinCallableDatabase, Boolean, BuiltinFunction,
+            MissingAttributeError, SignedInteger, StaticType, UnsignedInteger, Vector2,
+        },
+        Stack,
     },
-    static_method,
 };
 
 use super::{value_type::ValueType, DowncastError, Object, StaticTypeName, Value};
@@ -53,7 +57,7 @@ pub struct Scalar {
 }
 
 impl Object for Scalar {
-    fn get_type(&self) -> ValueType {
+    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
         ValueType::Scalar(Some(self.dimension))
     }
 
@@ -274,503 +278,52 @@ impl Object for Scalar {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _callable_database: &BuiltinCallableDatabase,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         match attribute {
-            "to_signed_integer" => Ok(static_method!(
-                Scalar_to_signed_integer(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::SignedInteger
-                {
-                    if this.dimension.is_zero_dimension() {
-                        Ok(values::SignedInteger::from(*this.value as i64).into())
-                    } else {
-                        Err(GenericFailure("Only zero dimensional scalars can be converted into an integer")
-                            .to_error(stack_trace.iter()))
-                    }
-                }).clone()),
-            "to_unsigned_integer" => Ok(static_method!(
-                Scalar_to_unsigned_integer(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::UnsignedInteger
-                {
-                    if this.dimension.is_zero_dimension() {
-                        if *this.value >= 0.0 {
-                            Ok(values::UnsignedInteger::from(*this.value as u64).into())
-                        } else {
-                            Err(GenericFailure("Negative values cannot be converted to signed integers")
-                                .to_error(stack_trace.iter()))
-                        }
-                    } else {
-                        Err(GenericFailure("Only zero dimensional scalars can be converted into an integer")
-                            .to_error(stack_trace.iter()))
-                    }
-                }).clone()),
-            "abs" => Ok(static_method!(
-                Scalar_abs(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::UnsignedInteger
-                {
-                    Ok(Self {
-                        dimension: this.dimension,
-                        value: Float::new(this.value.abs()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "clamp" => Ok(static_method!(
-                Scalar_clamp(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    min: Value,
-                    max: Value) -> ValueType::UnsignedInteger
-                {
-                    let min = this.unpack_same_dimension(stack_trace, min)?;
-                    let max = this.unpack_same_dimension(stack_trace, max)?;
-    
-                    Ok(Self {
-                        dimension: this.dimension,
-                        value: this.value.clamp(min.value, max.value)
-                    }.into())
-                }).clone()),
-            "copysign" => Ok(static_method!(
-                Scalar_copysign(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    sign: Zero) -> ValueType::UnsignedInteger
-                {
-                    Ok(Self {
-                        dimension: Dimension::zero(),
-                        value: Float::new(this.value.copysign(*sign.value)).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "hypot" => Ok(static_method!(
-                Scalar_hypot(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    other: Value) -> ValueType::UnsignedInteger
-                {
-                    let other = this.unpack_same_dimension(stack_trace, other)?;
-
-                    Ok(Self {
-                        dimension: Dimension::zero(),
-                        value: Float::new(this.value.hypot(*other.value)).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "is_finite" => Ok(static_method!(
-                Scalar_is_finite(
-                    _log: &mut dyn RuntimeLog,
-                    _stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    Ok(values::Boolean(this.value.is_finite()).into())
-                }).clone()),
-            "is_infinite" => Ok(static_method!(
-                Scalar_is_infinite(
-                    _log: &mut dyn RuntimeLog,
-                    _stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    Ok(values::Boolean(this.value.is_infinite()).into())
-                }).clone()),
-            "is_normal" => Ok(static_method!(
-                Scalar_is_normal(
-                    _log: &mut dyn RuntimeLog,
-                    _stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    Ok(values::Boolean(this.value.is_normal()).into())
-                }).clone()),
-            "cbrt" => Ok(static_method!(
-                Scalar_cbrt(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    Ok(Self {
-                        dimension: this.dimension / 3,
-                        value: Float::new(this.value.cbrt()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "pow" => Ok(static_method!(
-                Scalar_pow(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    exp: Zero) -> ValueType::Boolean
-                {
-                    Ok(Self {
-                        dimension: this.dimension * *exp.value as i8,
-                        value: Float::new(this.value.powf(*exp.value)).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "sqrt" => Ok(static_method!(
-                Scalar_sqrt(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    Ok(Self {
-                        dimension: this.dimension / 2,
-                        value: Float::new(this.value.sqrt()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "is_sign_negative" => Ok(static_method!(
-                Scalar_is_sign_negative(
-                    _log: &mut dyn RuntimeLog,
-                    _stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    Ok(values::Boolean(this.value.is_sign_negative()).into())
-                }).clone()),
-            "is_sign_positive" => Ok(static_method!(
-                Scalar_is_sign_positive(
-                    _log: &mut dyn RuntimeLog,
-                    _stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    Ok(values::Boolean(this.value.is_sign_positive()).into())
-                }).clone()),
-            "recip" => Ok(static_method!(
-                Scalar_recip(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    Ok(Self {
-                        dimension: -this.dimension,
-                        value: Float::new(this.value.recip()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "round" => Ok(static_method!(
-                Scalar_round(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    unit: Value) -> ValueType::Boolean
-                {
-                    let unit = this.unpack_same_dimension(stack_trace, unit)?;
-                   
-                    let value = this.value / unit.value;
-
-                    Ok(Self {
-                        dimension: this.dimension,
-                        value: Float::new(value.round() * *unit.value).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "trunc" => Ok(static_method!(
-                Scalar_trunc(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    unit: Value) -> ValueType::Boolean
-                {
-                    let unit = this.unpack_same_dimension(stack_trace, unit)?;
-                   
-                    let value = this.value / unit.value;
-
-                    Ok(Self {
-                        dimension: this.dimension,
-                        value: Float::new(value.trunc() * *unit.value).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "fract" => Ok(static_method!(
-                Scalar_fract(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    unit: Value) -> ValueType::Boolean
-                {
-                    let unit = this.unpack_same_dimension(stack_trace, unit)?;
-                   
-                    let value = this.value / unit.value;
-
-                    Ok(Self {
-                        dimension: this.dimension,
-                        value: Float::new(value.fract() * *unit.value).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "floor" => Ok(static_method!(
-                Scalar_floor(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    unit: Value) -> ValueType::Boolean
-                {
-                    let unit = this.unpack_same_dimension(stack_trace, unit)?;
-                   
-                    let value = this.value / unit.value;
-
-                    Ok(Self {
-                        dimension: this.dimension,
-                        value: Float::new(value.floor() * *unit.value).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "ceil" => Ok(static_method!(
-                Scalar_ceil(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    unit: Value) -> ValueType::Boolean
-                {
-                    let unit = this.unpack_same_dimension(stack_trace, unit)?;
-                   
-                    let value = this.value / unit.value;
-
-                    Ok(Self {
-                        dimension: this.dimension,
-                        value: Float::new(value.ceil() * *unit.value).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "max" => Ok(static_method!(
-                Scalar_max(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    other: Value) -> ValueType::Boolean
-                {
-                    let other = this.unpack_same_dimension(stack_trace, other)?;
-                   
-                    Ok(Self {
-                        dimension: this.dimension,
-                        value: this.value.max(other.value)
-                    }.into())
-                }).clone()),
-            "min" => Ok(static_method!(
-                Scalar_min(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self,
-                    other: Value) -> ValueType::Boolean
-                {
-                    let other = this.unpack_same_dimension(stack_trace, other)?;
-                   
-                    Ok(Self {
-                        dimension: this.dimension,
-                        value: this.value.min(other.value)
-                    }.into())
-                }).clone()),
-            "signum" => Ok(static_method!(
-                Scalar_signum(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    Ok(Self {
-                        dimension: Dimension::zero(),
-                        value: Float::new(this.value.signum()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "acos" => Ok(static_method!(
-                Scalar_acos(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_inverse_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::angle(),
-                        value: Float::new((this.value * PI).acos()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "acosh" => Ok(static_method!(
-                Scalar_acosh(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_inverse_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::angle(),
-                        value: Float::new((this.value).acosh() / PI).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "cos" => Ok(static_method!(
-                Scalar_cos(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::zero(),
-                        value: Float::new((this.value * PI).cos()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "cosh" => Ok(static_method!(
-                Scalar_cosh(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::zero(),
-                        value: Float::new((this.value * PI).cosh()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "asin" => Ok(static_method!(
-                Scalar_asin(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_inverse_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::angle(),
-                        value: Float::new((this.value * PI).asin()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "asinh" => Ok(static_method!(
-                Scalar_asinh(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_inverse_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::angle(),
-                        value: Float::new((this.value).asinh() / PI).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "sin" => Ok(static_method!(
-                Scalar_sin(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::zero(),
-                        value: Float::new((this.value * PI).sin()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "sinh" => Ok(static_method!(
-                Scalar_sinh(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::zero(),
-                        value: Float::new((this.value * PI).sinh()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "cossin" => Ok(static_method!(
-                Scalar_cossin(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_trig_compatible(stack_trace)?;
-
-                    let (sin, cos) = (this.value * PI).sin_cos();
-                    Ok(Vector2::new(stack_trace, Dimension::zero(), [cos, sin])?.into())
-                }).clone()),
-            "atan" => Ok(static_method!(
-                Scalar_atan(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_inverse_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::angle(),
-                        value: Float::new((this.value * PI).atan()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "atanh" => Ok(static_method!(
-                Scalar_atanh(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_inverse_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::angle(),
-                        value: Float::new((this.value).atanh() / PI).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "tan" => Ok(static_method!(
-                Scalar_tan(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::zero(),
-                        value: Float::new((this.value * PI).tan()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
-            "tanh" => Ok(static_method!(
-                Scalar_tanh(
-                    _log: &mut dyn RuntimeLog,
-                    stack_trace: &mut Vec<SourceReference>,
-                    _stack: &mut Stack,
-                    this: Self) -> ValueType::Boolean
-                {
-                    this.check_trig_compatible(stack_trace)?;
-
-                    Ok(Self {
-                        dimension: Dimension::zero(),
-                        value: Float::new((this.value * PI).tanh()).unwrap_not_nan(stack_trace)?
-                    }.into())
-                }).clone()),
+            "to_signed_integer" => Ok(BuiltinFunction::new::<methods::ToSignedInteger>().into()),
+            "to_unsigned_integer" => {
+                Ok(BuiltinFunction::new::<methods::ToUnsignedInteger>().into())
+            }
+            "abs" => Ok(BuiltinFunction::new::<methods::Abs>().into()),
+            "clamp" => Ok(BuiltinFunction::new::<methods::Clamp>().into()),
+            "copysign" => Ok(BuiltinFunction::new::<methods::Copysign>().into()),
+            "hypot" => Ok(BuiltinFunction::new::<methods::Hypot>().into()),
+            "is_finite" => Ok(BuiltinFunction::new::<methods::IsFinite>().into()),
+            "is_infinite" => Ok(BuiltinFunction::new::<methods::IsInfinite>().into()),
+            "is_normal" => Ok(BuiltinFunction::new::<methods::IsNormal>().into()),
+            "cbrt" => Ok(BuiltinFunction::new::<methods::Cbrt>().into()),
+            "pow" => Ok(BuiltinFunction::new::<methods::Pow>().into()),
+            "sqrt" => Ok(BuiltinFunction::new::<methods::Sqrt>().into()),
+            "is_sign_negative" => Ok(BuiltinFunction::new::<methods::IsSignNegative>().into()),
+            "is_sign_positive" => Ok(BuiltinFunction::new::<methods::IsSignPositive>().into()),
+            "recip" => Ok(BuiltinFunction::new::<methods::Recip>().into()),
+            "round" => Ok(BuiltinFunction::new::<methods::Round>().into()),
+            "trunc" => Ok(BuiltinFunction::new::<methods::Trunc>().into()),
+            "fract" => Ok(BuiltinFunction::new::<methods::Fract>().into()),
+            "floor" => Ok(BuiltinFunction::new::<methods::Floor>().into()),
+            "ceil" => Ok(BuiltinFunction::new::<methods::Ceil>().into()),
+            "max" => Ok(BuiltinFunction::new::<methods::Max>().into()),
+            "min" => Ok(BuiltinFunction::new::<methods::Min>().into()),
+            "signum" => Ok(BuiltinFunction::new::<methods::Signum>().into()),
+            "acos" => Ok(BuiltinFunction::new::<methods::Acos>().into()),
+            "acosh" => Ok(BuiltinFunction::new::<methods::Acosh>().into()),
+            "cos" => Ok(BuiltinFunction::new::<methods::Cos>().into()),
+            "cosh" => Ok(BuiltinFunction::new::<methods::Cosh>().into()),
+            "asin" => Ok(BuiltinFunction::new::<methods::Asin>().into()),
+            "asinh" => Ok(BuiltinFunction::new::<methods::Asinh>().into()),
+            "sin" => Ok(BuiltinFunction::new::<methods::Sin>().into()),
+            "sinh" => Ok(BuiltinFunction::new::<methods::Sinh>().into()),
+            "cossin" => Ok(BuiltinFunction::new::<methods::CosSin>().into()),
+            "atan" => Ok(BuiltinFunction::new::<methods::Atan>().into()),
+            "atanh" => Ok(BuiltinFunction::new::<methods::Atanh>().into()),
+            "tan" => Ok(BuiltinFunction::new::<methods::Tan>().into()),
+            "tanh" => Ok(BuiltinFunction::new::<methods::Tanh>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
-            }.to_error(stack_trace)),
+            }
+            .to_error(stack_trace)),
         }
     }
 
@@ -863,6 +416,661 @@ impl Scalar {
             .to_error(stack_trace))
         }
     }
+}
+
+mod methods {
+    pub struct ToSignedInteger;
+    pub struct ToUnsignedInteger;
+    pub struct Abs;
+    pub struct Clamp;
+    pub struct Copysign;
+    pub struct Hypot;
+    pub struct IsFinite;
+    pub struct IsInfinite;
+    pub struct IsNormal;
+    pub struct Cbrt;
+    pub struct Pow;
+    pub struct Sqrt;
+    pub struct IsSignNegative;
+    pub struct IsSignPositive;
+    pub struct Recip;
+    pub struct Round;
+    pub struct Trunc;
+    pub struct Fract;
+    pub struct Floor;
+    pub struct Ceil;
+    pub struct Max;
+    pub struct Min;
+    pub struct Signum;
+    pub struct Acos;
+    pub struct Acosh;
+    pub struct Cos;
+    pub struct Cosh;
+    pub struct Asin;
+    pub struct Asinh;
+    pub struct Sin;
+    pub struct Sinh;
+    pub struct CosSin;
+    pub struct Atan;
+    pub struct Atanh;
+    pub struct Tan;
+    pub struct Tanh;
+}
+
+pub fn register_methods(database: &mut BuiltinCallableDatabase) {
+    // build_method!(
+    //     database,
+    //     forward = methods::Qualify, "ValueType::qualify", (
+    //         _log: &mut dyn RuntimeLog,
+    //         stack_trace: &mut Vec<SourceReference>,
+    //         _stack: &mut Stack,
+    //         database: &BuiltinCallableDatabase,
+    //         this: ValueType,
+    //         to_qualify: Value) -> ValueNone
+    //     {
+    //         this.check_other_qualifies(&to_qualify.get_type(database)).map_err(|error| error.to_error(stack_trace.iter()))?;
+    //         Ok(values::ValueNone)
+    //     }
+    // );
+    build_method!(
+        database,
+        forward = methods::ToSignedInteger, "Scalar::to_signed_integer", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> SignedInteger
+        {
+            if this.dimension.is_zero_dimension() {
+                Ok(values::SignedInteger::from(*this.value as i64).into())
+            } else {
+                Err(GenericFailure("Only zero dimensional scalars can be converted into an integer")
+                    .to_error(stack_trace.iter()))
+            }
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::ToUnsignedInteger, "Scalar::to_unsigned_integer", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> UnsignedInteger
+        {
+            if this.dimension.is_zero_dimension() {
+                if *this.value >= 0.0 {
+                    Ok(values::UnsignedInteger::from(*this.value as u64).into())
+                } else {
+                    Err(GenericFailure("Negative values cannot be converted to signed integers")
+                        .to_error(stack_trace.iter()))
+                }
+            } else {
+                Err(GenericFailure("Only zero dimensional scalars can be converted into an integer")
+                    .to_error(stack_trace.iter()))
+            }
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Abs, "Scalar::abs", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: this.dimension,
+                value: Float::new(this.value.abs()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Clamp, "Scalar::clamp", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            min: Value,
+            max: Value) -> Scalar
+        {
+            let min = this.unpack_same_dimension(stack_trace, min)?;
+            let max = this.unpack_same_dimension(stack_trace, max)?;
+
+            Ok(Scalar {
+                dimension: this.dimension,
+                value: this.value.clamp(min.value, max.value)
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Copysign, "Scalar::copysign", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            sign: Zero) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(this.value.copysign(*sign.value)).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Hypot, "Scalar::hypot", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            other: Value) -> Scalar
+        {
+            let other = this.unpack_same_dimension(stack_trace, other)?;
+
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(this.value.hypot(*other.value)).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::IsFinite, "Scalar::is_finite", (
+            _log: &mut dyn RuntimeLog,
+            _stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Boolean
+        {
+            Ok(values::Boolean(this.value.is_finite()))
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::IsInfinite, "Scalar::is_infinite", (
+            _log: &mut dyn RuntimeLog,
+            _stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Boolean
+        {
+            Ok(values::Boolean(this.value.is_infinite()))
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::IsNormal, "Scalar::is_normal", (
+            _log: &mut dyn RuntimeLog,
+            _stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Boolean
+        {
+            Ok(values::Boolean(this.value.is_normal()).into())
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Cbrt, "Scalar::cbrt", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: this.dimension / 3,
+                value: Float::new(this.value.cbrt()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Pow, "Scalar::pow", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            exp: Zero) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: this.dimension * *exp.value as i8,
+                value: Float::new(this.value.powf(*exp.value)).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Sqrt, "Scalar::sqrt", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: this.dimension / 2,
+                value: Float::new(this.value.sqrt()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::IsSignNegative, "Scalar::is_sign_negative", (
+            _log: &mut dyn RuntimeLog,
+            _stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Boolean
+        {
+            Ok(Boolean(this.value.is_sign_negative()))
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::IsSignPositive, "Scalar::is_sign_positive", (
+            _log: &mut dyn RuntimeLog,
+            _stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Boolean
+        {
+            Ok(Boolean(this.value.is_sign_positive()))
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Recip, "Scalar::recip", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: -this.dimension,
+                value: Float::new(this.value.recip()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Round, "Scalar::round", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            unit: Value) -> Scalar
+        {
+            let unit = this.unpack_same_dimension(stack_trace, unit)?;
+
+            let value = this.value / unit.value;
+
+            Ok(Scalar {
+                dimension: this.dimension,
+                value: Float::new(value.round() * *unit.value).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Trunc, "Scalar::trunc", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            unit: Value) -> Scalar
+        {
+            let unit = this.unpack_same_dimension(stack_trace, unit)?;
+
+            let value = this.value / unit.value;
+
+            Ok(Scalar {
+                dimension: this.dimension,
+                value: Float::new(value.trunc() * *unit.value).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Fract, "Scalar::fract", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            unit: Value) -> Scalar
+        {
+            let unit = this.unpack_same_dimension(stack_trace, unit)?;
+
+            let value = this.value / unit.value;
+
+            Ok(Scalar {
+                dimension: this.dimension,
+                value: Float::new(value.fract() * *unit.value).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Floor, "Scalar::floor", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            unit: Value) -> Scalar
+        {
+            let unit = this.unpack_same_dimension(stack_trace, unit)?;
+
+            let value = this.value / unit.value;
+
+            Ok(Scalar {
+                dimension: this.dimension,
+                value: Float::new(value.floor() * *unit.value).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Ceil, "Scalar::ceil", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            unit: Value) -> Scalar
+        {
+            let unit = this.unpack_same_dimension(stack_trace, unit)?;
+
+            let value = this.value / unit.value;
+
+            Ok(Scalar {
+                dimension: this.dimension,
+                value: Float::new(value.ceil() * *unit.value).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Max, "Scalar::max", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            other: Value) -> Scalar
+        {
+            let other = this.unpack_same_dimension(stack_trace, other)?;
+
+            Ok(Scalar {
+                dimension: this.dimension,
+                value: this.value.max(other.value)
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Min, "Scalar::min", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar,
+            other: Value) -> Scalar
+        {
+            let other = this.unpack_same_dimension(stack_trace, other)?;
+
+            Ok(Scalar {
+                dimension: this.dimension,
+                value: this.value.min(other.value)
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Signum, "Scalar::signum", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(this.value.signum()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Acos, "Scalar::acos", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_inverse_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::angle(),
+                value: Float::new((this.value * PI).acos()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Acosh, "Scalar::acosh", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_inverse_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::angle(),
+                value: Float::new((this.value).acosh() / PI).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Cos, "Scalar::cos", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new((this.value * PI).cos()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Cosh, "Scalar::cosh", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new((this.value * PI).cosh()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Asin, "Scalar::asin", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_inverse_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::angle(),
+                value: Float::new((this.value * PI).asin()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Asinh, "Scalar::asinh", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_inverse_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::angle(),
+                value: Float::new((this.value).asinh() / PI).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Sin, "Scalar::sin", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new((this.value * PI).sin()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Sinh, "Scalar::sinh", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new((this.value * PI).sinh()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::CosSin, "Scalar::cossin", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Vector2
+        {
+            this.check_trig_compatible(stack_trace)?;
+
+            let (sin, cos) = (this.value * PI).sin_cos();
+            Vector2::new(stack_trace, Dimension::zero(), [cos, sin])
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Atan, "Scalar::atan", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_inverse_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::angle(),
+                value: Float::new((this.value * PI).atan()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Atanh, "Scalar::atanh", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_inverse_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::angle(),
+                value: Float::new((this.value).atanh() / PI).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Tan, "Scalar::tan", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new((this.value * PI).tan()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
+    build_method!(
+        database,
+        forward = methods::Tanh, "Scalar::tanh", (
+            _log: &mut dyn RuntimeLog,
+            stack_trace: &mut Vec<SourceReference>,
+            _stack: &mut Stack,
+            _database: &BuiltinCallableDatabase,
+            this: Scalar) -> Scalar
+        {
+            this.check_trig_compatible(stack_trace)?;
+
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new((this.value * PI).tanh()).unwrap_not_nan(stack_trace)?
+            })
+        }
+    );
 }
 
 macro_rules! build_scalar_type {
@@ -1050,68 +1258,68 @@ mod test {
         let product = test_run("(-100)::abs() == 100").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn clamp() {
         let product = test_run("(-100)::clamp(min = -50, max = 50) == -50").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("(100)::clamp(min = -50, max = 50) == 50").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn copysign() {
         let product = test_run("100::copysign(sign = -50) == -100").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn hypot() {
         // 141.4213562373095 was calculated Using `math.sqrt(100 ** 2 + 100 ** 2)` in Python 3.13.9.
         let product = test_run("100::hypot(other = 100) - 141.4213562373095 < 0.0001").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn is_finite() {
         let product = test_run("std.consts.Infinity::is_finite()").unwrap();
         assert_eq!(product, Boolean(false).into());
-        
+
         let product = test_run("5::is_finite()").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("(std.consts.Infinity * 5)::is_finite()").unwrap();
         assert_eq!(product, Boolean(false).into());
     }
-    
+
     #[test]
     fn is_infinite() {
         let product = test_run("std.consts.Infinity::is_infinite()").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("5::is_infinite()").unwrap();
         assert_eq!(product, Boolean(false).into());
-        
+
         let product = test_run("(std.consts.Infinity * 5)::is_infinite()").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn is_normal() {
         let product = test_run("std.consts.Infinity::is_normal()").unwrap();
         assert_eq!(product, Boolean(false).into());
-        
+
         let product = test_run("0::is_normal()").unwrap();
         assert_eq!(product, Boolean(false).into());
-        
+
         let product = test_run("5::is_normal()").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("(-5)::is_normal()").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn cbrt() {
         let product = test_run("(64 'm^3')::cbrt() == 4m").unwrap();
@@ -1123,108 +1331,108 @@ mod test {
         let product = test_run("2m::pow(exp = 2) == 4 'm^2'").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn sqrt() {
         let product = test_run("(16 'm^2')::sqrt() == 4m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn is_sign_negative() {
         let product = test_run("0::is_sign_negative()").unwrap();
         assert_eq!(product, Boolean(false).into());
-        
+
         let product = test_run("(-0)::is_sign_negative()").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("5::is_sign_negative()").unwrap();
         assert_eq!(product, Boolean(false).into());
-        
+
         let product = test_run("(-5)::is_sign_negative()").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn is_sign_positive() {
         let product = test_run("0::is_sign_positive()").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("(-0)::is_sign_positive()").unwrap();
         assert_eq!(product, Boolean(false).into());
-        
+
         let product = test_run("5::is_sign_positive()").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("(-5)::is_sign_positive()").unwrap();
         assert_eq!(product, Boolean(false).into());
     }
-    
+
     #[test]
     fn recip() {
         let product = test_run("16ft::recip() == 1 / 16ft").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn round() {
         let product = test_run("16.8ft::round(unit = 1ft) == 17ft").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("16.2ft::round(unit = 1ft) == 16ft").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn trunc() {
         let product = test_run("16.8ft::trunc(unit = 1ft) == 16ft").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("16.2ft::trunc(unit = 1ft) == 16ft").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn fract() {
         let product = test_run("16.8ft::fract(unit = 1ft) - 0.8ft < 0.0000000000001ft").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn floor() {
         let product = test_run("16.5ft::floor(unit = 1ft) == 16ft").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn ceil() {
         let product = test_run("16.5ft::ceil(unit = 1ft) == 17ft").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn max() {
         let product = test_run("16m::max(other = 15m) == 16m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn min() {
         let product = test_run("16m::min(other = 15m) == 15m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn signum() {
         let product = test_run("16m::signum() == 1").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("(-16m)::signum() == -1").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("0m::signum() == 1").unwrap();
         assert_eq!(product, Boolean(true).into());
-        
+
         let product = test_run("(-0m)::signum() == -1").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
@@ -1234,31 +1442,31 @@ mod test {
         let product = test_run("0::acos() - 90deg < 0.000000000001deg").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn cosh_acosh() {
         let product = test_run("1rad::cosh()::acosh() - 1rad < 0.000000000001rad").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn cos() {
         let product = test_run("90deg::cos() - 1 < 0.000000000001").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn asin() {
         let product = test_run("0::asin() - 90deg < 0.000000000001deg").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn sinh_asinh() {
         let product = test_run("1rad::sinh()::asinh() - 1rad < 0.000000000001rad").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn sin() {
         let product = test_run("90deg::sin() - 1 < 0.000000000001").unwrap();
@@ -1270,19 +1478,19 @@ mod test {
         let product = test_run("let angle = 45deg; in (angle::cossin() - <(angle::cos(), angle::sin())>)::norm() < 0.0000000001").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn atan() {
         let product = test_run("0::atan() == 0deg").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn tanh_atanh() {
         let product = test_run("1rad::tanh()::atanh() - 1rad < 0.000000000001rad").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
-    
+
     #[test]
     fn tan() {
         let product = test_run("0deg::tan() == 0").unwrap();

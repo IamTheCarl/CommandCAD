@@ -16,13 +16,15 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::execution::values::{closure::BuiltinCallableDatabase, StaticType};
+
 use super::{value_type::ValueType, Object, StaticTypeName};
 
 #[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
 pub struct ValueNone;
 
 impl Object for ValueNone {
-    fn get_type(&self) -> ValueType {
+    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
         ValueType::TypeNone
     }
 }
@@ -30,5 +32,11 @@ impl Object for ValueNone {
 impl StaticTypeName for ValueNone {
     fn static_type_name() -> &'static str {
         "None"
+    }
+}
+
+impl StaticType for ValueNone {
+    fn static_type() -> ValueType {
+        ValueType::TypeNone
     }
 }

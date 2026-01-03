@@ -22,7 +22,7 @@ use crate::{
     compile::{
         self, AstNode, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation,
     },
-    execution::stack::ScopeType,
+    execution::{stack::ScopeType, values::BuiltinCallableDatabase},
 };
 
 mod errors;
@@ -40,6 +40,7 @@ pub fn find_value<'p, 's>(
     log: &mut dyn RuntimeLog,
     stack_trace: &[SourceReference],
     stack: &'s mut Stack,
+    database: &BuiltinCallableDatabase,
     path_iter: impl IntoIterator<Item = &'p compile::AstNode<String>>,
 ) -> ExpressionResult<Value> {
     let mut path_iter = path_iter.into_iter().peekable();
@@ -59,6 +60,7 @@ pub fn find_value<'p, 's>(
         let mut value = stack_value.get_attribute(
             log,
             stack_trace,
+            database,
             &LocatedStr {
                 location: sub_path.reference.clone(),
                 string: &sub_path.node,
@@ -74,6 +76,7 @@ pub fn find_value<'p, 's>(
                 let final_value = value.get_attribute(
                     log,
                     stack_trace,
+                    database,
                     &LocatedStr {
                         location: sub_path.reference.clone(),
                         string: &sub_path.node,
@@ -85,6 +88,7 @@ pub fn find_value<'p, 's>(
                 value = value.get_attribute(
                     log,
                     stack_trace,
+                    database,
                     &LocatedStr {
                         location: sub_path.reference.clone(),
                         string: &sub_path.node,
@@ -104,33 +108,37 @@ pub fn execute_expression(
     log: &mut dyn RuntimeLog,
     stack_trace: &mut Vec<SourceReference>,
     stack: &mut Stack,
+    database: &BuiltinCallableDatabase,
     expression: &compile::AstNode<compile::Expression>,
 ) -> ExpressionResult<Value> {
     stack_trace.stack_scope(
         expression.reference.clone(),
         |stack_trace| match &expression.node {
             compile::Expression::BinaryExpression(ast_node) => {
-                execute_binary_expression(log, stack_trace, stack, ast_node)
+                execute_binary_expression(log, stack_trace, stack, database, ast_node)
             }
             compile::Expression::Boolean(ast_node) => Ok(values::Boolean(ast_node.node).into()),
             compile::Expression::ClosureDefinition(ast_node) => {
-                Ok(values::UserClosure::from_ast(log, stack_trace, stack, ast_node)?.into())
+                Ok(
+                    values::UserClosure::from_ast(log, stack_trace, stack, database, ast_node)?
+                        .into(),
+                )
             }
-            compile::Expression::DictionaryConstruction(ast_node) => {
-                Ok(values::Dictionary::from_ast(log, stack_trace, stack, ast_node)?.into())
-            }
+            compile::Expression::DictionaryConstruction(ast_node) => Ok(
+                values::Dictionary::from_ast(log, stack_trace, stack, database, ast_node)?.into(),
+            ),
             compile::Expression::If(ast_node) => {
-                execute_if_expression(log, stack_trace, stack, ast_node)
+                execute_if_expression(log, stack_trace, stack, database, ast_node)
             }
             compile::Expression::List(ast_node) => {
-                Ok(values::List::from_ast(log, stack_trace, stack, ast_node)?.into())
+                Ok(values::List::from_ast(log, stack_trace, stack, database, ast_node)?.into())
             }
             compile::Expression::Parenthesis(ast_node) => {
-                execute_expression(log, stack_trace, stack, &ast_node)
+                execute_expression(log, stack_trace, stack, database, &ast_node)
             }
             compile::Expression::IdentityPath(ast_node) => {
                 let path_iter = ast_node.node.path.iter();
-                Ok(find_value(log, stack_trace, stack, path_iter)?)
+                Ok(find_value(log, stack_trace, stack, database, path_iter)?)
             }
             compile::Expression::SelfPath(ast_node) => {
                 let self_code = AstNode {
@@ -138,7 +146,7 @@ pub fn execute_expression(
                     node: String::from("self"),
                 };
                 let path_iter = [&self_code].into_iter().chain(ast_node.node.path.iter());
-                Ok(find_value(log, stack_trace, stack, path_iter)?)
+                Ok(find_value(log, stack_trace, stack, database, path_iter)?)
             }
 
             compile::Expression::Scalar(ast_node) => Ok(values::Scalar {
@@ -147,13 +155,13 @@ pub fn execute_expression(
             }
             .into()),
             compile::Expression::Vector2(vector) => {
-                Ok(values::Vector2::from_ast(log, stack_trace, stack, vector)?.into())
+                Ok(values::Vector2::from_ast(log, stack_trace, stack, database, vector)?.into())
             }
             compile::Expression::Vector3(vector) => {
-                Ok(values::Vector3::from_ast(log, stack_trace, stack, vector)?.into())
+                Ok(values::Vector3::from_ast(log, stack_trace, stack, database, vector)?.into())
             }
             compile::Expression::Vector4(vector) => {
-                Ok(values::Vector4::from_ast(log, stack_trace, stack, vector)?.into())
+                Ok(values::Vector4::from_ast(log, stack_trace, stack, database, vector)?.into())
             }
             compile::Expression::SignedInteger(ast_node) => {
                 Ok(values::SignedInteger::from(ast_node.node).into())
@@ -162,23 +170,23 @@ pub fn execute_expression(
                 Ok(values::IString::from(ast_node.node.clone()).into())
             }
             compile::Expression::StructDefinition(ast_node) => Ok(ValueType::from(
-                values::StructDefinition::new(log, stack_trace, stack, ast_node)?,
+                values::StructDefinition::new(log, stack_trace, stack, database, ast_node)?,
             )
             .into()),
             compile::Expression::UnaryExpression(ast_node) => {
-                execute_unary_expression(log, stack_trace, stack, ast_node)
+                execute_unary_expression(log, stack_trace, stack, database, ast_node)
             }
             compile::Expression::UnsignedInteger(ast_node) => {
                 Ok(values::UnsignedInteger::from(ast_node.node).into())
             }
             compile::Expression::FunctionCall(ast_node) => {
-                execute_function_call(log, stack_trace, stack, ast_node)
+                execute_function_call(log, stack_trace, stack, database, ast_node)
             }
             compile::Expression::MethodCall(ast_node) => {
-                execute_method_call(log, stack_trace, stack, ast_node)
+                execute_method_call(log, stack_trace, stack, database, ast_node)
             }
             compile::Expression::LetIn(ast_node) => {
-                execute_let_in(log, stack_trace, stack, ast_node)
+                execute_let_in(log, stack_trace, stack, database, ast_node)
             }
         },
     )
@@ -188,11 +196,12 @@ fn execute_unary_expression(
     log: &mut dyn RuntimeLog,
     stack_trace: &mut Vec<SourceReference>,
     stack: &mut Stack,
+    database: &BuiltinCallableDatabase,
     expression: &compile::AstNode<Box<compile::UnaryExpression>>,
 ) -> ExpressionResult<Value> {
     stack_trace.stack_scope(expression.reference.clone(), |stack_trace| {
         let node = &expression.node;
-        let value = execute_expression(log, stack_trace, stack, &node.expression)?;
+        let value = execute_expression(log, stack_trace, stack, database, &node.expression)?;
         match node.operation.node {
             UnaryExpressionOperation::Add => value.unary_plus(log, stack_trace),
             UnaryExpressionOperation::Sub => value.unary_minus(log, stack_trace),
@@ -205,13 +214,15 @@ fn execute_function_call(
     log: &mut dyn RuntimeLog,
     stack_trace: &mut Vec<SourceReference>,
     stack: &mut Stack,
+    database: &BuiltinCallableDatabase,
     call: &compile::AstNode<Box<compile::FunctionCall>>,
 ) -> ExpressionResult<Value> {
-    let to_call = execute_expression(log, stack_trace, stack, &call.node.to_call)?;
-    let argument = values::Dictionary::from_ast(log, stack_trace, stack, &call.node.argument)?;
+    let to_call = execute_expression(log, stack_trace, stack, database, &call.node.to_call)?;
+    let argument =
+        values::Dictionary::from_ast(log, stack_trace, stack, database, &call.node.argument)?;
 
     stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
-        to_call.call(log, stack_trace, stack, argument)
+        to_call.call(log, stack_trace, stack, database, argument)
     })?
 }
 
@@ -219,18 +230,26 @@ fn execute_method_call(
     log: &mut dyn RuntimeLog,
     stack_trace: &mut Vec<SourceReference>,
     stack: &mut Stack,
+    database: &BuiltinCallableDatabase,
     call: &compile::AstNode<Box<compile::MethodCall>>,
 ) -> ExpressionResult<Value> {
-    let self_dictionary = execute_expression(log, stack_trace, stack, &call.node.self_dictionary)?;
+    let self_dictionary = execute_expression(
+        log,
+        stack_trace,
+        stack,
+        database,
+        &call.node.self_dictionary,
+    )?;
     let to_call = self_dictionary
-        .get_attribute(log, stack_trace, &call.node.to_call.node)?
+        .get_attribute(log, stack_trace, database, &call.node.to_call.node)?
         .clone();
-    let argument = values::Dictionary::from_ast(log, stack_trace, stack, &call.node.argument)?;
+    let argument =
+        values::Dictionary::from_ast(log, stack_trace, stack, database, &call.node.argument)?;
 
     stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
         stack.insert_value("self", self_dictionary);
 
-        to_call.call(log, stack_trace, stack, argument)
+        to_call.call(log, stack_trace, stack, database, argument)
     })?
 }
 
@@ -238,16 +257,18 @@ fn execute_let_in(
     log: &mut dyn RuntimeLog,
     stack_trace: &mut Vec<SourceReference>,
     stack: &mut Stack,
+    database: &BuiltinCallableDatabase,
     expression: &compile::AstNode<Box<compile::LetIn>>,
 ) -> ExpressionResult<Value> {
     stack_trace.stack_scope(expression.reference.clone(), |stack_trace| {
         for assignment in expression.node.assignments.iter() {
-            let value = execute_expression(log, stack_trace, stack, &assignment.node.value)?;
+            let value =
+                execute_expression(log, stack_trace, stack, database, &assignment.node.value)?;
             stack.insert_value(assignment.node.ident.node.clone(), value);
         }
 
         let node = &expression.node;
-        execute_expression(log, stack_trace, stack, &node.expression)
+        execute_expression(log, stack_trace, stack, database, &node.expression)
     })
 }
 
@@ -255,14 +276,15 @@ fn execute_binary_expression(
     log: &mut dyn RuntimeLog,
     stack_trace: &mut Vec<SourceReference>,
     stack: &mut Stack,
+    database: &BuiltinCallableDatabase,
     expression: &compile::AstNode<Box<compile::BinaryExpression>>,
 ) -> ExpressionResult<Value> {
     stack_trace.stack_scope(
         expression.reference.clone(),
         |stack_trace: &mut Vec<SourceReference>| {
             let node = &expression.node;
-            let value_a = execute_expression(log, stack_trace, stack, &node.a)?;
-            let value_b = execute_expression(log, stack_trace, stack, &node.b)?;
+            let value_a = execute_expression(log, stack_trace, stack, database, &node.a)?;
+            let value_b = execute_expression(log, stack_trace, stack, database, &node.b)?;
             match node.operation.node {
                 BinaryExpressionOperation::NotEq => Ok(values::Boolean(
                     !value_a
@@ -324,11 +346,18 @@ pub fn execute_if_expression(
     log: &mut dyn RuntimeLog,
     stack_trace: &mut Vec<SourceReference>,
     stack: &mut Stack,
+    database: &BuiltinCallableDatabase,
     expression: &compile::AstNode<Box<compile::IfExpression>>,
 ) -> ExpressionResult<Value> {
-    let condition = execute_expression(log, stack_trace, stack, &expression.node.condition)?
-        .downcast::<values::Boolean>(stack_trace)?
-        .0;
+    let condition = execute_expression(
+        log,
+        stack_trace,
+        stack,
+        database,
+        &expression.node.condition,
+    )?
+    .downcast::<values::Boolean>(stack_trace)?
+    .0;
 
     let expression = if condition {
         &expression.node.on_true
@@ -336,18 +365,25 @@ pub fn execute_if_expression(
         &expression.node.on_false
     };
 
-    execute_expression(log, stack_trace, stack, expression)
+    execute_expression(log, stack_trace, stack, database, expression)
 }
 
 #[cfg(test)]
 pub(crate) fn test_run(input: &str) -> ExpressionResult<Value> {
     use standard_environment::build_prelude;
 
-    let root = dbg!(compile::full_compile(input));
-    let prelude = build_prelude();
+    let root = compile::full_compile(input);
+    let database = BuiltinCallableDatabase::new();
+    let prelude = build_prelude(&database);
     let mut stack = Stack::new(prelude);
 
-    execute_expression(&mut Vec::new(), &mut Vec::new(), &mut stack, &root)
+    execute_expression(
+        &mut Vec::new(),
+        &mut Vec::new(),
+        &mut stack,
+        &database,
+        &root,
+    )
 }
 
 #[cfg(test)]

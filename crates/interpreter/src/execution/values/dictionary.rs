@@ -27,7 +27,7 @@ use crate::{
         errors::{ErrorType, ExpressionResult, Raise as _},
         logging::RuntimeLog,
         stack::{ScopeType, Stack},
-        values::StaticType,
+        values::closure::BuiltinCallableDatabase,
     },
 };
 
@@ -53,7 +53,7 @@ pub struct Dictionary {
 }
 
 impl Object for Dictionary {
-    fn get_type(&self) -> ValueType {
+    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
         self.data.struct_def.clone().into()
     }
 
@@ -61,6 +61,7 @@ impl Object for Dictionary {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _callable_database: &BuiltinCallableDatabase,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         if let Some(member) = self.data.members.get(attribute) {
@@ -80,16 +81,54 @@ impl StaticTypeName for Dictionary {
     }
 }
 
-// TODO we should derive StaticType for structs that can be used to automatically unpack
-// dictionaries.
+impl Dictionary {
+    pub fn struct_def(&self) -> &StructDefinition {
+        &self.data.struct_def
+    }
 
-impl From<HashMap<String, Value>> for Dictionary {
-    fn from(map: HashMap<String, Value>) -> Self {
+    pub fn from_ast(
+        log: &mut dyn RuntimeLog,
+        stack_trace: &mut Vec<SourceReference>,
+        stack: &mut Stack,
+        database: &BuiltinCallableDatabase,
+        ast_node: &AstNode<DictionaryConstruction>,
+    ) -> ExpressionResult<Self> {
+        let mut members = HashMap::with_capacity(ast_node.node.assignments.len());
+
+        stack.scope(stack_trace, ScopeType::Inherited, |stack, stack_trace| {
+            for assignment in ast_node.node.assignments.iter() {
+                let name = assignment.node.name.node.clone();
+                let value = execute_expression(
+                    log,
+                    stack_trace,
+                    stack,
+                    database,
+                    &assignment.node.assignment,
+                )?;
+
+                if members.insert(name.clone(), value.clone()).is_some() {
+                    // That's a duplicate member.
+                    return Err(DuplicateMemberError {
+                        name: assignment.node.name.node.clone(),
+                    }
+                    .to_error(stack_trace.iter().chain([&assignment.reference])));
+                }
+
+                stack.insert_value(name, value);
+            }
+
+            Ok(())
+        })??;
+
+        Ok(Self::new(database, members))
+    }
+
+    pub fn new(database: &BuiltinCallableDatabase, map: HashMap<String, Value>) -> Self {
         let mut struct_members = HashMap::with_capacity(map.len());
 
         for (name, value) in map.iter() {
             let member = StructMember {
-                ty: value.get_type(),
+                ty: value.get_type(database),
                 default: None,
             };
 
@@ -106,43 +145,6 @@ impl From<HashMap<String, Value>> for Dictionary {
         });
 
         Self { data }
-    }
-}
-
-impl Dictionary {
-    pub fn struct_def(&self) -> &StructDefinition {
-        &self.data.struct_def
-    }
-
-    pub fn from_ast(
-        log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        stack: &mut Stack,
-        ast_node: &AstNode<DictionaryConstruction>,
-    ) -> ExpressionResult<Self> {
-        let mut members = HashMap::with_capacity(ast_node.node.assignments.len());
-
-        stack.scope(stack_trace, ScopeType::Inherited, |stack, stack_trace| {
-            for assignment in ast_node.node.assignments.iter() {
-                let name = assignment.node.name.node.clone();
-                let value =
-                    execute_expression(log, stack_trace, stack, &assignment.node.assignment)?;
-
-                if members.insert(name.clone(), value.clone()).is_some() {
-                    // That's a duplicate member.
-                    return Err(DuplicateMemberError {
-                        name: assignment.node.name.node.clone(),
-                    }
-                    .to_error(stack_trace.iter().chain([&assignment.reference])));
-                }
-
-                stack.insert_value(name, value);
-            }
-
-            Ok(())
-        })??;
-
-        Ok(Self::from(members))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {

@@ -2,43 +2,43 @@ use std::collections::HashMap;
 
 use common_data_types::{Dimension, Float};
 
-use crate::execution::values::{Scalar, ValueNone};
+use crate::execution::values::{BuiltinCallableDatabase, Scalar, ValueNone};
 
 use super::values::{Dictionary, Value, ValueType};
 
 /// Builds standard library.
-pub fn build_prelude() -> HashMap<String, Value> {
-    let global = HashMap::from([("std".into(), build_std().into())]);
+pub fn build_prelude(database: &BuiltinCallableDatabase) -> HashMap<String, Value> {
+    let global = HashMap::from([("std".into(), build_std(database).into())]);
 
     global
 }
 
-fn build_std() -> Dictionary {
+fn build_std(database: &BuiltinCallableDatabase) -> Dictionary {
     let std = HashMap::from([
-        ("types".into(), build_types().into()),
+        ("types".into(), build_types(database).into()),
         (
             "scalar".into(),
-            build_dimension_types(ValueType::Scalar).into(),
+            build_dimension_types(database, ValueType::Scalar).into(),
         ),
         (
             "vector2".into(),
-            build_dimension_types(ValueType::Vector2).into(),
+            build_dimension_types(database, ValueType::Vector2).into(),
         ),
         (
             "vector3".into(),
-            build_dimension_types(ValueType::Vector3).into(),
+            build_dimension_types(database, ValueType::Vector3).into(),
         ),
         (
             "vector4".into(),
-            build_dimension_types(ValueType::Vector4).into(),
+            build_dimension_types(database, ValueType::Vector4).into(),
         ),
-        ("consts".into(), build_consts().into()),
+        ("consts".into(), build_consts(database).into()),
     ]);
-    Dictionary::from(std)
+    Dictionary::new(database, std)
 }
 
 /// Adds library for constants.
-fn build_consts() -> Dictionary {
+fn build_consts(database: &BuiltinCallableDatabase) -> Dictionary {
     let types: HashMap<String, Value> = HashMap::from_iter([
         ("None".into(), ValueNone.into()),
         (
@@ -50,11 +50,11 @@ fn build_consts() -> Dictionary {
             .into(),
         ),
     ]);
-    Dictionary::from(types)
+    Dictionary::new(database, types)
 }
 
 /// Adds library for type safety.
-fn build_types() -> Dictionary {
+fn build_types(database: &BuiltinCallableDatabase) -> Dictionary {
     let types: HashMap<String, Value> = HashMap::from_iter(
         [
             ("None".into(), ValueType::TypeNone.into()),
@@ -69,10 +69,13 @@ fn build_types() -> Dictionary {
         ]
         .into_iter(),
     );
-    Dictionary::from(types)
+    Dictionary::new(database, types)
 }
 
-fn build_dimension_types(type_builder: impl Fn(Option<Dimension>) -> ValueType) -> Dictionary {
+fn build_dimension_types(
+    database: &BuiltinCallableDatabase,
+    type_builder: impl Fn(Option<Dimension>) -> ValueType,
+) -> Dictionary {
     let types: HashMap<String, Value> = HashMap::from_iter(
         units::list_named_dimensions()
             .map(|(name, dimension)| (name, Some(dimension)))
@@ -80,5 +83,5 @@ fn build_dimension_types(type_builder: impl Fn(Option<Dimension>) -> ValueType) 
             .map(move |(name, dimension)| (name.into(), type_builder(dimension).into())),
     );
 
-    Dictionary::from(types)
+    Dictionary::new(database, types)
 }
