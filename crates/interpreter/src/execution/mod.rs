@@ -36,6 +36,8 @@ use logging::{LocatedStr, RuntimeLog, StackScope};
 use stack::Stack;
 use values::{Object, Value, ValueType};
 
+pub use standard_environment::build_prelude;
+
 pub fn find_value<'p, 's>(
     log: &mut dyn RuntimeLog,
     stack_trace: &[SourceReference],

@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use common_data_types::{Dimension, Float};
 
-use crate::execution::values::{BuiltinCallableDatabase, Scalar, ValueNone};
+use crate::execution::values::{
+    BuiltinCallableDatabase, Scalar, SignedInteger, UnsignedInteger, ValueNone,
+};
 
 use super::values::{Dictionary, Value, ValueType};
 
@@ -48,6 +50,18 @@ fn build_consts(database: &BuiltinCallableDatabase) -> Dictionary {
                 value: Float::new(common_data_types::RawFloat::INFINITY).expect("Infinity was NaN"),
             }
             .into(),
+        ),
+        ("UIntMax".into(), UnsignedInteger::from(u64::MAX).into()),
+        ("UIntMin".into(), UnsignedInteger::from(u64::MIN).into()),
+        (
+            "UIntBits".into(),
+            UnsignedInteger::from(u64::BITS as u64).into(),
+        ),
+        ("SIntMax".into(), SignedInteger::from(i64::MAX).into()),
+        ("SIntMin".into(), SignedInteger::from(i64::MIN).into()),
+        (
+            "SIntBits".into(),
+            UnsignedInteger::from(i64::BITS as u64).into(),
         ),
     ]);
     Dictionary::new(database, types)

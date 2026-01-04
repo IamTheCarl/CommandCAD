@@ -44,6 +44,7 @@ impl BuiltinCallableDatabase {
     pub fn new() -> Self {
         let mut database = Self::default();
 
+        super::integer::register_methods(&mut database);
         super::scalar::register_methods(&mut database);
         super::vector::register_methods(&mut database);
         super::value_type::register_methods(&mut database);

@@ -48,30 +48,12 @@ impl<I> From<I> for Integer<I> {
 
 impl<I> Object for Integer<I>
 where
-    I: CheckedAdd
-        + CheckedDiv
-        + CheckedMul
-        + CheckedSub
-        + CheckedAdd
-        + Ord
-        + GetType
-        + Hash
-        + Copy
-        + Eq
-        + BitAnd<Output = I>
-        + BitOr<Output = I>
-        + BitXor<Output = I>
-        + Shl<Output = I>
-        + Shr<Output = I>
-        + Neg
-        + Not<Output = I>
-        + One
-        + ToPrimitive,
+    I: IntOps,
     Self: StaticTypeName + Into<Value>,
     Value: AsVariant<Self>,
 {
     fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
-        I::get_type()
+        I::static_type()
     }
 
     fn bit_and(
@@ -245,31 +227,128 @@ where
 
 impl<I> StaticType for Integer<I>
 where
-    I: GetType,
+    I: StaticType,
 {
     fn static_type() -> ValueType {
-        I::get_type()
+        I::static_type()
     }
 }
 
-trait GetType {
-    fn get_type() -> ValueType;
-}
-
-/// Custom version of the std::ops::Neg trait that can fail.
-trait Neg {
+trait IntOps:
+    CheckedAdd
+    + CheckedDiv
+    + CheckedMul
+    + CheckedSub
+    + CheckedAdd
+    + Ord
+    + Hash
+    + Copy
+    + Eq
+    + BitAnd<Output = Self>
+    + BitOr<Output = Self>
+    + BitXor<Output = Self>
+    + Shl<Output = Self>
+    + Shr<Output = Self>
+    + Not<Output = Self>
+    + One
+    + ToPrimitive
+    + StaticType
+{
     fn neg(&self, stack_trace: &[SourceReference]) -> ExpressionResult<Value>;
+
+    fn count_ones(&self) -> u64;
+    fn count_zeros(&self) -> u64;
+
+    fn leading_zeros(&self) -> u64;
+    fn trailing_zeros(&self) -> u64;
+
+    fn leading_ones(&self) -> u64;
+    fn trailing_ones(&self) -> u64;
+
+    fn rotate_left(&self, by: u64) -> Self;
+    fn rotate_right(&self, by: u64) -> Self;
+
+    fn reverse_bits(&self) -> Self;
+
+    fn abs(&self) -> Self;
+    fn sqrt(&self) -> Self;
+
+    fn abs_diff(&self, rhs: Self) -> u64;
+    fn signum(&self) -> i64;
+    fn is_positive(&self) -> bool;
+    fn is_negative(&self) -> bool;
+    fn midpoint(&self, rhs: Self) -> Self;
 }
 
-impl GetType for i64 {
-    fn get_type() -> ValueType {
-        ValueType::SignedInteger
-    }
-}
+// TODO cast_signed and cast_unsigned
 
-impl Neg for i64 {
+impl IntOps for i64 {
     fn neg(&self, _stack_trace: &[SourceReference]) -> ExpressionResult<Value> {
         Ok(SignedInteger::from(-self).into())
+    }
+
+    fn count_ones(&self) -> u64 {
+        i64::count_ones(*self) as u64
+    }
+
+    fn count_zeros(&self) -> u64 {
+        i64::count_zeros(*self) as u64
+    }
+
+    fn leading_zeros(&self) -> u64 {
+        i64::leading_zeros(*self) as u64
+    }
+
+    fn trailing_zeros(&self) -> u64 {
+        i64::trailing_zeros(*self) as u64
+    }
+
+    fn leading_ones(&self) -> u64 {
+        i64::leading_ones(*self) as u64
+    }
+
+    fn trailing_ones(&self) -> u64 {
+        i64::trailing_ones(*self) as u64
+    }
+
+    fn rotate_left(&self, by: u64) -> Self {
+        i64::rotate_left(*self, by.min(u32::MIN as u64) as u32)
+    }
+
+    fn rotate_right(&self, by: u64) -> Self {
+        i64::rotate_right(*self, by.min(u32::MIN as u64) as u32)
+    }
+
+    fn reverse_bits(&self) -> Self {
+        i64::reverse_bits(*self)
+    }
+
+    fn abs(&self) -> Self {
+        i64::abs(*self)
+    }
+
+    fn sqrt(&self) -> Self {
+        i64::isqrt(*self)
+    }
+
+    fn abs_diff(&self, rhs: Self) -> u64 {
+        i64::abs_diff(*self, rhs)
+    }
+
+    fn signum(&self) -> i64 {
+        i64::signum(*self)
+    }
+
+    fn is_positive(&self) -> bool {
+        i64::is_positive(*self)
+    }
+
+    fn is_negative(&self) -> bool {
+        i64::is_negative(*self)
+    }
+
+    fn midpoint(&self, rhs: Self) -> Self {
+        i64::midpoint(*self, rhs)
     }
 }
 
@@ -279,19 +358,87 @@ impl StaticTypeName for Integer<i64> {
     }
 }
 
-impl GetType for u64 {
-    fn get_type() -> ValueType {
-        ValueType::UnsignedInteger
+impl StaticType for i64 {
+    fn static_type() -> ValueType {
+        ValueType::SignedInteger
     }
 }
 
-impl Neg for u64 {
+impl IntOps for u64 {
     fn neg(&self, stack_trace: &[SourceReference]) -> ExpressionResult<Value> {
         Err(super::UnsupportedOperationError {
             type_name: UnsignedInteger::static_type_name().into(),
             operation_name: "negate",
         }
         .to_error(stack_trace))
+    }
+
+    fn count_ones(&self) -> u64 {
+        u64::count_ones(*self) as u64
+    }
+
+    fn count_zeros(&self) -> u64 {
+        u64::count_zeros(*self) as u64
+    }
+
+    fn leading_zeros(&self) -> u64 {
+        u64::leading_zeros(*self) as u64
+    }
+
+    fn trailing_zeros(&self) -> u64 {
+        u64::trailing_zeros(*self) as u64
+    }
+
+    fn leading_ones(&self) -> u64 {
+        u64::leading_ones(*self) as u64
+    }
+
+    fn trailing_ones(&self) -> u64 {
+        u64::trailing_ones(*self) as u64
+    }
+
+    fn rotate_left(&self, by: u64) -> Self {
+        u64::rotate_left(*self, by.min(u32::MIN as u64) as u32)
+    }
+
+    fn rotate_right(&self, by: u64) -> Self {
+        u64::rotate_right(*self, by.min(u32::MIN as u64) as u32)
+    }
+
+    fn reverse_bits(&self) -> Self {
+        u64::reverse_bits(*self)
+    }
+
+    fn abs(&self) -> Self {
+        *self
+    }
+
+    fn sqrt(&self) -> Self {
+        u64::isqrt(*self)
+    }
+
+    fn abs_diff(&self, rhs: Self) -> u64 {
+        u64::abs_diff(*self, rhs)
+    }
+
+    fn signum(&self) -> i64 {
+        if *self > 0 {
+            1
+        } else {
+            0
+        }
+    }
+
+    fn is_positive(&self) -> bool {
+        *self > 0
+    }
+
+    fn is_negative(&self) -> bool {
+        false
+    }
+
+    fn midpoint(&self, rhs: Self) -> Self {
+        u64::midpoint(*self, rhs)
     }
 }
 
@@ -301,8 +448,16 @@ impl StaticTypeName for Integer<u64> {
     }
 }
 
+impl StaticType for u64 {
+    fn static_type() -> ValueType {
+        ValueType::UnsignedInteger
+    }
+}
+
 pub type SignedInteger = Integer<i64>;
 pub type UnsignedInteger = Integer<u64>;
+
+pub fn register_methods(database: &mut BuiltinCallableDatabase) {}
 
 #[cfg(test)]
 mod test {
