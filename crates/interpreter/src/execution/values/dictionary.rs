@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, fmt::Display, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
 
 use hashable_map::HashableMap;
 
@@ -76,8 +76,8 @@ impl Object for Dictionary {
 }
 
 impl StaticTypeName for Dictionary {
-    fn static_type_name() -> &'static str {
-        "Dictionary"
+    fn static_type_name() -> Cow<'static, str> {
+        "Dictionary".into()
     }
 }
 

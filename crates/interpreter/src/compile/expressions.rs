@@ -564,7 +564,6 @@ pub enum BinaryExpressionOperation {
     Add,
     Sub,
     Div,
-    DivDiv,
     Lt,
     LtLt,
     LtEq,
@@ -573,6 +572,7 @@ pub enum BinaryExpressionOperation {
     GtEq,
     GtGt,
     BitXor,
+    Xor,
     Or,
     OrOr,
 }
@@ -590,7 +590,7 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for BinaryExpression {
         input: &'i str,
         value: nodes::BinaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        type Operation<'t> = nodes::anon_unions::NotEq_And_AndAnd_Mul_MulMul_Add_Sub_Div_DivDiv_Lt_LtLt_LtEq_EqEq_Gt_GtEq_GtGt_BitXor_Or_OrOr<'t>;
+        type Operation<'t> = nodes::anon_unions::NotEq_And_AndAnd_Mul_MulMul_Add_Sub_Div_Lt_LtLt_LtEq_EqEq_Gt_GtEq_GtGt_BitXor_BitXorBitXor_Or_OrOr<'t>;
 
         let operation = value.op()?;
 
@@ -609,9 +609,6 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for BinaryExpression {
             Operation::Add(add) => AstNode::new(file, &add, BinaryExpressionOperation::Add),
             Operation::Sub(sub) => AstNode::new(file, &sub, BinaryExpressionOperation::Sub),
             Operation::Div(div) => AstNode::new(file, &div, BinaryExpressionOperation::Div),
-            Operation::DivDiv(div_div) => {
-                AstNode::new(file, &div_div, BinaryExpressionOperation::DivDiv)
-            }
             Operation::Lt(lt) => AstNode::new(file, &lt, BinaryExpressionOperation::Lt),
             Operation::LtLt(lt_lt) => AstNode::new(file, &lt_lt, BinaryExpressionOperation::LtLt),
             Operation::LtEq(lt_eq) => AstNode::new(file, &lt_eq, BinaryExpressionOperation::LtEq),
@@ -621,6 +618,9 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for BinaryExpression {
             Operation::GtGt(gt_gt) => AstNode::new(file, &gt_gt, BinaryExpressionOperation::GtGt),
             Operation::BitXor(bit_xor) => {
                 AstNode::new(file, &bit_xor, BinaryExpressionOperation::BitXor)
+            }
+            Operation::BitXorBitXor(xor_xor) => {
+                AstNode::new(file, &xor_xor, BinaryExpressionOperation::Xor)
             }
             Operation::Or(or) => AstNode::new(file, &or, BinaryExpressionOperation::Or),
             Operation::OrOr(or_or) => AstNode::new(file, &or_or, BinaryExpressionOperation::OrOr),

@@ -205,9 +205,9 @@ fn execute_unary_expression(
         let node = &expression.node;
         let value = execute_expression(log, stack_trace, stack, database, &node.expression)?;
         match node.operation.node {
-            UnaryExpressionOperation::Add => value.unary_plus(log, stack_trace),
-            UnaryExpressionOperation::Sub => value.unary_minus(log, stack_trace),
-            UnaryExpressionOperation::Not => value.unary_not(log, stack_trace),
+            UnaryExpressionOperation::Add => value.unary_plus(log, stack_trace, database),
+            UnaryExpressionOperation::Sub => value.unary_minus(log, stack_trace, database),
+            UnaryExpressionOperation::Not => value.unary_not(log, stack_trace, database),
         }
     })
 }
@@ -291,54 +291,74 @@ fn execute_binary_expression(
                 BinaryExpressionOperation::NotEq => Ok(values::Boolean(
                     !value_a
                         .clone()
-                        .cmp(log, stack_trace, value_b.clone())
+                        .cmp(log, stack_trace, database, value_b.clone())
                         .map(|ord| matches!(ord, Ordering::Equal))
-                        .or_else(|_| value_a.eq(log, stack_trace, value_b))?,
+                        .or_else(|_| value_a.eq(log, stack_trace, database, value_b))?,
                 )
                 .into()),
-                BinaryExpressionOperation::And => value_a.bit_and(log, stack_trace, value_b),
-                BinaryExpressionOperation::AndAnd => value_a.and(log, stack_trace, value_b),
-                BinaryExpressionOperation::Mul => value_a.multiply(log, stack_trace, value_b),
-                BinaryExpressionOperation::MulMul => value_a.exponent(log, stack_trace, value_b),
-                BinaryExpressionOperation::Add => value_a.addition(log, stack_trace, value_b),
-                BinaryExpressionOperation::Sub => value_a.subtraction(log, stack_trace, value_b),
-                BinaryExpressionOperation::Div => value_a.divide(log, stack_trace, value_b),
-                BinaryExpressionOperation::DivDiv => {
-                    value_a.floor_divide(log, stack_trace, value_b)
+                BinaryExpressionOperation::And => {
+                    value_a.bit_and(log, stack_trace, database, value_b)
+                }
+                BinaryExpressionOperation::AndAnd => {
+                    value_a.and(log, stack_trace, database, value_b)
+                }
+                BinaryExpressionOperation::Mul => {
+                    value_a.multiply(log, stack_trace, database, value_b)
+                }
+                BinaryExpressionOperation::MulMul => {
+                    value_a.exponent(log, stack_trace, database, value_b)
+                }
+                BinaryExpressionOperation::Add => {
+                    value_a.addition(log, stack_trace, database, value_b)
+                }
+                BinaryExpressionOperation::Sub => {
+                    value_a.subtraction(log, stack_trace, database, value_b)
+                }
+                BinaryExpressionOperation::Div => {
+                    value_a.divide(log, stack_trace, database, value_b)
                 }
                 BinaryExpressionOperation::Lt => Ok(values::Boolean(matches!(
-                    value_a.cmp(log, stack_trace, value_b)?,
+                    value_a.cmp(log, stack_trace, database, value_b)?,
                     Ordering::Less
                 ))
                 .into()),
-                BinaryExpressionOperation::LtLt => value_a.left_shift(log, stack_trace, value_b),
+                BinaryExpressionOperation::LtLt => {
+                    value_a.left_shift(log, stack_trace, database, value_b)
+                }
                 BinaryExpressionOperation::LtEq => Ok(values::Boolean(matches!(
-                    value_a.cmp(log, stack_trace, value_b)?,
+                    value_a.cmp(log, stack_trace, database, value_b)?,
                     Ordering::Less | Ordering::Equal
                 ))
                 .into()),
                 BinaryExpressionOperation::EqEq => Ok(values::Boolean(
                     value_a
                         .clone()
-                        .cmp(log, stack_trace, value_b.clone())
+                        .cmp(log, stack_trace, database, value_b.clone())
                         .map(|ord| matches!(ord, Ordering::Equal))
-                        .or_else(|_| value_a.eq(log, stack_trace, value_b))?,
+                        .or_else(|_| value_a.eq(log, stack_trace, database, value_b))?,
                 )
                 .into()),
                 BinaryExpressionOperation::Gt => Ok(values::Boolean(matches!(
-                    value_a.cmp(log, stack_trace, value_b)?,
+                    value_a.cmp(log, stack_trace, database, value_b)?,
                     Ordering::Greater
                 ))
                 .into()),
                 BinaryExpressionOperation::GtEq => Ok(values::Boolean(matches!(
-                    value_a.cmp(log, stack_trace, value_b)?,
+                    value_a.cmp(log, stack_trace, database, value_b)?,
                     Ordering::Equal | Ordering::Greater
                 ))
                 .into()),
-                BinaryExpressionOperation::GtGt => value_a.right_shift(log, stack_trace, value_b),
-                BinaryExpressionOperation::BitXor => value_a.bit_xor(log, stack_trace, value_b),
-                BinaryExpressionOperation::Or => value_a.bit_or(log, stack_trace, value_b),
-                BinaryExpressionOperation::OrOr => value_a.or(log, stack_trace, value_b),
+                BinaryExpressionOperation::GtGt => {
+                    value_a.right_shift(log, stack_trace, database, value_b)
+                }
+                BinaryExpressionOperation::BitXor => {
+                    value_a.bit_xor(log, stack_trace, database, value_b)
+                }
+                BinaryExpressionOperation::Xor => value_a.xor(log, stack_trace, database, value_b),
+                BinaryExpressionOperation::Or => {
+                    value_a.bit_or(log, stack_trace, database, value_b)
+                }
+                BinaryExpressionOperation::OrOr => value_a.or(log, stack_trace, database, value_b),
             }
         },
     )

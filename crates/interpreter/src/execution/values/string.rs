@@ -29,6 +29,8 @@ use crate::{
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
 
+use std::borrow::Cow;
+
 #[derive(Debug, Hash, Clone, Eq, PartialEq)]
 pub struct IString(pub ImString);
 
@@ -41,6 +43,7 @@ impl Object for IString {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<bool> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -95,8 +98,8 @@ impl Object for IString {
 }
 
 impl StaticTypeName for IString {
-    fn static_type_name() -> &'static str {
-        "String"
+    fn static_type_name() -> Cow<'static, str> {
+        "String".into()
     }
 }
 

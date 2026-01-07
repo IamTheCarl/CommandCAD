@@ -26,6 +26,8 @@ use crate::{
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
 
+use std::borrow::Cow;
+
 #[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
 pub struct Boolean(pub bool);
 
@@ -38,6 +40,7 @@ impl Object for Boolean {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<bool> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -47,6 +50,7 @@ impl Object for Boolean {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -57,6 +61,7 @@ impl Object for Boolean {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -67,6 +72,7 @@ impl Object for Boolean {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -77,14 +83,15 @@ impl Object for Boolean {
         self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         Ok(Self(!self.0).into())
     }
 }
 
 impl StaticTypeName for Boolean {
-    fn static_type_name() -> &'static str {
-        "Boolean"
+    fn static_type_name() -> Cow<'static, str> {
+        "Boolean".into()
     }
 }
 

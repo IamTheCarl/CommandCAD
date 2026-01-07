@@ -20,6 +20,8 @@ use crate::execution::values::{closure::BuiltinCallableDatabase, StaticType};
 
 use super::{value_type::ValueType, Object, StaticTypeName};
 
+use std::borrow::Cow;
+
 #[derive(Debug, Hash, Clone, Copy, Eq, PartialEq)]
 pub struct ValueNone;
 
@@ -30,8 +32,8 @@ impl Object for ValueNone {
 }
 
 impl StaticTypeName for ValueNone {
-    fn static_type_name() -> &'static str {
-        "None"
+    fn static_type_name() -> Cow<'static, str> {
+        "None".into()
     }
 }
 

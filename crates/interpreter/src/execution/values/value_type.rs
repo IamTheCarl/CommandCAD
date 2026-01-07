@@ -126,6 +126,10 @@ impl ValueType {
             (Self::Vector2(Option::None), Self::Vector2(_)) => Ok(()),
             (Self::Vector3(Option::None), Self::Vector3(_)) => Ok(()),
             (Self::Vector4(Option::None), Self::Vector4(_)) => Ok(()),
+            (Self::List(Option::None), Self::List(_)) => Ok(()),
+            (Self::List(Some(our_type)), Self::List(Some(their_type))) => {
+                our_type.check_other_qualifies(their_type)
+            }
             (Self::Closure(our_signature), Self::Closure(their_signature)) => {
                 our_signature
                     .argument_type
@@ -183,6 +187,7 @@ impl Object for ValueType {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: Self = rhs.downcast(stack_trace)?;
@@ -209,8 +214,8 @@ impl Object for ValueType {
 }
 
 impl StaticTypeName for ValueType {
-    fn static_type_name() -> &'static str {
-        "ValueType"
+    fn static_type_name() -> Cow<'static, str> {
+        "ValueType".into()
     }
 }
 
@@ -435,8 +440,8 @@ impl Display for StructDefinition {
 }
 
 impl StaticTypeName for StructDefinition {
-    fn static_type_name() -> &'static str {
-        "Struct Definition"
+    fn static_type_name() -> Cow<'static, str> {
+        "Struct Definition".into()
     }
 }
 

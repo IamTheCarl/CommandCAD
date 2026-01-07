@@ -190,6 +190,7 @@ impl Object for Scalar {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = self.unpack_same_dimension(stack_trace, rhs)?;
@@ -206,6 +207,7 @@ impl Object for Scalar {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = self.unpack_same_dimension(stack_trace, rhs)?;
@@ -222,6 +224,7 @@ impl Object for Scalar {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
@@ -232,16 +235,32 @@ impl Object for Scalar {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
         self.divide_by_measurement(stack_trace, rhs)
             .map(|rhs| rhs.into())
     }
+    fn exponent(
+        self,
+        _log: &mut dyn RuntimeLog,
+        stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
+        rhs: Value,
+    ) -> ExpressionResult<Value> {
+        let rhs = rhs.downcast::<Self>(stack_trace)?;
+        Ok(Scalar {
+            dimension: self.dimension * *rhs.value as i8,
+            value: Float::new(self.value.powf(*rhs.value)).unwrap_not_nan(stack_trace)?,
+        }
+        .into())
+    }
     fn unary_plus(
         self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         Ok(self.clone().into())
     }
@@ -249,6 +268,7 @@ impl Object for Scalar {
         self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         Ok(Self {
             value: -self.value,
@@ -260,6 +280,7 @@ impl Object for Scalar {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Ordering> {
         let rhs = rhs.downcast_ref::<Self>(stack_trace)?;
@@ -337,8 +358,8 @@ impl Object for Scalar {
 }
 
 impl StaticTypeName for Scalar {
-    fn static_type_name() -> &'static str {
-        "Scalar"
+    fn static_type_name() -> Cow<'static, str> {
+        "Scalar".into()
     }
 }
 
@@ -458,20 +479,6 @@ mod methods {
 }
 
 pub fn register_methods(database: &mut BuiltinCallableDatabase) {
-    // build_method!(
-    //     database,
-    //     forward = methods::Qualify, "ValueType::qualify", (
-    //         _log: &mut dyn RuntimeLog,
-    //         stack_trace: &mut Vec<SourceReference>,
-    //         _stack: &mut Stack,
-    //         database: &BuiltinCallableDatabase,
-    //         this: ValueType,
-    //         to_qualify: Value) -> ValueNone
-    //     {
-    //         this.check_other_qualifies(&to_qualify.get_type(database)).map_err(|error| error.to_error(stack_trace.iter()))?;
-    //         Ok(values::ValueNone)
-    //     }
-    // );
     build_method!(
         database,
         forward = methods::ToSignedInteger, "Scalar::to_signed_integer", (
@@ -1084,8 +1091,8 @@ macro_rules! build_scalar_type {
         }
 
         impl StaticTypeName for $name {
-            fn static_type_name() -> &'static str {
-                stringify!($name)
+            fn static_type_name() -> Cow<'static, str> {
+                stringify!($name).into()
             }
         }
 

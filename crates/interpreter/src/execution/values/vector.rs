@@ -18,6 +18,7 @@ use crate::{
 };
 
 use std::{
+    borrow::Cow,
     hash::Hash,
     ops::{Add, Div, Mul, Neg, Sub},
 };
@@ -50,6 +51,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = self.unpack_same_dimension(stack_trace, rhs)?;
@@ -61,6 +63,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = self.unpack_same_dimension(stack_trace, rhs)?;
@@ -72,6 +75,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
@@ -84,6 +88,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
@@ -96,6 +101,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         Ok(self.clone().into())
     }
@@ -103,6 +109,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         Ok(Self {
             value: -self.value,
@@ -115,6 +122,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<bool> {
         let rhs: Self = rhs.downcast(stack_trace)?;
@@ -245,7 +253,7 @@ impl<I> StaticTypeName for Vector<I>
 where
     I: StaticTypeName,
 {
-    fn static_type_name() -> &'static str {
+    fn static_type_name() -> Cow<'static, str> {
         I::static_type_name()
     }
 }
@@ -751,8 +759,8 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
     }
 }
 impl StaticTypeName for nalgebra::Vector2<Float> {
-    fn static_type_name() -> &'static str {
-        "Vector2"
+    fn static_type_name() -> Cow<'static, str> {
+        "Vector2".into()
     }
 }
 
@@ -875,8 +883,8 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
     }
 }
 impl StaticTypeName for nalgebra::Vector3<Float> {
-    fn static_type_name() -> &'static str {
-        "Vector3"
+    fn static_type_name() -> Cow<'static, str> {
+        "Vector3".into()
     }
 }
 
@@ -1005,8 +1013,8 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
     }
 }
 impl StaticTypeName for nalgebra::Vector4<Float> {
-    fn static_type_name() -> &'static str {
-        "Vector4"
+    fn static_type_name() -> Cow<'static, str> {
+        "Vector4".into()
     }
 }
 

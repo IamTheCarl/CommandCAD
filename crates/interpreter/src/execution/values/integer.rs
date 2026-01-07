@@ -21,6 +21,7 @@ use num_traits::{
     pow::checked_pow, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, One, ToPrimitive,
 };
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     hash::Hash,
     ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr},
@@ -64,6 +65,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -73,6 +75,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -82,6 +85,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -92,6 +96,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Ordering> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -101,6 +106,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -116,6 +122,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -131,6 +138,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -146,6 +154,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -156,18 +165,11 @@ where
         )
         .into())
     }
-    fn floor_divide(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.divide(log, stack_trace, rhs)
-    }
     fn exponent(
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -192,6 +194,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -201,6 +204,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
@@ -210,6 +214,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         Ok(self.clone().into())
     }
@@ -217,6 +222,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         self.0.neg(stack_trace).into()
     }
@@ -224,6 +230,7 @@ where
         self,
         _log: &mut dyn RuntimeLog,
         _stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         Ok(Self(!self.0).into())
     }
@@ -439,8 +446,8 @@ impl IntOps for i64 {
 }
 
 impl StaticTypeName for Integer<i64> {
-    fn static_type_name() -> &'static str {
-        "Signed Integer"
+    fn static_type_name() -> Cow<'static, str> {
+        "Signed Integer".into()
     }
 }
 
@@ -531,8 +538,8 @@ impl IntOps for u64 {
 }
 
 impl StaticTypeName for Integer<u64> {
-    fn static_type_name() -> &'static str {
-        "Unsigned Integer"
+    fn static_type_name() -> Cow<'static, str> {
+        "Unsigned Integer".into()
     }
 }
 

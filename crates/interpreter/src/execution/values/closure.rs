@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::TypeId, collections::HashMap, fmt::Display, sync::Arc};
+use std::{any::TypeId, borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
 
 use hashable_map::HashableMap;
 
@@ -48,6 +48,7 @@ impl BuiltinCallableDatabase {
         super::scalar::register_methods(&mut database);
         super::vector::register_methods(&mut database);
         super::value_type::register_methods(&mut database);
+        super::list::register_methods(&mut database);
 
         database
     }
@@ -415,8 +416,8 @@ impl Object for UserClosure {
 }
 
 impl StaticTypeName for UserClosure {
-    fn static_type_name() -> &'static str {
-        "Closure"
+    fn static_type_name() -> Cow<'static, str> {
+        "Closure".into()
     }
 }
 
@@ -506,8 +507,8 @@ macro_rules! build_closure_type {
         }
 
         impl $crate::execution::values::StaticTypeName for $name {
-            fn static_type_name() -> &'static str {
-                "Closure"
+            fn static_type_name() -> std::borrow::Cow<'static, str> {
+                "Closure".into()
             }
         }
 
@@ -744,8 +745,8 @@ impl Object for BuiltinFunction {
 }
 
 impl StaticTypeName for BuiltinFunction {
-    fn static_type_name() -> &'static str {
-        "Builtin Function"
+    fn static_type_name() -> Cow<'static, str> {
+        "Builtin Function".into()
     }
 }
 

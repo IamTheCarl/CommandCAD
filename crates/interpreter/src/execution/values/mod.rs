@@ -62,7 +62,40 @@ pub use value_type::{StructDefinition, StructMember, ValueType};
 pub trait StaticTypeName {
     /// Provides the type name without having an instance of the object.
     /// This is used for formatting error messages when failing to cast to an expected type.
-    fn static_type_name() -> &'static str;
+    fn static_type_name() -> Cow<'static, str>;
+}
+
+impl<V> StaticTypeName for Option<V>
+where
+    V: StaticTypeName,
+{
+    fn static_type_name() -> Cow<'static, str> {
+        format!("None | {}", V::static_type_name()).into()
+    }
+}
+
+impl<V> IntoVariant<Option<V>> for Value
+where
+    Value: IntoVariant<V> + IntoVariant<ValueNone>,
+{
+    fn into_variant(self) -> Result<Option<V>, Self>
+    where
+        Self: Sized,
+    {
+        let value: Result<V, Self> = self.into_variant();
+
+        match value {
+            Ok(value) => Ok(Some(value)),
+            Err(original) => {
+                let value: Result<ValueNone, Self> = original.into_variant();
+
+                match value {
+                    Ok(_none) => Ok(Option::None),
+                    Err(original) => Err(original),
+                }
+            }
+        }
+    }
 }
 
 pub trait StaticType {
@@ -71,6 +104,15 @@ pub trait StaticType {
     // Not all types provide this, and thus, not all types can be used with
     // built in functions.
     fn static_type() -> ValueType;
+}
+
+impl<V> StaticType for Option<V>
+where
+    V: StaticType,
+{
+    fn static_type() -> ValueType {
+        ValueType::MultiType(Box::new(ValueType::TypeNone), Box::new(V::static_type()))
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -141,6 +183,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "logical and")
@@ -149,6 +192,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "logical or")
@@ -157,6 +201,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "logical xor")
@@ -165,6 +210,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "binary and")
@@ -173,6 +219,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "binary or")
@@ -181,6 +228,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "binary xor")
@@ -189,6 +237,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Ordering> {
         UnsupportedOperationError::raise(&self, stack_trace, "compare")
@@ -197,14 +246,19 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        database: &BuiltinCallableDatabase,
         rhs: Value,
     ) -> ExpressionResult<bool> {
-        Ok(matches!(self.cmp(log, stack_trace, rhs)?, Ordering::Equal))
+        Ok(matches!(
+            self.cmp(log, stack_trace, database, rhs)?,
+            Ordering::Equal
+        ))
     }
     fn addition(
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "addition")
@@ -213,6 +267,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "subtraction")
@@ -221,6 +276,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "multiply")
@@ -229,22 +285,16 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "divide")
-    }
-    fn floor_divide(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "floor_divide")
     }
     fn exponent(
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "exponent")
@@ -253,6 +303,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "left shift")
@@ -261,6 +312,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
         _rhs: Value,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "right shift")
@@ -269,7 +321,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         &self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
-        _callable_database: &BuiltinCallableDatabase,
+        _database: &BuiltinCallableDatabase,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         Err(MissingAttributeError {
@@ -282,30 +334,16 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         _log: &mut dyn RuntimeLog,
         stack_trace: &mut Vec<SourceReference>,
         _stack: &mut Stack,
-        _callable_database: &BuiltinCallableDatabase,
+        _database: &BuiltinCallableDatabase,
         _argument: Dictionary,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, stack_trace, "call")
-    }
-    fn index(
-        &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _index: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "index")
-    }
-    fn iterate(
-        &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-    ) -> ExpressionResult<Box<dyn Iterator<Item = Value>>> {
-        UnsupportedOperationError::raise(self, stack_trace, "iterate")
     }
     fn unary_plus(
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "unary plus")
     }
@@ -313,6 +351,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "unary minus")
     }
@@ -320,6 +359,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         self,
         _log: &mut dyn RuntimeLog,
         stack_trace: &[SourceReference],
+        _database: &BuiltinCallableDatabase,
     ) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, stack_trace, "unary not")
     }
@@ -347,29 +387,15 @@ pub enum Value {
     Dictionary(Dictionary),
     List(List),
     String(IString),
-    // Range(Range),
-    // Closure(Closure<S>),
     Vector2(Vector2),
     Vector3(Vector3),
     Vector4(Vector4),
-    // Transform2D,
-    // Transform3D,
     // Quaternion,
-    // Cycle,
-    // Region,
-    // Sketch,
-    // Surface,
-    // Solid,
-    // Shell,
-    // Face,
-    // Curve,
-    // HalfEdge,
-    // Vertex,
 }
 
 impl StaticTypeName for Value {
-    fn static_type_name() -> &'static str {
-        "Value"
+    fn static_type_name() -> Cow<'static, str> {
+        "Value".into()
     }
 }
 
