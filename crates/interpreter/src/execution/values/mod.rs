@@ -56,6 +56,9 @@ pub use list::List;
 mod string;
 pub use string::IString;
 
+mod file;
+pub use file::File;
+
 mod value_type;
 pub use value_type::{StructDefinition, StructMember, ValueType};
 
@@ -390,6 +393,7 @@ pub enum Value {
     Vector2(Vector2),
     Vector3(Vector3),
     Vector4(Vector4),
+    File,
     // Quaternion,
 }
 

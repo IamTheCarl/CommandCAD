@@ -226,7 +226,10 @@ where
         if !value.is_nan() {
             Ok(Self { dimension, value })
         } else {
-            Err(GenericFailure("Result of arithmetic operation is NaN").to_error(stack_trace))
+            Err(
+                GenericFailure("Result of arithmetic operation is NaN".into())
+                    .to_error(stack_trace),
+            )
         }
     }
 
@@ -509,7 +512,7 @@ mod methods {
 
                 for component in result.iter() {
                     if component.dimension != dimension {
-                        return Err(GenericFailure("All components of a vector must match")
+                        return Err(GenericFailure("All components of a vector must match".into())
                             .to_error(stack_trace.iter()));
                     }
                 }
@@ -684,8 +687,10 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
                 value: Self::new(*x.value, *y.value),
             })
         } else {
-            Err(GenericFailure("All components of a vector must match")
-                .to_error(stack_trace.iter()))
+            Err(
+                GenericFailure("All components of a vector must match".into())
+                    .to_error(stack_trace.iter()),
+            )
         }
     }
 
@@ -800,8 +805,10 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
                 value: Self::new(*x.value, *y.value, *z.value),
             })
         } else {
-            Err(GenericFailure("All components of a vector must match")
-                .to_error(stack_trace.iter()))
+            Err(
+                GenericFailure("All components of a vector must match".into())
+                    .to_error(stack_trace.iter()),
+            )
         }
     }
 
@@ -925,8 +932,10 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
                 value: Self::new(*x.value, *y.value, *z.value, *w.value),
             })
         } else {
-            Err(GenericFailure("All components of a vector must match")
-                .to_error(stack_trace.iter()))
+            Err(
+                GenericFailure("All components of a vector must match".into())
+                    .to_error(stack_trace.iter()),
+            )
         }
     }
 

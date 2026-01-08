@@ -49,6 +49,7 @@ impl BuiltinCallableDatabase {
         super::vector::register_methods(&mut database);
         super::value_type::register_methods(&mut database);
         super::list::register_methods(&mut database);
+        super::file::register_methods(&mut database);
 
         database
     }

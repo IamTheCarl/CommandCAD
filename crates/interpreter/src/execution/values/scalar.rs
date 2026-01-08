@@ -43,9 +43,10 @@ impl UnwrapNotNan for std::result::Result<Float, FloatIsNan> {
     fn unwrap_not_nan(self, stack_trace: &[SourceReference]) -> ExpressionResult<Float> {
         match self {
             Ok(number) => Ok(number),
-            Err(_float_is_nan) => {
-                Err(GenericFailure("Result of arithmetic operation is NaN").to_error(stack_trace))
-            }
+            Err(_float_is_nan) => Err(GenericFailure(
+                "Result of arithmetic operation is NaN".into(),
+            )
+            .to_error(stack_trace)),
         }
     }
 }
@@ -399,7 +400,7 @@ impl Scalar {
         if self.dimension.is_zero_dimension() {
             Ok(())
         } else {
-            Err(GenericFailure("Inverse trigonometric functions can only be used with zero dimensional types (Angles, Ratios)").to_error(stack_trace))
+            Err(GenericFailure("Inverse trigonometric functions can only be used with zero dimensional types (Angles, Ratios)".into()).to_error(stack_trace))
         }
     }
 
@@ -408,7 +409,7 @@ impl Scalar {
             Ok(())
         } else {
             Err(
-                GenericFailure("Trigonometric functions can only be used with angles")
+                GenericFailure("Trigonometric functions can only be used with angles".into())
                     .to_error(stack_trace),
             )
         }
@@ -491,7 +492,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if this.dimension.is_zero_dimension() {
                 Ok(values::SignedInteger::from(*this.value as i64).into())
             } else {
-                Err(GenericFailure("Only zero dimensional scalars can be converted into an integer")
+                Err(GenericFailure("Only zero dimensional scalars can be converted into an integer".into())
                     .to_error(stack_trace.iter()))
             }
         }
@@ -509,11 +510,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 if *this.value >= 0.0 {
                     Ok(values::UnsignedInteger::from(*this.value as u64).into())
                 } else {
-                    Err(GenericFailure("Negative values cannot be converted to signed integers")
+                    Err(GenericFailure("Negative values cannot be converted to signed integers".into())
                         .to_error(stack_trace.iter()))
                 }
             } else {
-                Err(GenericFailure("Only zero dimensional scalars can be converted into an integer")
+                Err(GenericFailure("Only zero dimensional scalars can be converted into an integer".into())
                     .to_error(stack_trace.iter()))
             }
         }

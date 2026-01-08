@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::Any, fmt::Display};
+use std::{any::Any, borrow::Cow, fmt::Display};
 
 use crate::compile::SourceReference;
 
@@ -42,7 +42,7 @@ impl Display for Error {
 
 /// A generic error that will just display a static message.
 #[derive(Debug, Eq, PartialEq)]
-pub struct GenericFailure(pub &'static str);
+pub struct GenericFailure(pub Cow<'static, str>);
 
 impl ErrorType for GenericFailure {}
 

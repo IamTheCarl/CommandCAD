@@ -500,7 +500,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if let Some(slice) = slice {
                 Ok(List::from_iter(database, slice.into_iter().cloned()))
             } else {
-                Err(GenericFailure("Slice out of range").to_error(stack_trace.iter()))
+                Err(GenericFailure("Slice out of range".into()).to_error(stack_trace.iter()))
             }
         }
     );
@@ -519,7 +519,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if let Some(slice) = slice {
                 Ok(slice.clone())
             } else {
-                Err(GenericFailure("Index out of range").to_error(stack_trace.iter()))
+                Err(GenericFailure("Index out of range".into()).to_error(stack_trace.iter()))
             }
         }
     );

@@ -35,7 +35,7 @@ use crate::{
         stack::Stack,
         values::{
             self, closure::BuiltinCallableDatabase, dictionary::DictionaryData, BuiltinFunction,
-            Dictionary, IString, MissingAttributeError,
+            Dictionary, File, IString, MissingAttributeError,
         },
     },
 };
@@ -56,6 +56,7 @@ pub enum ValueType {
     Vector3(Option<Dimension>),
     Vector4(Option<Dimension>),
     MultiType(Box<ValueType>, Box<ValueType>),
+    File,
     Any,
 }
 
@@ -87,6 +88,7 @@ impl ValueType {
             Self::Vector3(Option::None) => "Vector3".into(),
             Self::Vector4(Option::None) => "Vector4".into(),
             Self::String => IString::static_type_name().into(),
+            Self::File => File::static_type_name().into(),
             _ => format!("{}", self).into(),
         }
     }

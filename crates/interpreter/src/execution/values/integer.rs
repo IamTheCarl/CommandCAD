@@ -112,7 +112,7 @@ where
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0.checked_add(&rhs.0).ok_or_else(|| {
             GenericFailure(
-                "Integer overflow: The computed value is too large to store in the integer",
+                "Integer overflow: The computed value is too large to store in the integer".into(),
             )
             .to_error(stack_trace)
         })?)
@@ -128,7 +128,7 @@ where
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0.checked_sub(&rhs.0).ok_or_else(|| {
             GenericFailure(
-                "Integer underflow: The computed value is too small to store in the integer",
+                "Integer underflow: The computed value is too small to store in the integer".into(),
             )
             .to_error(stack_trace)
         })?)
@@ -144,7 +144,7 @@ where
         let rhs: &Self = rhs.downcast_ref(stack_trace)?;
         Ok(Self(self.0.checked_mul(&rhs.0).ok_or_else(|| {
             GenericFailure(
-                "Integer overflow: The computed value is too large to store in the integer",
+                "Integer overflow: The computed value is too large to store in the integer".into(),
             )
             .to_error(stack_trace)
         })?)
@@ -161,7 +161,7 @@ where
         Ok(Self(
             self.0
                 .checked_div(&rhs.0)
-                .ok_or_else(|| GenericFailure("The computed value is either too large to store in the integer or you attempted to divide by zero").to_error(stack_trace))?,
+                .ok_or_else(|| GenericFailure("The computed value is either too large to store in the integer or you attempted to divide by zero".into()).to_error(stack_trace))?,
         )
         .into())
     }
@@ -177,14 +177,14 @@ where
         // This failure can only happen on 32bit (or less) systems.
         let rhs = rhs.0.to_usize().ok_or_else(|| {
             GenericFailure(
-                "Integer overflow: The requested exponent is larger than the host machine word size",
+                "Integer overflow: The requested exponent is larger than the host machine word size".into(),
             )
             .to_error(stack_trace)
         })?;
 
         Ok(Self(checked_pow(self.0, rhs).ok_or_else(|| {
             GenericFailure(
-                "Integer overflow: The computed value is too large to store in the integer",
+                "Integer overflow: The computed value is too large to store in the integer".into(),
             )
             .to_error(stack_trace)
         })?)
