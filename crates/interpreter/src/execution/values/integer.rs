@@ -27,17 +27,14 @@ use std::{
     ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr},
 };
 
-use crate::{
-    compile::SourceReference,
-    execution::{
-        errors::{ExpressionResult, GenericFailure, Raise},
-        logging::RuntimeLog,
-        values::{
-            closure::BuiltinCallableDatabase, integer::methods::MethodSet, BuiltinFunction,
-            MissingAttributeError, StaticType,
-        },
-        Stack,
+use crate::execution::{
+    errors::{ExpressionResult, GenericFailure, Raise},
+    logging::StackTrace,
+    values::{
+        closure::BuiltinCallableDatabase, integer::methods::MethodSet, BuiltinFunction,
+        MissingAttributeError, StaticType,
     },
+    ExecutionContext,
 };
 
 use super::{value_type::ValueType, Object, StaticTypeName, Value};
@@ -57,188 +54,105 @@ where
     Self: StaticTypeName + Into<Value>,
     Value: AsVariant<Self>,
 {
-    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
+    fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         I::static_type()
     }
 
-    fn bit_and(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(self.0 & rhs.0).into())
     }
-    fn bit_or(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(self.0 | rhs.0).into())
     }
-    fn bit_xor(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(self.0 ^ rhs.0).into())
     }
 
-    fn cmp(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Ordering> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Ordering> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(self.0.cmp(&rhs.0))
     }
-    fn addition(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_add(&rhs.0).ok_or_else(|| {
             GenericFailure(
                 "Integer overflow: The computed value is too large to store in the integer".into(),
             )
-            .to_error(stack_trace)
+            .to_error(context.stack_trace)
         })?)
         .into())
     }
-    fn subtraction(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_sub(&rhs.0).ok_or_else(|| {
             GenericFailure(
                 "Integer underflow: The computed value is too small to store in the integer".into(),
             )
-            .to_error(stack_trace)
+            .to_error(context.stack_trace)
         })?)
         .into())
     }
-    fn multiply(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_mul(&rhs.0).ok_or_else(|| {
             GenericFailure(
                 "Integer overflow: The computed value is too large to store in the integer".into(),
             )
-            .to_error(stack_trace)
+            .to_error(context.stack_trace)
         })?)
         .into())
     }
-    fn divide(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(
             self.0
                 .checked_div(&rhs.0)
-                .ok_or_else(|| GenericFailure("The computed value is either too large to store in the integer or you attempted to divide by zero".into()).to_error(stack_trace))?,
+                .ok_or_else(|| GenericFailure("The computed value is either too large to store in the integer or you attempted to divide by zero".into()).to_error(context.stack_trace))?,
         )
         .into())
     }
-    fn exponent(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
 
         // This failure can only happen on 32bit (or less) systems.
         let rhs = rhs.0.to_usize().ok_or_else(|| {
             GenericFailure(
                 "Integer overflow: The requested exponent is larger than the host machine word size".into(),
             )
-            .to_error(stack_trace)
+            .to_error(context.stack_trace)
         })?;
 
         Ok(Self(checked_pow(self.0, rhs).ok_or_else(|| {
             GenericFailure(
                 "Integer overflow: The computed value is too large to store in the integer".into(),
             )
-            .to_error(stack_trace)
+            .to_error(context.stack_trace)
         })?)
         .into())
     }
-    fn left_shift(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn left_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(self.0 << rhs.0).into())
     }
-    fn right_shift(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn right_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(self.0 >> rhs.0).into())
     }
-    fn unary_plus(
-        self,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
+    fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(self.clone().into())
     }
-    fn unary_minus(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
-        self.0.neg(stack_trace).into()
+    fn unary_minus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+        self.0.neg(context.stack_trace).into()
     }
-    fn unary_not(
-        self,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
+    fn unary_not(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(Self(!self.0).into())
     }
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         match attribute {
@@ -309,7 +223,7 @@ where
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(stack_trace)),
+            .to_error(context.stack_trace)),
         }
     }
 }
@@ -345,7 +259,7 @@ trait IntOps:
 {
     type MethodSet: MethodSet + 'static;
 
-    fn neg(&self, stack_trace: &[SourceReference]) -> ExpressionResult<Value>;
+    fn neg(&self, stack_trace: &StackTrace) -> ExpressionResult<Value>;
 
     fn count_ones(&self) -> u64;
     fn count_zeros(&self) -> u64;
@@ -376,7 +290,7 @@ trait IntOps:
 impl IntOps for i64 {
     type MethodSet = methods::SignedIntegerMethodSet;
 
-    fn neg(&self, _stack_trace: &[SourceReference]) -> ExpressionResult<Value> {
+    fn neg(&self, _stack_trace: &StackTrace) -> ExpressionResult<Value> {
         Ok(SignedInteger::from(-self).into())
     }
 
@@ -460,7 +374,7 @@ impl StaticType for i64 {
 impl IntOps for u64 {
     type MethodSet = methods::UnsignedIntegerMethodSet;
 
-    fn neg(&self, stack_trace: &[SourceReference]) -> ExpressionResult<Value> {
+    fn neg(&self, stack_trace: &StackTrace) -> ExpressionResult<Value> {
         Err(super::UnsupportedOperationError {
             type_name: UnsignedInteger::static_type_name().into(),
             operation_name: "negate",
@@ -635,198 +549,150 @@ mod methods {
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::CountOnes, format!("{}::count_ones", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> UnsignedInteger
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> UnsignedInteger {
                 Ok(UnsignedInteger::from(this.0.count_ones()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::CountZeros, format!("{}::count_zeros", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> UnsignedInteger
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> UnsignedInteger {
                 Ok(UnsignedInteger::from(this.0.count_zeros()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::LeadingZeros, format!("{}::leading_zeros", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> UnsignedInteger
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> UnsignedInteger {
                 Ok(UnsignedInteger::from(this.0.leading_zeros()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::TrailingZeros, format!("{}::trailing_zeros", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> UnsignedInteger
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> UnsignedInteger {
                 Ok(UnsignedInteger::from(this.0.trailing_zeros()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::LeadingOnes, format!("{}::leading_ones", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> UnsignedInteger
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> UnsignedInteger {
                 Ok(UnsignedInteger::from(this.0.leading_ones()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::TrailingOnes, format!("{}::trailing_ones", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> UnsignedInteger
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> UnsignedInteger {
                 Ok(UnsignedInteger::from(this.0.trailing_ones()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::RotateLeft, format!("{}::rotate_left", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                _context: &ExecutionContext,
                 this: Integer<I>,
-                n: UnsignedInteger) -> Integer<I>
-            {
+                n: UnsignedInteger
+            ) -> Integer<I> {
                 Ok(Integer::<I>::from(this.0.rotate_left(n.0)))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::RotateRight, format!("{}::rotate_right", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                _context: &ExecutionContext,
                 this: Integer<I>,
-                n: UnsignedInteger) -> Integer<I>
-            {
+                n: UnsignedInteger
+            ) -> Integer<I> {
                 Ok(Integer::<I>::from(this.0.rotate_right(n.0)))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::ReverseBits, format!("{}::reverse_bits", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> Integer<I>
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> Integer<I> {
                 Ok(Integer::<I>::from(this.0.reverse_bits()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::Abs, format!("{}::abs", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> Integer<I>
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> Integer<I> {
                 Ok(Integer::<I>::from(this.0.abs()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::Sqrt, format!("{}::sqrt", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> Integer<I>
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> Integer<I> {
                 Ok(Integer::<I>::from(this.0.sqrt()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::AbsDiff, format!("{}::abs_diff", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Integer<I>,
-                other: Value) -> UnsignedInteger
-            {
-                let other = other.downcast::<Integer<I>>(stack_trace)?;
+                other: Value
+            ) -> UnsignedInteger {
+                let other = other.downcast::<Integer<I>>(context.stack_trace)?;
                 Ok(UnsignedInteger::from(this.0.abs_diff(other.0)))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::Signum, format!("{}::signum", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> SignedInteger
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> SignedInteger {
                 Ok(SignedInteger::from(this.0.signum()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::IsPositive, format!("{}::is_positive", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> Boolean
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> Boolean {
                 Ok(Boolean(this.0.is_positive()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::IsNegative, format!("{}::is_negative", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                _stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
-                this: Integer<I>) -> Boolean
-            {
+                _context: &ExecutionContext,
+                this: Integer<I>
+            ) -> Boolean {
                 Ok(Boolean(this.0.is_negative()))
             }
         );
         build_method!(
             database,
             forward = <I::MethodSet as MethodSet>::Midpoint, format!("{}::midpoint", Integer::<I>::static_type_name()), (
-                _log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Integer<I>,
-                rhs: Value) -> Integer<I>
-            {
-                let rhs = rhs.downcast::<Integer<I>>(stack_trace)?;
+                rhs: Value
+            ) -> Integer<I> {
+                let rhs = rhs.downcast::<Integer<I>>(context.stack_trace)?;
                 Ok(Integer::<I>::from(this.0.midpoint(rhs.0)))
             }
         );

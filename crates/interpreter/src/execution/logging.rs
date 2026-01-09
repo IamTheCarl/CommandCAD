@@ -20,38 +20,126 @@ use std::{
     borrow::Cow,
     fmt::Display,
     ops::{Deref, DerefMut},
+    path::PathBuf,
+    sync::{Arc, Mutex},
 };
+use tree_sitter::{Point, Range};
 
 use crate::compile::SourceReference;
 
-pub trait RuntimeLog {
-    fn push_message(&mut self, message: LogMessage);
+pub trait RuntimeLog: std::fmt::Debug {
+    fn push_message(&self, message: LogMessage);
 }
 
-impl RuntimeLog for Vec<LogMessage> {
-    fn push_message(&mut self, message: LogMessage) {
-        self.push(message);
+impl RuntimeLog for Mutex<Vec<LogMessage>> {
+    fn push_message(&self, message: LogMessage) {
+        self.lock().expect("Log was poisoned").push(message);
     }
 }
 
-/// Makes for a stack scope that will not forget to pop if you break out early
-/// in some way.
-pub trait StackScope {
-    fn stack_scope<F, R>(&mut self, point: impl Into<SourceReference>, code: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R;
+#[derive(Debug, Clone)]
+pub struct StackTrace<'p> {
+    parent: Option<&'p StackTrace<'p>>,
+    reference: SourceReference,
 }
 
-impl StackScope for Vec<SourceReference> {
-    fn stack_scope<F, R>(&mut self, point: impl Into<SourceReference>, code: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        self.push(point.into());
-        let result = code(self);
-        self.pop();
+impl<'p> Display for StackTrace<'p> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(parent) = self.parent {
+            write!(f, "{parent}")?;
+        }
 
-        result
+        writeln!(f, "{}", self.reference)
+    }
+}
+
+impl StackTrace<'static> {
+    pub fn top(reference: SourceReference) -> Self {
+        Self {
+            parent: None,
+            reference,
+        }
+    }
+
+    /// A special stack trace for building the prelude
+    pub fn bootstrap() -> Self {
+        Self {
+            parent: None,
+            reference: SourceReference {
+                file: Arc::new(PathBuf::from("bootstrap.ccm")),
+                range: Range {
+                    start_byte: 0,
+                    end_byte: 0,
+                    start_point: Point { row: 0, column: 0 },
+                    end_point: Point { row: 0, column: 0 },
+                },
+            },
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test() -> Self {
+        Self {
+            parent: None,
+            reference: SourceReference {
+                file: Arc::new(PathBuf::from("test.ccm")),
+                range: Range {
+                    start_byte: 0,
+                    end_byte: 0,
+                    start_point: Point { row: 0, column: 0 },
+                    end_point: Point { row: 0, column: 0 },
+                },
+            },
+        }
+    }
+}
+
+impl<'p> StackTrace<'p> {
+    pub fn trace_scope<F, R>(&'p self, reference: impl Into<SourceReference>, code: F) -> R
+    where
+        F: FnOnce(StackTrace<'p>) -> R,
+    {
+        let scope = Self {
+            parent: Some(self),
+            reference: reference.into(),
+        };
+
+        code(scope)
+    }
+
+    pub fn bottom(&self) -> &SourceReference {
+        &self.reference
+    }
+
+    pub fn iter(&'p self) -> StackTraceIter<'p> {
+        StackTraceIter {
+            current: Some(self),
+        }
+    }
+}
+
+impl<'p> IntoIterator for &'p StackTrace<'p> {
+    type Item = &'p SourceReference;
+    type IntoIter = StackTraceIter<'p>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+pub struct StackTraceIter<'p> {
+    current: Option<&'p StackTrace<'p>>,
+}
+
+impl<'p> Iterator for StackTraceIter<'p> {
+    type Item = &'p SourceReference;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = self.current.take();
+        if let Some(next) = next {
+            self.current = next.parent;
+        }
+        next.map(|next| &next.reference)
     }
 }
 

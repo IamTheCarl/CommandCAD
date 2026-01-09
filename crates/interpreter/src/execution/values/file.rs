@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{borrow::Cow, io::Read, path::Path, sync::Arc};
+use std::{borrow::Cow, io::Read, sync::Arc};
 
 use imstr::ImString;
 use tempfile::NamedTempFile;
@@ -26,7 +26,7 @@ use crate::{
     execution::{
         errors::{GenericFailure, Raise as _},
         values::{BuiltinCallableDatabase, IString, Object, StaticTypeName, ValueType},
-        ExpressionResult, RuntimeLog, SourceReference, Stack,
+        ExecutionContext, ExpressionResult,
     },
 };
 
@@ -44,7 +44,7 @@ impl PartialEq for File {
 }
 
 impl Object for File {
-    fn get_type(&self, _database: &BuiltinCallableDatabase) -> ValueType {
+    fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::File
     }
 }
@@ -63,16 +63,13 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::ToString, "File::to_string", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: File
         ) -> IString {
-            let mut file = this.content.reopen().map_err(|error| GenericFailure(format!("Failed to re-open file: {error:?}").into()).to_error(stack_trace.iter()))?;
+            let mut file = this.content.reopen().map_err(|error| GenericFailure(format!("Failed to re-open file: {error:?}").into()).to_error(context.stack_trace))?;
 
             let mut content = String::new();
-            file.read_to_string(&mut content).map_err(|error| GenericFailure(format!("File was not UTF8 encoded: {error:?}").into()).to_error(stack_trace.iter()))?;
+            file.read_to_string(&mut content).map_err(|error| GenericFailure(format!("File was not UTF8 encoded: {error:?}").into()).to_error(context.stack_trace))?;
 
             Ok(IString(ImString::from(content)))
         }

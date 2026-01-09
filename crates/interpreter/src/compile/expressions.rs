@@ -1,6 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use common_data_types::{ConversionFactor, Dimension, Float, RawFloat};
+use imstr::ImString;
 use nodes::SourceFile;
 use tree_sitter::Range;
 use type_sitter::{HasChild, Node};
@@ -638,7 +639,7 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for BinaryExpression {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct IdentityPath {
-    pub path: Vec<AstNode<String>>,
+    pub path: Vec<AstNode<ImString>>,
 }
 
 impl<'t> Parse<'t, nodes::IdentityPath<'t>> for IdentityPath {
@@ -652,7 +653,7 @@ impl<'t> Parse<'t, nodes::IdentityPath<'t>> for IdentityPath {
 
         for ident in value.identifiers(&mut cursor) {
             let ident = ident?;
-            let text = String::parse(file, input, ident)?;
+            let text = ImString::parse(file, input, ident)?;
 
             path.push(text);
         }
@@ -663,7 +664,7 @@ impl<'t> Parse<'t, nodes::IdentityPath<'t>> for IdentityPath {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct SelfPath {
-    pub path: Vec<AstNode<String>>,
+    pub path: Vec<AstNode<ImString>>,
 }
 
 impl<'t> Parse<'t, nodes::SelfPath<'t>> for SelfPath {
@@ -677,7 +678,7 @@ impl<'t> Parse<'t, nodes::SelfPath<'t>> for SelfPath {
         let mut cursor = value.walk();
         for ident in value.identifiers(&mut cursor) {
             let ident = ident?;
-            let text = String::parse(file, input, ident)?;
+            let text = ImString::parse(file, input, ident)?;
 
             path.push(text);
         }
@@ -882,7 +883,7 @@ impl<'t> Parse<'t, nodes::If<'t>> for IfExpression {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct DictionaryMemberAssignment {
-    pub name: AstNode<String>,
+    pub name: AstNode<ImString>,
     pub assignment: AstNode<Expression>,
 }
 
@@ -893,7 +894,7 @@ impl<'t> Parse<'t, nodes::DictionaryMemberAssignment<'t>> for DictionaryMemberAs
         value: nodes::DictionaryMemberAssignment<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let name = value.name()?;
-        let name = String::parse(file, input, name)?;
+        let name = ImString::parse(file, input, name)?;
         let assignment = Expression::parse(file, input, value.assignment()?)?;
 
         Ok(AstNode::new(file, &value, Self { name, assignment }))
@@ -970,7 +971,7 @@ impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for ClosureDefinition {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct StructMember {
-    pub name: AstNode<String>,
+    pub name: AstNode<ImString>,
     pub ty: AstNode<Expression>,
     pub default: Option<AstNode<Expression>>,
 }
@@ -982,7 +983,7 @@ impl<'t> Parse<'t, nodes::StructMember<'t>> for StructMember {
         value: nodes::StructMember<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let name = value.name()?;
-        let name = String::parse(file, input, name)?;
+        let name = ImString::parse(file, input, name)?;
 
         let ty = value.declaration_type()?.expression()?;
         let ty = Expression::parse(file, input, ty)?;
@@ -1067,7 +1068,7 @@ impl<'t> Parse<'t, nodes::FunctionCall<'t>> for FunctionCall {
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct MethodCall {
     pub self_dictionary: AstNode<Expression>,
-    pub to_call: AstNode<String>,
+    pub to_call: AstNode<ImString>,
     pub argument: AstNode<DictionaryConstruction>,
 }
 
@@ -1078,7 +1079,7 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for MethodCall {
         value: nodes::MethodCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let self_dictionary = Expression::parse(file, input, value.self_dictionary()?)?;
-        let to_call = String::parse(file, input, value.to_call()?)?;
+        let to_call = ImString::parse(file, input, value.to_call()?)?;
         let argument = DictionaryConstruction::parse(file, input, value.argument()?)?;
 
         Ok(AstNode::new(
@@ -1095,7 +1096,7 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for MethodCall {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct LetInAssignment {
-    pub ident: AstNode<String>,
+    pub ident: AstNode<ImString>,
     pub value: AstNode<Expression>,
 }
 
@@ -1105,7 +1106,7 @@ impl<'t> Parse<'t, nodes::LetInAssignment<'t>> for LetInAssignment {
         input: &'i str,
         node: nodes::LetInAssignment<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        let ident = String::parse(file, input, node.ident()?)?;
+        let ident = ImString::parse(file, input, node.ident()?)?;
 
         let value = Expression::parse(file, input, node.value()?)?;
 
@@ -1317,7 +1318,7 @@ mod test {
             a.node.name,
             AstNode {
                 reference: a.node.name.reference.clone(),
-                node: "a".to_string()
+                node: "a".into()
             }
         );
         assert_eq!(
@@ -1335,7 +1336,7 @@ mod test {
             b.node.name,
             AstNode {
                 reference: b.node.name.reference.clone(),
-                node: "b".to_string()
+                node: "b".into()
             }
         );
         assert_eq!(

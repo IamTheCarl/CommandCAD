@@ -21,26 +21,25 @@ use common_data_types::{Dimension, Float, FloatIsNan};
 
 use crate::{
     build_method,
-    compile::SourceReference,
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
-        logging::RuntimeLog,
+        logging::StackTrace,
         values::{
             self, closure::BuiltinCallableDatabase, Boolean, BuiltinFunction,
             MissingAttributeError, SignedInteger, StaticType, UnsignedInteger, Vector2,
         },
-        Stack,
+        ExecutionContext,
     },
 };
 
 use super::{value_type::ValueType, DowncastError, Object, StaticTypeName, Value};
 
 pub trait UnwrapNotNan: Sized {
-    fn unwrap_not_nan(self, stack_trace: &[SourceReference]) -> ExpressionResult<Float>;
+    fn unwrap_not_nan(self, stack_trace: &StackTrace) -> ExpressionResult<Float>;
 }
 
 impl UnwrapNotNan for std::result::Result<Float, FloatIsNan> {
-    fn unwrap_not_nan(self, stack_trace: &[SourceReference]) -> ExpressionResult<Float> {
+    fn unwrap_not_nan(self, stack_trace: &StackTrace) -> ExpressionResult<Float> {
         match self {
             Ok(number) => Ok(number),
             Err(_float_is_nan) => Err(GenericFailure(
@@ -58,7 +57,7 @@ pub struct Scalar {
 }
 
 impl Object for Scalar {
-    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
+    fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::Scalar(Some(self.dimension))
     }
 
@@ -68,7 +67,7 @@ impl Object for Scalar {
 
     // fn format(
     //     &self,
-    //     log: &mut dyn RuntimeLog,
+    //     log: &dyn RuntimeLog,
     //     stack_trace: [SourceReference],
     //     f: &mut dyn fmt::Write,
     //     style: Style,
@@ -187,16 +186,10 @@ impl Object for Scalar {
     //     }
     // }
 
-    fn addition(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs = self.unpack_same_dimension(stack_trace, rhs)?;
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
 
-        let value = Float::new(*self.value + *rhs.value).unwrap_not_nan(stack_trace)?;
+        let value = Float::new(*self.value + *rhs.value).unwrap_not_nan(context.stack_trace)?;
 
         Ok(Self {
             value,
@@ -204,16 +197,10 @@ impl Object for Scalar {
         }
         .into())
     }
-    fn subtraction(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs = self.unpack_same_dimension(stack_trace, rhs)?;
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
 
-        let value = Float::new(*self.value - *rhs.value).unwrap_not_nan(stack_trace)?;
+        let value = Float::new(*self.value - *rhs.value).unwrap_not_nan(context.stack_trace)?;
 
         Ok(Self {
             value,
@@ -221,70 +208,36 @@ impl Object for Scalar {
         }
         .into())
     }
-    fn multiply(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
-        self.multiply_by_scalar(stack_trace, rhs)
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs = rhs.downcast_ref::<Scalar>(context.stack_trace)?;
+        self.multiply_by_scalar(context.stack_trace, rhs)
             .map(|rhs| rhs.into())
     }
-    fn divide(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
-        self.divide_by_measurement(stack_trace, rhs)
+    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs = rhs.downcast_ref::<Scalar>(context.stack_trace)?;
+        self.divide_by_measurement(context.stack_trace, rhs)
             .map(|rhs| rhs.into())
     }
-    fn exponent(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast::<Self>(stack_trace)?;
+    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs = rhs.downcast::<Self>(context.stack_trace)?;
         Ok(Scalar {
             dimension: self.dimension * *rhs.value as i8,
-            value: Float::new(self.value.powf(*rhs.value)).unwrap_not_nan(stack_trace)?,
+            value: Float::new(self.value.powf(*rhs.value)).unwrap_not_nan(context.stack_trace)?,
         }
         .into())
     }
-    fn unary_plus(
-        self,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
+    fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(self.clone().into())
     }
-    fn unary_minus(
-        self,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
+    fn unary_minus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(Self {
             value: -self.value,
             ..self.clone()
         }
         .into())
     }
-    fn cmp(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Ordering> {
-        let rhs = rhs.downcast_ref::<Self>(stack_trace)?;
+    fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Ordering> {
+        let rhs = rhs.downcast_ref::<Self>(context.stack_trace)?;
         if self.dimension == rhs.dimension {
             Ok(std::cmp::Ord::cmp(&self.value, &rhs.value))
         } else {
@@ -292,15 +245,13 @@ impl Object for Scalar {
                 expected: self.type_name(),
                 got: rhs.type_name(),
             }
-            .to_error(stack_trace))
+            .to_error(context.stack_trace))
         }
     }
 
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _callable_database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         match attribute {
@@ -345,14 +296,14 @@ impl Object for Scalar {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(stack_trace)),
+            .to_error(context.stack_trace)),
         }
     }
 
     // fn export(
     //     &self,
-    //     _log: &mut dyn RuntimeLog,
-    //     _stack_trace: &[SourceReference],
+    //     _log: &dyn RuntimeLog,
+    //     _stack_trace: &StackTrace,
     // ) -> ExpressionResult<SerializableValue> {
     //     Ok(SerializableValue::Scalar(self.clone()))
     // }
@@ -371,11 +322,7 @@ impl StaticType for Scalar {
 }
 
 impl Scalar {
-    fn multiply_by_scalar(
-        &self,
-        stack_trace: &[SourceReference],
-        rhs: &Self,
-    ) -> ExpressionResult<Self> {
+    fn multiply_by_scalar(&self, stack_trace: &StackTrace, rhs: &Self) -> ExpressionResult<Self> {
         let value = Float::new(*self.value * *rhs.value).unwrap_not_nan(stack_trace)?;
         let dimension = self.dimension + rhs.dimension;
 
@@ -384,7 +331,7 @@ impl Scalar {
 
     fn divide_by_measurement(
         &self,
-        stack_trace: &[SourceReference],
+        stack_trace: &StackTrace,
         rhs: &Self,
     ) -> ExpressionResult<Self> {
         let value = Float::new(*self.value / *rhs.value).unwrap_not_nan(stack_trace)?;
@@ -393,10 +340,7 @@ impl Scalar {
         Ok(Self { dimension, value })
     }
 
-    fn check_inverse_trig_compatible(
-        &self,
-        stack_trace: &[SourceReference],
-    ) -> ExpressionResult<()> {
+    fn check_inverse_trig_compatible(&self, stack_trace: &StackTrace) -> ExpressionResult<()> {
         if self.dimension.is_zero_dimension() {
             Ok(())
         } else {
@@ -404,7 +348,7 @@ impl Scalar {
         }
     }
 
-    fn check_trig_compatible(&self, stack_trace: &[SourceReference]) -> ExpressionResult<()> {
+    fn check_trig_compatible(&self, stack_trace: &StackTrace) -> ExpressionResult<()> {
         if self.dimension.is_zero_dimension() && self.dimension.ratio_type_hint.is_angle() {
             Ok(())
         } else {
@@ -415,11 +359,7 @@ impl Scalar {
         }
     }
 
-    fn unpack_same_dimension(
-        self,
-        stack_trace: &[SourceReference],
-        rhs: Value,
-    ) -> ExpressionResult<Self> {
+    fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExpressionResult<Self> {
         if let Value::Scalar(rhs) = rhs {
             if self.dimension == rhs.dimension {
                 Ok(rhs)
@@ -483,27 +423,21 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::ToSignedInteger, "Scalar::to_signed_integer", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> SignedInteger
         {
             if this.dimension.is_zero_dimension() {
                 Ok(values::SignedInteger::from(*this.value as i64).into())
             } else {
                 Err(GenericFailure("Only zero dimensional scalars can be converted into an integer".into())
-                    .to_error(stack_trace.iter()))
+                    .to_error(context.stack_trace))
             }
         }
     );
     build_method!(
         database,
         forward = methods::ToUnsignedInteger, "Scalar::to_unsigned_integer", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> UnsignedInteger
         {
             if this.dimension.is_zero_dimension() {
@@ -511,42 +445,36 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                     Ok(values::UnsignedInteger::from(*this.value as u64).into())
                 } else {
                     Err(GenericFailure("Negative values cannot be converted to signed integers".into())
-                        .to_error(stack_trace.iter()))
+                        .to_error(context.stack_trace))
                 }
             } else {
                 Err(GenericFailure("Only zero dimensional scalars can be converted into an integer".into())
-                    .to_error(stack_trace.iter()))
+                    .to_error(context.stack_trace))
             }
         }
     );
     build_method!(
         database,
         forward = methods::Abs, "Scalar::abs", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(this.value.abs()).unwrap_not_nan(stack_trace)?
+                value: Float::new(this.value.abs()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Clamp, "Scalar::clamp", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             min: Value,
             max: Value) -> Scalar
         {
-            let min = this.unpack_same_dimension(stack_trace, min)?;
-            let max = this.unpack_same_dimension(stack_trace, max)?;
+            let min = this.unpack_same_dimension(context.stack_trace, min)?;
+            let max = this.unpack_same_dimension(context.stack_trace, max)?;
 
             Ok(Scalar {
                 dimension: this.dimension,
@@ -557,44 +485,35 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::Copysign, "Scalar::copysign", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             sign: Zero) -> Scalar
         {
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new(this.value.copysign(*sign.value)).unwrap_not_nan(stack_trace)?
+                value: Float::new(this.value.copysign(*sign.value)).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Hypot, "Scalar::hypot", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             other: Value) -> Scalar
         {
-            let other = this.unpack_same_dimension(stack_trace, other)?;
+            let other = this.unpack_same_dimension(context.stack_trace, other)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new(this.value.hypot(*other.value)).unwrap_not_nan(stack_trace)?
+                value: Float::new(this.value.hypot(*other.value)).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::IsFinite, "Scalar::is_finite", (
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
             Ok(values::Boolean(this.value.is_finite()))
@@ -603,10 +522,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::IsInfinite, "Scalar::is_infinite", (
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
             Ok(values::Boolean(this.value.is_infinite()))
@@ -615,10 +531,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::IsNormal, "Scalar::is_normal", (
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
             Ok(values::Boolean(this.value.is_normal()).into())
@@ -627,56 +540,44 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::Cbrt, "Scalar::cbrt", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
             Ok(Scalar {
                 dimension: this.dimension / 3,
-                value: Float::new(this.value.cbrt()).unwrap_not_nan(stack_trace)?
+                value: Float::new(this.value.cbrt()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Pow, "Scalar::pow", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             exp: Zero) -> Scalar
         {
             Ok(Scalar {
                 dimension: this.dimension * *exp.value as i8,
-                value: Float::new(this.value.powf(*exp.value)).unwrap_not_nan(stack_trace)?
+                value: Float::new(this.value.powf(*exp.value)).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Sqrt, "Scalar::sqrt", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
             Ok(Scalar {
                 dimension: this.dimension / 2,
-                value: Float::new(this.value.sqrt()).unwrap_not_nan(stack_trace)?
+                value: Float::new(this.value.sqrt()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::IsSignNegative, "Scalar::is_sign_negative", (
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
             Ok(Boolean(this.value.is_sign_negative()))
@@ -685,10 +586,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::IsSignPositive, "Scalar::is_sign_positive", (
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
             Ok(Boolean(this.value.is_sign_positive()))
@@ -697,129 +595,108 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::Recip, "Scalar::recip", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
             Ok(Scalar {
                 dimension: -this.dimension,
-                value: Float::new(this.value.recip()).unwrap_not_nan(stack_trace)?
+                value: Float::new(this.value.recip()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Round, "Scalar::round", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             unit: Value) -> Scalar
         {
-            let unit = this.unpack_same_dimension(stack_trace, unit)?;
+            let unit = this.unpack_same_dimension(context.stack_trace, unit)?;
 
             let value = this.value / unit.value;
 
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(value.round() * *unit.value).unwrap_not_nan(stack_trace)?
+                value: Float::new(value.round() * *unit.value).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Trunc, "Scalar::trunc", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             unit: Value) -> Scalar
         {
-            let unit = this.unpack_same_dimension(stack_trace, unit)?;
+            let unit = this.unpack_same_dimension(context.stack_trace, unit)?;
 
             let value = this.value / unit.value;
 
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(value.trunc() * *unit.value).unwrap_not_nan(stack_trace)?
+                value: Float::new(value.trunc() * *unit.value).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Fract, "Scalar::fract", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             unit: Value) -> Scalar
         {
-            let unit = this.unpack_same_dimension(stack_trace, unit)?;
+            let unit = this.unpack_same_dimension(context.stack_trace, unit)?;
 
             let value = this.value / unit.value;
 
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(value.fract() * *unit.value).unwrap_not_nan(stack_trace)?
+                value: Float::new(value.fract() * *unit.value).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Floor, "Scalar::floor", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             unit: Value) -> Scalar
         {
-            let unit = this.unpack_same_dimension(stack_trace, unit)?;
+            let unit = this.unpack_same_dimension(context.stack_trace, unit)?;
 
             let value = this.value / unit.value;
 
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(value.floor() * *unit.value).unwrap_not_nan(stack_trace)?
+                value: Float::new(value.floor() * *unit.value).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Ceil, "Scalar::ceil", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             unit: Value) -> Scalar
         {
-            let unit = this.unpack_same_dimension(stack_trace, unit)?;
+            let unit = this.unpack_same_dimension(context.stack_trace, unit)?;
 
             let value = this.value / unit.value;
 
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(value.ceil() * *unit.value).unwrap_not_nan(stack_trace)?
+                value: Float::new(value.ceil() * *unit.value).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Max, "Scalar::max", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             other: Value) -> Scalar
         {
-            let other = this.unpack_same_dimension(stack_trace, other)?;
+            let other = this.unpack_same_dimension(context.stack_trace, other)?;
 
             Ok(Scalar {
                 dimension: this.dimension,
@@ -830,14 +707,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::Min, "Scalar::min", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar,
             other: Value) -> Scalar
         {
-            let other = this.unpack_same_dimension(stack_trace, other)?;
+            let other = this.unpack_same_dimension(context.stack_trace, other)?;
 
             Ok(Scalar {
                 dimension: this.dimension,
@@ -848,234 +722,192 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::Signum, "Scalar::signum", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new(this.value.signum()).unwrap_not_nan(stack_trace)?
+                value: Float::new(this.value.signum()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Acos, "Scalar::acos", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(stack_trace)?;
+            this.check_inverse_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value * PI).acos()).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value * PI).acos()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Acosh, "Scalar::acosh", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(stack_trace)?;
+            this.check_inverse_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value).acosh() / PI).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value).acosh() / PI).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Cos, "Scalar::cos", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(stack_trace)?;
+            this.check_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).cos()).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value * PI).cos()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Cosh, "Scalar::cosh", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(stack_trace)?;
+            this.check_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).cosh()).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value * PI).cosh()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Asin, "Scalar::asin", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(stack_trace)?;
+            this.check_inverse_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value * PI).asin()).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value * PI).asin()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Asinh, "Scalar::asinh", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(stack_trace)?;
+            this.check_inverse_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value).asinh() / PI).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value).asinh() / PI).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Sin, "Scalar::sin", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(stack_trace)?;
+            this.check_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).sin()).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value * PI).sin()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Sinh, "Scalar::sinh", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(stack_trace)?;
+            this.check_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).sinh()).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value * PI).sinh()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::CosSin, "Scalar::cossin", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Vector2
         {
-            this.check_trig_compatible(stack_trace)?;
+            this.check_trig_compatible(context.stack_trace)?;
 
             let (sin, cos) = (this.value * PI).sin_cos();
-            Vector2::new(stack_trace, Dimension::zero(), [cos, sin])
+            Vector2::new(context, Dimension::zero(), [cos, sin])
         }
     );
     build_method!(
         database,
         forward = methods::Atan, "Scalar::atan", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(stack_trace)?;
+            this.check_inverse_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value * PI).atan()).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value * PI).atan()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Atanh, "Scalar::atanh", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(stack_trace)?;
+            this.check_inverse_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value).atanh() / PI).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value).atanh() / PI).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Tan, "Scalar::tan", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(stack_trace)?;
+            this.check_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).tan()).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value * PI).tan()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );
     build_method!(
         database,
         forward = methods::Tanh, "Scalar::tanh", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(stack_trace)?;
+            this.check_trig_compatible(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).tanh()).unwrap_not_nan(stack_trace)?
+                value: Float::new((this.value * PI).tanh()).unwrap_not_nan(context.stack_trace)?
             })
         }
     );

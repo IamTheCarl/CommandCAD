@@ -16,13 +16,16 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashMap};
 
 use crate::{
     compile::{
         self, AstNode, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation,
     },
-    execution::{stack::ScopeType, values::BuiltinCallableDatabase},
+    execution::{
+        stack::{ScopeType, StackScope},
+        values::BuiltinCallableDatabase,
+    },
 };
 
 mod errors;
@@ -32,37 +35,29 @@ mod stack;
 mod standard_environment;
 pub mod values;
 use errors::ExpressionResult;
-use logging::{LocatedStr, RuntimeLog, StackScope};
-use stack::Stack;
+use imstr::ImString;
+use logging::{LocatedStr, RuntimeLog, StackTrace};
 use values::{Object, Value, ValueType};
 
 pub use standard_environment::build_prelude;
 
 pub fn find_value<'p, 's>(
-    log: &mut dyn RuntimeLog,
-    stack_trace: &[SourceReference],
-    stack: &'s mut Stack,
-    database: &BuiltinCallableDatabase,
-    path_iter: impl IntoIterator<Item = &'p compile::AstNode<String>>,
+    context: &ExecutionContext,
+    path_iter: impl IntoIterator<Item = &'p compile::AstNode<ImString>>,
 ) -> ExpressionResult<Value> {
     let mut path_iter = path_iter.into_iter().peekable();
     let root = path_iter.next().expect("Path is empty");
 
-    let stack_value = stack.get_variable(
-        stack_trace,
-        LocatedStr {
-            location: root.reference.clone(),
-            string: &root.node,
-        },
-    )?;
+    let stack_value = context.get_variable(LocatedStr {
+        location: root.reference.clone(),
+        string: &root.node,
+    })?;
 
     if let Some(sub_path) = path_iter.next() {
         // We need the value off the heap.
 
         let mut value = stack_value.get_attribute(
-            log,
-            stack_trace,
-            database,
+            context,
             &LocatedStr {
                 location: sub_path.reference.clone(),
                 string: &sub_path.node,
@@ -76,9 +71,7 @@ pub fn find_value<'p, 's>(
                 // last one needs to be a mutable borrow.
 
                 let final_value = value.get_attribute(
-                    log,
-                    stack_trace,
-                    database,
+                    context,
                     &LocatedStr {
                         location: sub_path.reference.clone(),
                         string: &sub_path.node,
@@ -88,9 +81,7 @@ pub fn find_value<'p, 's>(
                 return Ok(final_value.clone());
             } else {
                 value = value.get_attribute(
-                    log,
-                    stack_trace,
-                    database,
+                    context,
                     &LocatedStr {
                         location: sub_path.reference.clone(),
                         string: &sub_path.node,
@@ -106,49 +97,90 @@ pub fn find_value<'p, 's>(
     }
 }
 
+#[derive(Debug)]
+pub struct ExecutionContext<'c> {
+    pub log: &'c dyn RuntimeLog,
+    pub stack_trace: &'c StackTrace<'c>,
+    pub stack: &'c StackScope<'c>,
+    pub database: &'c BuiltinCallableDatabase,
+}
+
+impl<'c> ExecutionContext<'c> {
+    pub fn trace_scope<F, R>(&'c self, reference: impl Into<SourceReference>, code: F) -> R
+    where
+        F: FnOnce(&ExecutionContext<'_>) -> R,
+    {
+        self.stack_trace.trace_scope(reference, move |stack_trace| {
+            let context = ExecutionContext {
+                log: self.log,
+                stack_trace: &stack_trace,
+                stack: self.stack,
+                database: self.database,
+            };
+
+            code(&context)
+        })
+    }
+
+    pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(&self, name: S) -> ExpressionResult<&Value> {
+        self.stack.get_variable(self.stack_trace, name)
+    }
+
+    pub fn stack_scope<B, R>(
+        &self,
+        mode: ScopeType,
+        variables: HashMap<ImString, Value>,
+        block: B,
+    ) -> ExpressionResult<R>
+    where
+        B: FnOnce(&ExecutionContext) -> R,
+    {
+        self.stack
+            .scope(self.stack_trace, mode, variables, |stack, stack_trace| {
+                let context = ExecutionContext {
+                    log: self.log,
+                    stack_trace: &stack_trace,
+                    stack: &stack,
+                    database: self.database,
+                };
+
+                block(&context)
+            })
+    }
+}
+
 pub fn execute_expression(
-    log: &mut dyn RuntimeLog,
-    stack_trace: &mut Vec<SourceReference>,
-    stack: &mut Stack,
-    database: &BuiltinCallableDatabase,
+    context: &ExecutionContext,
     expression: &compile::AstNode<compile::Expression>,
 ) -> ExpressionResult<Value> {
-    stack_trace.stack_scope(
-        expression.reference.clone(),
-        |stack_trace| match &expression.node {
+    context.trace_scope(expression.reference.clone(), |context| {
+        match &expression.node {
             compile::Expression::BinaryExpression(ast_node) => {
-                execute_binary_expression(log, stack_trace, stack, database, ast_node)
+                execute_binary_expression(context, ast_node)
             }
             compile::Expression::Boolean(ast_node) => Ok(values::Boolean(ast_node.node).into()),
             compile::Expression::ClosureDefinition(ast_node) => {
-                Ok(
-                    values::UserClosure::from_ast(log, stack_trace, stack, database, ast_node)?
-                        .into(),
-                )
+                Ok(values::UserClosure::from_ast(context, ast_node)?.into())
             }
-            compile::Expression::DictionaryConstruction(ast_node) => Ok(
-                values::Dictionary::from_ast(log, stack_trace, stack, database, ast_node)?.into(),
-            ),
-            compile::Expression::If(ast_node) => {
-                execute_if_expression(log, stack_trace, stack, database, ast_node)
+            compile::Expression::DictionaryConstruction(ast_node) => {
+                Ok(values::Dictionary::from_ast(context, ast_node)?.into())
             }
+            compile::Expression::If(ast_node) => execute_if_expression(context, ast_node),
             compile::Expression::List(ast_node) => {
-                Ok(values::List::from_ast(log, stack_trace, stack, database, ast_node)?.into())
+                Ok(values::List::from_ast(context, ast_node)?.into())
             }
-            compile::Expression::Parenthesis(ast_node) => {
-                execute_expression(log, stack_trace, stack, database, &ast_node)
-            }
+            compile::Expression::Parenthesis(ast_node) => execute_expression(context, &ast_node),
             compile::Expression::IdentityPath(ast_node) => {
                 let path_iter = ast_node.node.path.iter();
-                Ok(find_value(log, stack_trace, stack, database, path_iter)?)
+                Ok(find_value(context, path_iter)?)
             }
             compile::Expression::SelfPath(ast_node) => {
                 let self_code = AstNode {
                     reference: ast_node.reference.clone(),
-                    node: String::from("self"),
+                    node: ImString::from("self"),
                 };
                 let path_iter = [&self_code].into_iter().chain(ast_node.node.path.iter());
-                Ok(find_value(log, stack_trace, stack, database, path_iter)?)
+                Ok(find_value(context, path_iter)?)
             }
 
             compile::Expression::Scalar(ast_node) => Ok(values::Scalar {
@@ -157,13 +189,13 @@ pub fn execute_expression(
             }
             .into()),
             compile::Expression::Vector2(vector) => {
-                Ok(values::Vector2::from_ast(log, stack_trace, stack, database, vector)?.into())
+                Ok(values::Vector2::from_ast(context, vector)?.into())
             }
             compile::Expression::Vector3(vector) => {
-                Ok(values::Vector3::from_ast(log, stack_trace, stack, database, vector)?.into())
+                Ok(values::Vector3::from_ast(context, vector)?.into())
             }
             compile::Expression::Vector4(vector) => {
-                Ok(values::Vector4::from_ast(log, stack_trace, stack, database, vector)?.into())
+                Ok(values::Vector4::from_ast(context, vector)?.into())
             }
             compile::Expression::SignedInteger(ast_node) => {
                 Ok(values::SignedInteger::from(ast_node.node).into())
@@ -171,215 +203,171 @@ pub fn execute_expression(
             compile::Expression::String(ast_node) => {
                 Ok(values::IString::from(ast_node.node.clone()).into())
             }
-            compile::Expression::StructDefinition(ast_node) => Ok(ValueType::from(
-                values::StructDefinition::new(log, stack_trace, stack, database, ast_node)?,
-            )
-            .into()),
+            compile::Expression::StructDefinition(ast_node) => {
+                Ok(ValueType::from(values::StructDefinition::new(context, ast_node)?).into())
+            }
             compile::Expression::UnaryExpression(ast_node) => {
-                execute_unary_expression(log, stack_trace, stack, database, ast_node)
+                execute_unary_expression(context, ast_node)
             }
             compile::Expression::UnsignedInteger(ast_node) => {
                 Ok(values::UnsignedInteger::from(ast_node.node).into())
             }
-            compile::Expression::FunctionCall(ast_node) => {
-                execute_function_call(log, stack_trace, stack, database, ast_node)
-            }
-            compile::Expression::MethodCall(ast_node) => {
-                execute_method_call(log, stack_trace, stack, database, ast_node)
-            }
-            compile::Expression::LetIn(ast_node) => {
-                execute_let_in(log, stack_trace, stack, database, ast_node)
-            }
-        },
-    )
+            compile::Expression::FunctionCall(ast_node) => execute_function_call(context, ast_node),
+            compile::Expression::MethodCall(ast_node) => execute_method_call(context, ast_node),
+            compile::Expression::LetIn(ast_node) => execute_let_in(context, ast_node),
+        }
+    })
 }
 
 fn execute_unary_expression(
-    log: &mut dyn RuntimeLog,
-    stack_trace: &mut Vec<SourceReference>,
-    stack: &mut Stack,
-    database: &BuiltinCallableDatabase,
+    context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::UnaryExpression>>,
 ) -> ExpressionResult<Value> {
-    stack_trace.stack_scope(expression.reference.clone(), |stack_trace| {
+    context.trace_scope(expression.reference.clone(), |context| {
         let node = &expression.node;
-        let value = execute_expression(log, stack_trace, stack, database, &node.expression)?;
+        let value = execute_expression(context, &node.expression)?;
         match node.operation.node {
-            UnaryExpressionOperation::Add => value.unary_plus(log, stack_trace, database),
-            UnaryExpressionOperation::Sub => value.unary_minus(log, stack_trace, database),
-            UnaryExpressionOperation::Not => value.unary_not(log, stack_trace, database),
+            UnaryExpressionOperation::Add => value.unary_plus(context),
+            UnaryExpressionOperation::Sub => value.unary_minus(context),
+            UnaryExpressionOperation::Not => value.unary_not(context),
         }
     })
 }
 
 fn execute_function_call(
-    log: &mut dyn RuntimeLog,
-    stack_trace: &mut Vec<SourceReference>,
-    stack: &mut Stack,
-    database: &BuiltinCallableDatabase,
+    context: &ExecutionContext,
     call: &compile::AstNode<Box<compile::FunctionCall>>,
 ) -> ExpressionResult<Value> {
-    let to_call = execute_expression(log, stack_trace, stack, database, &call.node.to_call)?;
-    let argument =
-        values::Dictionary::from_ast(log, stack_trace, stack, database, &call.node.argument)?;
+    let to_call = execute_expression(context, &call.node.to_call)?;
+    let argument = values::Dictionary::from_ast(context, &call.node.argument)?;
 
-    stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
-        to_call.call(log, stack_trace, stack, database, argument)
+    context.stack_scope(ScopeType::Isolated, HashMap::new(), |context| {
+        to_call.call(context, argument)
     })?
 }
 
 fn execute_method_call(
-    log: &mut dyn RuntimeLog,
-    stack_trace: &mut Vec<SourceReference>,
-    stack: &mut Stack,
-    database: &BuiltinCallableDatabase,
+    context: &ExecutionContext,
     call: &compile::AstNode<Box<compile::MethodCall>>,
 ) -> ExpressionResult<Value> {
-    let self_dictionary = execute_expression(
-        log,
-        stack_trace,
-        stack,
-        database,
-        &call.node.self_dictionary,
-    )?;
+    let self_dictionary = execute_expression(context, &call.node.self_dictionary)?;
     let to_call = self_dictionary
-        .get_attribute(log, stack_trace, database, &call.node.to_call.node)?
+        .get_attribute(context, &call.node.to_call.node)?
         .clone();
-    let argument =
-        values::Dictionary::from_ast(log, stack_trace, stack, database, &call.node.argument)?;
+    let argument = values::Dictionary::from_ast(context, &call.node.argument)?;
 
-    stack.scope(stack_trace, ScopeType::Isolated, |stack, stack_trace| {
-        stack.insert_value("self", self_dictionary);
-
-        to_call.call(log, stack_trace, stack, database, argument)
-    })?
+    context.stack_scope(
+        ScopeType::Isolated,
+        HashMap::from_iter([(ImString::from("self"), self_dictionary.into())]),
+        |context| to_call.call(context, argument),
+    )?
 }
 
 fn execute_let_in(
-    log: &mut dyn RuntimeLog,
-    stack_trace: &mut Vec<SourceReference>,
-    stack: &mut Stack,
-    database: &BuiltinCallableDatabase,
+    context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::LetIn>>,
 ) -> ExpressionResult<Value> {
-    stack_trace.stack_scope(expression.reference.clone(), |stack_trace| {
-        for assignment in expression.node.assignments.iter() {
-            let value =
-                execute_expression(log, stack_trace, stack, database, &assignment.node.value)?;
-            stack.insert_value(assignment.node.ident.node.clone(), value);
-        }
+    context.trace_scope(expression.reference.clone(), |context| {
+        context.stack.scope_mut(
+            context.stack_trace,
+            ScopeType::Inherited,
+            HashMap::with_capacity(expression.node.assignments.len()),
+            |stack, stack_trace| {
+                for assignment in expression.node.assignments.iter() {
+                    let context = ExecutionContext {
+                        log: context.log,
+                        stack_trace,
+                        stack,
+                        database: context.database,
+                    };
 
-        let node = &expression.node;
-        execute_expression(log, stack_trace, stack, database, &node.expression)
+                    let value = execute_expression(&context, &assignment.node.value)?;
+                    stack.insert_value(assignment.node.ident.node.clone(), value);
+                }
+
+                let context = ExecutionContext {
+                    log: context.log,
+                    stack_trace,
+                    stack,
+                    database: context.database,
+                };
+
+                let node = &expression.node;
+                execute_expression(&context, &node.expression)
+            },
+        )?
     })
 }
 
 fn execute_binary_expression(
-    log: &mut dyn RuntimeLog,
-    stack_trace: &mut Vec<SourceReference>,
-    stack: &mut Stack,
-    database: &BuiltinCallableDatabase,
+    context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::BinaryExpression>>,
 ) -> ExpressionResult<Value> {
-    stack_trace.stack_scope(
-        expression.reference.clone(),
-        |stack_trace: &mut Vec<SourceReference>| {
-            let node = &expression.node;
-            let value_a = execute_expression(log, stack_trace, stack, database, &node.a)?;
-            let value_b = execute_expression(log, stack_trace, stack, database, &node.b)?;
-            match node.operation.node {
-                BinaryExpressionOperation::NotEq => Ok(values::Boolean(
-                    !value_a
-                        .clone()
-                        .cmp(log, stack_trace, database, value_b.clone())
-                        .map(|ord| matches!(ord, Ordering::Equal))
-                        .or_else(|_| value_a.eq(log, stack_trace, database, value_b))?,
-                )
-                .into()),
-                BinaryExpressionOperation::And => {
-                    value_a.bit_and(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::AndAnd => {
-                    value_a.and(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::Mul => {
-                    value_a.multiply(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::MulMul => {
-                    value_a.exponent(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::Add => {
-                    value_a.addition(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::Sub => {
-                    value_a.subtraction(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::Div => {
-                    value_a.divide(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::Lt => Ok(values::Boolean(matches!(
-                    value_a.cmp(log, stack_trace, database, value_b)?,
-                    Ordering::Less
-                ))
-                .into()),
-                BinaryExpressionOperation::LtLt => {
-                    value_a.left_shift(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::LtEq => Ok(values::Boolean(matches!(
-                    value_a.cmp(log, stack_trace, database, value_b)?,
-                    Ordering::Less | Ordering::Equal
-                ))
-                .into()),
-                BinaryExpressionOperation::EqEq => Ok(values::Boolean(
-                    value_a
-                        .clone()
-                        .cmp(log, stack_trace, database, value_b.clone())
-                        .map(|ord| matches!(ord, Ordering::Equal))
-                        .or_else(|_| value_a.eq(log, stack_trace, database, value_b))?,
-                )
-                .into()),
-                BinaryExpressionOperation::Gt => Ok(values::Boolean(matches!(
-                    value_a.cmp(log, stack_trace, database, value_b)?,
-                    Ordering::Greater
-                ))
-                .into()),
-                BinaryExpressionOperation::GtEq => Ok(values::Boolean(matches!(
-                    value_a.cmp(log, stack_trace, database, value_b)?,
-                    Ordering::Equal | Ordering::Greater
-                ))
-                .into()),
-                BinaryExpressionOperation::GtGt => {
-                    value_a.right_shift(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::BitXor => {
-                    value_a.bit_xor(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::Xor => value_a.xor(log, stack_trace, database, value_b),
-                BinaryExpressionOperation::Or => {
-                    value_a.bit_or(log, stack_trace, database, value_b)
-                }
-                BinaryExpressionOperation::OrOr => value_a.or(log, stack_trace, database, value_b),
-            }
-        },
-    )
+    context.trace_scope(expression.reference.clone(), |context| {
+        let node = &expression.node;
+        let value_a = execute_expression(context, &node.a)?;
+        let value_b = execute_expression(context, &node.b)?;
+        match node.operation.node {
+            BinaryExpressionOperation::NotEq => Ok(values::Boolean(
+                !value_a
+                    .clone()
+                    .cmp(context, value_b.clone())
+                    .map(|ord| matches!(ord, Ordering::Equal))
+                    .or_else(|_| value_a.eq(context, value_b))?,
+            )
+            .into()),
+            BinaryExpressionOperation::And => value_a.bit_and(context, value_b),
+            BinaryExpressionOperation::AndAnd => value_a.and(context, value_b),
+            BinaryExpressionOperation::Mul => value_a.multiply(context, value_b),
+            BinaryExpressionOperation::MulMul => value_a.exponent(context, value_b),
+            BinaryExpressionOperation::Add => value_a.addition(context, value_b),
+            BinaryExpressionOperation::Sub => value_a.subtraction(context, value_b),
+            BinaryExpressionOperation::Div => value_a.divide(context, value_b),
+            BinaryExpressionOperation::Lt => Ok(values::Boolean(matches!(
+                value_a.cmp(context, value_b)?,
+                Ordering::Less
+            ))
+            .into()),
+            BinaryExpressionOperation::LtLt => value_a.left_shift(context, value_b),
+            BinaryExpressionOperation::LtEq => Ok(values::Boolean(matches!(
+                value_a.cmp(context, value_b)?,
+                Ordering::Less | Ordering::Equal
+            ))
+            .into()),
+            BinaryExpressionOperation::EqEq => Ok(values::Boolean(
+                value_a
+                    .clone()
+                    .cmp(context, value_b.clone())
+                    .map(|ord| matches!(ord, Ordering::Equal))
+                    .or_else(|_| value_a.eq(context, value_b))?,
+            )
+            .into()),
+            BinaryExpressionOperation::Gt => Ok(values::Boolean(matches!(
+                value_a.cmp(context, value_b)?,
+                Ordering::Greater
+            ))
+            .into()),
+            BinaryExpressionOperation::GtEq => Ok(values::Boolean(matches!(
+                value_a.cmp(context, value_b)?,
+                Ordering::Equal | Ordering::Greater
+            ))
+            .into()),
+            BinaryExpressionOperation::GtGt => value_a.right_shift(context, value_b),
+            BinaryExpressionOperation::BitXor => value_a.bit_xor(context, value_b),
+            BinaryExpressionOperation::Xor => value_a.xor(context, value_b),
+            BinaryExpressionOperation::Or => value_a.bit_or(context, value_b),
+            BinaryExpressionOperation::OrOr => value_a.or(context, value_b),
+        }
+    })
 }
 
 pub fn execute_if_expression(
-    log: &mut dyn RuntimeLog,
-    stack_trace: &mut Vec<SourceReference>,
-    stack: &mut Stack,
-    database: &BuiltinCallableDatabase,
+    context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::IfExpression>>,
 ) -> ExpressionResult<Value> {
-    let condition = execute_expression(
-        log,
-        stack_trace,
-        stack,
-        database,
-        &expression.node.condition,
-    )?
-    .downcast::<values::Boolean>(stack_trace)?
-    .0;
+    let condition = execute_expression(context, &expression.node.condition)?
+        .downcast::<values::Boolean>(context.stack_trace)?
+        .0;
 
     let expression = if condition {
         &expression.node.on_true
@@ -387,25 +375,26 @@ pub fn execute_if_expression(
         &expression.node.on_false
     };
 
-    execute_expression(log, stack_trace, stack, database, expression)
+    execute_expression(context, expression)
 }
 
 #[cfg(test)]
 pub(crate) fn test_run(input: &str) -> ExpressionResult<Value> {
     use standard_environment::build_prelude;
+    use std::sync::Mutex;
 
     let root = compile::full_compile(input);
     let database = BuiltinCallableDatabase::new();
     let prelude = build_prelude(&database);
-    let mut stack = Stack::new(prelude);
 
-    execute_expression(
-        &mut Vec::new(),
-        &mut Vec::new(),
-        &mut stack,
-        &database,
-        &root,
-    )
+    let context = ExecutionContext {
+        log: &Mutex::new(Vec::new()),
+        stack_trace: &StackTrace::test(),
+        stack: &StackScope::top(&prelude),
+        database: &database,
+    };
+
+    execute_expression(&context, &root)
 }
 
 #[cfg(test)]

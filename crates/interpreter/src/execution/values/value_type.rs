@@ -19,6 +19,7 @@ use std::{borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
 
 use common_data_types::Dimension;
 use hashable_map::HashableMap;
+use imstr::ImString;
 
 use super::{
     closure::Signature as ClosureSignature, Boolean, Object, SignedInteger, StaticTypeName,
@@ -27,16 +28,15 @@ use super::{
 
 use crate::{
     build_method,
-    compile::{self, AstNode, SourceReference},
+    compile::{self, AstNode},
     execute_expression,
     execution::{
         errors::{ErrorType, ExpressionResult, Raise},
-        logging::RuntimeLog,
-        stack::Stack,
         values::{
             self, closure::BuiltinCallableDatabase, dictionary::DictionaryData, BuiltinFunction,
             Dictionary, File, IString, MissingAttributeError,
         },
+        ExecutionContext,
     },
 };
 
@@ -181,27 +181,19 @@ impl Display for ValueType {
 }
 
 impl Object for ValueType {
-    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
+    fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::ValueType
     }
 
-    fn bit_or(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: Self = rhs.downcast(stack_trace)?;
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: Self = rhs.downcast(context.stack_trace)?;
 
         Ok(self.merge(rhs).into())
     }
 
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         match attribute {
@@ -210,7 +202,7 @@ impl Object for ValueType {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(stack_trace)),
+            .to_error(context.stack_trace)),
         }
     }
 }
@@ -230,14 +222,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::Qualify, "ValueType::qualify", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: ValueType,
             to_qualify: Value) -> ValueNone
         {
-            this.check_other_qualifies(&to_qualify.get_type(database)).map_err(|error| error.to_error(stack_trace.iter()))?;
+            this.check_other_qualifies(&to_qualify.get_type(context)).map_err(|error| error.to_error(context.stack_trace))?;
             Ok(values::ValueNone)
         }
     );
@@ -245,14 +234,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::TryQualify, "ValueType::try_qualify", (
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: ValueType,
             to_qualify: Value) -> values::Boolean
         {
-            Ok(values::Boolean(this.check_other_qualifies(&to_qualify.get_type(database)).is_ok()))
+            Ok(values::Boolean(this.check_other_qualifies(&to_qualify.get_type(context)).is_ok()))
         }
     );
 }
@@ -265,22 +251,13 @@ pub struct StructMember {
 
 impl StructMember {
     fn new(
-        log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        stack: &mut Stack,
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         source: &AstNode<compile::StructMember>,
     ) -> ExpressionResult<Self> {
-        let ty = execute_expression(log, stack_trace, stack, database, &source.node.ty)?
-            .downcast::<ValueType>(stack_trace)?;
+        let ty = execute_expression(context, &source.node.ty)?
+            .downcast::<ValueType>(context.stack_trace)?;
         let default = if let Some(default) = source.node.default.as_ref() {
-            Some(execute_expression(
-                log,
-                stack_trace,
-                stack,
-                database,
-                default,
-            )?)
+            Some(execute_expression(context, default)?)
         } else {
             None
         };
@@ -301,25 +278,19 @@ impl Display for StructMember {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StructDefinition {
-    pub members: Arc<HashableMap<String, StructMember>>,
+    pub members: Arc<HashableMap<ImString, StructMember>>,
     pub variadic: bool,
 }
 
 impl StructDefinition {
     pub fn new(
-        log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        stack: &mut Stack,
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         source: &AstNode<compile::StructDefinition>,
     ) -> ExpressionResult<Self> {
         let mut members = HashMap::new();
         for member in source.node.members.iter() {
             let name = member.node.name.node.clone();
-            members.insert(
-                name,
-                StructMember::new(log, stack_trace, stack, database, member)?,
-            );
+            members.insert(name, StructMember::new(context, member)?);
         }
 
         let members = Arc::new(HashableMap::from(members));
@@ -330,7 +301,7 @@ impl StructDefinition {
     pub fn fill_defaults(&self, dictionary: Dictionary) -> Dictionary {
         let data = Arc::unwrap_or_clone(dictionary.data);
 
-        let mut members = data.members;
+        let mut members: HashableMap<ImString, Value> = data.members;
         let struct_def_variadic = data.struct_def.variadic;
         let mut struct_def_members = Arc::unwrap_or_clone(data.struct_def.members);
 
@@ -447,8 +418,8 @@ impl StaticTypeName for StructDefinition {
     }
 }
 
-impl From<HashMap<String, StructMember>> for StructDefinition {
-    fn from(map: HashMap<String, StructMember>) -> Self {
+impl From<HashMap<ImString, StructMember>> for StructDefinition {
+    fn from(map: HashMap<ImString, StructMember>) -> Self {
         Self {
             members: Arc::new(HashableMap::from(map)),
             variadic: false,
@@ -458,7 +429,7 @@ impl From<HashMap<String, StructMember>> for StructDefinition {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct MissmatchedField {
-    pub name: String,
+    pub name: ImString,
     pub error: TypeQualificationError,
 }
 
@@ -506,8 +477,9 @@ impl Display for TypeQualificationError {
 #[cfg(test)]
 mod test {
     use pretty_assertions::assert_eq;
+    use std::sync::Mutex;
 
-    use crate::execution::test_run;
+    use crate::execution::{build_prelude, logging::StackTrace, stack::StackScope, test_run};
 
     use super::*;
 
@@ -637,10 +609,17 @@ mod test {
         let closure = closure.as_userclosure().unwrap();
 
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
 
         closure
-            .get_type(&database)
-            .check_other_qualifies(&closure.get_type(&database))
+            .get_type(&context)
+            .check_other_qualifies(&closure.get_type(&context))
             .unwrap();
     }
 
@@ -653,10 +632,17 @@ mod test {
         let dictionary = dictionary.as_dictionary().unwrap();
 
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
 
         structure
-            .get_type(&database)
-            .check_other_qualifies(&dictionary.get_type(&database))
+            .get_type(&context)
+            .check_other_qualifies(&dictionary.get_type(&context))
             .unwrap();
     }
 
@@ -669,9 +655,16 @@ mod test {
         let dictionary = dictionary.as_dictionary().unwrap();
 
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
 
         structure
-            .check_other_qualifies(&dictionary.get_type(&database))
+            .check_other_qualifies(&dictionary.get_type(&context))
             .unwrap();
     }
 
@@ -684,9 +677,16 @@ mod test {
         let dictionary = dictionary.as_dictionary().unwrap();
 
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
 
         structure
-            .check_other_qualifies(&dictionary.get_type(&database))
+            .check_other_qualifies(&dictionary.get_type(&context))
             .unwrap();
     }
 
@@ -699,9 +699,16 @@ mod test {
         let dictionary = dictionary.as_dictionary().unwrap();
 
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
 
         structure
-            .check_other_qualifies(&dictionary.get_type(&database))
+            .check_other_qualifies(&dictionary.get_type(&context))
             .unwrap_err();
     }
 
@@ -714,9 +721,16 @@ mod test {
         let dictionary = dictionary.as_dictionary().unwrap();
 
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
 
         structure
-            .check_other_qualifies(&dictionary.get_type(&database))
+            .check_other_qualifies(&dictionary.get_type(&context))
             .unwrap();
     }
 
@@ -729,9 +743,16 @@ mod test {
         let dictionary = dictionary.as_dictionary().unwrap();
 
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
 
         structure
-            .check_other_qualifies(&dictionary.get_type(&database))
+            .check_other_qualifies(&dictionary.get_type(&context))
             .unwrap();
     }
 
@@ -812,18 +833,32 @@ mod test {
         let closure = closure.as_userclosure().unwrap();
 
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
 
         ValueType::Any
-            .check_other_qualifies(&closure.get_type(&database))
+            .check_other_qualifies(&closure.get_type(&context))
             .unwrap();
 
         let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
         let dictionary = dictionary.as_dictionary().unwrap();
 
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
 
         ValueType::Any
-            .check_other_qualifies(&dictionary.get_type(&database))
+            .check_other_qualifies(&dictionary.get_type(&context))
             .unwrap();
 
         ValueType::Any

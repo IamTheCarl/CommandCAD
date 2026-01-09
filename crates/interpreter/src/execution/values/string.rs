@@ -18,13 +18,10 @@
 
 use imstr::ImString;
 
-use crate::{
-    compile::SourceReference,
-    execution::{
-        errors::Raise,
-        logging::RuntimeLog,
-        values::{closure::BuiltinCallableDatabase, MissingAttributeError, StaticType},
-    },
+use crate::execution::{
+    errors::Raise,
+    values::{MissingAttributeError, StaticType},
+    ExecutionContext,
 };
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
@@ -35,26 +32,18 @@ use std::borrow::Cow;
 pub struct IString(pub ImString);
 
 impl Object for IString {
-    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
+    fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::Boolean
     }
 
-    fn eq(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<bool> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(self.0 == rhs.0)
     }
 
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         // build_closure_type!(MapClosure(character: IString) -> ValueType::Any);
@@ -64,9 +53,9 @@ impl Object for IString {
             // "map" => {
             //     let value = static_method!(
             //         String_map(
-            //             _log: &mut dyn RuntimeLog,
-            //             stack_trace: &mut Vec<SourceReference>,
-            //             _stack: &mut Stack,
+            //             _log: &dyn RuntimeLog,
+            //             stack_trace: &StackTrace,
+            //             _stack: &StackScope,
             //             this: ValueType,
             //             for_each: MapClosure) -> ValueType::TypeNone
             //         {
@@ -78,9 +67,9 @@ impl Object for IString {
             // "fold" => {
             //     let value = static_method!(
             //         String_map(
-            //             _log: &mut dyn RuntimeLog,
-            //             stack_trace: &mut Vec<SourceReference>,
-            //             _stack: &mut Stack,
+            //             _log: &dyn RuntimeLog,
+            //             stack_trace: &StackTrace,
+            //             _stack: &StackScope,
             //             this: ValueType,
             //             for_each: FoldClosure) -> ValueType::TypeNone
             //         {
@@ -92,7 +81,7 @@ impl Object for IString {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(stack_trace)),
+            .to_error(context.stack_trace)),
         }
     }
 }

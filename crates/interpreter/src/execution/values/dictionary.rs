@@ -19,15 +19,15 @@
 use std::{borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
 
 use hashable_map::HashableMap;
+use imstr::ImString;
 
 use crate::{
-    compile::{AstNode, DictionaryConstruction, SourceReference},
+    compile::{AstNode, DictionaryConstruction},
     execute_expression,
     execution::{
         errors::{ErrorType, ExpressionResult, Raise as _},
-        logging::RuntimeLog,
-        stack::{ScopeType, Stack},
-        values::closure::BuiltinCallableDatabase,
+        stack::ScopeType,
+        ExecutionContext,
     },
 };
 
@@ -37,7 +37,7 @@ use super::{
 
 #[derive(Clone, Debug, Eq)]
 pub(crate) struct DictionaryData {
-    pub members: HashableMap<String, Value>,
+    pub members: HashableMap<ImString, Value>,
     pub struct_def: StructDefinition,
 }
 
@@ -53,15 +53,13 @@ pub struct Dictionary {
 }
 
 impl Object for Dictionary {
-    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
+    fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         self.data.struct_def.clone().into()
     }
 
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _callable_database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         if let Some(member) = self.data.members.get(attribute) {
@@ -70,7 +68,7 @@ impl Object for Dictionary {
             Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(stack_trace))
+            .to_error(context.stack_trace))
         }
     }
 }
@@ -87,48 +85,51 @@ impl Dictionary {
     }
 
     pub fn from_ast(
-        log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        stack: &mut Stack,
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         ast_node: &AstNode<DictionaryConstruction>,
     ) -> ExpressionResult<Self> {
         let mut members = HashMap::with_capacity(ast_node.node.assignments.len());
 
-        stack.scope(stack_trace, ScopeType::Inherited, |stack, stack_trace| {
-            for assignment in ast_node.node.assignments.iter() {
-                let name = assignment.node.name.node.clone();
-                let value = execute_expression(
-                    log,
-                    stack_trace,
-                    stack,
-                    database,
-                    &assignment.node.assignment,
-                )?;
+        context.stack.scope_mut(
+            context.stack_trace,
+            ScopeType::Inherited,
+            HashMap::new(),
+            |stack, stack_trace| {
+                for assignment in ast_node.node.assignments.iter() {
+                    let context = ExecutionContext {
+                        log: context.log,
+                        stack_trace,
+                        stack,
+                        database: context.database,
+                    };
 
-                if members.insert(name.clone(), value.clone()).is_some() {
-                    // That's a duplicate member.
-                    return Err(DuplicateMemberError {
-                        name: assignment.node.name.node.clone(),
+                    let name = assignment.node.name.node.clone();
+                    let value = execute_expression(&context, &assignment.node.assignment)?;
+
+                    if members.insert(name.clone(), value.clone()).is_some() {
+                        // That's a duplicate member.
+                        return Err(DuplicateMemberError {
+                            name: assignment.node.name.node.clone(),
+                        }
+                        .to_error(context.stack_trace.iter().chain([&assignment.reference])));
                     }
-                    .to_error(stack_trace.iter().chain([&assignment.reference])));
+
+                    stack.insert_value(name, value);
                 }
 
-                stack.insert_value(name, value);
-            }
+                Ok(())
+            },
+        )??;
 
-            Ok(())
-        })??;
-
-        Ok(Self::new(database, members))
+        Ok(Self::new(context, members))
     }
 
-    pub fn new(database: &BuiltinCallableDatabase, map: HashMap<String, Value>) -> Self {
+    pub fn new(context: &ExecutionContext, map: HashMap<ImString, Value>) -> Self {
         let mut struct_members = HashMap::with_capacity(map.len());
 
         for (name, value) in map.iter() {
             let member = StructMember {
-                ty: value.get_type(database),
+                ty: value.get_type(context),
                 default: None,
             };
 
@@ -147,14 +148,14 @@ impl Dictionary {
         Self { data }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&ImString, &Value)> {
         self.data.members.iter()
     }
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct DuplicateMemberError {
-    pub name: String,
+    pub name: ImString,
 }
 
 impl ErrorType for DuplicateMemberError {}
@@ -179,7 +180,7 @@ mod test {
         let product = test_run("(none = std.consts.None)").unwrap();
         let expected = Arc::new(DictionaryData {
             members: HashableMap::from(HashMap::from_iter([(
-                "none".to_string(),
+                "none".into(),
                 values::ValueNone.into(),
             )])),
             struct_def: StructDefinition {

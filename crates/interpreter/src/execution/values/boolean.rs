@@ -16,13 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{
-    compile::SourceReference,
-    execution::{
-        logging::RuntimeLog,
-        values::{closure::BuiltinCallableDatabase, StaticType},
-    },
-};
+use crate::execution::{values::StaticType, ExecutionContext};
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
 
@@ -32,59 +26,30 @@ use std::borrow::Cow;
 pub struct Boolean(pub bool);
 
 impl Object for Boolean {
-    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
+    fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::Boolean
     }
 
-    fn eq(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<bool> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(self.0 == rhs.0)
     }
-    fn and(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(self.0 && rhs.0).into())
     }
 
-    fn or(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self(self.0 || rhs.0).into())
     }
 
-    fn xor(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(Self((self.0 && rhs.0) || (!self.0 && !rhs.0)).into())
     }
 
-    fn unary_not(
-        self,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
+    fn unary_not(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(Self(!self.0).into())
     }
 }

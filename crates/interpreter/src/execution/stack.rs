@@ -16,14 +16,14 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::compile::SourceReference;
+use crate::execution::logging::StackTrace;
 
 use super::{
     errors::{ErrorType, ExpressionResult, Raise},
     logging::LocatedStr,
     values::Value,
 };
-use compact_str::CompactString;
+use imstr::ImString;
 use std::{collections::HashMap, fmt::Display};
 
 #[derive(Debug, Clone, Copy)]
@@ -33,27 +33,94 @@ pub enum ScopeType {
 }
 
 #[derive(Debug)]
-struct Scope {
+pub struct StackScope<'p> {
+    prelude: &'p HashMap<ImString, Value>,
+    parent: Option<&'p StackScope<'p>>,
     ty: ScopeType,
-    variables: HashMap<CompactString, Value>,
+    variables: HashMap<ImString, Value>,
 }
 
-#[derive(Debug)]
-pub struct Stack {
-    scopes: Vec<Scope>,
-    prelude: HashMap<String, Value>,
-    active_scope: usize,
-}
+impl<'p> StackScope<'p> {
+    pub fn top(prelude: &'p HashMap<ImString, Value>) -> Self {
+        Self {
+            prelude,
+            parent: None,
+            ty: ScopeType::Isolated,
+            variables: HashMap::new(),
+        }
+    }
 
-macro_rules! generate_variable_getter {
-    ($self:ident, $stack_trace: ident, $name:ident, $iter:ident, $get:ident) => {{
-        let mut scope_iterator = $self.scopes[..=$self.active_scope].$iter().rev();
-        let mut result = None;
+    pub fn scope<'s, B, R>(
+        &'p self,
+        stack_trace: &StackTrace,
+        mode: ScopeType,
+        variables: HashMap<ImString, Value>,
+        block: B,
+    ) -> ExpressionResult<R>
+    where
+        B: FnOnce(&Self, &StackTrace) -> R,
+    {
+        let scope = Self {
+            prelude: self.prelude,
+            parent: Some(self),
+            ty: mode,
+            variables,
+        };
+
+        let result = block(&scope, stack_trace);
+
+        Ok(result)
+    }
+
+    pub fn scope_mut<'s, B, R>(
+        &'p self,
+        stack_trace: &StackTrace,
+        mode: ScopeType,
+        variables: HashMap<ImString, Value>,
+        block: B,
+    ) -> ExpressionResult<R>
+    where
+        B: FnOnce(&mut Self, &StackTrace) -> R,
+    {
+        let mut scope = Self {
+            prelude: self.prelude,
+            parent: Some(self),
+            ty: mode,
+            variables,
+        };
+
+        let result = block(&mut scope, stack_trace);
+
+        Ok(result)
+    }
+
+    pub fn insert_value(&mut self, name: ImString, value: Value) {
+        self.variables.insert(name, value);
+    }
+
+    fn iter(&'p self) -> StackScopeIter<'p> {
+        StackScopeIter {
+            current: Some(self),
+        }
+    }
+
+    /// Gets a reference to a variable on the stack.
+    // TODO Recommending similar named variables would help users to notice typos.
+    // https://crates.io/crates/levenshtein
+    pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(
+        &self,
+        stack_trace: &StackTrace,
+        name: S,
+    ) -> ExpressionResult<&Value> {
+        let name = name.into();
+
+        let mut scope_iterator = self.iter();
+        let mut value = None;
 
         // Search the stack for the thing.
         for scope in &mut scope_iterator {
-            if let Some(value) = scope.variables.$get($name.string) {
-                result = Some(value);
+            if let Some(local_value) = scope.variables.get(name.string) {
+                value = Some(local_value);
                 break;
             }
 
@@ -67,8 +134,37 @@ macro_rules! generate_variable_getter {
             }
         }
 
-        result
-    }};
+        if let Some(value) = value {
+            Ok(value)
+        } else {
+            // See if we can find it in the prelude.
+            if let Some(value) = self.prelude.get(name.string) {
+                return Ok(value);
+            }
+
+            // We couldn't find it.
+            Err(NotInScopeError {
+                variable_name: name.string.to_string(),
+            }
+            .to_error(stack_trace.iter().chain([&name.location])))
+        }
+    }
+}
+
+pub struct StackScopeIter<'p> {
+    current: Option<&'p StackScope<'p>>,
+}
+
+impl<'p> Iterator for StackScopeIter<'p> {
+    type Item = &'p StackScope<'p>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = self.current.take();
+        if let Some(next) = next {
+            self.current = next.parent;
+        }
+        next
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -85,84 +181,5 @@ impl Display for NotInScopeError {
             "`{}` could not be found in the current scope",
             self.variable_name
         )
-    }
-}
-
-impl Stack {
-    pub fn new(prelude: HashMap<String, Value>) -> Self {
-        Self {
-            scopes: vec![Scope {
-                ty: ScopeType::Isolated,
-                variables: HashMap::new(),
-            }],
-            prelude,
-            active_scope: 0,
-        }
-    }
-
-    pub fn scope<'s, B, R>(
-        &mut self,
-        stack_trace: &mut Vec<SourceReference>,
-        mode: ScopeType,
-        block: B,
-    ) -> ExpressionResult<R>
-    where
-        B: FnOnce(&mut Self, &mut Vec<SourceReference>) -> R,
-    {
-        self.push_scope(mode)?;
-        let result = block(self, stack_trace);
-        self.pop_scope();
-
-        Ok(result)
-    }
-
-    fn push_scope<'s>(&mut self, mode: ScopeType) -> ExpressionResult<()> {
-        let next_scope_index = self.active_scope + 1;
-        if next_scope_index >= self.scopes.len() {
-            self.scopes.push(Scope {
-                variables: HashMap::new(),
-                ty: mode,
-            });
-        }
-
-        self.scopes[next_scope_index].ty = mode;
-        self.active_scope = next_scope_index;
-
-        Ok(())
-    }
-
-    fn pop_scope(&mut self) {
-        self.active_scope -= 1;
-    }
-
-    pub fn insert_value(&mut self, name: impl Into<CompactString>, value: Value) {
-        self.scopes[self.active_scope]
-            .variables
-            .insert(name.into(), value);
-    }
-
-    /// Gets a reference to a variable on the stack.
-    // TODO Recommending similar named variables would help users to notice typos.
-    // https://crates.io/crates/levenshtein
-    pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(
-        &self,
-        stack_trace: &[SourceReference],
-        name: S,
-    ) -> ExpressionResult<&Value> {
-        let name = name.into();
-        if let Some(value) = generate_variable_getter!(self, stack_trace, name, iter, get) {
-            Ok(value)
-        } else {
-            // See if we can find it in the prelude.
-            if let Some(value) = self.prelude.get(name.string) {
-                return Ok(value);
-            }
-
-            // We couldn't find it.
-            Err(NotInScopeError {
-                variable_name: name.string.to_string(),
-            }
-            .to_error(stack_trace.iter().chain([&name.location])))
-        }
     }
 }

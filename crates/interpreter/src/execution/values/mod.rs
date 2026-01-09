@@ -22,12 +22,9 @@ use enum_dispatch::enum_dispatch;
 use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
 use unwrap_enum::EnumAs;
 
-use crate::{compile::SourceReference, execution::stack::Stack};
+use crate::execution::{logging::StackTrace, ExecutionContext};
 
-use super::{
-    errors::{ErrorType, ExpressionResult, Raise as _},
-    logging::RuntimeLog,
-};
+use super::errors::{ErrorType, ExpressionResult, Raise as _};
 
 mod void;
 pub use void::ValueNone;
@@ -139,7 +136,7 @@ impl Display for UnsupportedOperationError {
 impl UnsupportedOperationError {
     fn raise<O: Object + Sized, R>(
         object: &O,
-        stack_trace: &[SourceReference],
+        stack_trace: &StackTrace,
         operation_name: &'static str,
     ) -> ExpressionResult<R> {
         Err(Self {
@@ -165,11 +162,11 @@ impl Display for MissingAttributeError {
 
 #[enum_dispatch]
 pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
-    fn get_type(&self, callable_database: &BuiltinCallableDatabase) -> ValueType;
+    fn get_type(&self, context: &ExecutionContext) -> ValueType;
 
     // fn format(
     //     &self,
-    //     _log: &mut dyn RuntimeLog,
+    //     _log: &dyn RuntimeLog,
     //     stack_trace: stack_trace: &S[SourceReference],
     //     _f: &mut dyn Write,
     //     _style: Style,
@@ -182,195 +179,78 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         Self::static_type_name().into()
     }
 
-    fn and(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "logical and")
+    fn and(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "logical and")
     }
-    fn or(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "logical or")
+    fn or(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "logical or")
     }
-    fn xor(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "logical xor")
+    fn xor(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "logical xor")
     }
-    fn bit_and(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "binary and")
+    fn bit_and(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "binary and")
     }
-    fn bit_or(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "binary or")
+    fn bit_or(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "binary or")
     }
-    fn bit_xor(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "binary xor")
+    fn bit_xor(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "binary xor")
     }
-    fn cmp(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Ordering> {
-        UnsupportedOperationError::raise(&self, stack_trace, "compare")
+    fn cmp(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Ordering> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "compare")
     }
-    fn eq(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<bool> {
-        Ok(matches!(
-            self.cmp(log, stack_trace, database, rhs)?,
-            Ordering::Equal
-        ))
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
+        Ok(matches!(self.cmp(context, rhs)?, Ordering::Equal))
     }
-    fn addition(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "addition")
+    fn addition(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "addition")
     }
-    fn subtraction(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "subtraction")
+    fn subtraction(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "subtraction")
     }
-    fn multiply(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "multiply")
+    fn multiply(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "multiply")
     }
-    fn divide(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "divide")
+    fn divide(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "divide")
     }
-    fn exponent(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "exponent")
+    fn exponent(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "exponent")
     }
-    fn left_shift(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "left shift")
+    fn left_shift(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "left shift")
     }
-    fn right_shift(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        _rhs: Value,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "right shift")
+    fn right_shift(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "right shift")
     }
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         Err(MissingAttributeError {
             name: attribute.into(),
         }
-        .to_error(stack_trace))
+        .to_error(context.stack_trace))
     }
-    fn call(
-        &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        _stack: &mut Stack,
-        _database: &BuiltinCallableDatabase,
-        _argument: Dictionary,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(self, stack_trace, "call")
+    fn call(&self, context: &ExecutionContext, _argument: Dictionary) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(self, context.stack_trace, "call")
     }
-    fn unary_plus(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "unary plus")
+    fn unary_plus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "unary plus")
     }
-    fn unary_minus(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "unary minus")
+    fn unary_minus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "unary minus")
     }
-    fn unary_not(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
-        UnsupportedOperationError::raise(&self, stack_trace, "unary not")
+    fn unary_not(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(&self, context.stack_trace, "unary not")
     }
 
     // fn export(
     //     &self,
-    //     _log: &mut dyn RuntimeLog,
-    //     stack_trace: &[SourceReference],
+    //     _log: &dyn RuntimeLog,
+    //     stack_trace: &StackScope,
     // ) -> OperatorResult<SerializableValue> {
     //     UnsupportedOperationError::raise(self, stack_trace, "export")
     // }
@@ -433,7 +313,7 @@ impl IntoVariant<Self> for Value {
 }
 
 impl Value {
-    pub fn downcast_ref<T>(&self, stack_trace: &[SourceReference]) -> ExpressionResult<&T>
+    pub fn downcast_ref<T>(&self, stack_trace: &StackTrace) -> ExpressionResult<&T>
     where
         T: StaticTypeName,
         Self: AsVariant<T>,
@@ -449,7 +329,7 @@ impl Value {
         }
     }
 
-    pub fn downcast<T>(self, stack_trace: &[SourceReference]) -> ExpressionResult<T>
+    pub fn downcast<T>(self, stack_trace: &StackTrace) -> ExpressionResult<T>
     where
         T: StaticTypeName,
         Self: IntoVariant<T>,
@@ -464,10 +344,7 @@ impl Value {
         }
     }
 
-    pub fn downcast_optional<T>(
-        self,
-        stack_trace: &[SourceReference],
-    ) -> ExpressionResult<Option<T>>
+    pub fn downcast_optional<T>(self, stack_trace: &StackTrace) -> ExpressionResult<Option<T>>
     where
         T: StaticTypeName,
         Self: IntoVariant<T>,

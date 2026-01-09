@@ -1,5 +1,6 @@
 mod expressions;
 
+use imstr::ImString;
 use std::{path::PathBuf, sync::Arc};
 use type_sitter::{IncorrectKind, Node};
 
@@ -42,14 +43,14 @@ trait Parse<'t, N: 't>: Sized {
     ) -> Result<AstNode<Self>, Error<'t, 'i>>;
 }
 
-impl<'t, N: Node<'t> + 't> Parse<'t, N> for String {
+impl<'t, N: Node<'t> + 't> Parse<'t, N> for ImString {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
         value: N,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let text = &input[value.byte_range()];
-        Ok(AstNode::new(file, &value, text.to_string()))
+        Ok(AstNode::new(file, &value, ImString::from(text.to_string())))
     }
 }
 

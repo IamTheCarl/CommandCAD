@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::execution::values::{closure::BuiltinCallableDatabase, StaticType};
+use crate::execution::{values::StaticType, ExecutionContext};
 
 use super::{value_type::ValueType, Object, StaticTypeName};
 
@@ -26,7 +26,7 @@ use std::borrow::Cow;
 pub struct ValueNone;
 
 impl Object for ValueNone {
-    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
+    fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::TypeNone
     }
 }

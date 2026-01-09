@@ -4,16 +4,16 @@ use nalgebra::{Dim, RawStorage};
 
 use crate::{
     build_closure_type, build_method,
-    compile::{self, AstNode, SourceReference},
+    compile::{self, AstNode},
     execute_expression,
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise as _},
-        logging::RuntimeLog,
-        stack::Stack,
+        logging::StackTrace,
         values::{
             closure::BuiltinCallableDatabase, scalar::UnwrapNotNan, BuiltinFunction, DowncastError,
             MissingAttributeError, Object, Scalar, StaticType, StaticTypeName, Value, ValueType,
         },
+        ExecutionContext,
     },
 };
 
@@ -43,74 +43,40 @@ where
     Self: StaticTypeName + Into<Value>,
     Value: IntoVariant<Self> + AsVariant<Self>,
 {
-    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
+    fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         I::get_type(self.dimension)
     }
 
-    fn addition(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs = self.unpack_same_dimension(stack_trace, rhs)?;
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
         let value = self.value + rhs.value;
 
-        Ok(Self::new_raw(stack_trace, self.dimension, value)?.into())
+        Ok(Self::new_raw(context, self.dimension, value)?.into())
     }
-    fn subtraction(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs = self.unpack_same_dimension(stack_trace, rhs)?;
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
         let value = self.value - rhs.value;
 
-        Ok(Self::new_raw(stack_trace, self.dimension, value)?.into())
+        Ok(Self::new_raw(context, self.dimension, value)?.into())
     }
-    fn multiply(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs = rhs.downcast_ref::<Scalar>(context.stack_trace)?;
         let value = self.value * *rhs.value;
         let dimension = self.dimension + rhs.dimension;
 
-        Ok(Self::new_raw(stack_trace, dimension, value)?.into())
+        Ok(Self::new_raw(context, dimension, value)?.into())
     }
-    fn divide(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_ref::<Scalar>(stack_trace)?;
+    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        let rhs = rhs.downcast_ref::<Scalar>(context.stack_trace)?;
         let value = self.value / *rhs.value;
         let dimension = self.dimension - rhs.dimension;
 
-        Ok(Self::new_raw(stack_trace, dimension, value)?.into())
+        Ok(Self::new_raw(context, dimension, value)?.into())
     }
-    fn unary_plus(
-        self,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
+    fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(self.clone().into())
     }
-    fn unary_minus(
-        self,
-        _log: &mut dyn RuntimeLog,
-        _stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
+    fn unary_minus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(Self {
             value: -self.value,
             ..self.clone()
@@ -118,27 +84,19 @@ where
         .into())
     }
 
-    fn eq(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<bool> {
-        let rhs: Self = rhs.downcast(stack_trace)?;
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
+        let rhs: Self = rhs.downcast(context.stack_trace)?;
         Ok(self.dimension == rhs.dimension && self.value == rhs.value)
     }
 
     fn get_attribute(
         &self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         attribute: &str,
     ) -> ExpressionResult<Value> {
-        if let Some(value) =
-            self.value
-                .get_attribute(log, stack_trace, attribute, self.dimension)?
+        if let Some(value) = self
+            .value
+            .get_attribute(context, attribute, self.dimension)?
         {
             Ok(value)
         } else {
@@ -186,7 +144,7 @@ where
                 _ => Err(MissingAttributeError {
                     name: attribute.into(),
                 }
-                .to_error(stack_trace)),
+                .to_error(context.stack_trace)),
             }
         }
     }
@@ -199,27 +157,24 @@ where
     Value: IntoVariant<Self> + AsVariant<Self>,
 {
     pub fn new(
-        stack_trace: &[SourceReference],
+        context: &ExecutionContext,
         dimension: Dimension,
         value: I::BuildFrom,
     ) -> ExpressionResult<Self> {
         let value = I::build(value);
 
-        Self::new_raw(stack_trace, dimension, value)
+        Self::new_raw(context, dimension, value)
     }
 
     pub fn from_ast(
-        log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        stack: &mut Stack,
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         ast_node: &AstNode<Box<I::NodeType>>,
     ) -> ExpressionResult<Self> {
-        I::from_ast(log, stack_trace, stack, database, ast_node)
+        I::from_ast(context, ast_node)
     }
 
     fn new_raw(
-        stack_trace: &[SourceReference],
+        context: &ExecutionContext,
         dimension: Dimension,
         value: I,
     ) -> ExpressionResult<Self> {
@@ -228,16 +183,12 @@ where
         } else {
             Err(
                 GenericFailure("Result of arithmetic operation is NaN".into())
-                    .to_error(stack_trace),
+                    .to_error(context.stack_trace),
             )
         }
     }
 
-    fn unpack_same_dimension(
-        self,
-        stack_trace: &[SourceReference],
-        rhs: Value,
-    ) -> ExpressionResult<Self> {
+    fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExpressionResult<Self> {
         let rhs: Vector<I> = rhs.downcast(stack_trace)?;
 
         if self.dimension == rhs.dimension {
@@ -343,48 +294,39 @@ mod methods {
         build_method!(
             database,
             forward = M::Abs, format!("Vector{dimension}::abs"), (
-                _log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Vector<I>) -> Vector<I>
             {
                 let value = this.value.abs();
-                Vector::new_raw(stack_trace, this.dimension, value)
+                Vector::new_raw(context, this.dimension, value)
             }
         );
         build_method!(
             database,
             forward = M::AddScalar, format!("Vector{dimension}::add_scalar"), (
-                _log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Vector<I>,
                 value: Scalar) -> Vector<I>
             {
                 if this.dimension == value.dimension {
                     let value = this.value.add_scalar(*value.value);
-                    Vector::new_raw(stack_trace, this.dimension, value)
+                    Vector::new_raw(context, this.dimension, value)
                 } else {
                     Err(DowncastError {
                         expected: this.type_name(),
                         got: value.type_name(),
                     }
-                    .to_error(stack_trace.iter()))
+                    .to_error(context.stack_trace))
                 }
             }
         );
         build_method!(
             database,
             forward = M::AMax, format!("Vector{dimension}::amax"), (
-                _log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.amax()).unwrap_not_nan(stack_trace)?;
+                let value = common_data_types::Float::new(this.value.amax()).unwrap_not_nan(context.stack_trace)?;
 
                 Ok(Scalar {
                     dimension: this.dimension,
@@ -395,13 +337,10 @@ mod methods {
         build_method!(
             database,
             forward = M::AMin, format!("Vector{dimension}::amin"), (
-                _log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.amin()).unwrap_not_nan(stack_trace)?;
+                let value = common_data_types::Float::new(this.value.amin()).unwrap_not_nan(context.stack_trace)?;
 
                 Ok(Scalar {
                     dimension: this.dimension,
@@ -412,16 +351,13 @@ mod methods {
         build_method!(
             database,
             forward = M::Dot, format!("Vector{dimension}::dot"), (
-                _log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Vector<I>,
                 rhs: Value) -> Scalar
             {
-                let rhs = rhs.downcast::<Vector<I>>(stack_trace)?;
+                let rhs = rhs.downcast::<Vector<I>>(context.stack_trace)?;
                 if this.dimension == rhs.dimension {
-                    let value = common_data_types::Float::new(this.value.dot(&rhs.value)).unwrap_not_nan(stack_trace)?;
+                    let value = common_data_types::Float::new(this.value.dot(&rhs.value)).unwrap_not_nan(context.stack_trace)?;
 
                     Ok(Scalar {
                         dimension: this.dimension,
@@ -432,20 +368,17 @@ mod methods {
                         expected: this.type_name(),
                         got: rhs.type_name(),
                     }
-                    .to_error(stack_trace.iter()))
+                    .to_error(context.stack_trace))
                 }
             }
         );
         build_method!(
             database,
             forward = M::Norm, format!("Vector{dimension}::norm"),(
-                _log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.norm()).unwrap_not_nan(stack_trace)?;
+                let value = common_data_types::Float::new(this.value.norm()).unwrap_not_nan(context.stack_trace)?;
 
                 Ok(Scalar {
                     dimension: this.dimension,
@@ -456,28 +389,22 @@ mod methods {
         build_method!(
             database,
             forward = M::Normalize, format!("Vector{dimension}::normalize"),(
-                _log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Vector<I>) -> Vector<I>
             {
                 let value = this.value.normalize();
-                Vector::<I>::new_raw(stack_trace, Dimension::zero(), value)
+                Vector::<I>::new_raw(context, Dimension::zero(), value)
             }
         );
         build_method!(
             database,
             forward = M::Angle, format!("Vector{dimension}::angle"),(
-                _log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                _stack: &mut Stack,
-                _database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Vector<I>,
                 other: Value) -> Scalar
             {
-                let other = other.downcast::<Vector<I>>(stack_trace)?;
-                let value = common_data_types::Float::new(this.value.angle(&other.value)).unwrap_not_nan(stack_trace)?;
+                let other = other.downcast::<Vector<I>>(context.stack_trace)?;
+                let value = common_data_types::Float::new(this.value.angle(&other.value)).unwrap_not_nan(context.stack_trace)?;
 
                 Ok(Scalar {
                     dimension: Dimension::angle(),
@@ -488,24 +415,21 @@ mod methods {
         build_method!(
             database,
             forward = M::Map, format!("Vector{dimension}::map"),(
-                log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                stack: &mut Stack,
-                database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Vector<I>,
                 f: MapClosure) -> Vector<I>
             {
-                let operations: ArrayVec<[Value; 4]> = this.value.iter().map(|c| f.call(log, stack_trace, stack, database, Dictionary::new(database, HashMap::from_iter([
+                let operations: ArrayVec<[Value; 4]> = this.value.iter().map(|c| f.call(context, Dictionary::new(context, HashMap::from_iter([
                     (
                         "c".into(),
                         Scalar {
                             dimension: this.dimension,
-                            value: common_data_types::Float::new(c).unwrap_not_nan(stack_trace)?
+                            value: common_data_types::Float::new(c).unwrap_not_nan(context.stack_trace)?
                         }.into()
                     )
                 ])))).collect::<ExpressionResult<_>>()?;
 
-                let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(stack_trace)).collect::<ExpressionResult<_>>()?;
+                let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(context.stack_trace)).collect::<ExpressionResult<_>>()?;
 
                 // The smallest vector we support is 2, so this should never panic.
                 let dimension = result[0].dimension;
@@ -513,20 +437,17 @@ mod methods {
                 for component in result.iter() {
                     if component.dimension != dimension {
                         return Err(GenericFailure("All components of a vector must match".into())
-                            .to_error(stack_trace.iter()));
+                            .to_error(context.stack_trace));
                     }
                 }
 
-                Ok(Vector::<I>::new_raw(stack_trace, dimension, I::from_iterator(result.iter().map(|c| *c.value)))?)
+                Ok(Vector::<I>::new_raw(context, dimension, I::from_iterator(result.iter().map(|c| *c.value)))?)
             }
         );
         build_method!(
             database,
             forward = M::Fold, format!("Vector{dimension}::fold"),(
-                log: &mut dyn RuntimeLog,
-                stack_trace: &mut Vec<SourceReference>,
-                stack: &mut Stack,
-                database: &BuiltinCallableDatabase,
+                context: &ExecutionContext,
                 this: Vector<I>,
                 init: Value,
                 f: FoldClosure) -> Value
@@ -534,12 +455,12 @@ mod methods {
 
                 let mut accumulator = init;
                 for component in this.value.iter() {
-                    accumulator = f.call(log, stack_trace, stack, database, Dictionary::new(database, HashMap::from_iter([
+                    accumulator = f.call(context, Dictionary::new(context, HashMap::from_iter([
                         (
                             "c".into(),
                             Scalar {
                                 dimension: this.dimension,
-                                value: common_data_types::Float::new(component).unwrap_not_nan(stack_trace)?
+                                value: common_data_types::Float::new(component).unwrap_not_nan(context.stack_trace)?
                             }.into()
                         ),
                         (
@@ -563,22 +484,19 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::Vector3Cross, "Vector3::cross", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: Vector3,
             rhs: Vector3) -> Vector3
         {
             if this.dimension == rhs.dimension {
                 let value = this.value.cross(&rhs.value);
-                Vector3::new_raw(stack_trace, this.dimension, value)
+                Vector3::new_raw(context, this.dimension, value)
             } else {
                 Err(DowncastError {
                     expected: this.type_name(),
                     got: rhs.type_name(),
                 }
-                .to_error(stack_trace.iter()))
+                .to_error(context.stack_trace))
             }
         }
     );
@@ -607,10 +525,7 @@ pub trait VectorInternalType:
     fn get_type(dimension: Dimension) -> ValueType;
     fn build(value: Self::BuildFrom) -> Self;
     fn from_ast(
-        log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        stack: &mut Stack,
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
     ) -> ExpressionResult<Vector<Self>>;
     fn from_iterator<I>(iterator: I) -> Self
@@ -619,8 +534,7 @@ pub trait VectorInternalType:
 
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
+        context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
     ) -> ExpressionResult<Option<Value>>;
@@ -652,9 +566,9 @@ where
 }
 
 macro_rules! get_component {
-    ($log:ident, $stack_trace:ident, $stack:ident, $database:ident, $ast_node:ident, $c:ident) => {
-        execute_expression($log, $stack_trace, $stack, $database, &$ast_node.node.$c)?
-            .downcast::<Scalar>($stack_trace)?
+    ($context:ident, $ast_node:ident, $c:ident) => {
+        execute_expression($context, &$ast_node.node.$c)?
+            .downcast::<Scalar>($context.stack_trace)?
     };
 }
 
@@ -672,14 +586,11 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
     }
 
     fn from_ast(
-        log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        stack: &mut Stack,
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
     ) -> ExpressionResult<Vector<Self>> {
-        let x = get_component!(log, stack_trace, stack, database, ast_node, x);
-        let y = get_component!(log, stack_trace, stack, database, ast_node, y);
+        let x = get_component!(context, ast_node, x);
+        let y = get_component!(context, ast_node, y);
 
         if x.dimension == y.dimension {
             Ok(Vector {
@@ -689,7 +600,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
         } else {
             Err(
                 GenericFailure("All components of a vector must match".into())
-                    .to_error(stack_trace.iter()),
+                    .to_error(context.stack_trace),
             )
         }
     }
@@ -703,8 +614,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
 
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
+        context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
     ) -> ExpressionResult<Option<Value>> {
@@ -712,14 +622,16 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
             "x" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.x).unwrap_not_nan(stack_trace)?,
+                    value: common_data_types::Float::new(self.x)
+                        .unwrap_not_nan(context.stack_trace)?,
                 }
                 .into(),
             )),
             "y" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.y).unwrap_not_nan(stack_trace)?,
+                    value: common_data_types::Float::new(self.y)
+                        .unwrap_not_nan(context.stack_trace)?,
                 }
                 .into(),
             )),
@@ -789,15 +701,12 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
     }
 
     fn from_ast(
-        log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        stack: &mut Stack,
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
     ) -> ExpressionResult<Vector<Self>> {
-        let x = get_component!(log, stack_trace, stack, database, ast_node, x);
-        let y = get_component!(log, stack_trace, stack, database, ast_node, y);
-        let z = get_component!(log, stack_trace, stack, database, ast_node, z);
+        let x = get_component!(context, ast_node, x);
+        let y = get_component!(context, ast_node, y);
+        let z = get_component!(context, ast_node, z);
 
         if x.dimension == y.dimension && x.dimension == z.dimension {
             Ok(Vector {
@@ -807,7 +716,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
         } else {
             Err(
                 GenericFailure("All components of a vector must match".into())
-                    .to_error(stack_trace.iter()),
+                    .to_error(context.stack_trace),
             )
         }
     }
@@ -821,8 +730,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
 
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
+        context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
     ) -> ExpressionResult<Option<Value>> {
@@ -830,21 +738,24 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
             "x" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.x).unwrap_not_nan(stack_trace)?,
+                    value: common_data_types::Float::new(self.x)
+                        .unwrap_not_nan(context.stack_trace)?,
                 }
                 .into(),
             )),
             "y" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.y).unwrap_not_nan(stack_trace)?,
+                    value: common_data_types::Float::new(self.y)
+                        .unwrap_not_nan(context.stack_trace)?,
                 }
                 .into(),
             )),
             "z" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.z).unwrap_not_nan(stack_trace)?,
+                    value: common_data_types::Float::new(self.z)
+                        .unwrap_not_nan(context.stack_trace)?,
                 }
                 .into(),
             )),
@@ -915,16 +826,13 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
     }
 
     fn from_ast(
-        log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        stack: &mut Stack,
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
     ) -> ExpressionResult<Vector<Self>> {
-        let x = get_component!(log, stack_trace, stack, database, ast_node, x);
-        let y = get_component!(log, stack_trace, stack, database, ast_node, y);
-        let z = get_component!(log, stack_trace, stack, database, ast_node, z);
-        let w = get_component!(log, stack_trace, stack, database, ast_node, w);
+        let x = get_component!(context, ast_node, x);
+        let y = get_component!(context, ast_node, y);
+        let z = get_component!(context, ast_node, z);
+        let w = get_component!(context, ast_node, w);
 
         if x.dimension == y.dimension && x.dimension == z.dimension && x.dimension == w.dimension {
             Ok(Vector {
@@ -934,7 +842,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
         } else {
             Err(
                 GenericFailure("All components of a vector must match".into())
-                    .to_error(stack_trace.iter()),
+                    .to_error(context.stack_trace),
             )
         }
     }
@@ -948,8 +856,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
 
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
+        context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
     ) -> ExpressionResult<Option<Value>> {
@@ -957,28 +864,32 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
             "x" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.x).unwrap_not_nan(stack_trace)?,
+                    value: common_data_types::Float::new(self.x)
+                        .unwrap_not_nan(context.stack_trace)?,
                 }
                 .into(),
             )),
             "y" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.y).unwrap_not_nan(stack_trace)?,
+                    value: common_data_types::Float::new(self.y)
+                        .unwrap_not_nan(context.stack_trace)?,
                 }
                 .into(),
             )),
             "z" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.z).unwrap_not_nan(stack_trace)?,
+                    value: common_data_types::Float::new(self.z)
+                        .unwrap_not_nan(context.stack_trace)?,
                 }
                 .into(),
             )),
             "w" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.w).unwrap_not_nan(stack_trace)?,
+                    value: common_data_types::Float::new(self.w)
+                        .unwrap_not_nan(context.stack_trace)?,
                 }
                 .into(),
             )),
@@ -1035,17 +946,26 @@ impl StaticType for nalgebra::Vector4<Float> {
 
 #[cfg(test)]
 mod test {
-    use crate::execution::{test_run, values::Boolean};
+    use crate::execution::{build_prelude, stack::StackScope, test_run, values::Boolean};
     use pretty_assertions::assert_eq;
+    use std::sync::Mutex;
 
     use super::*;
 
     #[test]
     fn construct_vector2() {
+        let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
         let product = test_run("<(1m, 2m)>").unwrap();
         assert_eq!(
             product,
-            Vector2::new(&[], Dimension::length(), [1.0, 2.0])
+            Vector2::new(&context, Dimension::length(), [1.0, 2.0])
                 .unwrap()
                 .into()
         );
@@ -1053,7 +973,7 @@ mod test {
         let product = test_run("<(-1m, -2m)>").unwrap();
         assert_eq!(
             product,
-            Vector2::new(&[], Dimension::length(), [-1.0, -2.0])
+            Vector2::new(&context, Dimension::length(), [-1.0, -2.0])
                 .unwrap()
                 .into()
         );
@@ -1061,10 +981,18 @@ mod test {
 
     #[test]
     fn construct_vector3() {
+        let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
         let product = test_run("<(1m, 2m, 3m)>").unwrap();
         assert_eq!(
             product,
-            Vector3::new(&[], Dimension::length(), [1.0, 2.0, 3.0])
+            Vector3::new(&context, Dimension::length(), [1.0, 2.0, 3.0])
                 .unwrap()
                 .into()
         );
@@ -1072,7 +1000,7 @@ mod test {
         let product = test_run("<(-1m, -2m, -3m)>").unwrap();
         assert_eq!(
             product,
-            Vector3::new(&[], Dimension::length(), [-1.0, -2.0, -3.0])
+            Vector3::new(&context, Dimension::length(), [-1.0, -2.0, -3.0])
                 .unwrap()
                 .into()
         );
@@ -1080,10 +1008,18 @@ mod test {
 
     #[test]
     fn construct_vector4() {
+        let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
         let product = test_run("<(1m, 2m, 3m, 4m)>").unwrap();
         assert_eq!(
             product,
-            Vector4::new(&[], Dimension::length(), [1.0, 2.0, 3.0, 4.0])
+            Vector4::new(&context, Dimension::length(), [1.0, 2.0, 3.0, 4.0])
                 .unwrap()
                 .into()
         );
@@ -1091,7 +1027,7 @@ mod test {
         let product = test_run("<(-1m, -2m, -3m, -4m)>").unwrap();
         assert_eq!(
             product,
-            Vector4::new(&[], Dimension::length(), [-1.0, -2.0, -3.0, -4.0])
+            Vector4::new(&context, Dimension::length(), [-1.0, -2.0, -3.0, -4.0])
                 .unwrap()
                 .into()
         );

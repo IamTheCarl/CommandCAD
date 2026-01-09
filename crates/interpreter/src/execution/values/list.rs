@@ -18,16 +18,15 @@
 
 use crate::{
     build_closure_type, build_method,
-    compile::{AstNode, Expression, SourceReference},
+    compile::{AstNode, Expression},
     execute_expression,
     execution::{
         errors::{Error, ErrorType, GenericFailure, Raise as _},
-        logging::RuntimeLog,
-        stack::Stack,
         values::{
             closure::BuiltinCallableDatabase, Boolean, BuiltinFunction, Dictionary,
             MissingAttributeError, StaticType, UnsignedInteger, ValueNone,
         },
+        ExecutionContext,
     },
 };
 
@@ -47,31 +46,28 @@ pub struct List {
 
 impl List {
     pub fn from_ast(
-        log: &mut dyn RuntimeLog,
-        stack_trace: &mut Vec<SourceReference>,
-        stack: &mut Stack,
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         ast_node: &AstNode<Vec<AstNode<Expression>>>,
     ) -> ExpressionResult<Self> {
         let values: ExpressionResult<Vec<Value>> = ast_node
             .node
             .iter()
-            .map(|expression| execute_expression(log, stack_trace, stack, database, expression))
+            .map(|expression| execute_expression(context, expression))
             .collect();
 
-        Ok(List::from_iter(database, values?))
+        Ok(List::from_iter(context, values?))
     }
 
-    pub fn from_iter<I>(database: &BuiltinCallableDatabase, iterator: I) -> Self
+    pub fn from_iter<I>(context: &ExecutionContext, iterator: I) -> Self
     where
         I: IntoIterator<Item = Value>,
     {
         let values: Vec<_> = iterator.into_iter().collect();
 
         let internal_type =
-            if let Some(initial_type) = values.first().map(|first| first.get_type(database)) {
+            if let Some(initial_type) = values.first().map(|first| first.get_type(context)) {
                 Some(values.iter().fold(initial_type, |accumulated, next| {
-                    accumulated.merge(next.get_type(database))
+                    accumulated.merge(next.get_type(context))
                 }))
             } else {
                 // This is an empty list.
@@ -86,8 +82,7 @@ impl List {
 
     fn map_raw(
         &self,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         operation_name: &'static str,
         mut operation: impl FnMut(&Value) -> ExpressionResult<Value>,
     ) -> ExpressionResult<Self> {
@@ -103,44 +98,35 @@ impl List {
                 })
             })
             .collect::<Result<_, OperationMappingError>>()
-            .map_err(|error| error.to_error(stack_trace))?;
+            .map_err(|error| error.to_error(context.stack_trace))?;
 
-        Ok(Self::from_iter(database, values))
+        Ok(Self::from_iter(context, values))
     }
 
     fn map_operation(
         &self,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         operation_name: &'static str,
         operation: impl FnMut(&Value) -> ExpressionResult<Value>,
     ) -> ExpressionResult<Value> {
-        self.map_raw(stack_trace, database, operation_name, operation)
+        self.map_raw(context, operation_name, operation)
             .map(|value| value.into())
     }
 }
 
 impl Object for List {
-    fn get_type(&self, _callable_database: &BuiltinCallableDatabase) -> ValueType {
+    fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::List(self.internal_type.clone().map(Box::new))
     }
 
-    fn eq(
-        self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<bool> {
-        let rhs: &Self = rhs.downcast_ref(stack_trace)?;
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
+        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
         Ok(self.values == rhs.values)
     }
 
     fn get_attribute(
         &self,
-        _log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        _callable_database: &BuiltinCallableDatabase,
+        context: &ExecutionContext,
         attribute: &str,
     ) -> ExpressionResult<Value> {
         match attribute {
@@ -168,201 +154,88 @@ impl Object for List {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(stack_trace)),
+            .to_error(context.stack_trace)),
         }
     }
 
-    fn and(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "and", move |value| {
-            value.clone().and(log, stack_trace, database, rhs.clone())
+    fn and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "and", move |value| {
+            value.clone().and(context, rhs.clone())
         })
     }
-    fn or(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "or", move |value| {
-            value.clone().or(log, stack_trace, database, rhs.clone())
+    fn or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "or", move |value| {
+            value.clone().or(context, rhs.clone())
         })
     }
-    fn xor(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "xor", move |value| {
-            value.clone().xor(log, stack_trace, database, rhs.clone())
+    fn xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "xor", move |value| {
+            value.clone().xor(context, rhs.clone())
         })
     }
-    fn bit_and(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "bit and", move |value| {
-            value
-                .clone()
-                .bit_and(log, stack_trace, database, rhs.clone())
+    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "bit and", move |value| {
+            value.clone().bit_and(context, rhs.clone())
         })
     }
-    fn bit_or(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "bit or", move |value| {
-            value
-                .clone()
-                .bit_or(log, stack_trace, database, rhs.clone())
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "bit or", move |value| {
+            value.clone().bit_or(context, rhs.clone())
         })
     }
-    fn bit_xor(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "bit xor", move |value| {
-            value
-                .clone()
-                .bit_xor(log, stack_trace, database, rhs.clone())
+    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "bit xor", move |value| {
+            value.clone().bit_xor(context, rhs.clone())
         })
     }
-    fn addition(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "addition", move |value| {
-            value
-                .clone()
-                .addition(log, stack_trace, database, rhs.clone())
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "addition", move |value| {
+            value.clone().addition(context, rhs.clone())
         })
     }
-    fn subtraction(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "subtraction", move |value| {
-            value
-                .clone()
-                .subtraction(log, stack_trace, database, rhs.clone())
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "subtraction", move |value| {
+            value.clone().subtraction(context, rhs.clone())
         })
     }
-    fn multiply(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "multiply", move |value| {
-            value
-                .clone()
-                .multiply(log, stack_trace, database, rhs.clone())
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "multiply", move |value| {
+            value.clone().multiply(context, rhs.clone())
         })
     }
-    fn divide(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "divide", move |value| {
-            value
-                .clone()
-                .divide(log, stack_trace, database, rhs.clone())
+    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "divide", move |value| {
+            value.clone().divide(context, rhs.clone())
         })
     }
-    fn exponent(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "exponent", move |value| {
-            value
-                .clone()
-                .exponent(log, stack_trace, database, rhs.clone())
+    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "exponent", move |value| {
+            value.clone().exponent(context, rhs.clone())
         })
     }
-    fn left_shift(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "left shift", move |value| {
-            value
-                .clone()
-                .left_shift(log, stack_trace, database, rhs.clone())
+    fn left_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "left shift", move |value| {
+            value.clone().left_shift(context, rhs.clone())
         })
     }
-    fn right_shift(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-        rhs: Value,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "right shift", move |value| {
-            value
-                .clone()
-                .right_shift(log, stack_trace, database, rhs.clone())
+    fn right_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+        self.map_operation(context, "right shift", move |value| {
+            value.clone().right_shift(context, rhs.clone())
         })
     }
-    fn unary_plus(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "unary plus", move |value| {
-            value.clone().unary_plus(log, stack_trace, database)
+    fn unary_plus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+        self.map_operation(context, "unary plus", move |value| {
+            value.clone().unary_plus(context)
         })
     }
-    fn unary_minus(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "unary minus", move |value| {
-            value.clone().unary_minus(log, stack_trace, database)
+    fn unary_minus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+        self.map_operation(context, "unary minus", move |value| {
+            value.clone().unary_minus(context)
         })
     }
-    fn unary_not(
-        self,
-        log: &mut dyn RuntimeLog,
-        stack_trace: &[SourceReference],
-        database: &BuiltinCallableDatabase,
-    ) -> ExpressionResult<Value> {
-        self.map_operation(stack_trace, database, "unary not", move |value| {
-            value.clone().unary_not(log, stack_trace, database)
+    fn unary_not(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+        self.map_operation(context, "unary not", move |value| {
+            value.clone().unary_not(context)
         })
     }
 }
@@ -458,26 +331,20 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::Append, "List::append", (
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
             rhs: List
         ) -> List {
             let mut content = Arc::unwrap_or_clone(this.values);
             content.extend_from_slice(&rhs.values);
 
-            Ok(List::from_iter(database, content))
+            Ok(List::from_iter(context, content))
         }
     );
     build_method!(
         database,
         forward = methods::Slice, "List::slice", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
             start: Option<UnsignedInteger> = ValueNone.into(),
             end: Option<UnsignedInteger> = ValueNone.into()
@@ -498,19 +365,16 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             let slice = this.values.get(start..end);
 
             if let Some(slice) = slice {
-                Ok(List::from_iter(database, slice.into_iter().cloned()))
+                Ok(List::from_iter(context, slice.into_iter().cloned()))
             } else {
-                Err(GenericFailure("Slice out of range".into()).to_error(stack_trace.iter()))
+                Err(GenericFailure("Slice out of range".into()).to_error(context.stack_trace))
             }
         }
     );
     build_method!(
         database,
         forward = methods::Get, "List::get", (
-            _log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            _database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
             i: UnsignedInteger
         ) -> Value {
@@ -519,33 +383,30 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if let Some(slice) = slice {
                 Ok(slice.clone())
             } else {
-                Err(GenericFailure("Index out of range".into()).to_error(stack_trace.iter()))
+                Err(GenericFailure("Index out of range".into()).to_error(context.stack_trace))
             }
         }
     );
     build_method!(
         database,
         forward = methods::Chunks, "List::chunks", (
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
             size: UnsignedInteger,
             strict: Boolean = Boolean(true).into()
         ) -> List {
-            fn wrap_chunks<'i, I: Iterator<Item = &'i [Value]>>(database: &BuiltinCallableDatabase, chunks: I) -> List {
+            fn wrap_chunks<'i, I: Iterator<Item = &'i [Value]>>(context: &ExecutionContext, chunks: I) -> List {
                 let mut list = Vec::new();
                 for chunk in chunks {
-                    list.push(List::from_iter(database, chunk.into_iter().cloned()).into());
+                    list.push(List::from_iter(context, chunk.into_iter().cloned()).into());
                 }
-                List::from_iter(database, list.into_iter())
+                List::from_iter(context, list.into_iter())
             }
 
             let chunks = if strict.0 {
-                wrap_chunks(database, this.values.chunks_exact(size.0 as usize))
+                wrap_chunks(context, this.values.chunks_exact(size.0 as usize))
             } else {
-                wrap_chunks(database, this.values.chunks(size.0 as usize))
+                wrap_chunks(context, this.values.chunks(size.0 as usize))
             };
 
             Ok(chunks)
@@ -555,38 +416,31 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::Map, "List::map",(
-            log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
-            f: MapClosure) -> List
-        {
-            let values: Vec<Value> = this.values.iter().map(|c| f.call(log, stack_trace, stack, database, Dictionary::new(database, HashMap::from_iter([
+            f: MapClosure
+        ) -> List {
+            let values: Vec<Value> = this.values.iter().map(|c| f.call(context, Dictionary::new(context, HashMap::from_iter([
                 (
                     "c".into(),
                     c.clone()
                 )
             ])))).collect::<ExpressionResult<_>>()?;
 
-            Ok(List::from_iter(database, values.into_iter()))
+            Ok(List::from_iter(context, values.into_iter()))
         }
     );
     build_method!(
         database,
         forward = methods::Fold, "List::fold",(
-            log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
             init: Value,
-            f: FoldClosure) -> Value
-        {
-
+            f: FoldClosure
+        ) -> Value {
             let mut accumulator = init;
             for component in this.values.iter() {
-                accumulator = f.call(log, stack_trace, stack, database, Dictionary::new(database, HashMap::from_iter([
+                accumulator = f.call(context, Dictionary::new(context, HashMap::from_iter([
                     (
                         "c".into(),
                         component.clone()
@@ -604,44 +458,38 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         forward = methods::Retain, "List::retain",(
-            log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
-            f: RetainClosure) -> List
-        {
+            f: RetainClosure
+        ) -> List {
             let mut values: Vec<Value> = Vec::with_capacity(this.values.len());
 
             for value in this.values.iter() {
-                let retain = f.call(log, stack_trace, stack, database, Dictionary::new(database, HashMap::from_iter([
+                let retain = f.call(context, Dictionary::new(context, HashMap::from_iter([
                     (
                         "c".into(),
                         value.clone()
                     )
-                ])))?.downcast::<Boolean>(stack_trace)?;
+                ])))?.downcast::<Boolean>(context.stack_trace)?;
 
                 if retain.0 {
                     values.push(value.clone());
                 }
             }
 
-            Ok(List::from_iter(database, values.into_iter()))
+            Ok(List::from_iter(context, values.into_iter()))
         }
     );
     build_method!(
         database,
         forward = methods::Sort, "List::sort",(
-            log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
-            this: List) -> List
-        {
+            context: &ExecutionContext,
+            this: List
+        ) -> List {
             let mut errors: Vec<Error> = vec![];
             let mut values: Vec<Value> = Arc::unwrap_or_clone(this.values);
             values.sort_unstable_by(|left: &Value, right: &Value| {
-                let result = left.clone().cmp(log, stack_trace, database, right.clone());
+                let result = left.clone().cmp(context, right.clone());
                 match result {
                     Ok(cmp) => cmp,
                     Err(error) => {
@@ -652,171 +500,147 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             });
 
             if errors.is_empty() {
-                Ok(List::from_iter(database, values.into_iter()))
+                Ok(List::from_iter(context, values.into_iter()))
             } else {
-                Err(SortingError { errors }.to_error(stack_trace.iter()))
+                Err(SortingError { errors }.to_error(context.stack_trace))
             }
         }
     );
     build_method!(
         database,
         forward = methods::Reverse, "List::reverse",(
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
-            this: List) -> List
-        {
+            context: &ExecutionContext,
+            this: List
+        ) -> List {
             let mut values: Vec<Value> = Arc::unwrap_or_clone(this.values);
             values.reverse();
 
-            Ok(List::from_iter(database, values.into_iter()))
+            Ok(List::from_iter(context, values.into_iter()))
         }
     );
     build_method!(
         database,
         forward = methods::Truncate, "List::truncate",(
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
-            length: UnsignedInteger) -> List
-        {
+            length: UnsignedInteger
+        ) -> List {
             let mut values: Vec<Value> = Arc::unwrap_or_clone(this.values);
             values.truncate(length.0 as usize);
 
-            Ok(List::from_iter(database, values.into_iter()))
+            Ok(List::from_iter(context, values.into_iter()))
         }
     );
     build_method!(
         database,
         forward = methods::Deduplicate, "List::deduplicate",(
-            log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
-            this: List) -> List
-        {
+            context: &ExecutionContext,
+            this: List
+        ) -> List {
             let mut values: Vec<Value> = Arc::unwrap_or_clone(this.values);
-            values.dedup_by(|left, right| left.clone().eq(log, stack_trace, database, right.clone()).unwrap_or(false));
+            values.dedup_by(|left, right| left.clone().eq(context, right.clone()).unwrap_or(false));
 
-            Ok(List::from_iter(database, values.into_iter()))
+            Ok(List::from_iter(context, values.into_iter()))
         }
     );
     build_method!(
         database,
         forward = methods::Union, "List::union",(
-            log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
-            other: List) -> List
-        {
+            other: List
+        ) -> List {
             let mut values: Vec<Value> = Arc::unwrap_or_clone(this.values);
 
             for new in other.values.iter() {
-                if !values.iter().any(|old| old.clone().eq(log, stack_trace, database, new.clone()).unwrap_or(false)) {
+                if !values.iter().any(|old| old.clone().eq(context, new.clone()).unwrap_or(false)) {
                     values.push(new.clone());
                 }
             }
 
-            Ok(List::from_iter(database, values.into_iter()))
+            Ok(List::from_iter(context, values.into_iter()))
         }
     );
     build_method!(
         database,
         forward = methods::Intersection, "List::intersection",(
-            log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
-            other: List) -> List
-        {
+            other: List
+        ) -> List {
             let mut values: Vec<Value> = Vec::new();
 
             for new in other.values.iter() {
-                if this.values.iter().any(|old| old.clone().eq(log, stack_trace, database, new.clone()).unwrap_or(false)) {
+                if this.values.iter().any(|old| old.clone().eq(context, new.clone()).unwrap_or(false)) {
                     values.push(new.clone());
                 }
             }
 
-            Ok(List::from_iter(database, values.into_iter()))
+            Ok(List::from_iter(context, values.into_iter()))
         }
     );
     build_method!(
         database,
         forward = methods::Difference, "List::difference",(
-            log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
-            other: List) -> List
-        {
+            other: List
+        ) -> List {
             let mut values: Vec<Value> = Vec::new();
 
             // Add values from ourselves that the other list does not have.
             for new in this.values.iter() {
-                if !other.values.iter().any(|old| old.clone().eq(log, stack_trace, database, new.clone()).unwrap_or(false)) {
+                if !other.values.iter().any(|old| old.clone().eq(context, new.clone()).unwrap_or(false)) {
                     values.push(new.clone());
                 }
             }
 
-            Ok(List::from_iter(database, values.into_iter()))
+            Ok(List::from_iter(context, values.into_iter()))
         }
     );
     build_method!(
         database,
         forward = methods::SymmetricDifference, "List::symmetric_difference",(
-            log: &mut dyn RuntimeLog,
-            stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
-            other: List) -> List
-        {
+            other: List
+        ) -> List {
             let mut values: Vec<Value> = Vec::new();
 
             // Add values from ourselves that the other list does not have.
             for new in this.values.iter() {
-                if !other.values.iter().any(|old| old.clone().eq(log, stack_trace, database, new.clone()).unwrap_or(false)) {
+                if !other.values.iter().any(|old| old.clone().eq(context, new.clone()).unwrap_or(false)) {
                     values.push(new.clone());
                 }
             }
 
             // Add values from the other list that are not already in the new list.
             for new in other.values.iter() {
-                if !this.values.iter().any(|old| old.clone().eq(log, stack_trace, database, new.clone()).unwrap_or(false)) {
+                if !this.values.iter().any(|old| old.clone().eq(context, new.clone()).unwrap_or(false)) {
                     values.push(new.clone());
                 }
             }
 
-            Ok(List::from_iter(database, values.into_iter()))
+            Ok(List::from_iter(context, values.into_iter()))
         }
     );
     build_method!(
         database,
         forward = methods::CartesianProduct, "List::cartesian_product",(
-            _log: &mut dyn RuntimeLog,
-            _stack_trace: &mut Vec<SourceReference>,
-            _stack: &mut Stack,
-            database: &BuiltinCallableDatabase,
+            context: &ExecutionContext,
             this: List,
-            other: List) -> List
-        {
+            other: List
+        ) -> List {
             let mut values: Vec<Value> = Vec::with_capacity(this.values.len() * other.values.len());
 
             for a in this.values.iter() {
                 for b in other.values.iter() {
-                    let list = List::from_iter(database, [a.clone(), b.clone()].into_iter());
+                    let list = List::from_iter(context, [a.clone(), b.clone()].into_iter());
                     values.push(list.into());
                 }
             }
 
-            Ok(List::from_iter(database, values.into_iter()))
+            Ok(List::from_iter(context, values.into_iter()))
         }
     );
 }
@@ -825,25 +649,43 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 mod test {
     use super::*;
     use crate::execution::{
+        build_prelude,
+        logging::StackTrace,
+        stack::StackScope,
         test_run,
         values::{Boolean, SignedInteger, UnsignedInteger},
     };
+    use std::sync::Mutex;
 
     #[test]
     fn create_empty() {
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
         let product = test_run("[]").unwrap();
-        assert_eq!(product, List::from_iter(&database, []).into());
+        assert_eq!(product, List::from_iter(&context, []).into());
     }
 
     #[test]
     fn create() {
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
         let product = test_run("[1u, 2u, 3u]").unwrap();
         assert_eq!(
             product,
             List::from_iter(
-                &database,
+                &context,
                 [
                     UnsignedInteger::from(1).into(),
                     UnsignedInteger::from(2).into(),
@@ -857,11 +699,18 @@ mod test {
     #[test]
     fn create_multi_type() {
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
         let product = test_run("[1u, 2i, 3u]").unwrap();
         assert_eq!(
             product,
             List::from_iter(
-                &database,
+                &context,
                 [
                     UnsignedInteger::from(1).into(),
                     SignedInteger::from(2).into(),
@@ -875,9 +724,16 @@ mod test {
     #[test]
     fn type_detection() {
         let database = BuiltinCallableDatabase::default();
+        let prelude = build_prelude(&database);
+        let context = ExecutionContext {
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &StackTrace::test(),
+            stack: &StackScope::top(&prelude),
+            database: &database,
+        };
         assert_eq!(
             List::from_iter(
-                &database,
+                &context,
                 [
                     UnsignedInteger::from(1).into(),
                     SignedInteger::from(2).into(),
