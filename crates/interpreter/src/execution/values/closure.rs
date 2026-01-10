@@ -25,7 +25,7 @@ use crate::{
     compile::{AstNode, ClosureDefinition, Expression},
     execute_expression,
     execution::{
-        errors::{ExpressionResult, Raise},
+        errors::{ExpressionResult, GenericFailure, Raise},
         find_value,
         stack::ScopeType,
         values::{Dictionary, MissingAttributeError, Value},
@@ -684,7 +684,10 @@ impl Object for BuiltinFunction {
                 if let Some(inverse) = context.database.get_inverse(self.0) {
                     Ok(BuiltinFunction(inverse).into())
                 } else {
-                    todo!()
+                    Err(
+                        GenericFailure("Function does not have an inverse available".into())
+                            .to_error(context.stack_trace),
+                    )
                 }
             }
             _ => Err(MissingAttributeError {
