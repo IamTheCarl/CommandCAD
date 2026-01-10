@@ -34,6 +34,8 @@ use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Val
 
 use std::{borrow::Cow, cmp::Ordering, collections::HashMap, sync::Arc};
 
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct List {
     // In theory, we could use a lot less memory by dynamically sizing everything to fit
@@ -51,7 +53,7 @@ impl List {
     ) -> ExpressionResult<Self> {
         let values: ExpressionResult<Vec<Value>> = ast_node
             .node
-            .iter()
+            .par_iter()
             .map(|expression| execute_expression(context, expression))
             .collect();
 

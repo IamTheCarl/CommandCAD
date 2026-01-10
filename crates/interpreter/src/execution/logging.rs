@@ -27,7 +27,7 @@ use tree_sitter::{Point, Range};
 
 use crate::compile::SourceReference;
 
-pub trait RuntimeLog: std::fmt::Debug {
+pub trait RuntimeLog: std::fmt::Debug + Send + Sync {
     fn push_message(&self, message: LogMessage);
 }
 

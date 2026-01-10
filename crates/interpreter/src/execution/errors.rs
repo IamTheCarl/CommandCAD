@@ -52,7 +52,7 @@ impl Display for GenericFailure {
     }
 }
 
-pub trait ErrorType: std::fmt::Debug + std::fmt::Display + Any {}
+pub trait ErrorType: std::fmt::Debug + std::fmt::Display + Any + Send + Sync {}
 
 pub trait Raise {
     fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error;
