@@ -20,7 +20,8 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use crate::{
     compile::{
-        self, AstNode, BinaryExpressionOperation, SourceReference, UnaryExpressionOperation,
+        self, AstNode, BinaryExpressionOperation, Expression, SourceReference,
+        UnaryExpressionOperation,
     },
     execution::{
         stack::{ScopeType, StackScope},
@@ -37,7 +38,10 @@ pub mod values;
 use errors::ExpressionResult;
 use imstr::ImString;
 use logging::{LocatedStr, RuntimeLog, StackTrace};
-use values::{Object, Value, ValueType};
+use values::{
+    closure::find_all_variable_accesses_in_closure_capture,
+    dictionary::find_all_variable_accesses_in_dictionary_construction, Object, Value, ValueType,
+};
 
 pub use standard_environment::build_prelude;
 
@@ -94,6 +98,124 @@ pub fn find_value<'p, 's>(
     } else {
         // We just needed the value off the stack.
         Ok(stack_value.clone())
+    }
+}
+
+pub fn find_all_variable_accesses_in_expression(
+    expression: &Expression,
+    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
+) -> ExpressionResult<()> {
+    match expression {
+        Expression::BinaryExpression(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node.a.node, access_collector)?;
+            find_all_variable_accesses_in_expression(&ast_node.node.b.node, access_collector)?;
+
+            Ok(())
+        }
+        Expression::ClosureDefinition(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.return_type.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_closure_capture(&ast_node.node, access_collector)?;
+
+            Ok(())
+        }
+        Expression::DictionaryConstruction(ast_node) => {
+            find_all_variable_accesses_in_dictionary_construction(&ast_node.node, access_collector)
+        }
+        Expression::If(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.condition.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.on_true.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.on_false.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::List(ast_node) => {
+            for expression in ast_node.node.iter() {
+                find_all_variable_accesses_in_expression(&expression.node, access_collector)?;
+            }
+
+            Ok(())
+        }
+        Expression::Parenthesis(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node, access_collector)
+        }
+        Expression::IdentityPath(ast_node) => {
+            // Only the top most parent matters.
+            access_collector(&ast_node.node.path[0])
+        }
+        Expression::StructDefinition(ast_node) => {
+            for member in ast_node.node.members.iter() {
+                find_all_variable_accesses_in_expression(&member.node.ty.node, access_collector)?;
+                if let Some(default) = member.node.default.as_ref() {
+                    find_all_variable_accesses_in_expression(&default.node, access_collector)?;
+                }
+            }
+
+            Ok(())
+        }
+        Expression::UnaryExpression(ast_node) => find_all_variable_accesses_in_expression(
+            &ast_node.node.expression.node,
+            access_collector,
+        ),
+        Expression::FunctionCall(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.to_call.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_dictionary_construction(
+                &ast_node.node.argument.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::MethodCall(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.self_dictionary.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_dictionary_construction(
+                &ast_node.node.argument.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::LetIn(ast_node) => {
+            for assignment in ast_node.node.assignments.iter() {
+                find_all_variable_accesses_in_expression(
+                    &assignment.node.value.node,
+                    access_collector,
+                )?;
+            }
+
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.expression.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::Boolean(_)
+        | Expression::Scalar(_)
+        | Expression::Vector2(_)
+        | Expression::Vector3(_)
+        | Expression::Vector4(_)
+        | Expression::SignedInteger(_)
+        | Expression::String(_)
+        | Expression::UnsignedInteger(_)
+        | Expression::SelfPath(_) => Ok(()),
     }
 }
 

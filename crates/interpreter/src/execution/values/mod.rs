@@ -41,10 +41,10 @@ pub use scalar::Scalar;
 mod vector;
 pub use vector::{Vector2, Vector3, Vector4};
 
-mod closure;
+pub mod closure;
 pub use closure::{BuiltinCallableDatabase, BuiltinFunction, UserClosure};
 
-mod dictionary;
+pub mod dictionary;
 pub use dictionary::Dictionary;
 
 mod list;

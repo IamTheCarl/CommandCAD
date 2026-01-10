@@ -26,6 +26,7 @@ use crate::{
     execute_expression,
     execution::{
         errors::{ErrorType, ExpressionResult, Raise as _},
+        find_all_variable_accesses_in_expression,
         stack::ScopeType,
         ExecutionContext,
     },
@@ -45,6 +46,20 @@ impl PartialEq for DictionaryData {
     fn eq(&self, other: &Self) -> bool {
         self.members == other.members
     }
+}
+
+pub fn find_all_variable_accesses_in_dictionary_construction(
+    dictionary_construction: &crate::compile::DictionaryConstruction,
+    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
+) -> ExpressionResult<()> {
+    for assignment in dictionary_construction.assignments.iter() {
+        find_all_variable_accesses_in_expression(
+            &assignment.node.assignment.node,
+            access_collector,
+        )?;
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
