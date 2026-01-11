@@ -29,6 +29,8 @@ use crate::{
     },
 };
 
+use rayon::prelude::*;
+
 mod errors;
 mod formatting;
 mod logging;
@@ -395,7 +397,8 @@ fn execute_let_in(
             ScopeType::Inherited,
             HashMap::with_capacity(expression.node.assignments.len()),
             |stack, stack_trace| {
-                for assignment in expression.node.assignments.iter() {
+                let mut buffer = Vec::new();
+                for group in expression.node.compute_groups() {
                     let context = ExecutionContext {
                         log: context.log,
                         stack_trace,
@@ -403,8 +406,17 @@ fn execute_let_in(
                         database: context.database,
                     };
 
-                    let value = execute_expression(&context, &assignment.node.value)?;
-                    stack.insert_value(assignment.node.ident.node.clone(), value);
+                    buffer.par_extend(group.par_iter().map(|assignment| {
+                        (
+                            assignment.node.ident.node.clone(),
+                            execute_expression(&context, &assignment.node.value),
+                        )
+                    }));
+
+                    for (name, result) in buffer.drain(..) {
+                        let value = result?;
+                        stack.insert_value(name, value);
+                    }
                 }
 
                 let context = ExecutionContext {

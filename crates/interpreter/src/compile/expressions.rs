@@ -1,13 +1,65 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{cmp::Ordering, collections::HashSet, path::PathBuf, sync::Arc};
 
 use common_data_types::{ConversionFactor, Dimension, Float, RawFloat};
+use hashable_map::HashableSet;
 use imstr::ImString;
 use nodes::SourceFile;
 use tree_sitter::Range;
 use type_sitter::{HasChild, Node};
 use unwrap_enum::EnumAs;
 
+use crate::execution::find_all_variable_accesses_in_expression;
+
 use super::{nodes, AstNode, Error, Parse};
+
+/// Used for sorting operations that have dependencies on other operations for parallel execution.
+trait DependentOperation {
+    fn original_index(&self) -> usize;
+    fn name(&self) -> &ImString;
+    fn dependencies(&self) -> &HashableSet<ImString>;
+}
+
+fn sort_and_group_dependencies<D>(deps: &mut Vec<D>) -> Vec<std::ops::Range<usize>>
+where
+    D: DependentOperation,
+{
+    deps.sort_by(|a, b| {
+        let a_name = a.name();
+        let b_name = b.name();
+        let a_index = a.original_index();
+        let b_index = b.original_index();
+        let a = a.dependencies();
+        let b = b.dependencies();
+
+        // Dependency takes president.
+        if a.contains(b_name) && a_index > b_index {
+            Ordering::Greater
+        } else if b.contains(a_name) && b_index > a_index {
+            Ordering::Less
+        } else {
+            // If they have no dependency on each other, put the ones with fewer dependencies
+            // as a higher priority.
+            a.len().cmp(&b.len())
+        }
+    });
+
+    let mut compute_groups = Vec::new();
+    let mut start = 0;
+    let mut iterator = deps.iter().enumerate().peekable();
+
+    while let (Some((a_index, a)), Some((b_index, b))) = (iterator.next(), iterator.peek()) {
+        // Every transition indicates the end of a group.
+        if a.dependencies() != b.dependencies() {
+            compute_groups.push(start..a_index + 1);
+            start = *b_index;
+        }
+    }
+
+    // Whatever remains is its own group.
+    compute_groups.push(start..deps.len());
+
+    compute_groups
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct InvalidUnitError<'t, 'i> {
@@ -1096,8 +1148,24 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for MethodCall {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct LetInAssignment {
+    pub index: usize,
     pub ident: AstNode<ImString>,
+    pub dependencies: HashableSet<ImString>,
     pub value: AstNode<Expression>,
+}
+
+impl DependentOperation for AstNode<LetInAssignment> {
+    fn original_index(&self) -> usize {
+        self.node.index
+    }
+
+    fn name(&self) -> &ImString {
+        &self.node.ident.node
+    }
+
+    fn dependencies(&self) -> &HashableSet<ImString> {
+        &self.node.dependencies
+    }
 }
 
 impl<'t> Parse<'t, nodes::LetInAssignment<'t>> for LetInAssignment {
@@ -1110,14 +1178,41 @@ impl<'t> Parse<'t, nodes::LetInAssignment<'t>> for LetInAssignment {
 
         let value = Expression::parse(file, input, node.value()?)?;
 
-        Ok(AstNode::new(file, &node, Self { ident, value }))
+        let mut dependencies = HashableSet::new();
+
+        // Because our access collector never returns errors, this will never fail.
+        find_all_variable_accesses_in_expression(&value.node, &mut |name| {
+            dependencies.insert(name.node.clone());
+            Ok(())
+        })
+        .ok();
+
+        Ok(AstNode::new(
+            file,
+            &node,
+            Self {
+                index: 0,
+                ident,
+                dependencies,
+                value,
+            },
+        ))
     }
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct LetIn {
     pub assignments: Vec<AstNode<LetInAssignment>>,
+    pub compute_groups: Vec<std::ops::Range<usize>>,
     pub expression: AstNode<Expression>,
+}
+
+impl LetIn {
+    pub fn compute_groups(&self) -> impl Iterator<Item = &[AstNode<LetInAssignment>]> {
+        self.compute_groups
+            .iter()
+            .map(|range| &self.assignments[range.clone()])
+    }
 }
 
 impl<'t> Parse<'t, nodes::LetIn<'t>> for LetIn {
@@ -1129,11 +1224,24 @@ impl<'t> Parse<'t, nodes::LetIn<'t>> for LetIn {
         let mut cursor = node.walk();
         let mut assignments = Vec::new();
 
-        for assignment in node.assignments(&mut cursor) {
+        let mut variable_names = HashSet::new();
+
+        for (index, assignment) in node.assignments(&mut cursor).enumerate() {
             let assignment = assignment?;
-            let assignment = LetInAssignment::parse(file, input, assignment)?;
+            let mut assignment = LetInAssignment::parse(file, input, assignment)?;
+            // Restrict all dependencies to names within our dependency set, that we already know
+            // of.
+            assignment
+                .node
+                .dependencies
+                .retain(|name| variable_names.contains(name));
+            assignment.node.index = index;
+
+            variable_names.insert(assignment.node.ident.node.clone());
             assignments.push(assignment);
         }
+
+        let compute_groups = sort_and_group_dependencies(&mut assignments);
 
         let expression = Expression::parse(file, input, node.expression()?)?;
 
@@ -1142,6 +1250,7 @@ impl<'t> Parse<'t, nodes::LetIn<'t>> for LetIn {
             &node,
             Self {
                 assignments,
+                compute_groups,
                 expression,
             },
         ))
@@ -2201,6 +2310,8 @@ mod test {
                                             reference: value1_ident.reference.clone(),
                                             node: "value1".into(),
                                         },
+                                        index: 0,
+                                        dependencies: HashableSet::new(),
                                         value: AstNode {
                                             reference: value1_value.reference.clone(),
                                             node: Expression::UnsignedInteger(AstNode {
@@ -2217,6 +2328,8 @@ mod test {
                                             reference: value2_ident.reference.clone(),
                                             node: "value2".into(),
                                         },
+                                        index: 1,
+                                        dependencies: HashableSet::new(),
                                         value: AstNode {
                                             reference: value2_value.reference.clone(),
                                             node: Expression::UnsignedInteger(AstNode {
@@ -2227,6 +2340,7 @@ mod test {
                                     }
                                 }
                             ],
+                            compute_groups: vec![0..2],
                             expression: AstNode {
                                 reference: expression.reference.clone(),
                                 node: Expression::UnsignedInteger(AstNode {
@@ -2240,6 +2354,113 @@ mod test {
                 )
             }
         );
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct TestDependency {
+        name: ImString,
+        index: usize,
+        dependencies: HashableSet<ImString>,
+    }
+
+    impl TestDependency {
+        fn new(
+            index: usize,
+            name: impl Into<ImString>,
+            dependencies: impl IntoIterator<Item = &'static str>,
+        ) -> Self {
+            Self {
+                index,
+                name: name.into(),
+                dependencies: HashableSet::from(HashSet::from_iter(
+                    dependencies.into_iter().map(|name| ImString::from(name)),
+                )),
+            }
+        }
+    }
+
+    impl DependentOperation for TestDependency {
+        fn original_index(&self) -> usize {
+            self.index
+        }
+
+        fn name(&self) -> &ImString {
+            &self.name
+        }
+
+        fn dependencies(&self) -> &HashableSet<ImString> {
+            &self.dependencies
+        }
+    }
+
+    #[test]
+    fn let_in_ordering() {
+        let mut dependencies = vec![
+            TestDependency::new(0, "a", []),
+            TestDependency::new(1, "c", ["a"]),
+            TestDependency::new(2, "d", ["c"]),
+            TestDependency::new(3, "b", []),
+        ];
+
+        let groups = sort_and_group_dependencies(&mut dependencies);
+
+        assert_eq!(
+            dependencies,
+            vec![
+                TestDependency::new(0, "a", []),
+                TestDependency::new(3, "b", []),
+                TestDependency::new(1, "c", ["a"]),
+                TestDependency::new(2, "d", ["c"]),
+            ]
+        );
+
+        assert_eq!(groups, vec![0..2, 2..3, 3..4]);
+    }
+
+    #[test]
+    fn let_in_broken_ordering() {
+        // This would be a case of user error, but we need to keep the user's mistakes in the new
+        // ordering to make the error messages make sense.
+        let mut dependencies = vec![
+            TestDependency::new(0, "a", []),
+            TestDependency::new(1, "d", ["c"]),
+            TestDependency::new(2, "c", ["a"]),
+            TestDependency::new(3, "b", []),
+        ];
+
+        let groups = sort_and_group_dependencies(&mut dependencies);
+
+        assert_eq!(
+            dependencies,
+            vec![
+                TestDependency::new(0, "a", []),
+                TestDependency::new(3, "b", []),
+                TestDependency::new(1, "d", ["c"]),
+                TestDependency::new(2, "c", ["a"]),
+            ]
+        );
+
+        assert_eq!(groups, vec![0..2, 2..3, 3..4]);
+    }
+
+    #[test]
+    fn let_in_circular_dependency() {
+        let mut dependencies = vec![
+            TestDependency::new(0, "a", ["b"]),
+            TestDependency::new(1, "b", ["a"]),
+        ];
+
+        let groups = sort_and_group_dependencies(&mut dependencies);
+
+        assert_eq!(
+            dependencies,
+            vec![
+                TestDependency::new(0, "a", ["b"]),
+                TestDependency::new(1, "b", ["a"]),
+            ]
+        );
+
+        assert_eq!(groups, vec![0..1, 1..2]);
     }
 
     #[test]
