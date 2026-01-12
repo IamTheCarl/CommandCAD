@@ -29,7 +29,7 @@ use crate::{
     },
 };
 
-use rayon::prelude::*;
+use rayon::{join, prelude::*};
 
 mod errors;
 mod formatting;
@@ -439,8 +439,15 @@ fn execute_binary_expression(
 ) -> ExpressionResult<Value> {
     context.trace_scope(expression.reference.clone(), |context| {
         let node = &expression.node;
-        let value_a = execute_expression(context, &node.a)?;
-        let value_b = execute_expression(context, &node.b)?;
+
+        let (result_a, result_b) = join(
+            || execute_expression(context, &node.a),
+            || execute_expression(context, &node.b),
+        );
+
+        let value_a = result_a?;
+        let value_b = result_b?;
+
         match node.operation.node {
             BinaryExpressionOperation::NotEq => Ok(values::Boolean(
                 !value_a
