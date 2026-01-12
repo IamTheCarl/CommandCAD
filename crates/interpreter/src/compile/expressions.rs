@@ -23,42 +23,47 @@ fn sort_and_group_dependencies<D>(deps: &mut Vec<D>) -> Vec<std::ops::Range<usiz
 where
     D: DependentOperation,
 {
-    deps.sort_by(|a, b| {
-        let a_name = a.name();
-        let b_name = b.name();
-        let a_index = a.original_index();
-        let b_index = b.original_index();
-        let a = a.dependencies();
-        let b = b.dependencies();
+    if !deps.is_empty() {
+        deps.sort_by(|a, b| {
+            let a_name = a.name();
+            let b_name = b.name();
+            let a_index = a.original_index();
+            let b_index = b.original_index();
+            let a = a.dependencies();
+            let b = b.dependencies();
 
-        // Dependency takes president.
-        if a.contains(b_name) && a_index > b_index {
-            Ordering::Greater
-        } else if b.contains(a_name) && b_index > a_index {
-            Ordering::Less
-        } else {
-            // If they have no dependency on each other, put the ones with fewer dependencies
-            // as a higher priority.
-            a.len().cmp(&b.len())
+            // Dependency takes president.
+            if a.contains(b_name) && a_index > b_index {
+                Ordering::Greater
+            } else if b.contains(a_name) && b_index > a_index {
+                Ordering::Less
+            } else {
+                // If they have no dependency on each other, put the ones with fewer dependencies
+                // as a higher priority.
+                a.len().cmp(&b.len())
+            }
+        });
+
+        let mut compute_groups = Vec::new();
+        let mut start = 0;
+        let mut iterator = deps.iter().enumerate().peekable();
+
+        while let (Some((a_index, a)), Some((b_index, b))) = (iterator.next(), iterator.peek()) {
+            // Every transition indicates the end of a group.
+            if a.dependencies() != b.dependencies() {
+                compute_groups.push(start..a_index + 1);
+                start = *b_index;
+            }
         }
-    });
 
-    let mut compute_groups = Vec::new();
-    let mut start = 0;
-    let mut iterator = deps.iter().enumerate().peekable();
+        // Whatever remains is its own group
+        compute_groups.push(start..deps.len());
 
-    while let (Some((a_index, a)), Some((b_index, b))) = (iterator.next(), iterator.peek()) {
-        // Every transition indicates the end of a group.
-        if a.dependencies() != b.dependencies() {
-            compute_groups.push(start..a_index + 1);
-            start = *b_index;
-        }
+        compute_groups
+    } else {
+        // Nothing to compute.
+        Vec::new()
     }
-
-    // Whatever remains is its own group.
-    compute_groups.push(start..deps.len());
-
-    compute_groups
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -935,6 +940,8 @@ impl<'t> Parse<'t, nodes::If<'t>> for IfExpression {
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct DictionaryMemberAssignment {
+    pub index: usize,
+    pub dependencies: HashableSet<ImString>,
     pub name: AstNode<ImString>,
     pub assignment: AstNode<Expression>,
 }
@@ -949,13 +956,54 @@ impl<'t> Parse<'t, nodes::DictionaryMemberAssignment<'t>> for DictionaryMemberAs
         let name = ImString::parse(file, input, name)?;
         let assignment = Expression::parse(file, input, value.assignment()?)?;
 
-        Ok(AstNode::new(file, &value, Self { name, assignment }))
+        let mut dependencies = HashableSet::new();
+
+        // Because our access collector never returns errors, this will never fail.
+        find_all_variable_accesses_in_expression(&assignment.node, &mut |name| {
+            dependencies.insert(name.node.clone());
+            Ok(())
+        })
+        .ok();
+
+        Ok(AstNode::new(
+            file,
+            &value,
+            Self {
+                index: 0,
+                dependencies,
+                name,
+                assignment,
+            },
+        ))
+    }
+}
+
+impl DependentOperation for AstNode<DictionaryMemberAssignment> {
+    fn original_index(&self) -> usize {
+        self.node.index
+    }
+
+    fn name(&self) -> &ImString {
+        &self.node.name.node
+    }
+
+    fn dependencies(&self) -> &HashableSet<ImString> {
+        &self.node.dependencies
     }
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct DictionaryConstruction {
     pub assignments: Vec<AstNode<DictionaryMemberAssignment>>,
+    pub compute_groups: Vec<std::ops::Range<usize>>,
+}
+
+impl DictionaryConstruction {
+    pub fn compute_groups(&self) -> impl Iterator<Item = &[AstNode<DictionaryMemberAssignment>]> {
+        self.compute_groups
+            .iter()
+            .map(|range| &self.assignments[range.clone()])
+    }
 }
 
 impl<'t> Parse<'t, nodes::DictionaryConstruction<'t>> for DictionaryConstruction {
@@ -968,17 +1016,33 @@ impl<'t> Parse<'t, nodes::DictionaryConstruction<'t>> for DictionaryConstruction
         let mut cursor = value.walk();
         let assignments_iter = value.assignmentss(&mut cursor);
 
+        let mut variable_names = HashSet::new();
+        let mut index = 0;
+
         for assignment in assignments_iter {
             let assignment = assignment?;
 
             // Skip the commas.
             if let Some(assignment) = assignment.as_dictionary_member_assignment() {
-                let assignment = DictionaryMemberAssignment::parse(file, input, assignment)?;
+                let mut assignment = DictionaryMemberAssignment::parse(file, input, assignment)?;
+                assignment
+                    .node
+                    .dependencies
+                    .retain(|name| variable_names.contains(name));
+                assignment.node.index = index;
+                index += 1;
+
+                variable_names.insert(assignment.node.name.node.clone());
                 assignments.push(assignment);
             }
         }
 
-        let node = Self { assignments };
+        let compute_groups = sort_and_group_dependencies(&mut assignments);
+
+        let node = Self {
+            assignments,
+            compute_groups,
+        };
         Ok(AstNode::new(file, &value, node))
     }
 }
@@ -2084,7 +2148,8 @@ mod test {
                         argument: AstNode {
                             reference: call.node.argument.reference.clone(),
                             node: DictionaryConstruction {
-                                assignments: vec![]
+                                assignments: vec![],
+                                compute_groups: vec![]
                             }
                         }
                     })
@@ -2131,10 +2196,12 @@ mod test {
                                 assignments: vec![AstNode {
                                     reference: dict_assignment.reference.clone(),
                                     node: DictionaryMemberAssignment {
+                                        index: 0,
                                         name: AstNode {
                                             reference: dict_assignment.node.name.reference.clone(),
                                             node: "value".into()
                                         },
+                                        dependencies: HashableSet::from(HashSet::from_iter([])),
                                         assignment: AstNode {
                                             reference: dict_assignment
                                                 .node
@@ -2154,7 +2221,8 @@ mod test {
                                             })
                                         }
                                     }
-                                }]
+                                }],
+                                compute_groups: vec![0..1]
                             }
                         }
                     })
@@ -2196,7 +2264,8 @@ mod test {
                         argument: AstNode {
                             reference: call.node.argument.reference.clone(),
                             node: DictionaryConstruction {
-                                assignments: vec![]
+                                assignments: vec![],
+                                compute_groups: vec![],
                             }
                         }
                     })
@@ -2243,6 +2312,8 @@ mod test {
                                 assignments: vec![AstNode {
                                     reference: dict_assignment.reference.clone(),
                                     node: DictionaryMemberAssignment {
+                                        index: 0,
+                                        dependencies: HashableSet::from(HashSet::from_iter([])),
                                         name: AstNode {
                                             reference: dict_assignment.node.name.reference.clone(),
                                             node: "value".into()
@@ -2266,7 +2337,8 @@ mod test {
                                             })
                                         }
                                     }
-                                }]
+                                }],
+                                compute_groups: vec![0..1]
                             }
                         }
                     })

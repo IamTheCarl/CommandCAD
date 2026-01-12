@@ -20,6 +20,7 @@ use std::{borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
 
 use hashable_map::HashableMap;
 use imstr::ImString;
+use rayon::prelude::*;
 
 use crate::{
     compile::{AstNode, DictionaryConstruction},
@@ -110,26 +111,36 @@ impl Dictionary {
             ScopeType::Inherited,
             HashMap::new(),
             |stack, stack_trace| {
-                for assignment in ast_node.node.assignments.iter() {
-                    let context = ExecutionContext {
-                        log: context.log,
-                        stack_trace,
-                        stack,
-                        database: context.database,
-                    };
+                let mut buffer = Vec::new();
+                for group in ast_node.node.compute_groups() {
+                    {
+                        let context = ExecutionContext {
+                            log: context.log,
+                            stack_trace,
+                            stack,
+                            database: context.database,
+                        };
 
-                    let name = assignment.node.name.node.clone();
-                    let value = execute_expression(&context, &assignment.node.assignment)?;
-
-                    if members.insert(name.clone(), value.clone()).is_some() {
-                        // That's a duplicate member.
-                        return Err(DuplicateMemberError {
-                            name: assignment.node.name.node.clone(),
-                        }
-                        .to_error(context.stack_trace.iter().chain([&assignment.reference])));
+                        buffer.par_extend(group.par_iter().map(|assignment| {
+                            (
+                                assignment.node.name.node.clone(),
+                                execute_expression(&context, &assignment.node.assignment),
+                            )
+                        }));
                     }
 
-                    stack.insert_value(name, value);
+                    for (name, result) in buffer.drain(..) {
+                        let value = result?;
+
+                        if members.insert(name.clone(), value.clone()).is_some() {
+                            // That's a duplicate member.
+                            return Err(DuplicateMemberError { name }.to_error(
+                                context.stack_trace.iter().chain([&ast_node.reference]),
+                            ));
+                        }
+
+                        stack.insert_value(name, value);
+                    }
                 }
 
                 Ok(())
