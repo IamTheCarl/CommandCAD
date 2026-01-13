@@ -812,7 +812,7 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for Scalar {
         };
 
         let scale_value: f64 =
-            whole as RawFloat + (fraction as RawFloat / (10 as RawFloat).powi(fraction_len as _));
+            whole as RawFloat + (fraction as RawFloat / (10.0 as RawFloat).powi(fraction_len as _));
         let scale_value = Float::new(scale_value).expect("Float was NaN");
         let scale_value = conversion_factor.convert_to_base_unit(scale_value);
 

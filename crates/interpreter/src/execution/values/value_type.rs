@@ -107,10 +107,6 @@ impl ValueType {
         value_type: &ValueType,
     ) -> Result<(), TypeQualificationError> {
         match (self, value_type) {
-            (Self::TypeNone, Self::TypeNone) => Ok(()),
-            (Self::Boolean, Self::Boolean) => Ok(()),
-            (Self::SignedInteger, Self::SignedInteger) => Ok(()),
-            (Self::UnsignedInteger, Self::UnsignedInteger) => Ok(()),
             (Self::Scalar(Some(our_dimension)), Self::Scalar(Some(their_dimension)))
             | (Self::Vector2(Some(our_dimension)), Self::Vector2(Some(their_dimension)))
             | (Self::Vector3(Some(our_dimension)), Self::Vector3(Some(their_dimension)))
@@ -144,7 +140,6 @@ impl ValueType {
             (Self::Dictionary(our_definition), Self::Dictionary(their_definition)) => {
                 our_definition.check_other_qualifies(their_definition)
             }
-            (Self::ValueType, Self::ValueType) => Ok(()),
             (Self::MultiType(left, right), value_type) => {
                 match (
                     left.check_other_qualifies(value_type),
@@ -158,10 +153,16 @@ impl ValueType {
                 }
             }
             (Self::Any, _) => Ok(()),
-            (expected, got) => Err(TypeQualificationError::This {
-                expected: expected.clone(),
-                got: got.clone(),
-            }),
+            (expected, got) => {
+                if expected == got {
+                    Ok(())
+                } else {
+                    Err(TypeQualificationError::This {
+                        expected: expected.clone(),
+                        got: got.clone(),
+                    })
+                }
+            }
         }
     }
 }

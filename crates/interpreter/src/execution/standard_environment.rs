@@ -106,7 +106,9 @@ fn build_types(context: &ExecutionContext) -> Dictionary {
             ("Bool".into(), ValueType::Boolean.into()),
             ("SInt".into(), ValueType::SignedInteger.into()),
             ("UInt".into(), ValueType::UnsignedInteger.into()),
+            ("String".into(), ValueType::String.into()),
             ("ValueType".into(), ValueType::ValueType.into()),
+            // TODO we need File types.
             // TODO we'll need a function to build custom function signature types.
             // ("Function".into(), ValueType::Closure(Arc<ClosureSignature>)),
 
