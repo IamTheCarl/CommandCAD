@@ -115,31 +115,6 @@ pub enum Expression {
     LetIn(AstNode<Box<LetIn>>),
 }
 
-impl<'t> Parse<'t, nodes::anon_unions::IdentityPath_StructDefinition<'t>> for Expression {
-    fn parse<'i>(
-        file: &Arc<PathBuf>,
-        input: &'i str,
-        value: nodes::anon_unions::IdentityPath_StructDefinition<'t>,
-    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        match value {
-            nodes::anon_unions::IdentityPath_StructDefinition::IdentityPath(path) => {
-                Ok(AstNode::new(
-                    file,
-                    &path,
-                    Self::IdentityPath(IdentityPath::parse(file, input, path)?),
-                ))
-            }
-            nodes::anon_unions::IdentityPath_StructDefinition::StructDefinition(
-                struct_definition,
-            ) => Ok(AstNode::new(
-                file,
-                &struct_definition,
-                Self::StructDefinition(StructDefinition::parse(file, input, struct_definition)?),
-            )),
-        }
-    }
-}
-
 impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for Expression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
@@ -1419,7 +1394,7 @@ mod test {
 
     #[test]
     fn closure_definition() {
-        let root = full_compile("() -> std.None \"\"");
+        let root = full_compile("() -> std.None: \"\"");
         let closure = root.node.as_closuredefinition().unwrap();
         let closure_reference = closure.reference.clone();
         let argument = &closure.node.argument_type;

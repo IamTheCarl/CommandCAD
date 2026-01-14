@@ -634,7 +634,7 @@ mod test {
 
     #[test]
     fn type_closure() {
-        let closure = test_run("() -> std.types.None std.consts.None").unwrap();
+        let closure = test_run("() -> std.types.None: std.consts.None").unwrap();
         let closure = closure.as_userclosure().unwrap();
 
         let database = BuiltinCallableDatabase::default();
@@ -858,7 +858,7 @@ mod test {
             .check_other_qualifies(&ValueType::Scalar(Some(Dimension::length())))
             .unwrap();
 
-        let closure = test_run("() -> std.types.None std.consts.None").unwrap();
+        let closure = test_run("() -> std.types.None: std.consts.None").unwrap();
         let closure = closure.as_userclosure().unwrap();
 
         let database = BuiltinCallableDatabase::default();

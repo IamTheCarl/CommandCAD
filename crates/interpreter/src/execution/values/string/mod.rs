@@ -574,7 +574,7 @@ mod test {
     #[test]
     fn method_map() {
         let product = test_run(
-            "\"abcd\"::map(f= (c: std.types.String) -> std.types.String (if c == \"b\" then \"X\" else c)) == \"aXcd\"",
+            "\"abcd\"::map(f= (c: std.types.String) -> std.types.String: if c == \"b\" then \"X\" else c) == \"aXcd\"",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());
@@ -583,14 +583,14 @@ mod test {
     #[test]
     fn method_fold() {
         let product =
-            test_run("\"aabbabaababb\"::fold(init = 0u, f = (previous: std.types.UInt, c: std.types.String) -> std.types.UInt (if c == \"a\" then previous + 1u else previous)) == 6u").unwrap();
+            test_run("\"aabbabaababb\"::fold(init = 0u, f = (previous: std.types.UInt, c: std.types.String) -> std.types.UInt: if c == \"a\" then previous + 1u else previous) == 6u").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn method_retain() {
         let product = test_run(
-            "\"1234\"::retain(f = (c: std.types.String) -> std.types.Bool (c == \"1\" || c == \"3\")) == \"13\"",
+            "\"1234\"::retain(f = (c: std.types.String) -> std.types.Bool: c == \"1\" || c == \"3\") == \"13\"",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());

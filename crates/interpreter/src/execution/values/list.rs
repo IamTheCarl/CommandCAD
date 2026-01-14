@@ -913,7 +913,7 @@ mod test {
     #[test]
     fn method_map() {
         let product = test_run(
-            "[1u, 2u, 3u, 4u]::map(f= (c: std.types.UInt) -> std.types.UInt c + 1u) == [2u, 3u, 4u, 5u]",
+            "[1u, 2u, 3u, 4u]::map(f= (c: std.types.UInt) -> std.types.UInt: c + 1u) == [2u, 3u, 4u, 5u]",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());
@@ -922,14 +922,14 @@ mod test {
     #[test]
     fn method_fold() {
         let product =
-            test_run("[1u, 2u, 3u, 4u]::fold(init = 0u, f = (previous: std.types.UInt, c: std.types.UInt) -> std.types.UInt (previous + c)) == 10u").unwrap();
+            test_run("[1u, 2u, 3u, 4u]::fold(init = 0u, f = (previous: std.types.UInt, c: std.types.UInt) -> std.types.UInt: previous + c) == 10u").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn method_retain() {
         let product = test_run(
-            "[1u, 2u, 3u, 4u]::retain(f = (c: std.types.UInt) -> std.types.Bool (c == 1u || c == 3u)) == [1u, 3u]",
+            "[1u, 2u, 3u, 4u]::retain(f = (c: std.types.UInt) -> std.types.Bool: c == 1u || c == 3u) == [1u, 3u]",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());

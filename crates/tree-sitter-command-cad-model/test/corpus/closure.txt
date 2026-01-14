@@ -1,8 +1,9 @@
+    identity_path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
 ==================
 Empty
 ==================
 
-() -> std.None "" 
+() -> std.None: "" 
 
 ---
 
@@ -10,9 +11,10 @@ Empty
   (expression
     (closure_definition
       (struct_definition)
-      (identity_path
-        (identifier)
-        (identifier))
+        (expression
+          (identity_path
+            (identifier)
+            (identifier)))
       (expression
         (string)))))
 
@@ -20,7 +22,7 @@ Empty
 With argument
 ==================
 
-(argument: std.types.UInt) -> std.None "" 
+(argument: std.types.UInt) -> std.None: "" 
 
 ---
 
@@ -36,9 +38,10 @@ With argument
                 (identifier)
                 (identifier)
                 (identifier))))))
-      (identity_path
-        (identifier)
-        (identifier))
+      (expression
+        (identity_path
+          (identifier)
+          (identifier)))
       (expression
         (string)))))
 
@@ -46,7 +49,7 @@ With argument
 With Binary Expression
 ==================
 
-(argument: std.types.UInt) -> std.None a + b 
+(argument: std.types.UInt) -> std.None: a + b 
 
 ---
 
@@ -62,9 +65,10 @@ With Binary Expression
                 (identifier)
                 (identifier)
                 (identifier))))))
-      (identity_path
-        (identifier)
-        (identifier))
+      (expression
+        (identity_path
+          (identifier)
+          (identifier)))
       (expression
         (binary_expression
           (expression

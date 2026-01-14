@@ -1475,40 +1475,40 @@ mod test {
 
     #[test]
     fn apply_vector2() {
-        let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m)>").unwrap();
+        let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length: c + 1m) == <(1m, 2m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2')>").unwrap();
+        let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
 
     #[test]
     fn apply_vector3() {
-        let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m, 3m)>").unwrap();
+        let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length: c + 1m) == <(1m, 2m, 3m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2')>").unwrap();
+        let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("<(0m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        test_run("<(0m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
 
     #[test]
     fn apply_vector4() {
-        let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length c + 1m) == <(1m, 2m, 3m, 4m)>").unwrap();
+        let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length: c + 1m) == <(1m, 2m, 3m, 4m)>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2')>").unwrap();
+        let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("<(0m, 1m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        test_run("<(0m, 1m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
     }
 
     #[test]
     fn fold_vector2() {
-        let product = test_run("<(1m, 2m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
+        let product = test_run("<(1m, 2m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length: previous + c)").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1521,7 +1521,7 @@ mod test {
 
     #[test]
     fn fold_vector3() {
-        let product = test_run("<(1m, 2m, 3m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
+        let product = test_run("<(1m, 2m, 3m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length: previous + c)").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1534,7 +1534,7 @@ mod test {
 
     #[test]
     fn fold_vector4() {
-        let product = test_run("<(1m, 2m, 3m, 4m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length previous + c)").unwrap();
+        let product = test_run("<(1m, 2m, 3m, 4m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length: previous + c)").unwrap();
         assert_eq!(
             product,
             Scalar {

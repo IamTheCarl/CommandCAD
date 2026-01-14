@@ -649,7 +649,7 @@ mod test {
 
     #[test]
     fn define_closure() {
-        let product = test_run("() -> std.types.UInt 1u").unwrap();
+        let product = test_run("() -> std.types.UInt: 1u").unwrap();
 
         let expression = product.as_userclosure().unwrap().data.expression.clone();
 

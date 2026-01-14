@@ -165,11 +165,7 @@
         "required": true,
         "types": [
           {
-            "type": "identity_path",
-            "named": true
-          },
-          {
-            "type": "struct_definition",
+            "type": "expression",
             "named": true
           }
         ]

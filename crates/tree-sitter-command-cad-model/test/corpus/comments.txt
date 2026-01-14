@@ -17,7 +17,7 @@ Comment before closure
 ==================
 
 # There's a comment before the code.
-()->std.None ""
+()->std.None: ""
 
 ---
 
@@ -26,8 +26,9 @@ Comment before closure
   (expression
     (closure_definition
       (struct_definition)
-      (identity_path
-        (identifier)
-        (identifier))
+      (expression
+        (identity_path
+          (identifier)
+          (identifier)))
       (expression
         (string)))))
