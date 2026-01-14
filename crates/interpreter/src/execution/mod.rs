@@ -32,7 +32,6 @@ use crate::{
 use rayon::{join, prelude::*};
 
 mod errors;
-mod formatting;
 mod logging;
 mod stack;
 mod standard_environment;
@@ -365,9 +364,11 @@ fn execute_function_call(
     let to_call = execute_expression(context, &call.node.to_call)?;
     let argument = values::Dictionary::from_ast(context, &call.node.argument)?;
 
-    context.stack_scope(ScopeType::Isolated, HashMap::new(), |context| {
-        to_call.call(context, argument)
-    })?
+    context.stack_scope(
+        to_call.call_scope_type(context),
+        HashMap::new(),
+        |context| to_call.call(context, argument),
+    )?
 }
 
 fn execute_method_call(
@@ -381,7 +382,7 @@ fn execute_method_call(
     let argument = values::Dictionary::from_ast(context, &call.node.argument)?;
 
     context.stack_scope(
-        ScopeType::Isolated,
+        to_call.call_scope_type(context),
         HashMap::from_iter([(ImString::from("self"), self_dictionary.into())]),
         |context| to_call.call(context, argument),
     )?

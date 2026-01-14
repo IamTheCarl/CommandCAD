@@ -16,7 +16,11 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::execution::{values::StaticType, ExecutionContext};
+use crate::execution::{
+    logging::{LogLevel, LogMessage},
+    values::{string::formatting::Style, StaticType},
+    ExecutionContext,
+};
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
 
@@ -28,6 +32,32 @@ pub struct Boolean(pub bool);
 impl Object for Boolean {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::Boolean
+    }
+
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        if !matches!(style, Style::Default) {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Boolean values only support default formatting".into(),
+            });
+        }
+
+        if precision.is_some() {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Boolean values cannot be formatted with precision".into(),
+            });
+        }
+
+        write!(f, "{}", self.0)
     }
 
     fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
@@ -63,5 +93,19 @@ impl StaticTypeName for Boolean {
 impl StaticType for Boolean {
     fn static_type() -> ValueType {
         ValueType::Boolean
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::execution::{test_run, values};
+
+    #[test]
+    fn format() {
+        let product = test_run("\"{value}\"::format(value = true) == \"true\"").unwrap();
+        assert_eq!(product, values::Boolean(true).into());
+
+        let product = test_run("\"{value}\"::format(value = false) == \"false\"").unwrap();
+        assert_eq!(product, values::Boolean(true).into());
     }
 }

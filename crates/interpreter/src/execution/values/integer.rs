@@ -29,10 +29,10 @@ use std::{
 
 use crate::execution::{
     errors::{ExpressionResult, GenericFailure, Raise},
-    logging::StackTrace,
+    logging::{LogLevel, LogMessage, StackTrace},
     values::{
-        closure::BuiltinCallableDatabase, integer::methods::MethodSet, BuiltinFunction,
-        MissingAttributeError, StaticType,
+        closure::BuiltinCallableDatabase, integer::methods::MethodSet, string::formatting::Style,
+        BuiltinFunction, MissingAttributeError, StaticType,
     },
     ExecutionContext,
 };
@@ -48,6 +48,9 @@ impl<I> From<I> for Integer<I> {
     }
 }
 
+const INTEGER_FORMAT_WARNING_MESSAGE: &'static str =
+    "Integer formats such as Octal and Hex ignore precision";
+
 impl<I> Object for Integer<I>
 where
     I: IntOps,
@@ -56,6 +59,55 @@ where
 {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         I::static_type()
+    }
+
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        match style {
+            Style::Default => write!(f, "{}", self.0),
+            Style::Debug => write!(f, "{}", self.0),
+            Style::Octal => {
+                if precision.is_some() {
+                    context.log.push_message(LogMessage {
+                        origin: context.stack_trace.bottom().clone(),
+                        level: LogLevel::Warning,
+                        message: INTEGER_FORMAT_WARNING_MESSAGE.into(),
+                    });
+                }
+                write!(f, "{:o}", self.0)
+            }
+            Style::Hex => {
+                if precision.is_some() {
+                    context.log.push_message(LogMessage {
+                        origin: context.stack_trace.bottom().clone(),
+                        level: LogLevel::Warning,
+                        message: INTEGER_FORMAT_WARNING_MESSAGE.into(),
+                    });
+                }
+                write!(f, "{:x}", self.0)
+            }
+            Style::CapitalizedHex => {
+                if precision.is_some() {
+                    context.log.push_message(LogMessage {
+                        origin: context.stack_trace.bottom().clone(),
+                        level: LogLevel::Warning,
+                        message: INTEGER_FORMAT_WARNING_MESSAGE.into(),
+                    });
+                }
+                write!(f, "{:X}", self.0)
+            }
+            Style::Exponent => {
+                write!(f, "{:e}", self.0)
+            }
+            Style::CapitalizedExponent => {
+                write!(f, "{:E}", self.0)
+            }
+        }
     }
 
     fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
@@ -256,6 +308,14 @@ trait IntOps:
     + One
     + ToPrimitive
     + StaticType
+    + std::fmt::Display
+    + std::fmt::Debug
+    + std::fmt::Binary
+    + std::fmt::LowerExp
+    + std::fmt::UpperExp
+    + std::fmt::LowerHex
+    + std::fmt::UpperHex
+    + std::fmt::Octal
 {
     type MethodSet: MethodSet + 'static;
 
@@ -1200,6 +1260,18 @@ mod test {
     #[test]
     fn signed_midpoint() {
         let product = test_run("10i::midpoint(rhs = 10i) == 10i").unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn unsigned_format() {
+        let product = test_run("\"{a} {b:?} {c:o} {d:x} {e:X} {f:e} {g:E}\"::format(a = 10u, b = 32u, c = 0o123u, d = 0xDEADBEEFu, e = 0xDEADBEEFu, f = 1000u, g = 1000u) == \"10 32 123 deadbeef DEADBEEF 1e3 1E3\"").unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn signed_format() {
+        let product = test_run("\"{a} {b:?} {c:o} {d:x} {e:X} {f:e} {g:E}\"::format(a = 10i, b = 32i, c = 0o123i, d = 0xDEADBEEFi, e = 0xDEADBEEFi, f = 1000i, g = 1000i) == \"10 32 123 deadbeef DEADBEEF 1e3 1E3\"").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 }

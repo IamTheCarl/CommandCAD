@@ -29,6 +29,7 @@ use crate::{
         errors::{ErrorType, ExpressionResult, Raise as _},
         find_all_variable_accesses_in_expression,
         stack::ScopeType,
+        values::string::formatting::Style,
         ExecutionContext,
     },
 };
@@ -71,6 +72,30 @@ pub struct Dictionary {
 impl Object for Dictionary {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         self.data.struct_def.clone().into()
+    }
+
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        write!(f, "(")?;
+
+        let mut items = self.data.members.iter().peekable();
+
+        while let Some((name, value)) = items.next() {
+            write!(f, "{name} = ")?;
+            value.format(context, f, style, precision)?;
+            if items.peek().is_some() {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, ")")?;
+
+        Ok(())
     }
 
     fn get_attribute(
@@ -177,6 +202,10 @@ impl Dictionary {
     pub fn iter(&self) -> impl Iterator<Item = (&ImString, &Value)> {
         self.data.members.iter()
     }
+
+    pub fn get(&self, name: &str) -> Option<&Value> {
+        self.data.members.get(name)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -239,5 +268,21 @@ mod test {
     fn reference_own_member() {
         let product = test_run("let d = (one = 1u, two = one + 1u); in d.two").unwrap();
         assert_eq!(product, values::UnsignedInteger::from(2).into());
+    }
+
+    #[test]
+    fn format() {
+        let product = test_run("\"{value}\"::format(value = (a = 1u)) == \"(a = 1)\"").unwrap();
+        assert_eq!(product, values::Boolean(true).into());
+
+        let product =
+            test_run("let result = \"{value}\"::format(value = (a = 1u, b = 2u)); in result == \"(a = 1, b = 2)\" || result == \"(b = 2, a = 1)\"")
+                .unwrap();
+        assert_eq!(product, values::Boolean(true).into());
+
+        let product =
+            test_run("\"{value:X}\"::format(value = (a = 0xDEADBEEFu)) == \"(a = DEADBEEF)\"")
+                .unwrap();
+        assert_eq!(product, values::Boolean(true).into());
     }
 }

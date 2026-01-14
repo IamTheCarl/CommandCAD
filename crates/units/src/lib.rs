@@ -57,9 +57,9 @@ pub fn get_unit_list() -> &'static Vec<(String, Vec<UnitDescription>)> {
     list
 }
 
-pub fn get_base_unit_name(dimension: impl AsRef<Dimension>) -> Option<&'static str> {
+pub fn get_base_unit_name(dimension: &Dimension) -> Option<&'static str> {
     static BASE_UNITS: OnceLock<BaseUnits> = OnceLock::new();
     let database = BASE_UNITS.get_or_init(|| include!(concat!(env!("OUT_DIR"), "/base_units.rs")));
 
-    database.get(dimension.as_ref()).map(|cow| cow.borrow())
+    database.get(dimension).map(|cow| cow.borrow())
 }

@@ -32,9 +32,11 @@ use crate::{
     execute_expression,
     execution::{
         errors::{ErrorType, ExpressionResult, Raise},
+        logging::{LogLevel, LogMessage},
         values::{
-            self, closure::BuiltinCallableDatabase, dictionary::DictionaryData, BuiltinFunction,
-            Dictionary, File, IString, MissingAttributeError,
+            self, closure::BuiltinCallableDatabase, dictionary::DictionaryData,
+            string::formatting::Style, BuiltinFunction, Dictionary, File, IString,
+            MissingAttributeError,
         },
         ExecutionContext,
     },
@@ -184,6 +186,32 @@ impl Display for ValueType {
 impl Object for ValueType {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::ValueType
+    }
+
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        if !matches!(style, Style::Default) {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Value types only support default formatting".into(),
+            });
+        }
+
+        if precision.is_some() {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Value types cannot be formatted with precision".into(),
+            });
+        }
+
+        write!(f, "{}", self)
     }
 
     fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {

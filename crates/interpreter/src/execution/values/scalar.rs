@@ -23,10 +23,11 @@ use crate::{
     build_method,
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
-        logging::StackTrace,
+        logging::{LogLevel, LogMessage, StackTrace},
         values::{
-            self, closure::BuiltinCallableDatabase, Boolean, BuiltinFunction,
-            MissingAttributeError, SignedInteger, StaticType, UnsignedInteger, Vector2,
+            self, closure::BuiltinCallableDatabase, string::formatting::Style, Boolean,
+            BuiltinFunction, MissingAttributeError, SignedInteger, StaticType, UnsignedInteger,
+            Vector2,
         },
         ExecutionContext,
     },
@@ -65,126 +66,85 @@ impl Object for Scalar {
         units::get_dimension_name(&self.dimension)
     }
 
-    // fn format(
-    //     &self,
-    //     log: &dyn RuntimeLog,
-    //     stack_trace: [SourceReference],
-    //     f: &mut dyn fmt::Write,
-    //     style: Style,
-    //     precision: Option<u8>,
-    // ) -> ExpressionResult<S, ()> {
-    //     // This just takes a reference to the unit name, so it's pretty cheap. I don't mind if it's not always used.
-    //     // In the rare case that a unit name is generated and memory is allocated on the heap, well we're clearly
-    //     // not about to format a number, so it's clear that we're going to use this.
-    //     let unit_name = BASE_UNITS
-    //         .get(&self.dimension)
-    //         .cloned()
-    //         .unwrap_or_else(|| format_dimension(&self.dimension));
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        // This just takes a reference to the unit name, so it's pretty cheap. I don't mind if it's not always used.
+        // In the rare case that a unit name is generated and memory is allocated on the heap, well we're clearly
+        // not about to format a number, so it's clear that we're going to use this.
+        let unit_name = units::get_base_unit_name(&self.dimension);
 
-    //     match (style, precision, self.is_number()) {
-    //         (Style::Default, None, true) => {
-    //             write!(f, "{}", self.value).unwrap_formatting_result(span)
-    //         }
-    //         (Style::Default, None, false) => {
-    //             write!(f, "{} {unit_name}", self.value).unwrap_formatting_result(span)
-    //         }
-    //         (Style::Default, Some(precision), true) => {
-    //             write!(f, "{:.1$}", self.value, precision as usize).unwrap_formatting_result(span)
-    //         }
-    //         (Style::Default, Some(precision), false) => {
-    //             write!(f, "{:.1$} {unit_name}", self.value, precision as usize)
-    //                 .unwrap_formatting_result(span)
-    //         }
-    //         (Style::Debug, None, true) => {
-    //             write!(f, "{}", self.value).unwrap_formatting_result(span)
-    //         }
-    //         (Style::Debug, None, false) => {
-    //             write!(f, "{} {unit_name}", self.value).unwrap_formatting_result(span)
-    //         }
-    //         (Style::Debug, Some(precision), true) => {
-    //             write!(f, "{:.1$}", self.value, precision as usize).unwrap_formatting_result(span)
-    //         }
-    //         (Style::Debug, Some(precision), false) => {
-    //             write!(f, "{:.1$} {unit_name}", self.value, precision as usize)
-    //                 .unwrap_formatting_result(span)
-    //         }
-    //         (Style::Octal, _, true) => {
-    //             if precision.is_some() {
-    //                 log.push(LogMessage::FormatIntegerPrecision(span.clone()));
-    //             }
-    //             write!(f, "{:o}", self.value.into_inner() as usize).unwrap_formatting_result(span)
-    //         }
-    //         (Style::Octal, _, false) => {
-    //             if precision.is_some() {
-    //                 log.push(LogMessage::FormatIntegerPrecision(span.clone()));
-    //             }
-    //             write!(f, "{:o} {unit_name}", self.value.into_inner() as usize)
-    //                 .unwrap_formatting_result(span)
-    //         }
-    //         (Style::Hex, _, true) => {
-    //             if precision.is_some() {
-    //                 log.push(LogMessage::FormatIntegerPrecision(span.clone()));
-    //             }
-    //             write!(f, "{:x}", self.value.into_inner() as usize).unwrap_formatting_result(span)
-    //         }
-    //         (Style::Hex, _, false) => {
-    //             if precision.is_some() {
-    //                 log.push(LogMessage::FormatIntegerPrecision(span.clone()));
-    //             }
-    //             write!(f, "{:x} {unit_name}", self.value.into_inner() as usize)
-    //                 .unwrap_formatting_result(span)
-    //         }
-    //         (Style::CapitalizedHex, _, true) => {
-    //             if precision.is_some() {
-    //                 log.push(LogMessage::FormatIntegerPrecision(span.clone()));
-    //             }
-    //             write!(f, "{:X}", self.value.into_inner() as usize).unwrap_formatting_result(span)
-    //         }
-    //         (Style::CapitalizedHex, _, false) => {
-    //             if precision.is_some() {
-    //                 log.push(LogMessage::FormatIntegerPrecision(span.clone()));
-    //             }
-    //             write!(f, "{:X} {unit_name}", self.value.into_inner() as usize)
-    //                 .unwrap_formatting_result(span)
-    //         }
-    //         (Style::Exponent, None, true) => {
-    //             write!(f, "{:e}", self.value.into_inner() as usize).unwrap_formatting_result(span)
-    //         }
-    //         (Style::Exponent, None, false) => {
-    //             write!(f, "{:e} {unit_name}", self.value.into_inner() as usize)
-    //                 .unwrap_formatting_result(span)
-    //         }
-    //         (Style::Exponent, Some(precision), true) => {
-    //             write!(f, "{:.1$e}", self.value.into_inner(), precision as usize)
-    //                 .unwrap_formatting_result(span)
-    //         }
-    //         (Style::Exponent, Some(precision), false) => write!(
-    //             f,
-    //             "{:.1$e} {unit_name}",
-    //             self.value.into_inner(),
-    //             precision as usize
-    //         )
-    //         .unwrap_formatting_result(span),
-    //         (Style::CapitalizedExponent, None, true) => {
-    //             write!(f, "{:E}", self.value.into_inner()).unwrap_formatting_result(span)
-    //         }
-    //         (Style::CapitalizedExponent, None, false) => {
-    //             write!(f, "{:E} {unit_name}", self.value.into_inner())
-    //                 .unwrap_formatting_result(span)
-    //         }
-    //         (Style::CapitalizedExponent, Some(precision), true) => {
-    //             write!(f, "{:.1$E}", self.value.into_inner(), precision as usize)
-    //                 .unwrap_formatting_result(span)
-    //         }
-    //         (Style::CapitalizedExponent, Some(precision), false) => write!(
-    //             f,
-    //             "{:.1$E} {unit_name}",
-    //             self.value.into_inner(),
-    //             precision as usize
-    //         )
-    //         .unwrap_formatting_result(span),
-    //     }
-    // }
+        match (style, precision, unit_name) {
+            (Style::Default, Option::None, Option::None) => {
+                write!(f, "{}", self.value)
+            }
+            (Style::Default, Option::None, Some(unit_name)) => {
+                write!(f, "{}{unit_name}", self.value)
+            }
+            (Style::Default, Some(precision), Option::None) => {
+                write!(f, "{:.1$}", self.value, precision as usize)
+            }
+            (Style::Default, Some(precision), Some(unit_name)) => {
+                write!(f, "{:.1$}{unit_name}", self.value, precision as usize)
+            }
+            (Style::Debug, Option::None, Option::None) => {
+                write!(f, "{}", self.value)
+            }
+            (Style::Debug, Option::None, Some(unit_name)) => {
+                write!(f, "{}{unit_name}", self.value)
+            }
+            (Style::Debug, Some(precision), Option::None) => {
+                write!(f, "{:.1$}", self.value, precision as usize)
+            }
+            (Style::Debug, Some(precision), Some(unit_name)) => {
+                write!(f, "{:.1$}{unit_name}", self.value, precision as usize)
+            }
+            (Style::Octal | Style::Hex | Style::CapitalizedHex, _, _) => {
+                context.log.push_message(LogMessage {
+                    origin: context.stack_trace.bottom().clone(),
+                    level: LogLevel::Warning,
+                    message: "Scalar values cannot be formatted as integers".into(),
+                });
+
+                // Don't stop execution. Just use default formatting.
+                self.format(context, f, Style::Default, precision)
+            }
+            (Style::Exponent, Option::None, Option::None) => {
+                write!(f, "{:e}", self.value.into_inner() as usize)
+            }
+            (Style::Exponent, Option::None, Some(unit_name)) => {
+                write!(f, "{:e}{unit_name}", self.value.into_inner() as usize)
+            }
+            (Style::Exponent, Some(precision), Option::None) => {
+                write!(f, "{:.1$e}", self.value.into_inner(), precision as usize)
+            }
+            (Style::Exponent, Some(precision), Some(unit_name)) => write!(
+                f,
+                "{:.1$e}{unit_name}",
+                self.value.into_inner(),
+                precision as usize
+            ),
+            (Style::CapitalizedExponent, Option::None, Option::None) => {
+                write!(f, "{:E}", self.value.into_inner())
+            }
+            (Style::CapitalizedExponent, Option::None, Some(unit_name)) => {
+                write!(f, "{:E}{unit_name}", self.value.into_inner())
+            }
+            (Style::CapitalizedExponent, Some(precision), Option::None) => {
+                write!(f, "{:.1$E}", self.value.into_inner(), precision as usize)
+            }
+            (Style::CapitalizedExponent, Some(precision), Some(unit_name)) => write!(
+                f,
+                "{:.1$E}{unit_name}",
+                self.value.into_inner(),
+                precision as usize
+            ),
+        }
+    }
 
     fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
         let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
@@ -1334,6 +1294,31 @@ mod test {
     #[test]
     fn tan() {
         let product = test_run("0deg::tan() == 0").unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn format() {
+        let product = test_run(
+            "\"{a} {b} {c:.2}\"::format(a = 10, b = 10m, c = 10.1234) == \"10 10m 10.12\"",
+        )
+        .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product = test_run(
+            "\"{a:?} {b:?} {c:?.2}\"::format(a = 10, b = 10m, c = 10.1234) == \"10 10m 10.12\"",
+        )
+        .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("\"{a:e} {b:e} {c:e.2}\"::format(a = 1000, b = 1000m, c = 1234.1234) == \"1e3 1e3m 1.23e3\"")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("\"{a:E} {b:E} {c:E.2}\"::format(a = 1000, b = 1000m, c = 1234.1234) == \"1E3 1E3m 1.23E3\"")
+                .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 }

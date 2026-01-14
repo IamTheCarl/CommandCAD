@@ -25,7 +25,11 @@ use crate::{
     build_method,
     execution::{
         errors::{GenericFailure, Raise as _},
-        values::{BuiltinCallableDatabase, IString, Object, StaticTypeName, ValueType},
+        logging::{LogLevel, LogMessage},
+        values::{
+            string::formatting::Style, BuiltinCallableDatabase, IString, Object, StaticTypeName,
+            ValueType,
+        },
         ExecutionContext, ExpressionResult,
     },
 };
@@ -46,6 +50,32 @@ impl PartialEq for File {
 impl Object for File {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::File
+    }
+
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        if !matches!(style, Style::Debug) {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Files only support debug formatting".into(),
+            });
+        }
+
+        if precision.is_some() {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Files cannot be formatted with precision".into(),
+            });
+        }
+
+        write!(f, "{:?}", self.content.path())
     }
 }
 

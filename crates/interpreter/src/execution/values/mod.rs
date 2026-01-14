@@ -22,7 +22,9 @@ use enum_dispatch::enum_dispatch;
 use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
 use unwrap_enum::EnumAs;
 
-use crate::execution::{logging::StackTrace, ExecutionContext};
+use crate::execution::{
+    logging::StackTrace, stack::ScopeType, values::string::formatting::Style, ExecutionContext,
+};
 
 use super::errors::{ErrorType, ExpressionResult, Raise as _};
 
@@ -164,16 +166,13 @@ impl Display for MissingAttributeError {
 pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
     fn get_type(&self, context: &ExecutionContext) -> ValueType;
 
-    // fn format(
-    //     &self,
-    //     _log: &dyn RuntimeLog,
-    //     stack_trace: stack_trace: &S[SourceReference],
-    //     _f: &mut dyn Write,
-    //     _style: Style,
-    //     _precision: Option<u8>,
-    // ) -> OperatorResult<S, ()> {
-    //     UnsupportedOperationError::raise(self, stack_trace, "format")
-    // }
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result;
 
     fn type_name(&self) -> Cow<'static, str> {
         Self::static_type_name().into()
@@ -233,6 +232,9 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
             name: attribute.into(),
         }
         .to_error(context.stack_trace))
+    }
+    fn call_scope_type(&self, _context: &ExecutionContext) -> ScopeType {
+        ScopeType::Isolated
     }
     fn call(&self, context: &ExecutionContext, _argument: Dictionary) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, context.stack_trace, "call")

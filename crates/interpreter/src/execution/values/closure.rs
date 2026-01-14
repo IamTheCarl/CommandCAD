@@ -27,8 +27,9 @@ use crate::{
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
         find_all_variable_accesses_in_expression, find_value,
+        logging::{LogLevel, LogMessage},
         stack::ScopeType,
-        values::{Dictionary, MissingAttributeError, Value},
+        values::{string::formatting::Style, Dictionary, MissingAttributeError, Value},
         ExecutionContext,
     },
 };
@@ -236,6 +237,32 @@ impl Object for UserClosure {
         ValueType::Closure(self.data.signature.clone())
     }
 
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        if !matches!(style, Style::Default) {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Boolean values only support default formatting".into(),
+            });
+        }
+
+        if precision.is_some() {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Boolean values cannot be formatted with precision".into(),
+            });
+        }
+
+        write!(f, "{}", self.get_type(context))
+    }
+
     fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value> {
         self.data
             .signature
@@ -277,6 +304,10 @@ pub trait BuiltinCallable: Sync + Send {
     fn name(&self) -> &str;
 
     fn signature(&self) -> &Arc<Signature>;
+
+    fn scope_type(&self) -> ScopeType {
+        ScopeType::Isolated
+    }
 }
 
 impl std::fmt::Debug for dyn BuiltinCallable {
@@ -537,6 +568,36 @@ impl BuiltinFunction {
 impl Object for BuiltinFunction {
     fn get_type(&self, context: &ExecutionContext) -> ValueType {
         ValueType::Closure(context.database.get_forward(self.0).signature().clone())
+    }
+
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        if !matches!(style, Style::Default) {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Closures only support default formatting".into(),
+            });
+        }
+
+        if precision.is_some() {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Closures cannot be formatted with precision".into(),
+            });
+        }
+
+        write!(f, "{}", self.get_type(context))
+    }
+
+    fn call_scope_type(&self, context: &ExecutionContext) -> ScopeType {
+        context.database.get_forward(self.0).forward.scope_type()
     }
 
     fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value> {

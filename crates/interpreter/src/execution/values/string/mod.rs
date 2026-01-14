@@ -17,15 +17,21 @@
  */
 
 use common_data_types::{Dimension, Float};
+use hashable_map::HashableMap;
 use imstr::ImString;
 
 use crate::{
     build_closure_type, build_method,
     execution::{
         errors::{GenericFailure, Raise},
+        logging::{LocatedStr, LogLevel, LogMessage},
+        stack::ScopeType,
         values::{
+            closure::{BuiltinCallable, Signature},
+            string::formatting::{Format, Style},
             Boolean, BuiltinCallableDatabase, BuiltinFunction, Dictionary, List,
-            MissingAttributeError, Scalar, SignedInteger, StaticType, UnsignedInteger, ValueNone,
+            MissingAttributeError, Scalar, SignedInteger, StaticType, StructDefinition,
+            UnsignedInteger, ValueNone,
         },
         ExecutionContext,
     },
@@ -33,7 +39,9 @@ use crate::{
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
 
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
+
+pub mod formatting;
 
 #[derive(Debug, Hash, Clone, Eq, PartialEq)]
 pub struct IString(pub ImString);
@@ -41,6 +49,32 @@ pub struct IString(pub ImString);
 impl Object for IString {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::String
+    }
+
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        if !matches!(style, Style::Default) {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Strings only support default formatting".into(),
+            });
+        }
+
+        if precision.is_some() {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "Strings cannot be formatted with precision".into(),
+            });
+        }
+
+        write!(f, "{}", self.0)
     }
 
     fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
@@ -134,12 +168,69 @@ mod methods {
     pub struct Contains;
 }
 
+fn register_format_method(database: &mut BuiltinCallableDatabase) {
+    struct BuiltFunction {
+        signature: Arc<Signature>,
+    }
+
+    impl BuiltinCallable for BuiltFunction {
+        fn call(
+            &self,
+            context: &ExecutionContext,
+            argument: Dictionary,
+        ) -> ExpressionResult<Value> {
+            let this = context
+                .get_variable(LocatedStr {
+                    location: context.stack_trace.bottom().clone(),
+                    string: "self",
+                })?
+                .downcast_ref::<IString>(context.stack_trace)?
+                .clone();
+
+            let (excess, format) = Format::parse(&this.0).map_err(|error| {
+                GenericFailure(format!("Failed to parse formatting string: {error:?}").into())
+                    .to_error(context.stack_trace)
+            })?;
+            assert!(excess.is_empty());
+
+            let mut output = String::new();
+            format.format(context, &mut output, argument)?;
+
+            Ok(IString(ImString::from(output)).into())
+        }
+
+        fn name(&self) -> &str {
+            "String::format"
+        }
+
+        fn signature(&self) -> &Arc<Signature> {
+            &self.signature
+        }
+
+        fn scope_type(&self) -> ScopeType {
+            ScopeType::Inherited
+        }
+    }
+
+    let callable = BuiltFunction {
+        signature: Arc::new(Signature {
+            argument_type: StructDefinition {
+                members: Arc::new(HashableMap::from(HashMap::new())),
+                variadic: true,
+            },
+            return_type: ValueType::String,
+        }),
+    };
+
+    database.register::<methods::Format>(Box::new(callable))
+}
+
 pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_closure_type!(MapClosure(c: Value) -> Value);
     build_closure_type!(FoldClosure(previous: Value, c: Value) -> Value);
     build_closure_type!(RetainClosure(c: Value) -> Boolean);
 
-    // pub struct Format;
+    register_format_method(database);
 
     build_method!(
         database,
@@ -392,7 +483,10 @@ mod test {
 
     #[test]
     fn method_format() {
-        todo!()
+        let product =
+            test_run("let one = 1; in \"Test {one} {two}\"::format(two = 2) == \"Test 1 2\"")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
@@ -575,5 +669,14 @@ mod test {
 
         let product = test_run("\"abcd\"::contains(pattern = \"bcde\")").unwrap();
         assert_eq!(product, Boolean(false).into());
+    }
+
+    #[test]
+    fn format() {
+        let product = test_run(
+            "\"outer text: {value}\"::format(value = \"inner text\") == \"outer text: inner text\"",
+        )
+        .unwrap();
+        assert_eq!(product, Boolean(true).into());
     }
 }

@@ -10,8 +10,9 @@ use crate::{
         errors::{ExpressionResult, GenericFailure, Raise as _},
         logging::StackTrace,
         values::{
-            closure::BuiltinCallableDatabase, scalar::UnwrapNotNan, BuiltinFunction, DowncastError,
-            MissingAttributeError, Object, Scalar, StaticType, StaticTypeName, Value, ValueType,
+            closure::BuiltinCallableDatabase, scalar::UnwrapNotNan, string::formatting::Style,
+            BuiltinFunction, DowncastError, MissingAttributeError, Object, Scalar, StaticType,
+            StaticTypeName, Value, ValueType,
         },
         ExecutionContext,
     },
@@ -45,6 +46,35 @@ where
 {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         I::get_type(self.dimension)
+    }
+
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        let mut components = self.value.iter().peekable();
+
+        write!(f, "<(")?;
+
+        while let Some(value) = components.next() {
+            let c = Scalar {
+                dimension: self.dimension,
+                value: common_data_types::Float::new(value).expect("Vector has NaN component"),
+            };
+
+            c.format(context, f, style, precision)?;
+
+            if components.peek().is_some() {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, ")>")?;
+
+        Ok(())
     }
 
     fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
@@ -1513,5 +1543,26 @@ mod test {
             }
             .into()
         );
+    }
+
+    #[test]
+    fn format() {
+        let product = test_run(
+            "\"{a} {b} {c:.2}\"::format(a = <(1, 2)>, b = <(1m, 2m)>, c = <(1.234, 2.345)>) == \"<(1, 2)> <(1m, 2m)> <(1.23, 2.34)>\"",
+        )
+        .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product = test_run(
+            "\"{a} {b} {c:.2}\"::format(a = <(1, 2, 3)>, b = <(1m, 2m, 3m)>, c = <(1.234, 2.345, 3.456)>) == \"<(1, 2, 3)> <(1m, 2m, 3m)> <(1.23, 2.34, 3.46)>\"",
+        )
+        .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product = test_run(
+            "\"{a} {b} {c:.2}\"::format(a = <(1, 2, 3, 4)>, b = <(1m, 2m, 3m, 4m)>, c = <(1.234, 2.345, 3.456, 4.567)>) == \"<(1, 2, 3, 4)> <(1m, 2m, 3m, 4m)> <(1.23, 2.34, 3.46, 4.57)>\"",
+        )
+        .unwrap();
+        assert_eq!(product, Boolean(true).into());
     }
 }

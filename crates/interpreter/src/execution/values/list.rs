@@ -23,8 +23,8 @@ use crate::{
     execution::{
         errors::{Error, ErrorType, GenericFailure, Raise as _},
         values::{
-            closure::BuiltinCallableDatabase, Boolean, BuiltinFunction, Dictionary,
-            MissingAttributeError, StaticType, UnsignedInteger, ValueNone,
+            closure::BuiltinCallableDatabase, string::formatting::Style, Boolean, BuiltinFunction,
+            Dictionary, MissingAttributeError, StaticType, UnsignedInteger, ValueNone,
         },
         ExecutionContext,
     },
@@ -119,6 +119,29 @@ impl List {
 impl Object for List {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::List(self.internal_type.clone().map(Box::new))
+    }
+
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        write!(f, "[")?;
+
+        let mut items = self.values.iter().peekable();
+
+        while let Some(value) = items.next() {
+            value.format(context, f, style, precision)?;
+            if items.peek().is_some() {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, "]")?;
+
+        Ok(())
     }
 
     fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
@@ -965,6 +988,19 @@ mod test {
     #[test]
     fn method_cartesian_product() {
         let product = test_run("[1, 2, 3]::cartesian_product(other = [3, 4, 5]) == [[1, 3], [1, 4], [1, 5], [2, 3], [2, 4], [2, 5], [3, 3], [3, 4], [3, 5]]").unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn format() {
+        let product = test_run("\"{value}\"::format(value = [1u]) == \"[1]\"").unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product = test_run("\"{value}\"::format(value = [1u, 2u]) == \"[1, 2]\"").unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("\"{value:X}\"::format(value = [0xDEADBEEFu]) == \"[DEADBEEF]\"").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 }

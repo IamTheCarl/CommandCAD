@@ -16,7 +16,11 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::execution::{values::StaticType, ExecutionContext};
+use crate::execution::{
+    logging::{LogLevel, LogMessage},
+    values::{string::formatting::Style, StaticType},
+    ExecutionContext,
+};
 
 use super::{value_type::ValueType, Object, StaticTypeName};
 
@@ -29,6 +33,32 @@ impl Object for ValueNone {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::TypeNone
     }
+
+    fn format(
+        &self,
+        context: &ExecutionContext,
+        f: &mut dyn std::fmt::Write,
+        style: Style,
+        precision: Option<u8>,
+    ) -> std::fmt::Result {
+        if !matches!(style, Style::Default) {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "None values only support default formatting".into(),
+            });
+        }
+
+        if precision.is_some() {
+            context.log.push_message(LogMessage {
+                origin: context.stack_trace.bottom().clone(),
+                level: LogLevel::Warning,
+                message: "None values cannot be formatted with precision".into(),
+            });
+        }
+
+        write!(f, "None")
+    }
 }
 
 impl StaticTypeName for ValueNone {
@@ -40,5 +70,16 @@ impl StaticTypeName for ValueNone {
 impl StaticType for ValueNone {
     fn static_type() -> ValueType {
         ValueType::TypeNone
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::execution::{test_run, values};
+
+    #[test]
+    fn format() {
+        let product = test_run("\"{value}\"::format(value = std.consts.None) == \"None\"").unwrap();
+        assert_eq!(product, values::Boolean(true).into());
     }
 }
