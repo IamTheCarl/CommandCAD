@@ -26,8 +26,8 @@ use crate::{
     execute_expression,
     execution::{
         errors::{ExpressionResult, GenericFailure, Raise},
-        find_all_variable_accesses_in_expression, find_value,
-        logging::{LogLevel, LogMessage},
+        find_all_variable_accesses_in_expression,
+        logging::{LocatedStr, LogLevel, LogMessage},
         stack::ScopeType,
         values::{string::formatting::Style, Dictionary, MissingAttributeError, Value},
         ExecutionContext,
@@ -215,7 +215,12 @@ impl UserClosure {
 
         let mut captured_values = HashableMap::new();
         find_all_variable_accesses_in_closure_capture(&source.node, &mut |field_name| {
-            let value = find_value(context, [field_name])?;
+            let value = context
+                .get_variable(LocatedStr {
+                    location: field_name.reference.clone(),
+                    string: field_name.node.as_str(),
+                })?
+                .clone();
 
             captured_values.insert(field_name.node.clone(), value);
 

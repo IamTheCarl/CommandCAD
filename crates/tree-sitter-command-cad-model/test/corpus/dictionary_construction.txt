@@ -24,8 +24,7 @@ One
       (dictionary_member_assignment
         (identifier)
         (expression
-          (identity_path
-            (identifier)))))))
+          (identifier))))))
 
 ==================
 One,
@@ -41,8 +40,7 @@ One,
       (dictionary_member_assignment
         (identifier)
         (expression
-          (identity_path
-            (identifier)))))))
+          (identifier))))))
 
 ==================
 One, two
@@ -58,13 +56,11 @@ One, two
       (dictionary_member_assignment
         (identifier)
         (expression
-          (identity_path
-            (identifier))))
+          (identifier)))
       (dictionary_member_assignment
         (identifier)
         (expression
-          (identity_path
-            (identifier)))))))
+          (identifier))))))
 
 ==================
 One, two,
@@ -80,10 +76,8 @@ One, two,
       (dictionary_member_assignment
         (identifier)
         (expression
-          (identity_path
-            (identifier))))
+          (identifier)))
       (dictionary_member_assignment
         (identifier)
         (expression
-          (identity_path
-            (identifier)))))))
+          (identifier))))))

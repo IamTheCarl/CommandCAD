@@ -46,62 +46,6 @@ use values::{
 
 pub use standard_environment::build_prelude;
 
-pub fn find_value<'p, 's>(
-    context: &ExecutionContext,
-    path_iter: impl IntoIterator<Item = &'p compile::AstNode<ImString>>,
-) -> ExpressionResult<Value> {
-    let mut path_iter = path_iter.into_iter().peekable();
-    let root = path_iter.next().expect("Path is empty");
-
-    let stack_value = context.get_variable(LocatedStr {
-        location: root.reference.clone(),
-        string: &root.node,
-    })?;
-
-    if let Some(sub_path) = path_iter.next() {
-        // We need the value off the heap.
-
-        let mut value = stack_value.get_attribute(
-            context,
-            &LocatedStr {
-                location: sub_path.reference.clone(),
-                string: &sub_path.node,
-            },
-        )?;
-
-        // Follow the chain of elements to evaluate the whole path, up to the last element.
-        while let Some(sub_path) = path_iter.next() {
-            if path_iter.peek().is_none() {
-                // That's the last element of the path. We break out early because the
-                // last one needs to be a mutable borrow.
-
-                let final_value = value.get_attribute(
-                    context,
-                    &LocatedStr {
-                        location: sub_path.reference.clone(),
-                        string: &sub_path.node,
-                    },
-                )?;
-
-                return Ok(final_value.clone());
-            } else {
-                value = value.get_attribute(
-                    context,
-                    &LocatedStr {
-                        location: sub_path.reference.clone(),
-                        string: &sub_path.node,
-                    },
-                )?;
-            }
-        }
-
-        Ok(value.clone())
-    } else {
-        // We just needed the value off the stack.
-        Ok(stack_value.clone())
-    }
-}
-
 pub fn find_all_variable_accesses_in_expression(
     expression: &Expression,
     access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
@@ -151,9 +95,8 @@ pub fn find_all_variable_accesses_in_expression(
         Expression::Parenthesis(ast_node) => {
             find_all_variable_accesses_in_expression(&ast_node.node, access_collector)
         }
-        Expression::IdentityPath(ast_node) => {
-            // Only the top most parent matters.
-            access_collector(&ast_node.node.path[0])
+        Expression::MemberAccess(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node.base.node, access_collector)
         }
         Expression::StructDefinition(ast_node) => {
             for member in ast_node.node.members.iter() {
@@ -208,6 +151,7 @@ pub fn find_all_variable_accesses_in_expression(
 
             Ok(())
         }
+        Expression::Identifier(ast_node) => access_collector(ast_node),
         Expression::Boolean(_)
         | Expression::Scalar(_)
         | Expression::Vector2(_)
@@ -216,7 +160,7 @@ pub fn find_all_variable_accesses_in_expression(
         | Expression::SignedInteger(_)
         | Expression::String(_)
         | Expression::UnsignedInteger(_)
-        | Expression::SelfPath(_) => Ok(()),
+        | Expression::Self_(_) => Ok(()),
     }
 }
 
@@ -293,19 +237,25 @@ pub fn execute_expression(
                 Ok(values::List::from_ast(context, ast_node)?.into())
             }
             compile::Expression::Parenthesis(ast_node) => execute_expression(context, &ast_node),
-            compile::Expression::IdentityPath(ast_node) => {
-                let path_iter = ast_node.node.path.iter();
-                Ok(find_value(context, path_iter)?)
-            }
-            compile::Expression::SelfPath(ast_node) => {
-                let self_code = AstNode {
-                    reference: ast_node.reference.clone(),
-                    node: ImString::from("self"),
-                };
-                let path_iter = [&self_code].into_iter().chain(ast_node.node.path.iter());
-                Ok(find_value(context, path_iter)?)
-            }
+            compile::Expression::MemberAccess(ast_node) => {
+                let base = execute_expression(context, &ast_node.node.base)?;
 
+                context.trace_scope(ast_node.node.member.reference.clone(), |context| {
+                    base.get_attribute(context, &ast_node.node.member.node)
+                })
+            }
+            compile::Expression::Self_(ast_node) => context
+                .get_variable(LocatedStr {
+                    location: ast_node.reference.clone(),
+                    string: "self",
+                })
+                .cloned(),
+            compile::Expression::Identifier(ast_node) => context
+                .get_variable(LocatedStr {
+                    location: ast_node.reference.clone(),
+                    string: ast_node.node.as_str(),
+                })
+                .cloned(),
             compile::Expression::Scalar(ast_node) => Ok(values::Scalar {
                 dimension: ast_node.node.dimension,
                 value: ast_node.node.value,

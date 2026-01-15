@@ -161,47 +161,51 @@
       "value": "'(\\\\'|[^'])*'"
     },
     "_float": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "SEQ",
-          "members": [
-            {
-              "type": "FIELD",
-              "name": "whole",
-              "content": {
-                "type": "SYMBOL",
-                "name": "number"
+      "type": "PREC_RIGHT",
+      "value": 0,
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "whole",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "number"
+                }
+              },
+              {
+                "type": "STRING",
+                "value": "."
+              },
+              {
+                "type": "FIELD",
+                "name": "fractional",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "number"
+                }
               }
-            },
-            {
-              "type": "STRING",
-              "value": "."
-            },
-            {
-              "type": "FIELD",
-              "name": "fractional",
-              "content": {
-                "type": "SYMBOL",
-                "name": "number"
+            ]
+          },
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "whole",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "number"
+                }
               }
-            }
-          ]
-        },
-        {
-          "type": "SEQ",
-          "members": [
-            {
-              "type": "FIELD",
-              "name": "whole",
-              "content": {
-                "type": "SYMBOL",
-                "name": "number"
-              }
-            }
-          ]
-        }
-      ]
+            ]
+          }
+        ]
+      }
     },
     "_unit": {
       "type": "CHOICE",
@@ -218,7 +222,7 @@
     },
     "scalar": {
       "type": "PREC_LEFT",
-      "value": 16,
+      "value": 17,
       "content": {
         "type": "SEQ",
         "members": [
@@ -514,11 +518,15 @@
         },
         {
           "type": "SYMBOL",
-          "name": "identity_path"
+          "name": "self"
         },
         {
           "type": "SYMBOL",
-          "name": "self_path"
+          "name": "identifier"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "member_access"
         },
         {
           "type": "SYMBOL",
@@ -1371,41 +1379,21 @@
         }
       ]
     },
-    "identity_path": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "SYMBOL",
-          "name": "identifier"
-        },
-        {
-          "type": "REPEAT",
-          "content": {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "STRING",
-                "value": "."
-              },
-              {
-                "type": "SYMBOL",
-                "name": "identifier"
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "self_path": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "SYMBOL",
-          "name": "self"
-        },
-        {
-          "type": "REPEAT",
-          "content": {
+    "member_access": {
+      "type": "PREC_LEFT",
+      "value": 16,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "base",
+            "content": {
+              "type": "SYMBOL",
+              "name": "expression"
+            }
+          },
+          {
             "type": "SEQ",
             "members": [
               {
@@ -1414,7 +1402,7 @@
               },
               {
                 "type": "FIELD",
-                "name": "identifier",
+                "name": "member",
                 "content": {
                   "type": "SYMBOL",
                   "name": "identifier"
@@ -1422,8 +1410,8 @@
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     "declaration_type": {
       "type": "SEQ",
@@ -1507,7 +1495,7 @@
     },
     "struct_member": {
       "type": "PREC_LEFT",
-      "value": 17,
+      "value": 18,
       "content": {
         "type": "SEQ",
         "members": [

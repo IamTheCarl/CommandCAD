@@ -7,12 +7,17 @@ this.is.a.test
 ---
 
 (source_file
-(expression
-  (identity_path
-    (identifier)
-    (identifier)
-    (identifier)
-    (identifier))))
+  (expression
+    (member_access
+      (expression
+        (member_access
+          (expression
+            (member_access
+              (expression
+                (identifier))
+              (identifier)))
+          (identifier)))
+      (identifier))))
 
 ==================
 Self Path
@@ -24,9 +29,16 @@ self.this.is.a.test
 
 (source_file
   (expression
-    (self_path
-      (self)
-      (identifier)
-      (identifier)
-      (identifier)
+    (member_access
+      (expression
+        (member_access
+          (expression
+            (member_access
+              (expression
+                (member_access
+                  (expression
+                    (self))
+                  (identifier)))
+              (identifier)))
+          (identifier)))
       (identifier))))

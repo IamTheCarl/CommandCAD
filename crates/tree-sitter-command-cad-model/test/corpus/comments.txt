@@ -27,8 +27,9 @@ Comment before closure
     (closure_definition
       (struct_definition)
       (expression
-        (identity_path
-          (identifier)
+        (member_access
+          (expression
+            (identifier))
           (identifier)))
       (expression
         (string)))))

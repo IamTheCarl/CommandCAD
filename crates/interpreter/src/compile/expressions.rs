@@ -99,8 +99,9 @@ pub enum Expression {
     If(AstNode<Box<IfExpression>>),
     List(AstNode<Vec<AstNode<Expression>>>),
     Parenthesis(Box<AstNode<Expression>>),
-    IdentityPath(AstNode<IdentityPath>),
-    SelfPath(AstNode<SelfPath>),
+    MemberAccess(Box<AstNode<MemberAccess>>),
+    Self_(AstNode<Self_>),
+    Identifier(AstNode<ImString>),
     Scalar(AstNode<Scalar>),
     Vector2(AstNode<Box<Vector2>>),
     Vector3(AstNode<Box<Vector3>>),
@@ -232,30 +233,30 @@ impl<'t> Parse<'t, nodes::Parenthesis<'t>> for Expression {
     }
 }
 
-impl<'t> Parse<'t, nodes::IdentityPath<'t>> for Expression {
+impl<'t> Parse<'t, nodes::MemberAccess<'t>> for Expression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::IdentityPath<'t>,
+        value: nodes::MemberAccess<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         Ok(AstNode::new(
             file,
             &value,
-            Self::IdentityPath(IdentityPath::parse(file, input, value)?),
+            Self::MemberAccess(Box::new(MemberAccess::parse(file, input, value)?)),
         ))
     }
 }
 
-impl<'t> Parse<'t, nodes::SelfPath<'t>> for Expression {
+impl<'t> Parse<'t, nodes::Self_<'t>> for Expression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::SelfPath<'t>,
+        value: nodes::Self_<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         Ok(AstNode::new(
             file,
             &value,
-            Self::SelfPath(SelfPath::parse(file, input, value)?),
+            Self::Self_(Self_::parse(file, input, value)?),
         ))
     }
 }
@@ -360,7 +361,8 @@ impl<'t> Parse<'t, nodes::String<'t>> for Expression {
         input: &'i str,
         value: nodes::String<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        static ESCAPE_SEQUENCES: &[(&str, &str)] = &[("\"", "\\\""), ("\n", "\\n"), ("\\", "\\\\")];
+        static ESCAPE_SEQUENCES: &[(&str, &str); 3] =
+            &[("\"", "\\\""), ("\n", "\\n"), ("\\", "\\\\")];
         let raw_text = &input[value.byte_range()];
         let raw_text = &raw_text[1..raw_text.len() - 1];
 
@@ -513,8 +515,13 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
             ChildType::If(if_expression) => Self::parse(file, input, if_expression),
             ChildType::List(list) => Self::parse(file, input, list),
             ChildType::Parenthesis(parenthesis) => Self::parse(file, input, parenthesis),
-            ChildType::IdentityPath(path) => Self::parse(file, input, path),
-            ChildType::SelfPath(path) => Self::parse(file, input, path),
+            ChildType::MemberAccess(path) => Self::parse(file, input, path),
+            ChildType::Self_(path) => Self::parse(file, input, path),
+            ChildType::Identifier(ident) => Ok(AstNode::new(
+                file,
+                &value,
+                Self::Identifier(ImString::parse(file, input, ident)?),
+            )),
             ChildType::Scalar(scalar) => Self::parse(file, input, scalar),
             ChildType::Vector2(vector) => Self::parse(file, input, vector),
             ChildType::Vector3(vector) => Self::parse(file, input, vector),
@@ -670,52 +677,34 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for BinaryExpression {
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]
-pub struct IdentityPath {
-    pub path: Vec<AstNode<ImString>>,
+pub struct MemberAccess {
+    pub base: AstNode<Expression>,
+    pub member: AstNode<ImString>,
 }
 
-impl<'t> Parse<'t, nodes::IdentityPath<'t>> for IdentityPath {
+impl<'t> Parse<'t, nodes::MemberAccess<'t>> for MemberAccess {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::IdentityPath<'t>,
+        value: nodes::MemberAccess<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        let mut cursor = value.walk();
-        let mut path = Vec::new();
+        let base = Expression::parse(file, input, value.base()?)?;
+        let member = ImString::parse(file, input, value.member()?)?;
 
-        for ident in value.identifiers(&mut cursor) {
-            let ident = ident?;
-            let text = ImString::parse(file, input, ident)?;
-
-            path.push(text);
-        }
-
-        Ok(AstNode::new(file, &value, Self { path }))
+        Ok(AstNode::new(file, &value, Self { base, member }))
     }
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]
-pub struct SelfPath {
-    pub path: Vec<AstNode<ImString>>,
-}
+pub struct Self_;
 
-impl<'t> Parse<'t, nodes::SelfPath<'t>> for SelfPath {
+impl<'t> Parse<'t, nodes::Self_<'t>> for Self_ {
     fn parse<'i>(
         file: &Arc<PathBuf>,
-        input: &'i str,
-        value: nodes::SelfPath<'t>,
+        _input: &'i str,
+        value: nodes::Self_<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        let mut path = Vec::new();
-
-        let mut cursor = value.walk();
-        for ident in value.identifiers(&mut cursor) {
-            let ident = ident?;
-            let text = ImString::parse(file, input, ident)?;
-
-            path.push(text);
-        }
-
-        Ok(AstNode::new(file, &value, Self { path }))
+        Ok(AstNode::new(file, &value, Self))
     }
 }
 
@@ -1394,7 +1383,7 @@ mod test {
 
     #[test]
     fn closure_definition() {
-        let root = full_compile("() -> std.None: \"\"");
+        let root = full_compile("() -> thing: \"\"");
         let closure = root.node.as_closuredefinition().unwrap();
         let closure_reference = closure.reference.clone();
         let argument = &closure.node.argument_type;
@@ -1402,7 +1391,7 @@ mod test {
 
         let returns = &closure.node.return_type;
         let returns_reference = returns.reference.clone();
-        let returns_path = returns.node.as_identitypath().unwrap();
+        let returns_path = returns.node.as_identifier().unwrap();
         let returns_path_reference = returns_path.reference.clone();
 
         let expression = &closure.node.expression;
@@ -1425,20 +1414,9 @@ mod test {
                         },
                         return_type: AstNode {
                             reference: returns_reference,
-                            node: Expression::IdentityPath(AstNode {
+                            node: Expression::Identifier(AstNode {
                                 reference: returns_path_reference,
-                                node: IdentityPath {
-                                    path: vec![
-                                        AstNode {
-                                            reference: returns_path.node.path[0].reference.clone(),
-                                            node: "std".into()
-                                        },
-                                        AstNode {
-                                            reference: returns_path.node.path[1].reference.clone(),
-                                            node: "None".into()
-                                        }
-                                    ]
-                                }
+                                node: ImString::from("thing")
                             })
                         },
                         expression: Arc::new(AstNode {
@@ -1672,31 +1650,33 @@ mod test {
     }
 
     #[test]
-    fn identity_path() {
+    fn member_access() {
         let root = full_compile("this.thang");
-        let path = root.node.as_identitypath().unwrap();
-        let this = &path.node.path[0];
-        let thang = &path.node.path[1];
+        let path = root.node.as_memberaccess().unwrap();
+        let base = &path.node.base;
+        let this = base.node.as_identifier().unwrap();
+        let member = &path.node.member;
 
         assert_eq!(
             root,
             AstNode {
                 reference: root.reference.clone(),
-                node: Expression::IdentityPath(AstNode {
+                node: Expression::MemberAccess(Box::new(AstNode {
                     reference: path.reference.clone(),
-                    node: IdentityPath {
-                        path: vec![
-                            AstNode {
+                    node: MemberAccess {
+                        base: AstNode {
+                            reference: base.reference.clone(),
+                            node: Expression::Identifier(AstNode {
                                 reference: this.reference.clone(),
-                                node: "this".into()
-                            },
-                            AstNode {
-                                reference: thang.reference.clone(),
-                                node: "thang".into()
-                            }
-                        ]
+                                node: ImString::from("this")
+                            })
+                        },
+                        member: AstNode {
+                            reference: member.reference.clone(),
+                            node: ImString::from("thang")
+                        }
                     }
-                })
+                }))
             }
         );
     }
@@ -1704,29 +1684,44 @@ mod test {
     #[test]
     fn self_path() {
         let root = full_compile("self.this.thang");
-        let path = root.node.as_selfpath().unwrap();
-        let this = &path.node.path[0];
-        let thang = &path.node.path[1];
+        let thang = root.node.as_memberaccess().unwrap();
+        let this_expr = &thang.node.base;
+        let this = this_expr.node.as_memberaccess().unwrap();
+        let self_expr = &this.node.base;
+        let self_ = self_expr.node.as_self_().unwrap();
 
         assert_eq!(
             root,
             AstNode {
                 reference: root.reference.clone(),
-                node: Expression::SelfPath(AstNode {
-                    reference: path.reference.clone(),
-                    node: SelfPath {
-                        path: vec![
-                            AstNode {
+                node: Expression::MemberAccess(Box::new(AstNode {
+                    reference: thang.reference.clone(),
+                    node: MemberAccess {
+                        base: AstNode {
+                            reference: this.reference.clone(),
+                            node: Expression::MemberAccess(Box::new(AstNode {
                                 reference: this.reference.clone(),
-                                node: "this".into()
-                            },
-                            AstNode {
-                                reference: thang.reference.clone(),
-                                node: "thang".into()
-                            }
-                        ]
+                                node: MemberAccess {
+                                    base: AstNode {
+                                        reference: self_expr.reference.clone(),
+                                        node: Expression::Self_(AstNode {
+                                            reference: self_.reference.clone(),
+                                            node: Self_
+                                        })
+                                    },
+                                    member: AstNode {
+                                        reference: this.node.member.reference.clone(),
+                                        node: ImString::from("this")
+                                    }
+                                }
+                            }))
+                        },
+                        member: AstNode {
+                            reference: thang.node.member.reference.clone(),
+                            node: ImString::from("thang")
+                        }
                     }
-                })
+                }))
             }
         );
     }
@@ -1901,19 +1896,18 @@ mod test {
 
     #[test]
     fn struct_definition() {
-        let root = full_compile("( one: std.Constraint, two: std.Constraint = a, ... )");
+        let root = full_compile("( one: One, two: Two = a, ... )");
         let struct_definition = root.node.as_structdefinition().unwrap();
         let members = &struct_definition.node.members;
         let one = &members[0];
-        let one_ty = one.node.ty.node.as_identitypath().unwrap();
+        let one_ty = one.node.ty.node.as_identifier().unwrap();
         let two = &members[1];
-        let two_ty = two.node.ty.node.as_identitypath().unwrap();
+        let two_ty = two.node.ty.node.as_identifier().unwrap();
         let two_default = two.node.default.as_ref().unwrap();
-        let two_default_path = two_default.node.as_identitypath().unwrap();
+        let two_default_path = two_default.node.as_identifier().unwrap();
 
         assert!(struct_definition.node.variadic);
         assert_eq!(members.len(), 2);
-        assert_eq!(two_default_path.node.path.len(), 1);
 
         assert_eq!(
             *one,
@@ -1926,20 +1920,9 @@ mod test {
                     },
                     ty: AstNode {
                         reference: one.node.ty.reference.clone(),
-                        node: Expression::IdentityPath(AstNode {
+                        node: Expression::Identifier(AstNode {
                             reference: one_ty.reference.clone(),
-                            node: IdentityPath {
-                                path: vec![
-                                    AstNode {
-                                        reference: one_ty.node.path[0].reference.clone(),
-                                        node: "std".into(),
-                                    },
-                                    AstNode {
-                                        reference: one_ty.node.path[1].reference.clone(),
-                                        node: "Constraint".into(),
-                                    }
-                                ]
-                            }
+                            node: "One".into()
                         })
                     },
                     default: None
@@ -1957,32 +1940,16 @@ mod test {
                     },
                     ty: AstNode {
                         reference: two.node.ty.reference.clone(),
-                        node: Expression::IdentityPath(AstNode {
+                        node: Expression::Identifier(AstNode {
                             reference: two_ty.reference.clone(),
-                            node: IdentityPath {
-                                path: vec![
-                                    AstNode {
-                                        reference: two_ty.node.path[0].reference.clone(),
-                                        node: "std".into(),
-                                    },
-                                    AstNode {
-                                        reference: two_ty.node.path[1].reference.clone(),
-                                        node: "Constraint".into(),
-                                    }
-                                ]
-                            }
+                            node: "Two".into()
                         })
                     },
                     default: Some(AstNode {
                         reference: two_default.reference.clone(),
-                        node: Expression::IdentityPath(AstNode {
+                        node: Expression::Identifier(AstNode {
                             reference: two_default_path.reference.clone(),
-                            node: IdentityPath {
-                                path: vec![AstNode {
-                                    reference: two_default_path.node.path[0].reference.clone(),
-                                    node: "a".into()
-                                }]
-                            }
+                            node: "a".into()
                         })
                     })
                 }
@@ -2092,9 +2059,9 @@ mod test {
 
     #[test]
     fn function_call_no_arguments() {
-        let root = full_compile("a.b()");
+        let root = full_compile("a()");
         let call = root.node.as_functioncall().unwrap();
-        let to_call = call.node.to_call.node.as_identitypath().unwrap();
+        let to_call = call.node.to_call.node.as_identifier().unwrap();
         assert_eq!(
             root,
             AstNode {
@@ -2104,20 +2071,9 @@ mod test {
                     node: Box::new(FunctionCall {
                         to_call: AstNode {
                             reference: call.node.to_call.reference.clone(),
-                            node: Expression::IdentityPath(AstNode {
+                            node: Expression::Identifier(AstNode {
                                 reference: to_call.reference.clone(),
-                                node: IdentityPath {
-                                    path: vec![
-                                        AstNode {
-                                            reference: to_call.node.path[0].reference.clone(),
-                                            node: "a".into()
-                                        },
-                                        AstNode {
-                                            reference: to_call.node.path[1].reference.clone(),
-                                            node: "b".into()
-                                        }
-                                    ]
-                                }
+                                node: "a".into()
                             })
                         },
                         argument: AstNode {
@@ -2135,9 +2091,9 @@ mod test {
 
     #[test]
     fn function_call_with_arguments() {
-        let root = full_compile("a.b(value = 24u)");
+        let root = full_compile("a(value = 24u)");
         let call = root.node.as_functioncall().unwrap();
-        let to_call = call.node.to_call.node.as_identitypath().unwrap();
+        let to_call = call.node.to_call.node.as_identifier().unwrap();
         let dict = &call.node.argument.node;
         let dict_assignment = &dict.assignments[0];
         assert_eq!(
@@ -2149,20 +2105,9 @@ mod test {
                     node: Box::new(FunctionCall {
                         to_call: AstNode {
                             reference: call.node.to_call.reference.clone(),
-                            node: Expression::IdentityPath(AstNode {
+                            node: Expression::Identifier(AstNode {
                                 reference: to_call.reference.clone(),
-                                node: IdentityPath {
-                                    path: vec![
-                                        AstNode {
-                                            reference: to_call.node.path[0].reference.clone(),
-                                            node: "a".into()
-                                        },
-                                        AstNode {
-                                            reference: to_call.node.path[1].reference.clone(),
-                                            node: "b".into()
-                                        }
-                                    ]
-                                }
+                                node: "a".into()
                             })
                         },
                         argument: AstNode {

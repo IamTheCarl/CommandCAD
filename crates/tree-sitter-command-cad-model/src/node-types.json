@@ -266,7 +266,7 @@
           "named": true
         },
         {
-          "type": "identity_path",
+          "type": "identifier",
           "named": true
         },
         {
@@ -282,6 +282,10 @@
           "named": true
         },
         {
+          "type": "member_access",
+          "named": true
+        },
+        {
           "type": "method_call",
           "named": true
         },
@@ -294,7 +298,7 @@
           "named": true
         },
         {
-          "type": "self_path",
+          "type": "self",
           "named": true
         },
         {
@@ -556,21 +560,6 @@
     "fields": {}
   },
   {
-    "type": "identity_path",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "identifier",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
     "type": "if",
     "named": true,
     "fields": {
@@ -701,6 +690,32 @@
     }
   },
   {
+    "type": "member_access",
+    "named": true,
+    "fields": {
+      "base": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "member": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "method_call",
     "named": true,
     "fields": {
@@ -799,32 +814,6 @@
           }
         ]
       }
-    }
-  },
-  {
-    "type": "self_path",
-    "named": true,
-    "fields": {
-      "identifier": {
-        "multiple": true,
-        "required": false,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "self",
-          "named": true
-        }
-      ]
     }
   },
   {

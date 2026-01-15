@@ -16,27 +16,21 @@ Precedence
               (expression
                 (binary_expression
                   (expression
-                    (identity_path
-                      (identifier)))
+                    (identifier))
                   (expression
                     (binary_expression
                       (expression
-                        (identity_path
-                          (identifier)))
+                        (identifier))
                       (expression
                         (binary_expression
                           (expression
-                            (identity_path
-                              (identifier)))
+                            (identifier))
                           (expression
-                            (identity_path
-                              (identifier)))))))))
+                            (identifier))))))))
               (expression
-                (identity_path
-                  (identifier)))))))
+                (identifier))))))
       (expression
-        (identity_path
-          (identifier))))))
+        (identifier)))))
 
 ==================
 Vectors
@@ -54,24 +48,18 @@ Vectors
           (expression
             (vector2
               (expression
-                (identity_path
-                  (identifier)))
+                (identifier))
               (expression
-                (identity_path
-                  (identifier)))))
+                (identifier))))
           (expression
             (vector2
               (expression
-                (identity_path
-                  (identifier)))
+                (identifier))
               (expression
-                (identity_path
-                  (identifier)))))))
+                (identifier))))))
       (expression
         (vector2
           (expression
-            (identity_path
-              (identifier)))
+            (identifier))
           (expression
-            (identity_path
-              (identifier))))))))
+            (identifier)))))))

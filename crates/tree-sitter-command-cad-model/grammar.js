@@ -8,8 +8,9 @@
 // @ts-check
 
 const PREC = {
-  struct_member: 17,
-  unit: 16,
+  struct_member: 18,
+  unit: 17,
+  member_access: 16,
   method_call: 15,
   function_call: 14,
   field: 13,
@@ -109,10 +110,10 @@ module.exports = grammar({
     number: _ => /[0-9]+/,
     unit_quote: _ => /'(\\'|[^'])*'/,
 
-    _float: $ => choice(
+    _float: $ => prec.right(choice(
       seq(field('whole', $.number), '.', field('fractional', $.number)),
       seq(field('whole', $.number)),
-    ),
+    )),
 
     _unit: $ => choice($.identifier, $.unit_quote),
 
@@ -147,8 +148,9 @@ module.exports = grammar({
       $.vector4,
       $.boolean,
       $.string,
-      $.identity_path,
-      $.self_path,
+      $.self,
+      $.identifier,
+      $.member_access,
       $.list,
       $.if,
       $.struct_definition,
@@ -169,8 +171,9 @@ module.exports = grammar({
     let_in: $ => seq('let', field('assignment', repeat($.let_in_assignment)), 'in', field('expression', $.expression)),
     let_in_assignment: $ => seq(field('ident', $.identifier), '=', field('value', $.expression), ';'),
 
-    identity_path: $ => seq($.identifier, repeat(seq('.', $.identifier))),
-    self_path: $ => seq($.self, repeat(seq('.', field('identifier', $.identifier)))),
+    member_access: $ => prec.left(PREC.member_access, seq(
+      field('base', $.expression), seq('.', field('member', $.identifier)) 
+    )),
 
     declaration_type: $ => seq(':', $.expression),
 
