@@ -5,5 +5,15 @@ members = [
   "interpreter",
   "common_data_types",
   "tree-sitter-command-cad-model",
-  "units"
+  "units",
+  "cli"
+]
+
+# We skip tree-sitter because it doesn't have actual tests and one of the generated documentation
+# does not pass
+default-members = [
+  "interpreter",
+  "common_data_types",
+  "units",
+  "cli"
 ]
