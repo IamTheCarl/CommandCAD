@@ -25,11 +25,11 @@ use crate::{
     compile::{AstNode, ClosureDefinition, Expression},
     execute_expression,
     execution::{
-        errors::{ExpressionResult, GenericFailure, Raise},
+        errors::{ExpressionResult, Raise},
         find_all_variable_accesses_in_expression,
         logging::{LocatedStr, LogLevel, LogMessage},
         stack::ScopeType,
-        values::{string::formatting::Style, Dictionary, MissingAttributeError, Value},
+        values::{string::formatting::Style, Dictionary, Value},
         ExecutionContext,
     },
 };
@@ -57,74 +57,41 @@ impl BuiltinCallableDatabase {
         database
     }
 
-    fn register_internal<T: 'static>(
-        &mut self,
-        forward: Box<dyn BuiltinCallable>,
-        inverse: Option<TypeId>,
-    ) {
+    pub fn register<T: 'static>(&mut self, callable: Box<dyn BuiltinCallable>) {
         if self
             .names
-            .insert(forward.name().to_string(), TypeId::of::<T>())
+            .insert(callable.name().to_string(), TypeId::of::<T>())
             .is_some()
         {
-            panic!("Duplicate bultin function name: {}", forward.name());
+            panic!("Duplicate bultin function name: {}", callable.name());
         }
 
         if self
             .callables
-            .insert(
-                TypeId::of::<T>(),
-                CallableStorage {
-                    forward,
-                    reverse: inverse,
-                },
-            )
+            .insert(TypeId::of::<T>(), CallableStorage { callable })
             .is_some()
         {
             panic!("Duplicate bultin function tag: {:?}", TypeId::of::<T>());
         }
     }
 
-    pub fn register<T: 'static>(&mut self, callable: Box<dyn BuiltinCallable>) {
-        self.register_internal::<T>(callable, Option::None);
-    }
-
-    pub fn register_with_inverse<ForwardT: 'static, InverseT: 'static>(
-        &mut self,
-        forward: Box<dyn BuiltinCallable>,
-        inverse: Box<dyn BuiltinCallable>,
-    ) {
-        self.register_internal::<ForwardT>(forward, Some(TypeId::of::<InverseT>()));
-        self.register_internal::<InverseT>(inverse, Some(TypeId::of::<ForwardT>()));
-    }
-
-    fn get_forward(&self, id: TypeId) -> &CallableStorage {
+    fn get_callable(&self, id: TypeId) -> &CallableStorage {
         self.callables
             .get(&id)
             .expect("Forward callable was not present")
-    }
-
-    fn get_inverse(&self, id: TypeId) -> Option<TypeId> {
-        let forward = self
-            .callables
-            .get(&id)
-            .expect("Forward callable was not present");
-
-        forward.reverse.clone()
     }
 }
 
 #[derive(Debug)]
 struct CallableStorage {
-    forward: Box<dyn BuiltinCallable>,
-    reverse: Option<TypeId>,
+    callable: Box<dyn BuiltinCallable>,
 }
 
 impl std::ops::Deref for CallableStorage {
     type Target = dyn BuiltinCallable;
 
     fn deref(&self) -> &Self::Target {
-        self.forward.as_ref()
+        self.callable.as_ref()
     }
 }
 
@@ -306,6 +273,10 @@ impl StaticTypeName for UserClosure {
 pub trait BuiltinCallable: Sync + Send {
     fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value>;
 
+    fn formula_call(&self, context: &ExecutionContext, _value: Value) -> ExpressionResult<Value>;
+    fn formula_inverse(&self, context: &ExecutionContext, _value: Value)
+        -> ExpressionResult<Value>;
+
     fn name(&self) -> &str;
 
     fn signature(&self) -> &Arc<Signature>;
@@ -443,6 +414,28 @@ macro_rules! build_function_callable {
                     (self.function)(context $(, $($arg),*)?)
             }
 
+            fn formula_call(
+                &self,
+                context: &$crate::execution::ExecutionContext,
+                _value: $crate::execution::values::Value
+            ) -> ExpressionResult<$crate::execution::values::Value> {
+                Err(
+                    $crate::execution::errors::GenericFailure(format!("Function {} cannot be used in formulas", self.name()).into())
+                        .to_error(context.stack_trace),
+                )
+            }
+
+            fn formula_inverse(
+                &self,
+                context: &$crate::execution::ExecutionContext,
+                _value: $crate::execution::values::Value,
+            ) -> ExpressionResult<$crate::execution::values::Value> {
+                Err(
+                    $crate::execution::errors::GenericFailure(format!("Function {} does not have an inverse", self.name()).into())
+                        .to_error(context.stack_trace),
+                )
+            }
+
             fn name(&self) -> &str {
                 $name
             }
@@ -462,37 +455,49 @@ macro_rules! build_function_callable {
 #[macro_export]
 macro_rules! build_function {
     ($database:ident,
-        forward = $ident:ident, $name:literal, ($context:ident: &ExecutionContext $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block
+        $ident:ident, $name:literal, ($context:ident: &ExecutionContext $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block
     ) => {{
         let callable = $crate::build_function_callable!($name ($context: &ExecutionContext $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code);
 
         $database.register::<$ident>(Box::new(callable))
     }};
-    ($database:ident,
-        forward = $forward_ident:ident, $forward_name:literal, ($forward_context:ident: &ExecutionContext $(, $($forward_arg:ident: $forward_ty:path $(= $forward_default:expr)?),+)?) -> $forward_return_type:ty $forward_code:block,
-        reverse = $reverse_ident:ident, $reverse_name:literal, ($reverse_context:ident: &ExecutionContext $(, $($reverse_arg:ident: $reverse_ty:path $(= $reverse_default:expr)?),+)?) -> $reverse_return_type:ty $reverse_code:block
-    ) => {{
-        let forward = $crate::build_function_callable!($forward_name ($forward_context: &ExecutionContext $(, $($forward_arg: $forward_ty $(= $forward_default)?),+)?) -> $forward_return_type $forward_code);
-        let reverse = $crate::build_function_callable!($reverse_name ($reverse_context: &ExecutionContext $(, $($reverse_arg: $reverse_ty $(= $reverse_default)?),+)?) -> $reverse_return_type $reverse_code);
+    // ($database:ident,
+    //     $forward_ident:ident, $forward_name:literal, ($forward_context:ident: &ExecutionContext $(, $($forward_arg:ident: $forward_ty:path $(= $forward_default:expr)?),+)?) -> $forward_return_type:ty $forward_code:block,
+    //     reverse = $reverse_ident:ident, $reverse_name:literal, ($reverse_context:ident: &ExecutionContext $(, $($reverse_arg:ident: $reverse_ty:path $(= $reverse_default:expr)?),+)?) -> $reverse_return_type:ty $reverse_code:block
+    // ) => {{
+    //     let $crate::build_function_callable!($forward_name ($forward_context: &ExecutionContext $(, $($forward_arg: $forward_ty $(= $forward_default)?),+)?) -> $forward_return_type $forward_code);
+    //     let reverse = $crate::build_function_callable!($reverse_name ($reverse_context: &ExecutionContext $(, $($reverse_arg: $reverse_ty $(= $reverse_default)?),+)?) -> $reverse_return_type $reverse_code);
 
-        $database.register_with_inverse::<$forward_ident, $reverse_ident>(Box::new(forward), Box::new(reverse))
-    }};
+    //     $database.register_with_inverse::<$forward_ident, $reverse_ident>(Box::new(forward), Box::new(reverse))
+    // }};
 }
 
 #[macro_export]
 macro_rules! build_method_callable {
-    ($name:expr, ($context:ident: &ExecutionContext, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block) => {{
-        struct BuiltFunction<S, F: Fn(&$crate::execution::ExecutionContext, S $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value>> {
+    ($name:expr,
+        ($context:ident: &ExecutionContext, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block,
+        formula = $formula:expr,
+        inverse = $inverse:expr
+    ) => {{
+        struct BuiltFunction<S, F, FC, FI>
+        where
+            F: Fn(&$crate::execution::ExecutionContext, S $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value>
+        {
             function: F,
+            formula: FC,
+            inverse: FI,
             signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
             name: String,
             _self_type: std::marker::PhantomData<S>
         }
 
-        impl<S, F: Fn(&$crate::execution::ExecutionContext, S $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<S, F>
+        impl<S, F, FC, FI> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<S, F, FC, FI>
         where
             S: Send + Sync + Clone + StaticTypeName,
-            $crate::execution::values::Value: enum_downcast::AsVariant<S>
+            $crate::execution::values::Value: enum_downcast::AsVariant<S>,
+            F: Fn(&$crate::execution::ExecutionContext, S $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync,
+            FC: Fn(&$crate::execution::ExecutionContext, $crate::execution::values::Value) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync,
+            FI: Fn(&$crate::execution::ExecutionContext, $crate::execution::values::Value) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync
         {
             fn call(
                 &self,
@@ -523,6 +528,22 @@ macro_rules! build_method_callable {
                     (self.function)(context, this $(, $($arg),*)?)
             }
 
+            fn formula_call(
+                &self,
+                context: &$crate::execution::ExecutionContext,
+                value: $crate::execution::values::Value
+            ) -> ExpressionResult<$crate::execution::values::Value> {
+                (self.formula)(context, value)
+            }
+
+            fn formula_inverse(
+                &self,
+                context: &$crate::execution::ExecutionContext,
+                value: $crate::execution::values::Value,
+            ) -> ExpressionResult<$crate::execution::values::Value> {
+                (self.inverse)(context, value)
+            }
+
             fn name(&self) -> &str {
                 &self.name
             }
@@ -534,6 +555,8 @@ macro_rules! build_method_callable {
 
         BuiltFunction {
             function: move |$context: &$crate::execution::ExecutionContext, $this: $this_type $(, $($arg: $ty),*)?| -> ExpressionResult<$crate::execution::values::Value> { let result: $return_type = $code?; Ok(result.into()) },
+            formula: $formula,
+            inverse: $inverse,
             signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
             name: $name.into(),
             _self_type: std::marker::PhantomData
@@ -544,20 +567,38 @@ macro_rules! build_method_callable {
 #[macro_export]
 macro_rules! build_method {
     ($database:ident,
-        forward = $ident:ty, $name:expr, ($context:ident: &ExecutionContext, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block
+        $ident:ty, $name:expr, ($context:ident: &ExecutionContext, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block
     ) => {{
-        let callable = $crate::build_method_callable!($name, ($context: &ExecutionContext, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code);
+        let callable = $crate::build_method_callable!($name,
+            ($context: &ExecutionContext, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code,
+            formula = |context: &$crate::execution::ExecutionContext, _value| {
+                Err(
+                    $crate::execution::errors::GenericFailure(format!("Method {} cannot be used in formulas", stringify!($name)).into())
+                        .to_error(context.stack_trace),
+                )
+            },
+            inverse = |context: &$crate::execution::ExecutionContext, _value| {
+                Err(
+                    $crate::execution::errors::GenericFailure(format!("Method {} does not have an inverse", stringify!($name)).into())
+                        .to_error(context.stack_trace),
+                )
+            }
+        );
 
         $database.register::<$ident>(Box::new(callable))
     }};
     ($database:ident,
-        forward = $forward_ident:ty, $forward_name:expr, ($forward_context:ident: &ExecutionContext, $forward_this:ident: $forward_this_type:ty $(, $($forward_arg:ident: $forward_ty:path $(= $forward_default:expr)?),+)?) -> $forward_return_type:path $forward_code:block,
-        reverse = $reverse_ident:ty, $reverse_name:expr, ($reverse_context:ident: &ExecutionContext, $reverse_this:ident: $reverse_this_type:ty $(, $($reverse_arg:ident: $reverse_ty:path $(= $reverse_default:expr)?),+)?) -> $reverse_return_type:path $reverse_code:block
+        $ident:ty, $name:expr, ($context:ident: &ExecutionContext, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block,
+        formula = $formula:expr,
+        inverse = $inverse:expr
     ) => {{
-        let forward = $crate::build_method_callable!($forward_name, ($forward_context: &ExecutionContext, $forward_this: $forward_this_type $(, $($forward_arg: $forward_ty $(= $forward_default)?),+)?) -> $forward_return_type $forward_code);
-        let reverse = $crate::build_method_callable!($reverse_name, ($reverse_context: &ExecutionContext, $reverse_this: $reverse_this_type $(, $($reverse_arg: $reverse_ty $(= $reverse_default)?),+)?) -> $reverse_return_type $reverse_code);
+        let callable = $crate::build_method_callable!($name,
+            ($context: &ExecutionContext, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code,
+            formula = $formula,
+            inverse = $inverse
+        );
 
-        $database.register_with_inverse::<$forward_ident, $reverse_ident>(Box::new(forward), Box::new(reverse))
+        $database.register::<$ident>(Box::new(callable))
     }};
 }
 
@@ -572,7 +613,7 @@ impl BuiltinFunction {
 
 impl Object for BuiltinFunction {
     fn get_type(&self, context: &ExecutionContext) -> ValueType {
-        ValueType::Closure(context.database.get_forward(self.0).signature().clone())
+        ValueType::Closure(context.database.get_callable(self.0).signature().clone())
     }
 
     fn format(
@@ -602,34 +643,14 @@ impl Object for BuiltinFunction {
     }
 
     fn call_scope_type(&self, context: &ExecutionContext) -> ScopeType {
-        context.database.get_forward(self.0).forward.scope_type()
+        context.database.get_callable(self.0).callable.scope_type()
     }
 
     fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value> {
-        context.database.get_forward(self.0).call(context, argument)
-    }
-
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
-        match attribute {
-            "inverse" => {
-                if let Some(inverse) = context.database.get_inverse(self.0) {
-                    Ok(BuiltinFunction(inverse).into())
-                } else {
-                    Err(
-                        GenericFailure("Function does not have an inverse available".into())
-                            .to_error(context.stack_trace),
-                    )
-                }
-            }
-            _ => Err(MissingAttributeError {
-                name: attribute.into(),
-            }
-            .to_error(context.stack_trace)),
-        }
+        context
+            .database
+            .get_callable(self.0)
+            .call(context, argument)
     }
 }
 
@@ -810,7 +831,7 @@ mod test {
         struct TestFunction;
         build_function!(
             database,
-            forward = TestFunction, "test_function", (
+            TestFunction, "test_function", (
                 _context: &ExecutionContext
             ) -> UnsignedInteger {
                 Ok(values::UnsignedInteger::from(846))
@@ -844,7 +865,7 @@ mod test {
         struct TestFunction;
         build_function!(
             database,
-            forward = TestFunction, "test_function", (
+            TestFunction, "test_function", (
                 _context: &ExecutionContext,
                 a: UnsignedInteger,
                 b: UnsignedInteger
@@ -874,58 +895,12 @@ mod test {
     }
 
     #[test]
-    fn builtin_function_with_inverse() {
-        let mut database = BuiltinCallableDatabase::default();
-
-        struct TestFunction;
-        struct TestInverse;
-        build_function!(
-            database,
-            forward = TestFunction, "test_function", (
-                _context: &ExecutionContext,
-                input: UnsignedInteger
-            ) -> UnsignedInteger {
-                Ok(values::UnsignedInteger::from(input.0 + 1))
-            },
-            reverse = TestInverse, "test_inverse", (
-                _context: &ExecutionContext,
-                input: UnsignedInteger
-            ) -> UnsignedInteger {
-                Ok(values::UnsignedInteger::from(input.0 - 1))
-            }
-        );
-
-        use crate::execution::standard_environment::build_prelude;
-
-        let root = crate::compile::full_compile("test_inverse(input = test_function(input = 1u))");
-        let mut prelude = build_prelude(&database);
-        prelude.insert(
-            "test_function".into(),
-            BuiltinFunction::new::<TestFunction>().into(),
-        );
-        prelude.insert(
-            "test_inverse".into(),
-            BuiltinFunction::new::<TestInverse>().into(),
-        );
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        let product = execute_expression(&context, &root).unwrap();
-
-        assert_eq!(product, values::UnsignedInteger::from(1).into());
-    }
-
-    #[test]
     fn builtin_function_with_default_value() {
         let mut database = BuiltinCallableDatabase::default();
         struct TestFunction;
         build_function!(
             database,
-            forward = TestFunction, "test_function", (
+            TestFunction, "test_function", (
                 _context: &ExecutionContext,
                 a: UnsignedInteger,
                 b: UnsignedInteger = UnsignedInteger::from(2).into()
@@ -962,7 +937,7 @@ mod test {
         struct TestFunction;
         build_function!(
             database,
-            forward = TestFunction, "test_function", (
+            TestFunction, "test_function", (
                 _context: &ExecutionContext,
                 a: UnsignedInteger
             ) -> UnsignedInteger {
@@ -996,7 +971,7 @@ mod test {
         struct TestMethod;
         build_method!(
             database,
-            forward = TestMethod, "test_method", (context: &ExecutionContext, this: Dictionary) -> Value {
+            TestMethod, "test_method", (context: &ExecutionContext, this: Dictionary) -> Value {
                 this.get_attribute(context, "value")
             }
         );
@@ -1030,7 +1005,7 @@ mod test {
 
         build_method!(
             database,
-            forward = TestMethod, "test_method", (
+            TestMethod, "test_method", (
                 context: &ExecutionContext,
                 this: Dictionary,
                 to_add: UnsignedInteger
@@ -1062,58 +1037,5 @@ mod test {
         let product = execute_expression(&context, &root).unwrap();
 
         assert_eq!(product, values::UnsignedInteger::from(15).into());
-    }
-
-    #[test]
-    fn builtin_method_with_inverse() {
-        let mut database = BuiltinCallableDatabase::default();
-        struct TestMethod;
-        struct InverseMethod;
-        build_method!(
-            database,
-            forward = TestMethod, "test_method", (
-                context: &ExecutionContext,
-                this: Dictionary,
-                input: UnsignedInteger
-            ) -> UnsignedInteger {
-                let value: UnsignedInteger = this.get_attribute(context, "value")?.downcast(context.stack_trace)?;
-
-                Ok(UnsignedInteger::from(input.0 + value.0))
-            },
-            reverse = InverseMethod, "reverse_method", (
-                context: &ExecutionContext,
-                this: Dictionary,
-                input: UnsignedInteger
-            ) -> UnsignedInteger {
-                let value: UnsignedInteger = this.get_attribute(context, "value")?.downcast(context.stack_trace)?;
-
-                Ok(UnsignedInteger::from(input.0 - value.0))
-            }
-        );
-
-        use crate::execution::standard_environment::build_prelude;
-
-        let root = crate::compile::full_compile(
-            "let object = (value = 5u, test_method = provided_test_method, inverse_method = provided_inverse_method); in object::inverse_method(input = object::test_method(input = 2u))",
-        );
-        let mut prelude = build_prelude(&database);
-        prelude.insert(
-            "provided_test_method".into(),
-            BuiltinFunction::new::<TestMethod>().into(),
-        );
-        prelude.insert(
-            "provided_inverse_method".into(),
-            BuiltinFunction::new::<InverseMethod>().into(),
-        );
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        let product = execute_expression(&context, &root).unwrap();
-
-        assert_eq!(product, values::UnsignedInteger::from(2).into());
     }
 }

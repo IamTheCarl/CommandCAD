@@ -355,7 +355,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
     build_method!(
         database,
-        forward = methods::Append, "List::append", (
+        methods::Append, "List::append", (
             context: &ExecutionContext,
             this: List,
             rhs: List
@@ -368,7 +368,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Slice, "List::slice", (
+        methods::Slice, "List::slice", (
             context: &ExecutionContext,
             this: List,
             start: Option<UnsignedInteger> = ValueNone.into(),
@@ -398,7 +398,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Get, "List::get", (
+        methods::Get, "List::get", (
             context: &ExecutionContext,
             this: List,
             i: UnsignedInteger
@@ -414,7 +414,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Chunks, "List::chunks", (
+        methods::Chunks, "List::chunks", (
             context: &ExecutionContext,
             this: List,
             size: UnsignedInteger,
@@ -440,7 +440,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Map, "List::map",(
+        methods::Map, "List::map",(
             context: &ExecutionContext,
             this: List,
             f: MapClosure
@@ -457,7 +457,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Fold, "List::fold",(
+        methods::Fold, "List::fold",(
             context: &ExecutionContext,
             this: List,
             init: Value,
@@ -482,7 +482,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Retain, "List::retain",(
+        methods::Retain, "List::retain",(
             context: &ExecutionContext,
             this: List,
             f: RetainClosure
@@ -507,7 +507,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Sort, "List::sort",(
+        methods::Sort, "List::sort",(
             context: &ExecutionContext,
             this: List
         ) -> List {
@@ -533,7 +533,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Reverse, "List::reverse",(
+        methods::Reverse, "List::reverse",(
             context: &ExecutionContext,
             this: List
         ) -> List {
@@ -545,7 +545,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Truncate, "List::truncate",(
+        methods::Truncate, "List::truncate",(
             context: &ExecutionContext,
             this: List,
             length: UnsignedInteger
@@ -558,7 +558,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Deduplicate, "List::deduplicate",(
+        methods::Deduplicate, "List::deduplicate",(
             context: &ExecutionContext,
             this: List
         ) -> List {
@@ -570,7 +570,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Union, "List::union",(
+        methods::Union, "List::union",(
             context: &ExecutionContext,
             this: List,
             other: List
@@ -588,7 +588,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Intersection, "List::intersection",(
+        methods::Intersection, "List::intersection",(
             context: &ExecutionContext,
             this: List,
             other: List
@@ -606,7 +606,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Difference, "List::difference",(
+        methods::Difference, "List::difference",(
             context: &ExecutionContext,
             this: List,
             other: List
@@ -625,7 +625,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::SymmetricDifference, "List::symmetric_difference",(
+        methods::SymmetricDifference, "List::symmetric_difference",(
             context: &ExecutionContext,
             this: List,
             other: List
@@ -651,7 +651,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::CartesianProduct, "List::cartesian_product",(
+        methods::CartesianProduct, "List::cartesian_product",(
             context: &ExecutionContext,
             this: List,
             other: List

@@ -421,6 +421,10 @@
         "required": true,
         "types": [
           {
+            "type": "&&",
+            "named": false
+          },
+          {
             "type": "*",
             "named": false
           },
@@ -439,6 +443,14 @@
           {
             "type": "/",
             "named": false
+          },
+          {
+            "type": "^^",
+            "named": false
+          },
+          {
+            "type": "||",
+            "named": false
           }
         ]
       }
@@ -453,7 +465,19 @@
       "required": true,
       "types": [
         {
+          "type": "boolean",
+          "named": true
+        },
+        {
           "type": "formula_binary_expression",
+          "named": true
+        },
+        {
+          "type": "formula_function_call",
+          "named": true
+        },
+        {
+          "type": "formula_method_call",
           "named": true
         },
         {
@@ -462,6 +486,18 @@
         },
         {
           "type": "formula_unary_expression",
+          "named": true
+        },
+        {
+          "type": "formula_vector2",
+          "named": true
+        },
+        {
+          "type": "formula_vector3",
+          "named": true
+        },
+        {
+          "type": "formula_vector4",
           "named": true
         },
         {
@@ -481,6 +517,68 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "formula_function_call",
+    "named": true,
+    "fields": {
+      "argument": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "to_call": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "formula_method_call",
+    "named": true,
+    "fields": {
+      "argument": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "self_dictionary": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "to_call": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -507,6 +605,10 @@
         "required": true,
         "types": [
           {
+            "type": "!",
+            "named": false
+          },
+          {
             "type": "+",
             "named": false
           },
@@ -526,6 +628,114 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "formula_vector2",
+    "named": true,
+    "fields": {
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "formula_vector3",
+    "named": true,
+    "fields": {
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "z": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "formula_vector4",
+    "named": true,
+    "fields": {
+      "w": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "x": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "y": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      },
+      "z": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "formula_expression",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {

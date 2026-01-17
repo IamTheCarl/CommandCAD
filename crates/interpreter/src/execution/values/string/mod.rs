@@ -199,6 +199,28 @@ fn register_format_method(database: &mut BuiltinCallableDatabase) {
             Ok(IString(ImString::from(output)).into())
         }
 
+        fn formula_call(
+            &self,
+            context: &ExecutionContext,
+            _value: Value,
+        ) -> ExpressionResult<Value> {
+            Err(
+                GenericFailure("Method String::format cannot be used in formulas".into())
+                    .to_error(context.stack_trace),
+            )
+        }
+
+        fn formula_inverse(
+            &self,
+            context: &ExecutionContext,
+            _value: Value,
+        ) -> ExpressionResult<Value> {
+            Err(
+                GenericFailure("Method String::format does not have an inverse".into())
+                    .to_error(context.stack_trace),
+            )
+        }
+
         fn name(&self) -> &str {
             "String::format"
         }
@@ -234,7 +256,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
     build_method!(
         database,
-        forward = methods::Append, "String::append", (
+        methods::Append, "String::append", (
             _context: &ExecutionContext,
             this: IString,
             rhs: IString
@@ -246,7 +268,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Slice, "String::slice", (
+        methods::Slice, "String::slice", (
             _context: &ExecutionContext,
             this: IString,
             start: Option<UnsignedInteger> = ValueNone.into(),
@@ -269,7 +291,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Chunks, "String::chunks", (
+        methods::Chunks, "String::chunks", (
             context: &ExecutionContext,
             this: IString,
             size: UnsignedInteger,
@@ -296,7 +318,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Lines, "String::lines", (
+        methods::Lines, "String::lines", (
             context: &ExecutionContext,
             this: IString,
             include_empty: Boolean = Boolean(true).into()
@@ -312,7 +334,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Map, "String::map", (
+        methods::Map, "String::map", (
             context: &ExecutionContext,
             this: IString,
             f: MapClosure
@@ -336,7 +358,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Fold, "String::fold", (
+        methods::Fold, "String::fold", (
             context: &ExecutionContext,
             this: IString,
             init: Value,
@@ -361,7 +383,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Retain, "String::retain",(
+        methods::Retain, "String::retain",(
             context: &ExecutionContext,
             this: IString,
             f: RetainClosure
@@ -386,7 +408,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Reverse, "String::reverse",(
+        methods::Reverse, "String::reverse",(
             _context: &ExecutionContext,
             this: IString
         ) -> IString {
@@ -396,7 +418,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Truncate, "String::truncate",(
+        methods::Truncate, "String::truncate",(
             _context: &ExecutionContext,
             this: IString,
             length: UnsignedInteger
@@ -409,7 +431,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::ToLowercase, "String::to_lowercase",(
+        methods::ToLowercase, "String::to_lowercase",(
             _context: &ExecutionContext,
             this: IString
         ) -> IString {
@@ -419,7 +441,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::ToUppercase, "String::to_uppercase",(
+        methods::ToUppercase, "String::to_uppercase",(
             _context: &ExecutionContext,
             this: IString
         ) -> IString {
@@ -429,7 +451,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::ParseScalar, "String::parse_scalar",(
+        methods::ParseScalar, "String::parse_scalar",(
             context: &ExecutionContext,
             this: IString
         ) -> Scalar {
@@ -444,7 +466,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::ParseUnsignedInteger, "String::parse_unsigned_integer",(
+        methods::ParseUnsignedInteger, "String::parse_unsigned_integer",(
             context: &ExecutionContext,
             this: IString
         ) -> UnsignedInteger {
@@ -455,7 +477,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::ParseSignedInteger, "String::parse_signed_integer",(
+        methods::ParseSignedInteger, "String::parse_signed_integer",(
             context: &ExecutionContext,
             this: IString
         ) -> SignedInteger {
@@ -466,7 +488,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Contains, "String::contains",(
+        methods::Contains, "String::contains",(
             _context: &ExecutionContext,
             this: IString,
             pattern: IString

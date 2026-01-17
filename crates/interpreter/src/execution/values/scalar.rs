@@ -382,7 +382,7 @@ mod methods {
 pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
-        forward = methods::ToSignedInteger, "Scalar::to_signed_integer", (
+        methods::ToSignedInteger, "Scalar::to_signed_integer", (
             context: &ExecutionContext,
             this: Scalar) -> SignedInteger
         {
@@ -396,7 +396,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::ToUnsignedInteger, "Scalar::to_unsigned_integer", (
+        methods::ToUnsignedInteger, "Scalar::to_unsigned_integer", (
             context: &ExecutionContext,
             this: Scalar) -> UnsignedInteger
         {
@@ -415,7 +415,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Abs, "Scalar::abs", (
+        methods::Abs, "Scalar::abs", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -427,7 +427,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Clamp, "Scalar::clamp", (
+        methods::Clamp, "Scalar::clamp", (
             context: &ExecutionContext,
             this: Scalar,
             min: Value,
@@ -444,7 +444,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Copysign, "Scalar::copysign", (
+        methods::Copysign, "Scalar::copysign", (
             context: &ExecutionContext,
             this: Scalar,
             sign: Zero) -> Scalar
@@ -457,7 +457,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Hypot, "Scalar::hypot", (
+        methods::Hypot, "Scalar::hypot", (
             context: &ExecutionContext,
             this: Scalar,
             other: Value) -> Scalar
@@ -472,7 +472,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::IsFinite, "Scalar::is_finite", (
+        methods::IsFinite, "Scalar::is_finite", (
             _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
@@ -481,7 +481,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::IsInfinite, "Scalar::is_infinite", (
+        methods::IsInfinite, "Scalar::is_infinite", (
             _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
@@ -490,7 +490,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::IsNormal, "Scalar::is_normal", (
+        methods::IsNormal, "Scalar::is_normal", (
             _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
@@ -499,7 +499,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Cbrt, "Scalar::cbrt", (
+        methods::Cbrt, "Scalar::cbrt", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -511,7 +511,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Pow, "Scalar::pow", (
+        methods::Pow, "Scalar::pow", (
             context: &ExecutionContext,
             this: Scalar,
             exp: Zero) -> Scalar
@@ -524,7 +524,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Sqrt, "Scalar::sqrt", (
+        methods::Sqrt, "Scalar::sqrt", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -532,11 +532,27 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: this.dimension / 2,
                 value: Float::new(this.value.sqrt()).unwrap_not_nan(context.stack_trace)?
             })
+        },
+        formula = |context: &ExecutionContext, value: Value| -> ExpressionResult<Value> {
+            let value = value.downcast::<Scalar>(context.stack_trace)?;
+
+            Ok(Scalar {
+                dimension: value.dimension / 2,
+                value: Float::new(value.value.sqrt()).unwrap_not_nan(context.stack_trace)?
+            }.into())
+        },
+        inverse = |context: &ExecutionContext, value: Value| -> ExpressionResult<Value> {
+            let value = value.downcast::<Scalar>(context.stack_trace)?;
+
+            Ok(Scalar {
+                dimension: value.dimension * 2,
+                value: Float::new(value.value.powi(2)).unwrap_not_nan(context.stack_trace)?
+            }.into())
         }
     );
     build_method!(
         database,
-        forward = methods::IsSignNegative, "Scalar::is_sign_negative", (
+        methods::IsSignNegative, "Scalar::is_sign_negative", (
             _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
@@ -545,7 +561,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::IsSignPositive, "Scalar::is_sign_positive", (
+        methods::IsSignPositive, "Scalar::is_sign_positive", (
             _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
@@ -554,7 +570,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Recip, "Scalar::recip", (
+        methods::Recip, "Scalar::recip", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -566,7 +582,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Round, "Scalar::round", (
+        methods::Round, "Scalar::round", (
             context: &ExecutionContext,
             this: Scalar,
             unit: Value) -> Scalar
@@ -583,7 +599,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Trunc, "Scalar::trunc", (
+        methods::Trunc, "Scalar::trunc", (
             context: &ExecutionContext,
             this: Scalar,
             unit: Value) -> Scalar
@@ -600,7 +616,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Fract, "Scalar::fract", (
+        methods::Fract, "Scalar::fract", (
             context: &ExecutionContext,
             this: Scalar,
             unit: Value) -> Scalar
@@ -617,7 +633,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Floor, "Scalar::floor", (
+        methods::Floor, "Scalar::floor", (
             context: &ExecutionContext,
             this: Scalar,
             unit: Value) -> Scalar
@@ -634,7 +650,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Ceil, "Scalar::ceil", (
+        methods::Ceil, "Scalar::ceil", (
             context: &ExecutionContext,
             this: Scalar,
             unit: Value) -> Scalar
@@ -651,7 +667,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Max, "Scalar::max", (
+        methods::Max, "Scalar::max", (
             context: &ExecutionContext,
             this: Scalar,
             other: Value) -> Scalar
@@ -666,7 +682,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Min, "Scalar::min", (
+        methods::Min, "Scalar::min", (
             context: &ExecutionContext,
             this: Scalar,
             other: Value) -> Scalar
@@ -681,7 +697,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Signum, "Scalar::signum", (
+        methods::Signum, "Scalar::signum", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -693,7 +709,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Acos, "Scalar::acos", (
+        methods::Acos, "Scalar::acos", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -707,7 +723,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Acosh, "Scalar::acosh", (
+        methods::Acosh, "Scalar::acosh", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -721,7 +737,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Cos, "Scalar::cos", (
+        methods::Cos, "Scalar::cos", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -735,7 +751,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Cosh, "Scalar::cosh", (
+        methods::Cosh, "Scalar::cosh", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -749,7 +765,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Asin, "Scalar::asin", (
+        methods::Asin, "Scalar::asin", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -763,7 +779,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Asinh, "Scalar::asinh", (
+        methods::Asinh, "Scalar::asinh", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -777,7 +793,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Sin, "Scalar::sin", (
+        methods::Sin, "Scalar::sin", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -791,7 +807,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Sinh, "Scalar::sinh", (
+        methods::Sinh, "Scalar::sinh", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -805,7 +821,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::CosSin, "Scalar::cossin", (
+        methods::CosSin, "Scalar::cossin", (
             context: &ExecutionContext,
             this: Scalar) -> Vector2
         {
@@ -817,7 +833,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Atan, "Scalar::atan", (
+        methods::Atan, "Scalar::atan", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -831,7 +847,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Atanh, "Scalar::atanh", (
+        methods::Atanh, "Scalar::atanh", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -845,7 +861,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Tan, "Scalar::tan", (
+        methods::Tan, "Scalar::tan", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
@@ -859,7 +875,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        forward = methods::Tanh, "Scalar::tanh", (
+        methods::Tanh, "Scalar::tanh", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {

@@ -92,7 +92,7 @@ mod methods {
 pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
-        forward = methods::ToString, "File::to_string", (
+        methods::ToString, "File::to_string", (
             context: &ExecutionContext,
             this: File
         ) -> IString {

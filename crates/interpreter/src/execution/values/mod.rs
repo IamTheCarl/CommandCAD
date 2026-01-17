@@ -239,6 +239,16 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
     fn call(&self, context: &ExecutionContext, _argument: Dictionary) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(self, context.stack_trace, "call")
     }
+    fn formula_call(&self, context: &ExecutionContext, _value: Value) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(self, context.stack_trace, "inverse call")
+    }
+    fn formula_inverse_call(
+        &self,
+        context: &ExecutionContext,
+        _value: Value,
+    ) -> ExpressionResult<Value> {
+        UnsupportedOperationError::raise(self, context.stack_trace, "inverse call")
+    }
     fn unary_plus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "unary plus")
     }

@@ -152,6 +152,10 @@ pub fn find_all_variable_accesses_in_expression(
             Ok(())
         }
         Expression::Identifier(ast_node) => access_collector(ast_node),
+        Expression::Formula(_) => {
+            // Formulas cannot access external variables.
+            Ok(())
+        }
         Expression::Boolean(_)
         | Expression::Scalar(_)
         | Expression::Vector2(_)
@@ -288,6 +292,9 @@ pub fn execute_expression(
             compile::Expression::FunctionCall(ast_node) => execute_function_call(context, ast_node),
             compile::Expression::MethodCall(ast_node) => execute_method_call(context, ast_node),
             compile::Expression::LetIn(ast_node) => execute_let_in(context, ast_node),
+            compile::Expression::Formula(formula) => {
+                todo!()
+            }
         }
     })
 }

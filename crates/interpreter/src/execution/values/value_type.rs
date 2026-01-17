@@ -250,7 +250,7 @@ mod methods {
 pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
-        forward = methods::Qualify, "ValueType::qualify", (
+        methods::Qualify, "ValueType::qualify", (
             context: &ExecutionContext,
             this: ValueType,
             to_qualify: Value) -> ValueNone
@@ -262,7 +262,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
     build_method!(
         database,
-        forward = methods::TryQualify, "ValueType::try_qualify", (
+        methods::TryQualify, "ValueType::try_qualify", (
             context: &ExecutionContext,
             this: ValueType,
             to_qualify: Value) -> values::Boolean

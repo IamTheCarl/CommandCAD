@@ -323,7 +323,7 @@ mod methods {
 
         build_method!(
             database,
-            forward = M::Abs, format!("Vector{dimension}::abs"), (
+            M::Abs, format!("Vector{dimension}::abs"), (
                 context: &ExecutionContext,
                 this: Vector<I>) -> Vector<I>
             {
@@ -333,7 +333,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = M::AddScalar, format!("Vector{dimension}::add_scalar"), (
+            M::AddScalar, format!("Vector{dimension}::add_scalar"), (
                 context: &ExecutionContext,
                 this: Vector<I>,
                 value: Scalar) -> Vector<I>
@@ -352,7 +352,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = M::AMax, format!("Vector{dimension}::amax"), (
+            M::AMax, format!("Vector{dimension}::amax"), (
                 context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
@@ -366,7 +366,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = M::AMin, format!("Vector{dimension}::amin"), (
+            M::AMin, format!("Vector{dimension}::amin"), (
                 context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
@@ -380,7 +380,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = M::Dot, format!("Vector{dimension}::dot"), (
+            M::Dot, format!("Vector{dimension}::dot"), (
                 context: &ExecutionContext,
                 this: Vector<I>,
                 rhs: Value) -> Scalar
@@ -404,7 +404,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = M::Norm, format!("Vector{dimension}::norm"),(
+            M::Norm, format!("Vector{dimension}::norm"),(
                 context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
@@ -418,7 +418,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = M::Normalize, format!("Vector{dimension}::normalize"),(
+            M::Normalize, format!("Vector{dimension}::normalize"),(
                 context: &ExecutionContext,
                 this: Vector<I>) -> Vector<I>
             {
@@ -428,7 +428,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = M::Angle, format!("Vector{dimension}::angle"),(
+            M::Angle, format!("Vector{dimension}::angle"),(
                 context: &ExecutionContext,
                 this: Vector<I>,
                 other: Value) -> Scalar
@@ -444,7 +444,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = M::Map, format!("Vector{dimension}::map"),(
+            M::Map, format!("Vector{dimension}::map"),(
                 context: &ExecutionContext,
                 this: Vector<I>,
                 f: MapClosure) -> Vector<I>
@@ -476,7 +476,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = M::Fold, format!("Vector{dimension}::fold"),(
+            M::Fold, format!("Vector{dimension}::fold"),(
                 context: &ExecutionContext,
                 this: Vector<I>,
                 init: Value,
@@ -513,7 +513,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
     build_method!(
         database,
-        forward = methods::Vector3Cross, "Vector3::cross", (
+        methods::Vector3Cross, "Vector3::cross", (
             context: &ExecutionContext,
             this: Vector3,
             rhs: Vector3) -> Vector3

@@ -608,7 +608,7 @@ mod methods {
     {
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::CountOnes, format!("{}::count_ones", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::CountOnes, format!("{}::count_ones", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> UnsignedInteger {
@@ -617,7 +617,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::CountZeros, format!("{}::count_zeros", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::CountZeros, format!("{}::count_zeros", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> UnsignedInteger {
@@ -626,7 +626,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::LeadingZeros, format!("{}::leading_zeros", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::LeadingZeros, format!("{}::leading_zeros", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> UnsignedInteger {
@@ -635,7 +635,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::TrailingZeros, format!("{}::trailing_zeros", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::TrailingZeros, format!("{}::trailing_zeros", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> UnsignedInteger {
@@ -644,7 +644,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::LeadingOnes, format!("{}::leading_ones", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::LeadingOnes, format!("{}::leading_ones", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> UnsignedInteger {
@@ -653,7 +653,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::TrailingOnes, format!("{}::trailing_ones", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::TrailingOnes, format!("{}::trailing_ones", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> UnsignedInteger {
@@ -662,7 +662,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::RotateLeft, format!("{}::rotate_left", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::RotateLeft, format!("{}::rotate_left", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>,
                 n: UnsignedInteger
@@ -672,7 +672,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::RotateRight, format!("{}::rotate_right", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::RotateRight, format!("{}::rotate_right", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>,
                 n: UnsignedInteger
@@ -682,7 +682,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::ReverseBits, format!("{}::reverse_bits", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::ReverseBits, format!("{}::reverse_bits", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> Integer<I> {
@@ -691,7 +691,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::Abs, format!("{}::abs", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::Abs, format!("{}::abs", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> Integer<I> {
@@ -700,7 +700,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::Sqrt, format!("{}::sqrt", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::Sqrt, format!("{}::sqrt", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> Integer<I> {
@@ -709,7 +709,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::AbsDiff, format!("{}::abs_diff", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::AbsDiff, format!("{}::abs_diff", Integer::<I>::static_type_name()), (
                 context: &ExecutionContext,
                 this: Integer<I>,
                 other: Value
@@ -720,7 +720,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::Signum, format!("{}::signum", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::Signum, format!("{}::signum", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> SignedInteger {
@@ -729,7 +729,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::IsPositive, format!("{}::is_positive", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::IsPositive, format!("{}::is_positive", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> Boolean {
@@ -738,7 +738,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::IsNegative, format!("{}::is_negative", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::IsNegative, format!("{}::is_negative", Integer::<I>::static_type_name()), (
                 _context: &ExecutionContext,
                 this: Integer<I>
             ) -> Boolean {
@@ -747,7 +747,7 @@ mod methods {
         );
         build_method!(
             database,
-            forward = <I::MethodSet as MethodSet>::Midpoint, format!("{}::midpoint", Integer::<I>::static_type_name()), (
+            <I::MethodSet as MethodSet>::Midpoint, format!("{}::midpoint", Integer::<I>::static_type_name()), (
                 context: &ExecutionContext,
                 this: Integer<I>,
                 rhs: Value

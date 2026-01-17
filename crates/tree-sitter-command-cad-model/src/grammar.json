@@ -1768,6 +1768,35 @@
         ]
       }
     },
+    "_formula_relation": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "STRING",
+          "value": ">"
+        },
+        {
+          "type": "STRING",
+          "value": ">="
+        },
+        {
+          "type": "STRING",
+          "value": "=="
+        },
+        {
+          "type": "STRING",
+          "value": "<="
+        },
+        {
+          "type": "STRING",
+          "value": "<"
+        },
+        {
+          "type": "STRING",
+          "value": "!="
+        }
+      ]
+    },
     "formula": {
       "type": "SEQ",
       "members": [
@@ -1787,33 +1816,8 @@
           "type": "FIELD",
           "name": "relation",
           "content": {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "STRING",
-                "value": ">"
-              },
-              {
-                "type": "STRING",
-                "value": ">="
-              },
-              {
-                "type": "STRING",
-                "value": "=="
-              },
-              {
-                "type": "STRING",
-                "value": "<="
-              },
-              {
-                "type": "STRING",
-                "value": "<"
-              },
-              {
-                "type": "STRING",
-                "value": "!="
-              }
-            ]
+            "type": "SYMBOL",
+            "name": "_formula_relation"
           }
         },
         {
@@ -1847,7 +1851,23 @@
         },
         {
           "type": "SYMBOL",
+          "name": "boolean"
+        },
+        {
+          "type": "SYMBOL",
           "name": "scalar"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "formula_vector2"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "formula_vector3"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "formula_vector4"
         },
         {
           "type": "SYMBOL",
@@ -1860,6 +1880,14 @@
         {
           "type": "SYMBOL",
           "name": "formula_binary_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "formula_method_call"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "formula_function_call"
         }
       ]
     },
@@ -1917,6 +1945,28 @@
                   "content": {
                     "type": "STRING",
                     "value": "+"
+                  }
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "FIELD",
+                  "name": "op",
+                  "content": {
+                    "type": "STRING",
+                    "value": "!"
                   }
                 },
                 {
@@ -2096,6 +2146,324 @@
               }
             ]
           }
+        },
+        {
+          "type": "PREC_LEFT",
+          "value": 3,
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "a",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              },
+              {
+                "type": "FIELD",
+                "name": "op",
+                "content": {
+                  "type": "STRING",
+                  "value": "&&"
+                }
+              },
+              {
+                "type": "FIELD",
+                "name": "b",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "PREC_LEFT",
+          "value": 2,
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "a",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              },
+              {
+                "type": "FIELD",
+                "name": "op",
+                "content": {
+                  "type": "STRING",
+                  "value": "||"
+                }
+              },
+              {
+                "type": "FIELD",
+                "name": "b",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "PREC_LEFT",
+          "value": 1,
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "a",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              },
+              {
+                "type": "FIELD",
+                "name": "op",
+                "content": {
+                  "type": "STRING",
+                  "value": "^^"
+                }
+              },
+              {
+                "type": "FIELD",
+                "name": "b",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "formula_method_call": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "PREC_LEFT",
+          "value": 15,
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "self_dictionary",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              },
+              {
+                "type": "STRING",
+                "value": "::"
+              },
+              {
+                "type": "FIELD",
+                "name": "to_call",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "identifier"
+                }
+              },
+              {
+                "type": "STRING",
+                "value": "("
+              },
+              {
+                "type": "FIELD",
+                "name": "argument",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              },
+              {
+                "type": "STRING",
+                "value": ")"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "formula_function_call": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "PREC_LEFT",
+          "value": 14,
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "to_call",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              },
+              {
+                "type": "STRING",
+                "value": "("
+              },
+              {
+                "type": "FIELD",
+                "name": "argument",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "formula_expression"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "formula_vector2": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "<("
+        },
+        {
+          "type": "FIELD",
+          "name": "x",
+          "content": {
+            "type": "SYMBOL",
+            "name": "formula_expression"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "FIELD",
+          "name": "y",
+          "content": {
+            "type": "SYMBOL",
+            "name": "formula_expression"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ")>"
+        }
+      ]
+    },
+    "formula_vector3": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "<("
+        },
+        {
+          "type": "FIELD",
+          "name": "x",
+          "content": {
+            "type": "SYMBOL",
+            "name": "formula_expression"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "FIELD",
+          "name": "y",
+          "content": {
+            "type": "SYMBOL",
+            "name": "formula_expression"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "FIELD",
+          "name": "z",
+          "content": {
+            "type": "SYMBOL",
+            "name": "formula_expression"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ")>"
+        }
+      ]
+    },
+    "formula_vector4": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "<("
+        },
+        {
+          "type": "FIELD",
+          "name": "x",
+          "content": {
+            "type": "SYMBOL",
+            "name": "formula_expression"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "FIELD",
+          "name": "y",
+          "content": {
+            "type": "SYMBOL",
+            "name": "formula_expression"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "FIELD",
+          "name": "z",
+          "content": {
+            "type": "SYMBOL",
+            "name": "formula_expression"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "FIELD",
+          "name": "w",
+          "content": {
+            "type": "SYMBOL",
+            "name": "formula_expression"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ")>"
         }
       ]
     }
