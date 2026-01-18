@@ -479,23 +479,20 @@ macro_rules! build_method_callable {
         formula = $formula:expr,
         inverse = $inverse:expr
     ) => {{
-        struct BuiltFunction<S, F, FC, FI>
+        struct BuiltFunction<F, FC, FI>
         where
-            F: Fn(&$crate::execution::ExecutionContext, S $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value>
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> ExpressionResult<$crate::execution::values::Value>
         {
             function: F,
             formula: FC,
             inverse: FI,
             signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
             name: String,
-            _self_type: std::marker::PhantomData<S>
         }
 
-        impl<S, F, FC, FI> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<S, F, FC, FI>
+        impl<F, FC, FI> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F, FC, FI>
         where
-            S: Send + Sync + Clone + StaticTypeName,
-            $crate::execution::values::Value: enum_downcast::AsVariant<S>,
-            F: Fn(&$crate::execution::ExecutionContext, S $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync,
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync,
             FC: Fn(&$crate::execution::ExecutionContext, $crate::execution::values::Value) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync,
             FI: Fn(&$crate::execution::ExecutionContext, $crate::execution::values::Value) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync
         {
@@ -504,28 +501,7 @@ macro_rules! build_method_callable {
                 context: &$crate::execution::ExecutionContext,
                 argument: $crate::execution::values::Dictionary,
             ) -> $crate::execution::errors::ExpressionResult<$crate::execution::values::Value> {
-                use $crate::execution::errors::Raise;
-
-                let this = context.get_variable(
-                    $crate::execution::logging::LocatedStr {
-                        location: context.stack_trace.bottom().clone(),
-                        string: "self",
-                    },
-                )?.downcast_ref::<S>(context.stack_trace)?.clone();
-
-                self.signature
-                    .argument_type
-                    .check_other_qualifies(argument.struct_def())
-                    .map_err(|error| error.to_error(context.stack_trace.iter()))?;
-
-                // Argument is potentially unused if we take no arguments.
-                let mut _argument = self.signature.argument_type.fill_defaults(argument);
-
-                let _data = std::sync::Arc::make_mut(&mut _argument.data);
-                $($(let $arg: $ty = _data.members.remove(stringify!($arg))
-                        .expect("Argument was not present after argument check.").downcast(context.stack_trace)?;)*)?
-
-                    (self.function)(context, this $(, $($arg),*)?)
+                (self.function)(context, &self.signature, argument)
             }
 
             fn formula_call(
@@ -554,12 +530,41 @@ macro_rules! build_method_callable {
         }
 
         BuiltFunction {
-            function: move |$context: &$crate::execution::ExecutionContext, $this: $this_type $(, $($arg: $ty),*)?| -> ExpressionResult<$crate::execution::values::Value> { let result: $return_type = $code?; Ok(result.into()) },
+            function: move |
+                $context: &$crate::execution::ExecutionContext,
+                signature: &$crate::execution::values::closure::Signature,
+                argument: $crate::execution::values::Dictionary
+            | -> ExpressionResult<$crate::execution::values::Value> {
+                // use $crate::execution::errors::Raise;
+
+                let $this = $context.get_variable(
+                    $crate::execution::logging::LocatedStr {
+                        location: $context.stack_trace.bottom().clone(),
+                        string: "self",
+                    },
+                )?.downcast_ref::<$this_type>($context.stack_trace)?.clone();
+
+                signature
+                    .argument_type
+                    .check_other_qualifies(argument.struct_def())
+                    .map_err(|error| error.to_error($context.stack_trace.iter()))?;
+
+                // Argument is potentially unused if we take no arguments.
+                let mut _argument = signature.argument_type.fill_defaults(argument);
+
+                let _data = std::sync::Arc::make_mut(&mut _argument.data);
+                $($(let $arg: $ty = _data.members.remove(stringify!($arg))
+                        .expect("Argument was not present after argument check.").downcast::<$ty>($context.stack_trace)?;)*)?
+
+                let result: $return_type = {
+                    $code?
+                };
+                Ok(result.into())
+            },
             formula: $formula,
             inverse: $inverse,
             signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
             name: $name.into(),
-            _self_type: std::marker::PhantomData
         }
     }};
 }

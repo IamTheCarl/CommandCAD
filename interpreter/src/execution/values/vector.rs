@@ -383,9 +383,8 @@ mod methods {
             M::Dot, format!("Vector{dimension}::dot"), (
                 context: &ExecutionContext,
                 this: Vector<I>,
-                rhs: Value) -> Scalar
+                rhs: Vector<I>) -> Scalar
             {
-                let rhs = rhs.downcast::<Vector<I>>(context.stack_trace)?;
                 if this.dimension == rhs.dimension {
                     let value = common_data_types::Float::new(this.value.dot(&rhs.value)).unwrap_not_nan(context.stack_trace)?;
 
@@ -431,9 +430,8 @@ mod methods {
             M::Angle, format!("Vector{dimension}::angle"),(
                 context: &ExecutionContext,
                 this: Vector<I>,
-                other: Value) -> Scalar
+                other: Vector<I>) -> Scalar
             {
-                let other = other.downcast_for_binary_op::<Vector<I>>(context.stack_trace)?;
                 let value = common_data_types::Float::new(this.value.angle(&other.value)).unwrap_not_nan(context.stack_trace)?;
 
                 Ok(Scalar {

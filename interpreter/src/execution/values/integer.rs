@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use enum_downcast::AsVariant;
+use enum_downcast::{AsVariant, IntoVariant};
 use num_traits::{
     pow::checked_pow, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, One, ToPrimitive,
 };
@@ -55,7 +55,7 @@ impl<I> Object for Integer<I>
 where
     I: IntOps,
     Self: StaticTypeName + Into<Value>,
-    Value: AsVariant<Self>,
+    Value: AsVariant<Self> + IntoVariant<Self>,
 {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         I::static_type()
@@ -712,9 +712,8 @@ mod methods {
             <I::MethodSet as MethodSet>::AbsDiff, format!("{}::abs_diff", Integer::<I>::static_type_name()), (
                 context: &ExecutionContext,
                 this: Integer<I>,
-                other: Value
+                other: Integer<I>
             ) -> UnsignedInteger {
-                let other = other.downcast_for_binary_op::<Integer<I>>(context.stack_trace)?;
                 Ok(UnsignedInteger::from(this.0.abs_diff(other.0)))
             }
         );
@@ -750,9 +749,8 @@ mod methods {
             <I::MethodSet as MethodSet>::Midpoint, format!("{}::midpoint", Integer::<I>::static_type_name()), (
                 context: &ExecutionContext,
                 this: Integer<I>,
-                rhs: Value
+                rhs: Integer<I>
             ) -> Integer<I> {
-                let rhs = rhs.downcast_for_binary_op::<Integer<I>>(context.stack_trace)?;
                 Ok(Integer::<I>::from(this.0.midpoint(rhs.0)))
             }
         );

@@ -439,14 +439,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         methods::Clamp, "Scalar::clamp", (
-            context: &ExecutionContext,
+            _context: &ExecutionContext,
             this: Scalar,
-            min: Value,
-            max: Value) -> Scalar
+            min: Scalar,
+            max: Scalar) -> Scalar
         {
-            let min = this.unpack_same_dimension(context.stack_trace, min)?;
-            let max = this.unpack_same_dimension(context.stack_trace, max)?;
-
             Ok(Scalar {
                 dimension: this.dimension,
                 value: this.value.clamp(min.value, max.value)
@@ -471,10 +468,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         methods::Hypot, "Scalar::hypot", (
             context: &ExecutionContext,
             this: Scalar,
-            other: Value) -> Scalar
+            other: Scalar) -> Scalar
         {
-            let other = this.unpack_same_dimension(context.stack_trace, other)?;
-
             Ok(Scalar {
                 dimension: Dimension::zero(),
                 value: Float::new(this.value.hypot(*other.value)).unwrap_not_nan(context.stack_trace)?
@@ -596,9 +591,9 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         methods::Round, "Scalar::round", (
             context: &ExecutionContext,
             this: Scalar,
-            unit: Value) -> Scalar
+            unit: Scalar) -> Scalar
         {
-            let unit = this.unpack_same_dimension(context.stack_trace, unit)?;
+            let unit = this.unpack_same_dimension(context.stack_trace, unit.into())?;
 
             let value = this.value / unit.value;
 
@@ -613,10 +608,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         methods::Trunc, "Scalar::trunc", (
             context: &ExecutionContext,
             this: Scalar,
-            unit: Value) -> Scalar
+            unit: Scalar) -> Scalar
         {
-            let unit = this.unpack_same_dimension(context.stack_trace, unit)?;
-
             let value = this.value / unit.value;
 
             Ok(Scalar {
@@ -630,10 +623,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         methods::Fract, "Scalar::fract", (
             context: &ExecutionContext,
             this: Scalar,
-            unit: Value) -> Scalar
+            unit: Scalar) -> Scalar
         {
-            let unit = this.unpack_same_dimension(context.stack_trace, unit)?;
-
             let value = this.value / unit.value;
 
             Ok(Scalar {
@@ -647,10 +638,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         methods::Floor, "Scalar::floor", (
             context: &ExecutionContext,
             this: Scalar,
-            unit: Value) -> Scalar
+            unit: Scalar) -> Scalar
         {
-            let unit = this.unpack_same_dimension(context.stack_trace, unit)?;
-
             let value = this.value / unit.value;
 
             Ok(Scalar {
@@ -664,10 +653,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         methods::Ceil, "Scalar::ceil", (
             context: &ExecutionContext,
             this: Scalar,
-            unit: Value) -> Scalar
+            unit: Scalar) -> Scalar
         {
-            let unit = this.unpack_same_dimension(context.stack_trace, unit)?;
-
             let value = this.value / unit.value;
 
             Ok(Scalar {
@@ -679,12 +666,10 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         methods::Max, "Scalar::max", (
-            context: &ExecutionContext,
+            _context: &ExecutionContext,
             this: Scalar,
-            other: Value) -> Scalar
+            other: Scalar) -> Scalar
         {
-            let other = this.unpack_same_dimension(context.stack_trace, other)?;
-
             Ok(Scalar {
                 dimension: this.dimension,
                 value: this.value.max(other.value)
@@ -694,12 +679,10 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
         methods::Min, "Scalar::min", (
-            context: &ExecutionContext,
+            _context: &ExecutionContext,
             this: Scalar,
-            other: Value) -> Scalar
+            other: Scalar) -> Scalar
         {
-            let other = this.unpack_same_dimension(context.stack_trace, other)?;
-
             Ok(Scalar {
                 dimension: this.dimension,
                 value: this.value.min(other.value)
