@@ -309,7 +309,7 @@ impl ErrorType for DowncastError {}
 
 impl Display for DowncastError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Expected `{}`, got {}", self.expected, self.got)
+        write!(f, "Expected `{}`, got `{}`", self.expected, self.got)
     }
 }
 
@@ -325,7 +325,7 @@ impl Display for DowncastForBinaryOpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Left side is `{}`, right side is {}, these must be the same",
+            "Left side is `{}`, right side is `{}`, these must be the same",
             self.expected, self.got
         )
     }

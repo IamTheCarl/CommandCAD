@@ -7,7 +7,7 @@ use type_sitter::{HasChild, Node};
 use unwrap_enum::EnumAs;
 
 use crate::{
-    compile::{formula::Formula, Scalar},
+    compile::{formula::Formula, unwrap_missing, Scalar},
     execution::find_all_variable_accesses_in_expression,
 };
 
@@ -110,6 +110,7 @@ pub enum Expression {
     MethodCall(AstNode<Box<MethodCall>>),
     LetIn(AstNode<Box<LetIn>>),
     Formula(AstNode<Formula>),
+    Missing(ImString),
 }
 
 impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for Expression {
@@ -118,6 +119,8 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for Expression {
         input: &'i str,
         value: nodes::BinaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -134,6 +137,8 @@ impl<'t> Parse<'t, nodes::Formula<'t>> for Expression {
         input: &'i str,
         value: nodes::Formula<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -148,6 +153,8 @@ impl<'t> Parse<'t, nodes::Boolean<'t>> for Expression {
         input: &'i str,
         value: nodes::Boolean<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -162,6 +169,8 @@ impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for Expression {
         input: &'i str,
         value: nodes::ClosureDefinition<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -176,6 +185,8 @@ impl<'t> Parse<'t, nodes::DictionaryConstruction<'t>> for Expression {
         input: &'i str,
         value: nodes::DictionaryConstruction<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -190,6 +201,8 @@ impl<'t> Parse<'t, nodes::If<'t>> for Expression {
         input: &'i str,
         value: nodes::If<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -204,6 +217,8 @@ impl<'t> Parse<'t, nodes::List<'t>> for Expression {
         input: &'i str,
         value: nodes::List<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         let mut cursor = value.walk();
 
         let mut list = Vec::new();
@@ -227,6 +242,8 @@ impl<'t> Parse<'t, nodes::Parenthesis<'t>> for Expression {
         input: &'i str,
         value: nodes::Parenthesis<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         let expression = value.expression()?;
         Ok(AstNode::new(
             file,
@@ -242,6 +259,8 @@ impl<'t> Parse<'t, nodes::MemberAccess<'t>> for Expression {
         input: &'i str,
         value: nodes::MemberAccess<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -270,6 +289,8 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for Expression {
         input: &'i str,
         value: nodes::Scalar<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -284,6 +305,8 @@ impl<'t> Parse<'t, nodes::Vector2<'t>> for Expression {
         input: &'i str,
         value: nodes::Vector2<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -298,6 +321,8 @@ impl<'t> Parse<'t, nodes::Vector3<'t>> for Expression {
         input: &'i str,
         value: nodes::Vector3<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -312,6 +337,8 @@ impl<'t> Parse<'t, nodes::Vector4<'t>> for Expression {
         input: &'i str,
         value: nodes::Vector4<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -326,6 +353,8 @@ impl<'t> Parse<'t, nodes::SignedInteger<'t>> for Expression {
         input: &'i str,
         value: nodes::SignedInteger<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -340,6 +369,8 @@ impl<'t> Parse<'t, nodes::UnsignedInteger<'t>> for Expression {
         input: &'i str,
         value: nodes::UnsignedInteger<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -356,6 +387,8 @@ impl<'t> Parse<'t, nodes::String<'t>> for Expression {
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         static ESCAPE_SEQUENCES: &[(&str, &str); 3] =
             &[("\"", "\\\""), ("\n", "\\n"), ("\\", "\\\\")];
+        unwrap_missing(&value)?;
+
         let raw_text = &input[value.byte_range()];
         let raw_text = &raw_text[1..raw_text.len() - 1];
 
@@ -382,6 +415,8 @@ impl<'t> Parse<'t, nodes::StructDefinition<'t>> for Expression {
         input: &'i str,
         value: nodes::StructDefinition<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -396,6 +431,8 @@ impl<'t> Parse<'t, nodes::UnaryExpression<'t>> for Expression {
         input: &'i str,
         value: nodes::UnaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -412,6 +449,8 @@ impl<'t> Parse<'t, nodes::FunctionCall<'t>> for Expression {
         input: &'i str,
         value: nodes::FunctionCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -426,6 +465,8 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for Expression {
         input: &'i str,
         value: nodes::MethodCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -440,6 +481,8 @@ impl<'t> Parse<'t, nodes::LetIn<'t>> for Expression {
         input: &'i str,
         node: nodes::LetIn<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&node)?;
+
         Ok(AstNode::new(
             file,
             &node,
@@ -456,7 +499,7 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         type ChildType<'t> = <nodes::Expression<'t> as HasChild<'t>>::Child;
 
-        match value.child()? {
+        let result = match value.child()? {
             ChildType::BinaryExpression(binary_expression) => {
                 Self::parse(file, input, binary_expression)
             }
@@ -496,6 +539,16 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
             ChildType::MethodCall(method_call) => Self::parse(file, input, method_call),
             ChildType::Formula(formula) => Self::parse(file, input, formula),
             ChildType::LetIn(let_in) => Self::parse(file, input, let_in),
+        };
+
+        match result {
+            Ok(expression) => Ok(expression),
+            Err(Error::Missing(kind)) => Ok(AstNode::new(
+                file,
+                &value,
+                Self::Missing(ImString::from(kind)),
+            )),
+            Err(error) => Err(error),
         }
     }
 }

@@ -61,6 +61,14 @@ impl<N> AstNode<N> {
     }
 }
 
+fn unwrap_missing<'t, 'i, N: Node<'t> + 't>(value: &N) -> Result<(), Error<'t, 'i>> {
+    if !value.raw().is_missing() {
+        Ok(())
+    } else {
+        Err(Error::Missing(value.raw().kind()))
+    }
+}
+
 trait Parse<'t, N: 't>: Sized {
     fn parse<'i>(
         file: &Arc<PathBuf>,
@@ -75,6 +83,7 @@ impl<'t, N: Node<'t> + 't> Parse<'t, N> for ImString {
         input: &'i str,
         value: N,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
         let text = &input[value.byte_range()];
         Ok(AstNode::new(file, &value, ImString::from(text.to_string())))
     }
@@ -86,6 +95,7 @@ impl<'t> Parse<'t, nodes::Boolean<'t>> for bool {
         _input: &'i str,
         value: nodes::Boolean<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
         type ChildType<'t> = <nodes::Boolean<'t> as HasChild<'t>>::Child;
         let child = value.child()?;
 
@@ -103,6 +113,7 @@ impl<'t> Parse<'t, nodes::SignedInteger<'t>> for i64 {
         input: &'i str,
         value: nodes::SignedInteger<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
         let number = value.value()?;
         let integer = match number.child()? {
             nodes::anon_unions::BaseTen_Binary_Hex_Octal::Hex(value) => {
@@ -137,6 +148,7 @@ impl<'t> Parse<'t, nodes::UnsignedInteger<'t>> for u64 {
         input: &'i str,
         value: nodes::UnsignedInteger<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
         let number = value.value()?;
         let integer = match number.child()? {
             nodes::anon_unions::BaseTen_Binary_Hex_Octal::Hex(value) => {
@@ -182,6 +194,8 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for Scalar {
             coefficient: 1.0,
             dimension: Dimension::zero(),
         };
+
+        unwrap_missing(&value)?;
 
         // Get the conversion factor using the unit name.
         let conversion_factor = if let Some(unit_name) = value.unit() {
@@ -259,6 +273,7 @@ pub enum Error<'t, 'i> {
     InvalidUnit(InvalidUnitError<'t, 'i>),
     ParseInt(ParseIntError<'t>),
     ParseNumber(ParseNumberError<'t>),
+    Missing(&'static str),
 }
 
 impl<'t> std::error::Error for Error<'t, '_> {}
@@ -267,7 +282,12 @@ impl<'t> std::fmt::Display for Error<'t, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::IncorrectKind(incorrect_kind) => {
-                write!(f, "incorrect node type, expected {}", incorrect_kind.kind)
+                write!(
+                    f,
+                    "incorrect node type, got {}, expected {}",
+                    incorrect_kind.node.kind(),
+                    incorrect_kind.kind
+                )
             }
             Error::InvalidUnit(invalid_unit_error) => {
                 write!(f, "invalid scalar unit: {}", invalid_unit_error.name)
@@ -277,6 +297,9 @@ impl<'t> std::fmt::Display for Error<'t, '_> {
             }
             Error::ParseNumber(parse_number_error) => {
                 write!(f, "failed to parse scalar: {}", parse_number_error.error)
+            }
+            Error::Missing(kind) => {
+                write!(f, "Missing `{kind}`")
             }
         }
     }

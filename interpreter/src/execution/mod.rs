@@ -20,7 +20,11 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use crate::{
     compile::{self, AstNode, BinaryExpressionOperation, Expression, UnaryExpressionOperation},
-    execution::{stack::ScopeType, values::BuiltinCallableDatabase},
+    execution::{
+        errors::{GenericFailure, Raise},
+        stack::ScopeType,
+        values::BuiltinCallableDatabase,
+    },
     SourceReference,
 };
 
@@ -163,7 +167,8 @@ pub fn find_all_variable_accesses_in_expression(
         | Expression::SignedInteger(_)
         | Expression::String(_)
         | Expression::UnsignedInteger(_)
-        | Expression::Self_(_) => Ok(()),
+        | Expression::Self_(_)
+        | Expression::Missing(_) => Ok(()),
     }
 }
 
@@ -293,6 +298,9 @@ pub fn execute_expression(
             compile::Expression::LetIn(ast_node) => execute_let_in(context, ast_node),
             compile::Expression::Formula(formula) => {
                 todo!()
+            }
+            compile::Expression::Missing(kind) => {
+                Err(GenericFailure(format!("Missing {kind}").into()).to_error(context.stack_trace))
             }
         }
     })

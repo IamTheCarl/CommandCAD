@@ -18,7 +18,7 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use crate::compile::{nodes, Error, Parse};
+use crate::compile::{nodes, unwrap_missing, Error, Parse};
 
 use super::{AstNode, Scalar};
 use imstr::ImString;
@@ -37,6 +37,8 @@ impl<'t> Parse<'t, nodes::Formula<'t>> for Formula {
         input: &'i str,
         value: nodes::Formula<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         let left = Expression::parse(file, input, value.lhs()?)?;
         let right = Expression::parse(file, input, value.rhs()?)?;
 
@@ -97,6 +99,8 @@ impl<'t> Parse<'t, nodes::FormulaExpression<'t>> for Expression {
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         type ChildType<'t> = <nodes::FormulaExpression<'t> as HasChild<'t>>::Child;
 
+        unwrap_missing(&value)?;
+
         match value.child()? {
             ChildType::FormulaBinaryExpression(binary_expression) => {
                 Self::parse(file, input, binary_expression)
@@ -133,6 +137,8 @@ impl<'t> Parse<'t, nodes::FormulaBinaryExpression<'t>> for Expression {
         input: &'i str,
         value: nodes::FormulaBinaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -147,6 +153,8 @@ impl<'t> Parse<'t, nodes::Boolean<'t>> for Expression {
         input: &'i str,
         value: nodes::Boolean<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -161,6 +169,8 @@ impl<'t> Parse<'t, nodes::FormulaParenthesis<'t>> for Expression {
         input: &'i str,
         value: nodes::FormulaParenthesis<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         let expression = value.formula_expression()?;
         Ok(AstNode::new(
             file,
@@ -176,6 +186,8 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for Expression {
         input: &'i str,
         value: nodes::Scalar<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -190,6 +202,8 @@ impl<'t> Parse<'t, nodes::FormulaVector2<'t>> for Expression {
         input: &'i str,
         value: nodes::FormulaVector2<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -204,6 +218,8 @@ impl<'t> Parse<'t, nodes::FormulaVector3<'t>> for Expression {
         input: &'i str,
         value: nodes::FormulaVector3<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -218,6 +234,8 @@ impl<'t> Parse<'t, nodes::FormulaVector4<'t>> for Expression {
         input: &'i str,
         value: nodes::FormulaVector4<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -232,6 +250,8 @@ impl<'t> Parse<'t, nodes::SignedInteger<'t>> for Expression {
         input: &'i str,
         value: nodes::SignedInteger<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -246,6 +266,8 @@ impl<'t> Parse<'t, nodes::UnsignedInteger<'t>> for Expression {
         input: &'i str,
         value: nodes::UnsignedInteger<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -260,6 +282,8 @@ impl<'t> Parse<'t, nodes::FormulaUnaryExpression<'t>> for Expression {
         input: &'i str,
         value: nodes::FormulaUnaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -274,6 +298,8 @@ impl<'t> Parse<'t, nodes::FormulaFunctionCall<'t>> for Expression {
         input: &'i str,
         value: nodes::FormulaFunctionCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -288,6 +314,8 @@ impl<'t> Parse<'t, nodes::FormulaMethodCall<'t>> for Expression {
         input: &'i str,
         value: nodes::FormulaMethodCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         Ok(AstNode::new(
             file,
             &value,
@@ -315,6 +343,8 @@ impl<'t> Parse<'t, nodes::FormulaUnaryExpression<'t>> for UnaryExpression {
         input: &'i str,
         value: nodes::FormulaUnaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         let operation = value.op()?;
 
         let operation = match operation {
@@ -367,6 +397,8 @@ impl<'t> Parse<'t, nodes::FormulaBinaryExpression<'t>> for BinaryExpression {
         input: &'i str,
         value: nodes::FormulaBinaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         type Operation<'t> =
             nodes::anon_unions::AndAnd_Mul_MulMul_Add_Sub_Div_BitXorBitXor_OrOr<'t>;
 
@@ -411,6 +443,8 @@ impl<'t> Parse<'t, nodes::FormulaVector2<'t>> for Vector2 {
         input: &'i str,
         value: nodes::FormulaVector2<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         let x = value.x()?;
         let x = Expression::parse(file, input, x)?;
 
@@ -434,6 +468,8 @@ impl<'t> Parse<'t, nodes::FormulaVector3<'t>> for Vector3 {
         input: &'i str,
         value: nodes::FormulaVector3<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         let x = value.x()?;
         let x = Expression::parse(file, input, x)?;
 
@@ -461,6 +497,8 @@ impl<'t> Parse<'t, nodes::FormulaVector4<'t>> for Vector4 {
         input: &'i str,
         value: nodes::FormulaVector4<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         let x = value.x()?;
         let x = Expression::parse(file, input, x)?;
 
@@ -489,6 +527,8 @@ impl<'t> Parse<'t, nodes::FormulaFunctionCall<'t>> for FunctionCall {
         input: &'i str,
         value: nodes::FormulaFunctionCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         let to_call = Expression::parse(file, input, value.to_call()?)?;
         let argument = Expression::parse(file, input, value.argument()?)?;
 
@@ -509,6 +549,8 @@ impl<'t> Parse<'t, nodes::FormulaMethodCall<'t>> for MethodCall {
         input: &'i str,
         value: nodes::FormulaMethodCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
         let self_dictionary = Expression::parse(file, input, value.self_dictionary()?)?;
         let to_call = ImString::parse(file, input, value.to_call()?)?;
         let argument = Expression::parse(file, input, value.argument()?)?;
