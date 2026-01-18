@@ -61,5 +61,11 @@ pub fn get_base_unit_name(dimension: &Dimension) -> Option<&'static str> {
     static BASE_UNITS: OnceLock<BaseUnits> = OnceLock::new();
     let database = BASE_UNITS.get_or_init(|| include!(concat!(env!("OUT_DIR"), "/base_units.rs")));
 
-    database.get(dimension).map(|cow| cow.borrow())
+    let name = database.get(dimension).map(|cow| cow.borrow());
+
+    match name {
+        Some(name) => Some(name),
+        Option::None if *dimension != Dimension::zero() => Some("?"),
+        _ => Option::None,
+    }
 }
