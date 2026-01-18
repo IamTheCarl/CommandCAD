@@ -91,6 +91,7 @@ impl ValueType {
             Self::Vector4(Option::None) => "Vector4".into(),
             Self::String => IString::static_type_name().into(),
             Self::File => File::static_type_name().into(),
+            Self::Any => "Any".into(),
             _ => format!("{}", self).into(),
         }
     }

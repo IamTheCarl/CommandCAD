@@ -457,7 +457,6 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         ) -> Scalar {
             let value = this.0.parse::<Float>()
                 .map_err(|error| GenericFailure(format!("Failed to parse scalar value: {error:?}").into()).to_error(context.stack_trace))?;
-            dbg!(&value);
             Ok(Scalar {
                 dimension: Dimension::zero(),
                 value,
