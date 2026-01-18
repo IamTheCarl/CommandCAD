@@ -40,6 +40,8 @@ impl Display for Error {
     }
 }
 
+impl std::error::Error for Error {}
+
 /// A generic error that will just display a static message.
 #[derive(Debug, Eq, PartialEq)]
 pub struct GenericFailure(pub Cow<'static, str>);

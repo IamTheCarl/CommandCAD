@@ -19,14 +19,9 @@
 use std::{cmp::Ordering, collections::HashMap};
 
 use crate::{
-    compile::{
-        self, AstNode, BinaryExpressionOperation, Expression, SourceReference,
-        UnaryExpressionOperation,
-    },
-    execution::{
-        stack::{ScopeType, StackScope},
-        values::BuiltinCallableDatabase,
-    },
+    compile::{self, AstNode, BinaryExpressionOperation, Expression, UnaryExpressionOperation},
+    execution::{stack::ScopeType, values::BuiltinCallableDatabase},
+    SourceReference,
 };
 
 use rayon::{join, prelude::*};
@@ -38,7 +33,10 @@ mod standard_environment;
 pub mod values;
 use errors::ExpressionResult;
 use imstr::ImString;
-use logging::{LocatedStr, RuntimeLog, StackTrace};
+use logging::LocatedStr;
+pub use logging::{LogLevel, LogMessage, RuntimeLog, StackTrace};
+pub use stack::StackScope;
+
 use values::{
     closure::find_all_variable_accesses_in_closure_capture,
     dictionary::find_all_variable_accesses_in_dictionary_construction, Object, Value, ValueType,

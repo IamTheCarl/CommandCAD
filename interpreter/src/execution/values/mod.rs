@@ -22,9 +22,7 @@ use enum_dispatch::enum_dispatch;
 use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
 use unwrap_enum::EnumAs;
 
-use crate::execution::{
-    logging::StackTrace, stack::ScopeType, values::string::formatting::Style, ExecutionContext,
-};
+use crate::execution::{logging::StackTrace, stack::ScopeType, ExecutionContext};
 
 use super::errors::{ErrorType, ExpressionResult, Raise as _};
 
@@ -53,7 +51,7 @@ mod list;
 pub use list::List;
 
 mod string;
-pub use string::IString;
+pub use string::{formatting::Style, IString};
 
 mod file;
 pub use file::File;

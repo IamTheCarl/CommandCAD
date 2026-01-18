@@ -4,12 +4,19 @@ mod formula;
 use common_data_types::{ConversionFactor, Dimension, Float, RawFloat};
 use imstr::ImString;
 use std::{path::PathBuf, sync::Arc};
+use tree_sitter::Range;
 use type_sitter::{HasChild, IncorrectKind, Node};
 
 pub use expressions::*;
 
 pub mod nodes {
     include!(concat!(env!("OUT_DIR"), "/nodes.rs"));
+}
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+pub struct SourceReference {
+    pub file: Arc<PathBuf>,
+    pub range: Range,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]
@@ -235,6 +242,27 @@ pub enum Error<'t, 'i> {
     InvalidUnit(InvalidUnitError<'t, 'i>),
     ParseInt(ParseIntError<'t>),
     ParseNumber(ParseNumberError<'t>),
+}
+
+impl<'t> std::error::Error for Error<'t, '_> {}
+
+impl<'t> std::fmt::Display for Error<'t, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::IncorrectKind(incorrect_kind) => {
+                write!(f, "incorrect node type, expected {}", incorrect_kind.kind)
+            }
+            Error::InvalidUnit(invalid_unit_error) => {
+                write!(f, "invalid scalar unit: {}", invalid_unit_error.name)
+            }
+            Error::ParseInt(parse_int_error) => {
+                write!(f, "failed to parse integer: {}", parse_int_error.error)
+            }
+            Error::ParseNumber(parse_number_error) => {
+                write!(f, "failed to parse scalar: {}", parse_number_error.error)
+            }
+        }
+    }
 }
 
 impl<'t> From<IncorrectKind<'t>> for Error<'t, '_> {

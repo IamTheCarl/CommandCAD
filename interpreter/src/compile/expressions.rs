@@ -3,7 +3,6 @@ use std::{cmp::Ordering, collections::HashSet, path::PathBuf, sync::Arc};
 use hashable_map::HashableSet;
 use imstr::ImString;
 use nodes::SourceFile;
-use tree_sitter::Range;
 use type_sitter::{HasChild, Node};
 use unwrap_enum::EnumAs;
 
@@ -84,12 +83,6 @@ pub struct ParseIntError<'t> {
 pub struct ParseNumberError<'t> {
     pub error: std::num::ParseIntError,
     pub node: nodes::Number<'t>,
-}
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub struct SourceReference {
-    pub file: Arc<PathBuf>,
-    pub range: Range,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, EnumAs)]
@@ -1159,7 +1152,8 @@ impl<'t> Parse<'t, nodes::LetIn<'t>> for LetIn {
     }
 }
 
-pub fn new_parser() -> type_sitter::Parser<nodes::SourceFile<'static>> {
+pub type Parser = type_sitter::Parser<nodes::SourceFile<'static>>;
+pub fn new_parser() -> Parser {
     type_sitter::Parser::new(&tree_sitter_command_cad_model::language())
         .expect("Error loading CommandCadModel grammar")
 }
