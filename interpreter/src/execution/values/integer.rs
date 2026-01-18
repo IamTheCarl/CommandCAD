@@ -111,24 +111,24 @@ where
     }
 
     fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 & rhs.0).into())
     }
     fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 | rhs.0).into())
     }
     fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 ^ rhs.0).into())
     }
 
     fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Ordering> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(self.0.cmp(&rhs.0))
     }
     fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_add(&rhs.0).ok_or_else(|| {
             GenericFailure(
                 "Integer overflow: The computed value is too large to store in the integer".into(),
@@ -138,7 +138,7 @@ where
         .into())
     }
     fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_sub(&rhs.0).ok_or_else(|| {
             GenericFailure(
                 "Integer underflow: The computed value is too small to store in the integer".into(),
@@ -148,7 +148,7 @@ where
         .into())
     }
     fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_mul(&rhs.0).ok_or_else(|| {
             GenericFailure(
                 "Integer overflow: The computed value is too large to store in the integer".into(),
@@ -158,7 +158,7 @@ where
         .into())
     }
     fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(
             self.0
                 .checked_div(&rhs.0)
@@ -167,7 +167,7 @@ where
         .into())
     }
     fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
 
         // This failure can only happen on 32bit (or less) systems.
         let rhs = rhs.0.to_usize().ok_or_else(|| {
@@ -186,11 +186,11 @@ where
         .into())
     }
     fn left_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 << rhs.0).into())
     }
     fn right_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 >> rhs.0).into())
     }
     fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
@@ -714,7 +714,7 @@ mod methods {
                 this: Integer<I>,
                 other: Value
             ) -> UnsignedInteger {
-                let other = other.downcast::<Integer<I>>(context.stack_trace)?;
+                let other = other.downcast_for_binary_op::<Integer<I>>(context.stack_trace)?;
                 Ok(UnsignedInteger::from(this.0.abs_diff(other.0)))
             }
         );
@@ -752,7 +752,7 @@ mod methods {
                 this: Integer<I>,
                 rhs: Value
             ) -> Integer<I> {
-                let rhs = rhs.downcast::<Integer<I>>(context.stack_trace)?;
+                let rhs = rhs.downcast_for_binary_op::<Integer<I>>(context.stack_trace)?;
                 Ok(Integer::<I>::from(this.0.midpoint(rhs.0)))
             }
         );

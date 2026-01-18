@@ -309,7 +309,34 @@ impl ErrorType for DowncastError {}
 
 impl Display for DowncastError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Expected type `{}`, got {}", self.expected, self.got)
+        write!(f, "Expected `{}`, got {}", self.expected, self.got)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct DowncastForBinaryOpError {
+    pub expected: Cow<'static, str>,
+    pub got: Cow<'static, str>,
+}
+
+impl ErrorType for DowncastForBinaryOpError {}
+
+impl Display for DowncastForBinaryOpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Left side is `{}`, right side is {}, these must be the same",
+            self.expected, self.got
+        )
+    }
+}
+
+impl From<DowncastError> for DowncastForBinaryOpError {
+    fn from(error: DowncastError) -> Self {
+        Self {
+            expected: error.expected,
+            got: error.got,
+        }
     }
 }
 
@@ -323,6 +350,22 @@ impl IntoVariant<Self> for Value {
 }
 
 impl Value {
+    pub fn downcast_for_binary_op_ref<T>(&self, stack_trace: &StackTrace) -> ExpressionResult<&T>
+    where
+        T: StaticTypeName,
+        Self: AsVariant<T>,
+    {
+        self.downcast_ref(stack_trace).map_err(|error| error.into())
+    }
+
+    pub fn downcast_for_binary_op<T>(self, stack_trace: &StackTrace) -> ExpressionResult<T>
+    where
+        T: StaticTypeName,
+        Self: IntoVariant<T>,
+    {
+        self.downcast(stack_trace).map_err(|error| error.into())
+    }
+
     pub fn downcast_ref<T>(&self, stack_trace: &StackTrace) -> ExpressionResult<&T>
     where
         T: StaticTypeName,
@@ -331,7 +374,7 @@ impl Value {
         if let Some(value) = self.enum_downcast_ref() {
             Ok(value)
         } else {
-            Err(DowncastError {
+            Err(DowncastForBinaryOpError {
                 expected: T::static_type_name().into(),
                 got: self.type_name(),
             }
@@ -346,7 +389,7 @@ impl Value {
     {
         match self.into_variant() {
             Ok(value) => Ok(value),
-            Err(original) => Err(DowncastError {
+            Err(original) => Err(DowncastForBinaryOpError {
                 expected: T::static_type_name().into(),
                 got: original.type_name(),
             }
@@ -361,7 +404,7 @@ impl Value {
     {
         match self {
             Self::ValueNone(_) => Ok(None),
-            this => Ok(Some(this.downcast::<T>(stack_trace)?)),
+            this => Ok(Some(this.downcast_for_binary_op::<T>(stack_trace)?)),
         }
     }
 }

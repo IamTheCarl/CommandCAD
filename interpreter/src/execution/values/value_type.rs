@@ -215,7 +215,7 @@ impl Object for ValueType {
     }
 
     fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: Self = rhs.downcast(context.stack_trace)?;
+        let rhs: Self = rhs.downcast_for_binary_op(context.stack_trace)?;
 
         Ok(self.merge(rhs).into())
     }

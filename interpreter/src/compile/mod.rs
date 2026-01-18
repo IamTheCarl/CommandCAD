@@ -1,6 +1,7 @@
 mod expressions;
 mod formula;
 
+use ariadne::Span;
 use common_data_types::{ConversionFactor, Dimension, Float, RawFloat};
 use imstr::ImString;
 use std::{path::PathBuf, sync::Arc};
@@ -17,6 +18,22 @@ pub mod nodes {
 pub struct SourceReference {
     pub file: Arc<PathBuf>,
     pub range: Range,
+}
+
+impl Span for SourceReference {
+    type SourceId = Arc<PathBuf>;
+
+    fn source(&self) -> &Self::SourceId {
+        &self.file
+    }
+
+    fn start(&self) -> usize {
+        self.range.start_byte
+    }
+
+    fn end(&self) -> usize {
+        self.range.end_byte
+    }
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]

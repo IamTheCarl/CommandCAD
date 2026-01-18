@@ -3,6 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 mod arguments;
 use anyhow::{anyhow, Context, Result};
 use arguments::Arguments;
+use ariadne::{Cache, Source};
 use clap::Parser as _;
 use reedline::{DefaultPrompt, Reedline, Signal};
 
@@ -35,6 +36,23 @@ impl RuntimeLog for StderrLog {
         };
 
         eprintln!("{}: {}: {}", level_char, message.origin, message);
+    }
+}
+
+struct ReplFileCache<'i>(Source<&'i str>);
+
+impl<'i> Cache<Arc<PathBuf>> for ReplFileCache<'i> {
+    type Storage = &'i str;
+
+    fn fetch(
+        &mut self,
+        _id: &Arc<PathBuf>,
+    ) -> Result<&Source<Self::Storage>, impl std::fmt::Debug> {
+        self.0.fetch(&())
+    }
+
+    fn display<'a>(&self, _id: &'a Arc<PathBuf>) -> Option<impl std::fmt::Display + 'a> {
+        self.0.display(&())
     }
 }
 
@@ -103,7 +121,10 @@ fn run_line(
             println!("{output}");
         }
         Err(error) => {
-            eprintln!("Failed to evaluate: {error}");
+            let report = error.report();
+            report
+                .eprint(ReplFileCache(Source::from(input)))
+                .context("Failed to format error message")?;
         }
     }
 

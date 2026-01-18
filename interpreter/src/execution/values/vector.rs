@@ -11,8 +11,8 @@ use crate::{
         logging::StackTrace,
         values::{
             closure::BuiltinCallableDatabase, scalar::UnwrapNotNan, string::formatting::Style,
-            BuiltinFunction, DowncastError, MissingAttributeError, Object, Scalar, StaticType,
-            StaticTypeName, Value, ValueType,
+            BuiltinFunction, DowncastForBinaryOpError, MissingAttributeError, Object, Scalar,
+            StaticType, StaticTypeName, Value, ValueType,
         },
         ExecutionContext,
     },
@@ -90,14 +90,14 @@ where
         Ok(Self::new_raw(context, self.dimension, value)?.into())
     }
     fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_ref::<Scalar>(context.stack_trace)?;
+        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
         let value = self.value * *rhs.value;
         let dimension = self.dimension + rhs.dimension;
 
         Ok(Self::new_raw(context, dimension, value)?.into())
     }
     fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_ref::<Scalar>(context.stack_trace)?;
+        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
         let value = self.value / *rhs.value;
         let dimension = self.dimension - rhs.dimension;
 
@@ -115,7 +115,7 @@ where
     }
 
     fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
-        let rhs: Self = rhs.downcast(context.stack_trace)?;
+        let rhs: Self = rhs.downcast_for_binary_op(context.stack_trace)?;
         Ok(self.dimension == rhs.dimension && self.value == rhs.value)
     }
 
@@ -219,12 +219,12 @@ where
     }
 
     fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExpressionResult<Self> {
-        let rhs: Vector<I> = rhs.downcast(stack_trace)?;
+        let rhs: Vector<I> = rhs.downcast_for_binary_op(stack_trace)?;
 
         if self.dimension == rhs.dimension {
             Ok(rhs)
         } else {
-            Err(DowncastError {
+            Err(DowncastForBinaryOpError {
                 expected: self.type_name(),
                 got: rhs.type_name(),
             }
@@ -342,7 +342,7 @@ mod methods {
                     let value = this.value.add_scalar(*value.value);
                     Vector::new_raw(context, this.dimension, value)
                 } else {
-                    Err(DowncastError {
+                    Err(DowncastForBinaryOpError {
                         expected: this.type_name(),
                         got: value.type_name(),
                     }
@@ -394,7 +394,7 @@ mod methods {
                         value
                     })
                 } else {
-                    Err(DowncastError {
+                    Err(DowncastForBinaryOpError {
                         expected: this.type_name(),
                         got: rhs.type_name(),
                     }
@@ -433,7 +433,7 @@ mod methods {
                 this: Vector<I>,
                 other: Value) -> Scalar
             {
-                let other = other.downcast::<Vector<I>>(context.stack_trace)?;
+                let other = other.downcast_for_binary_op::<Vector<I>>(context.stack_trace)?;
                 let value = common_data_types::Float::new(this.value.angle(&other.value)).unwrap_not_nan(context.stack_trace)?;
 
                 Ok(Scalar {
@@ -522,7 +522,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 let value = this.value.cross(&rhs.value);
                 Vector3::new_raw(context, this.dimension, value)
             } else {
-                Err(DowncastError {
+                Err(DowncastForBinaryOpError {
                     expected: this.type_name(),
                     got: rhs.type_name(),
                 }

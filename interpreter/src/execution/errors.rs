@@ -18,6 +18,8 @@
 
 use std::{any::Any, borrow::Cow, fmt::Display};
 
+use ariadne::{Label, Report, ReportKind};
+
 use crate::compile::SourceReference;
 
 pub type ExpressionResult<R> = std::result::Result<R, Error>;
@@ -26,6 +28,18 @@ pub type ExpressionResult<R> = std::result::Result<R, Error>;
 pub struct Error {
     pub ty: Box<dyn ErrorType>,
     pub trace: Vec<SourceReference>,
+}
+
+impl Error {
+    pub fn report(&self) -> Report<'_, SourceReference> {
+        let bottom = self.trace.first().expect("Error has no trace").clone();
+
+        let mut builder = Report::build(ReportKind::Error, bottom.clone());
+        builder.set_message("Failed to evaluate");
+        builder.add_label(Label::new(bottom).with_message(format!("{}", self.ty)));
+
+        builder.finish()
+    }
 }
 
 impl Display for Error {

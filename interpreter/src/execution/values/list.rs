@@ -145,7 +145,7 @@ impl Object for List {
     }
 
     fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(self.values == rhs.values)
     }
 

@@ -61,21 +61,21 @@ impl Object for Boolean {
     }
 
     fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(self.0 == rhs.0)
     }
     fn and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 && rhs.0).into())
     }
 
     fn or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 || rhs.0).into())
     }
 
     fn xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self((self.0 && rhs.0) || (!self.0 && !rhs.0)).into())
     }
 

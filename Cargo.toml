@@ -17,3 +17,6 @@ default-members = [
   "units",
   "cli"
 ]
+
+[workspace.dependencies]
+ariadne = "0.6.0"

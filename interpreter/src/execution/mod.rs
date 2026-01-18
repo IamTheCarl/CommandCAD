@@ -27,6 +27,7 @@ use crate::{
 use rayon::{join, prelude::*};
 
 mod errors;
+pub use errors::Error;
 mod logging;
 mod stack;
 mod standard_environment;

@@ -33,7 +33,7 @@ use crate::{
     },
 };
 
-use super::{value_type::ValueType, DowncastError, Object, StaticTypeName, Value};
+use super::{value_type::ValueType, DowncastForBinaryOpError, Object, StaticTypeName, Value};
 
 pub trait UnwrapNotNan: Sized {
     fn unwrap_not_nan(self, stack_trace: &StackTrace) -> ExpressionResult<Float>;
@@ -169,17 +169,17 @@ impl Object for Scalar {
         .into())
     }
     fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_ref::<Scalar>(context.stack_trace)?;
+        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
         self.multiply_by_scalar(context.stack_trace, rhs)
             .map(|rhs| rhs.into())
     }
     fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_ref::<Scalar>(context.stack_trace)?;
+        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
         self.divide_by_measurement(context.stack_trace, rhs)
             .map(|rhs| rhs.into())
     }
     fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast::<Self>(context.stack_trace)?;
+        let rhs = rhs.downcast_for_binary_op::<Self>(context.stack_trace)?;
         Ok(Scalar {
             dimension: self.dimension * *rhs.value as i8,
             value: Float::new(self.value.powf(*rhs.value)).unwrap_not_nan(context.stack_trace)?,
@@ -197,11 +197,11 @@ impl Object for Scalar {
         .into())
     }
     fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Ordering> {
-        let rhs = rhs.downcast_ref::<Self>(context.stack_trace)?;
+        let rhs = rhs.downcast_for_binary_op_ref::<Self>(context.stack_trace)?;
         if self.dimension == rhs.dimension {
             Ok(std::cmp::Ord::cmp(&self.value, &rhs.value))
         } else {
-            Err(DowncastError {
+            Err(DowncastForBinaryOpError {
                 expected: self.type_name(),
                 got: rhs.type_name(),
             }
@@ -324,14 +324,14 @@ impl Scalar {
             if self.dimension == rhs.dimension {
                 Ok(rhs)
             } else {
-                Err(DowncastError {
+                Err(DowncastForBinaryOpError {
                     expected: self.type_name(),
                     got: rhs.type_name(),
                 }
                 .to_error(stack_trace))
             }
         } else {
-            Err(DowncastError {
+            Err(DowncastForBinaryOpError {
                 expected: self.type_name(),
                 got: rhs.type_name(),
             }
@@ -534,7 +534,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             })
         },
         formula = |context: &ExecutionContext, value: Value| -> ExpressionResult<Value> {
-            let value = value.downcast::<Scalar>(context.stack_trace)?;
+            let value = value.downcast_for_binary_op::<Scalar>(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: value.dimension / 2,
@@ -542,7 +542,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             }.into())
         },
         inverse = |context: &ExecutionContext, value: Value| -> ExpressionResult<Value> {
-            let value = value.downcast::<Scalar>(context.stack_trace)?;
+            let value = value.downcast_for_binary_op::<Scalar>(context.stack_trace)?;
 
             Ok(Scalar {
                 dimension: value.dimension * 2,
