@@ -31,6 +31,7 @@ use crate::{
         },
         ExecutionContext,
     },
+    values::DowncastError,
 };
 
 use super::{value_type::ValueType, DowncastForBinaryOpError, Object, StaticTypeName, Value};
@@ -179,12 +180,22 @@ impl Object for Scalar {
             .map(|rhs| rhs.into())
     }
     fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_for_binary_op::<Self>(context.stack_trace)?;
-        Ok(Scalar {
-            dimension: self.dimension * *rhs.value as i8,
-            value: Float::new(self.value.powf(*rhs.value)).unwrap_not_nan(context.stack_trace)?,
+        let rhs = rhs.downcast::<Zero>(context.stack_trace)?;
+
+        if rhs.dimension == Dimension::zero() {
+            Ok(Scalar {
+                dimension: self.dimension * *rhs.value as i8,
+                value: Float::new(self.value.powf(*rhs.value))
+                    .unwrap_not_nan(context.stack_trace)?,
+            }
+            .into())
+        } else {
+            Err(DowncastError {
+                expected: ValueType::Scalar(Some(Dimension::zero())).name(),
+                got: rhs.get_type(context).name(),
+            }
+            .to_error(context.stack_trace))
         }
-        .into())
     }
     fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(self.clone().into())
