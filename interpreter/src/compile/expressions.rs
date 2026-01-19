@@ -2,7 +2,6 @@ use std::{cmp::Ordering, collections::HashSet, path::PathBuf, sync::Arc};
 
 use hashable_map::HashableSet;
 use imstr::ImString;
-use nodes::SourceFile;
 use type_sitter::{HasChild, Node};
 use unwrap_enum::EnumAs;
 
@@ -110,7 +109,7 @@ pub enum Expression {
     MethodCall(AstNode<Box<MethodCall>>),
     LetIn(AstNode<Box<LetIn>>),
     Formula(AstNode<Formula>),
-    Missing(ImString),
+    Malformed(ImString),
 }
 
 impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for Expression {
@@ -543,10 +542,10 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
 
         match result {
             Ok(expression) => Ok(expression),
-            Err(Error::Missing(kind)) => Ok(AstNode::new(
+            Err(Error::Malformed(kind)) => Ok(AstNode::new(
                 file,
                 &value,
-                Self::Missing(ImString::from(kind)),
+                Self::Malformed(ImString::from(kind)),
             )),
             Err(error) => Err(error),
         }
@@ -1209,16 +1208,6 @@ pub type Parser = type_sitter::Parser<nodes::SourceFile<'static>>;
 pub fn new_parser() -> Parser {
     type_sitter::Parser::new(&tree_sitter_command_cad_model::language())
         .expect("Error loading CommandCadModel grammar")
-}
-
-pub fn compile<'t, 'i>(
-    file: &Arc<PathBuf>,
-    input: &'i str,
-    tree: &'t type_sitter::Tree<SourceFile<'static>>,
-) -> Result<AstNode<Expression>, Error<'t, 'i>> {
-    let root = tree.root_node()?;
-
-    Expression::parse(file, input, root.expression()?)
 }
 
 #[cfg(test)]

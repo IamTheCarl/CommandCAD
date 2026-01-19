@@ -233,6 +233,8 @@ dependencies = [
  "interpreter",
  "reedline",
  "termimad",
+ "tree-sitter",
+ "type-sitter",
 ]
 
 [[package]]

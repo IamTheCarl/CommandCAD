@@ -6,7 +6,7 @@ use common_data_types::{ConversionFactor, Dimension, Float, RawFloat};
 use imstr::ImString;
 use std::{path::PathBuf, sync::Arc};
 use tree_sitter::Range;
-use type_sitter::{HasChild, IncorrectKind, Node};
+use type_sitter::{HasChild, IncorrectKind, Node, UntypedNode};
 
 pub use expressions::*;
 
@@ -62,10 +62,10 @@ impl<N> AstNode<N> {
 }
 
 fn unwrap_missing<'t, 'i, N: Node<'t> + 't>(value: &N) -> Result<(), Error<'t, 'i>> {
-    if !value.raw().is_missing() {
+    if !value.has_error() {
         Ok(())
     } else {
-        Err(Error::Missing(value.raw().kind()))
+        Err(Error::Malformed(value.raw().kind()))
     }
 }
 
@@ -273,7 +273,7 @@ pub enum Error<'t, 'i> {
     InvalidUnit(InvalidUnitError<'t, 'i>),
     ParseInt(ParseIntError<'t>),
     ParseNumber(ParseNumberError<'t>),
-    Missing(&'static str),
+    Malformed(&'static str),
 }
 
 impl<'t> std::error::Error for Error<'t, '_> {}
@@ -298,7 +298,7 @@ impl<'t> std::fmt::Display for Error<'t, '_> {
             Error::ParseNumber(parse_number_error) => {
                 write!(f, "failed to parse scalar: {}", parse_number_error.error)
             }
-            Error::Missing(kind) => {
+            Error::Malformed(kind) => {
                 write!(f, "Missing `{kind}`")
             }
         }
@@ -321,6 +321,44 @@ impl<'t> From<ParseNumberError<'t>> for Error<'t, '_> {
     fn from(value: ParseNumberError<'t>) -> Self {
         Self::ParseNumber(value)
     }
+}
+
+pub fn compile<'t, 'i>(
+    file: &Arc<PathBuf>,
+    input: &'i str,
+    tree: &'t RootTree,
+) -> Result<AstNode<Expression>, Error<'t, 'i>> {
+    let root = tree.root_node()?;
+
+    Expression::parse(file, input, root.expression()?)
+}
+
+pub type RootTree = type_sitter::Tree<nodes::SourceFile<'static>>;
+
+pub fn iter_raw_nodes<'t>(tree: &'t RootTree) -> impl Iterator<Item = UntypedNode<'t>> {
+    let mut cursor: type_sitter::TreeCursor = tree.walk();
+
+    std::iter::from_fn(move || loop {
+        let node = cursor.node();
+
+        // Go to the first child, or the next sibling.
+        if cursor.goto_first_child() || cursor.goto_next_sibling() {
+            break Some(node);
+        } else {
+            // No more children.
+            // Work your way back up the tree until you can reach another sibling, or you reach the
+            // root.
+            loop {
+                if !cursor.goto_parent() {
+                    // We have reached the root. We are done iterating.
+                    return Option::None;
+                }
+                if cursor.goto_next_sibling() {
+                    return Some(node);
+                }
+            }
+        }
+    })
 }
 
 /// Compiles a full document. Panics if there are any issues.

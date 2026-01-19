@@ -3,18 +3,22 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 mod arguments;
 use anyhow::{anyhow, Context, Result};
 use arguments::Arguments;
-use ariadne::{Cache, Source};
+use ariadne::{Cache, Label, Report, ReportKind, Source};
 use clap::Parser as _;
 use reedline::{DefaultPrompt, Reedline, Signal};
+use type_sitter::Node as _;
 
 use crate::arguments::Commands;
 
 use interpreter::{
-    build_prelude, compile, execute_expression,
+    build_prelude,
+    compile::{compile, iter_raw_nodes},
+    execute_expression,
     execution::values::BuiltinCallableDatabase,
     new_parser,
     values::{Object, Style, Value},
-    ExecutionContext, ImString, LogMessage, Parser, RuntimeLog, StackScope, StackTrace,
+    ExecutionContext, ImString, LogMessage, Parser, RuntimeLog, SourceReference, StackScope,
+    StackTrace,
 };
 
 fn main() {
@@ -88,6 +92,50 @@ fn repl() {
     }
 }
 
+fn build_syntax_errors<'t>(
+    tree: &'t interpreter::compile::RootTree,
+    repl_file: &'t Arc<PathBuf>,
+    span: SourceReference,
+) -> Option<Report<'t, SourceReference>> {
+    let mut report_builder = Report::build(ReportKind::Error, span);
+    report_builder.set_message("Syntax issues found while parsing");
+
+    let mut has_syntax_issues = false;
+
+    for node in iter_raw_nodes(tree) {
+        if node.is_missing() {
+            let kind = node.raw().kind();
+            report_builder.add_label(
+                Label::new(SourceReference {
+                    file: repl_file.clone(),
+                    range: node.range(),
+                })
+                .with_message(format!("Missing expected node `{kind}`")),
+            );
+
+            has_syntax_issues = true;
+        }
+
+        if node.is_error() {
+            report_builder.add_label(
+                Label::new(SourceReference {
+                    file: repl_file.clone(),
+                    range: node.range(),
+                })
+                .with_message("Could not parse node"),
+            );
+
+            has_syntax_issues = true;
+        }
+    }
+
+    if has_syntax_issues {
+        Some(report_builder.finish())
+    } else {
+        Option::None
+    }
+}
+
 fn run_line(
     parser: &mut Parser,
     prelude: &HashMap<ImString, Value>,
@@ -95,11 +143,11 @@ fn run_line(
     repl_file: &Arc<PathBuf>,
     input: &str,
 ) -> Result<()> {
-    let root = parser
+    let tree = parser
         .parse(input, None)
         .map_err(|error| anyhow!("Failed to parse input: {error:?}"))?;
     let root =
-        compile(&repl_file, input, &root).map_err(|error| anyhow!("Failed to compile: {error}"))?;
+        compile(&repl_file, input, &tree).map_err(|error| anyhow!("Failed to compile: {error}"))?;
 
     let log = StderrLog;
     let context = ExecutionContext {
@@ -108,6 +156,12 @@ fn run_line(
         stack: &StackScope::top(&prelude),
         database: &database,
     };
+
+    if let Some(report) = build_syntax_errors(&tree, repl_file, root.reference.clone()) {
+        report
+            .eprint(ReplFileCache(Source::from(input)))
+            .context("Failed to format syntax error message")?;
+    }
 
     let result = execute_expression(&context, &root);
 

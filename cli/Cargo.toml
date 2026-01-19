@@ -10,3 +10,5 @@ termimad = "0.34.1"
 interpreter = { path = "../interpreter/" }
 anyhow = "1.0.100"
 ariadne = { workspace = true }
+type-sitter = { workspace = true }
+tree-sitter = { workspace = true }

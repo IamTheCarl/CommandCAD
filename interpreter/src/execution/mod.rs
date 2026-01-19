@@ -168,7 +168,7 @@ pub fn find_all_variable_accesses_in_expression(
         | Expression::String(_)
         | Expression::UnsignedInteger(_)
         | Expression::Self_(_)
-        | Expression::Missing(_) => Ok(()),
+        | Expression::Malformed(_) => Ok(()),
     }
 }
 
@@ -299,9 +299,10 @@ pub fn execute_expression(
             compile::Expression::Formula(formula) => {
                 todo!()
             }
-            compile::Expression::Missing(kind) => {
-                Err(GenericFailure(format!("Missing {kind}").into()).to_error(context.stack_trace))
-            }
+            compile::Expression::Malformed(kind) => Err(GenericFailure(
+                format!("Malformed syntax, expected {kind}").into(),
+            )
+            .to_error(context.stack_trace)),
         }
     })
 }
