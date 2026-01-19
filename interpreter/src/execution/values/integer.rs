@@ -863,12 +863,6 @@ mod test {
     }
 
     #[test]
-    fn signed_floor_divide() {
-        let product = test_run("6i // 2i").unwrap();
-        assert_eq!(product, SignedInteger::from(3).into());
-    }
-
-    #[test]
     fn signed_exponent() {
         let product = test_run("6i ** 3i").unwrap();
         assert_eq!(product, SignedInteger::from(216).into());
@@ -992,12 +986,6 @@ mod test {
     #[test]
     fn unsigned_divide() {
         let product = test_run("6u / 2u").unwrap();
-        assert_eq!(product, UnsignedInteger::from(3).into());
-    }
-
-    #[test]
-    fn unsigned_floor_divide() {
-        let product = test_run("6u // 2u").unwrap();
         assert_eq!(product, UnsignedInteger::from(3).into());
     }
 

@@ -748,7 +748,7 @@ mod test {
     #[test]
     fn call_custom_method() {
         let product = test_run(
-            "let object = (value = 5u, method = () -> std.types.UInt: self.value;); in object::method()",
+            "let object = (value = 5u, method = () -> std.types.UInt: self.value); in object::method()",
         )
         .unwrap();
         assert_eq!(product, values::UnsignedInteger::from(5).into());
