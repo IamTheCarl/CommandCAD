@@ -182,11 +182,20 @@ impl UserClosure {
 
         let mut captured_values = HashableMap::new();
         find_all_variable_accesses_in_closure_capture(&source.node, &mut |field_name| {
+            let local_variables = signature
+                .argument_type
+                .members
+                .iter()
+                .map(|(name, _value): (&ImString, _)| name.clone());
+
             let value = context
-                .get_variable(LocatedStr {
-                    location: field_name.reference.clone(),
-                    string: field_name.node.as_str(),
-                })?
+                .get_variable_for_closure(
+                    local_variables,
+                    LocatedStr {
+                        location: field_name.reference.clone(),
+                        string: field_name.node.as_str(),
+                    },
+                )?
                 .clone();
 
             captured_values.insert(field_name.node.clone(), value);

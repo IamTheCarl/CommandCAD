@@ -24,7 +24,8 @@ use super::{
     values::Value,
 };
 use imstr::ImString;
-use std::{collections::HashMap, fmt::Display};
+use levenshtein::levenshtein;
+use std::{cmp::Ordering, collections::HashMap, fmt::Display};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ScopeType {
@@ -98,10 +99,42 @@ impl<'p> StackScope<'p> {
         self.variables.insert(name, value);
     }
 
-    fn iter(&'p self) -> StackScopeIter<'p> {
+    fn iter_visible_scopes(&'p self) -> StackScopeIter<'p> {
         StackScopeIter {
-            current: Some(self),
+            only_visible: true,
+            next: Some(self),
         }
+    }
+
+    pub fn iter_visible_variables(&'p self) -> impl Iterator<Item = (&'p ImString, &'p Value)> {
+        self.iter_visible_scopes()
+            .flat_map(|scope| scope.variables.iter())
+            .chain(self.prelude.iter())
+    }
+
+    pub fn suggest_similar_names(
+        &self,
+        local_variables: impl IntoIterator<Item = ImString>,
+        name: &str,
+    ) -> Vec<ImString> {
+        let mut names: Vec<_> = self
+            .iter_visible_variables()
+            .map(|(name, _value)| name.clone())
+            .chain(local_variables.into_iter())
+            .collect();
+        names.sort_by(|name_a, name_b| {
+            match (name_a.starts_with(name), name_b.starts_with(name)) {
+                (true, false) => Ordering::Less,
+                _ => match levenshtein(name_a, name).cmp(&levenshtein(name_b, name)) {
+                    Ordering::Equal => name_b.cmp(name_a), // They're equel, so just alphabetize
+                    // them to insure consistent test
+                    // results.
+                    ord => ord,
+                },
+            }
+        });
+
+        names
     }
 
     /// Gets a reference to a variable on the stack.
@@ -110,11 +143,12 @@ impl<'p> StackScope<'p> {
     pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(
         &self,
         stack_trace: &StackTrace,
+        local_variables: impl IntoIterator<Item = ImString>,
         name: S,
     ) -> ExpressionResult<&Value> {
         let name = name.into();
 
-        let mut scope_iterator = self.iter();
+        let mut scope_iterator = self.iter_visible_scopes();
         let mut value = None;
 
         // Search the stack for the thing.
@@ -122,15 +156,6 @@ impl<'p> StackScope<'p> {
             if let Some(local_value) = scope.variables.get(name.string) {
                 value = Some(local_value);
                 break;
-            }
-
-            match &scope.ty {
-                // If this scope is isolated, then we should not continue searching up the stack.
-                // Skip to the prelude.
-                ScopeType::Isolated => {
-                    break;
-                }
-                _ => {}
             }
         }
 
@@ -144,7 +169,8 @@ impl<'p> StackScope<'p> {
 
             // We couldn't find it.
             Err(NotInScopeError {
-                variable_name: name.string.to_string(),
+                variable_name: ImString::from(name.string),
+                suggestions: self.suggest_similar_names(local_variables, name.string),
             }
             .to_error(stack_trace.iter().chain([&name.location])))
         }
@@ -152,24 +178,30 @@ impl<'p> StackScope<'p> {
 }
 
 pub struct StackScopeIter<'p> {
-    current: Option<&'p StackScope<'p>>,
+    only_visible: bool,
+    next: Option<&'p StackScope<'p>>,
 }
 
 impl<'p> Iterator for StackScopeIter<'p> {
     type Item = &'p StackScope<'p>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next = self.current.take();
-        if let Some(next) = next {
-            self.current = next.parent;
+        let current = self.next.take();
+        if let Some(current) = current {
+            if !self.only_visible || matches!(current.ty, ScopeType::Inherited) {
+                self.next = current.parent;
+            } else {
+                self.next = None;
+            }
         }
-        next
+        current
     }
 }
 
 #[derive(Debug, Eq, PartialEq)]
 struct NotInScopeError {
-    variable_name: String,
+    variable_name: ImString,
+    suggestions: Vec<ImString>,
 }
 
 impl ErrorType for NotInScopeError {}
@@ -178,8 +210,148 @@ impl Display for NotInScopeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "`{}` could not be found in the current scope",
+            "`{}` could not be found in the current scope. Possible alternatives: ",
             self.variable_name
-        )
+        )?;
+
+        let mut names = self.suggestions.iter().take(3).peekable();
+
+        while let Some(name) = names.next() {
+            if names.peek().is_some() {
+                write!(f, "{name}, ")?;
+            } else {
+                write!(f, "{name}")?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use pretty_assertions::assert_eq;
+
+    use crate::values::{UnsignedInteger, ValueNone};
+
+    use super::*;
+
+    #[test]
+    fn iter_variables() {
+        let stack_trace = StackTrace::test();
+        let prelude = HashMap::from_iter([("a".into(), UnsignedInteger::from(1).into())]);
+        let stack = StackScope::top(&prelude);
+
+        stack
+            .scope(
+                &stack_trace,
+                ScopeType::Inherited,
+                HashMap::from_iter([("b".into(), UnsignedInteger::from(2).into())]),
+                |stack, stack_trace| {
+                    stack
+                        .scope(
+                            &stack_trace,
+                            ScopeType::Inherited,
+                            HashMap::from_iter([("c".into(), UnsignedInteger::from(3).into())]),
+                            |stack, _stack_trace| {
+                                let mut variables =
+                                    stack.iter_visible_variables().collect::<Vec<_>>();
+                                variables.sort_by(|(name_a, _value_a), (name_b, _value_b)| {
+                                    name_a.cmp(name_b)
+                                });
+                                assert_eq!(
+                                    variables,
+                                    vec![
+                                        (&"a".into(), &UnsignedInteger::from(1).into()),
+                                        (&"b".into(), &UnsignedInteger::from(2).into()),
+                                        (&"c".into(), &UnsignedInteger::from(3).into())
+                                    ]
+                                );
+                            },
+                        )
+                        .unwrap();
+                },
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn iter_isolated_variables() {
+        let stack_trace = StackTrace::test();
+        let prelude = HashMap::from_iter([("a".into(), UnsignedInteger::from(1).into())]);
+        let stack = StackScope::top(&prelude);
+
+        stack
+            .scope(
+                &stack_trace,
+                ScopeType::Inherited,
+                HashMap::from_iter([("b".into(), UnsignedInteger::from(2).into())]),
+                |stack, stack_trace| {
+                    stack
+                        .scope(
+                            &stack_trace,
+                            ScopeType::Isolated,
+                            HashMap::from_iter([("c".into(), UnsignedInteger::from(3).into())]),
+                            |stack, _stack_trace| {
+                                let mut variables =
+                                    stack.iter_visible_variables().collect::<Vec<_>>();
+                                variables.sort_by(|(name_a, _value_a), (name_b, _value_b)| {
+                                    name_a.cmp(name_b)
+                                });
+
+                                assert_eq!(
+                                    variables,
+                                    vec![
+                                        (&"a".into(), &UnsignedInteger::from(1).into()),
+                                        (&"c".into(), &UnsignedInteger::from(3).into())
+                                    ]
+                                );
+                            },
+                        )
+                        .unwrap();
+                },
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn suggest_similar_names() {
+        let prelude = HashMap::from_iter([
+            ("abc".into(), ValueNone.into()),
+            ("abcdef".into(), ValueNone.into()),
+            ("123".into(), ValueNone.into()),
+            ("12345".into(), ValueNone.into()),
+        ]);
+        let stack = StackScope::top(&prelude);
+
+        assert_eq!(
+            stack.suggest_similar_names([], "abc"),
+            vec![
+                ImString::from("abc"),
+                ImString::from("abcdef"),
+                ImString::from("123"),
+                ImString::from("12345")
+            ]
+        );
+
+        assert_eq!(
+            stack.suggest_similar_names([], "abcde"),
+            vec![
+                ImString::from("abcdef"),
+                ImString::from("abc"),
+                ImString::from("12345"),
+                ImString::from("123"),
+            ]
+        );
+
+        assert_eq!(
+            stack.suggest_similar_names([], "123"),
+            vec![
+                ImString::from("123"),
+                ImString::from("12345"),
+                ImString::from("abc"),
+                ImString::from("abcdef")
+            ]
+        );
     }
 }

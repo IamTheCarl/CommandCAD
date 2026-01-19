@@ -23,6 +23,7 @@ tempfile = "3.24.0"
 rayon = "1.11.0"
 nom = "8.0.0"
 ariadne = { workspace = true }
+levenshtein = "1.0.5"
 
 [build-dependencies]
 type-sitter-gen = "0.8"

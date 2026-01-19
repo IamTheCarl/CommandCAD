@@ -198,7 +198,16 @@ impl<'c> ExecutionContext<'c> {
     }
 
     pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(&self, name: S) -> ExpressionResult<&Value> {
-        self.stack.get_variable(self.stack_trace, name)
+        self.stack.get_variable(self.stack_trace, [], name)
+    }
+
+    pub fn get_variable_for_closure<'s, S: Into<LocatedStr<'s>>>(
+        &self,
+        local_variables: impl IntoIterator<Item = ImString>,
+        name: S,
+    ) -> ExpressionResult<&Value> {
+        self.stack
+            .get_variable(self.stack_trace, local_variables, name)
     }
 
     pub fn stack_scope<B, R>(
