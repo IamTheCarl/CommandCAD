@@ -396,31 +396,25 @@ macro_rules! build_closure_type {
 #[macro_export]
 macro_rules! build_function_callable {
     ($name:literal ($context:ident: &ExecutionContext $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block) => {{
-        struct BuiltFunction<F: Fn(&$crate::execution::ExecutionContext $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value>> {
+        struct BuiltFunction<F>
+        where
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> ExpressionResult<$crate::execution::values::Value>
+        {
             function: F,
             signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
+            name: String,
         }
 
-        impl<F: Fn(&$crate::execution::ExecutionContext $(, $($ty),*)?) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F> {
+        impl<F> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F>
+        where
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync,
+        {
             fn call(
                 &self,
                 context: &$crate::execution::ExecutionContext,
                 argument: $crate::execution::values::Dictionary,
             ) -> $crate::execution::errors::ExpressionResult<$crate::execution::values::Value> {
-                use $crate::execution::errors::Raise;
-                self.signature
-                    .argument_type
-                    .check_other_qualifies(argument.struct_def())
-                    .map_err(|error| error.to_error(context.stack_trace.iter()))?;
-
-                // Argument is potentially unused if we take no arguments.
-                let mut _argument = self.signature.argument_type.fill_defaults(argument);
-
-                let _data = std::sync::Arc::make_mut(&mut _argument.data);
-                $($(let $arg: $ty = _data.members.remove(stringify!($arg))
-                        .expect("Argument was not present after argument check.").downcast(context.stack_trace)?;)*)?
-
-                    (self.function)(context $(, $($arg),*)?)
+                (self.function)(context, &self.signature, argument)
             }
 
             fn formula_call(
@@ -446,7 +440,7 @@ macro_rules! build_function_callable {
             }
 
             fn name(&self) -> &str {
-                $name
+                &self.name
             }
 
             fn signature(&self) -> &std::sync::Arc<$crate::execution::values::closure::Signature> {
@@ -455,8 +449,30 @@ macro_rules! build_function_callable {
         }
 
         BuiltFunction {
-            function: move |$context: &$crate::execution::ExecutionContext $(, $($arg: $ty),*)?| -> ExpressionResult<$crate::execution::values::Value> { let result: $return_type = $code?; Ok(result.into()) },
+            function: move |
+                $context: &$crate::execution::ExecutionContext,
+                signature: &$crate::execution::values::closure::Signature,
+                argument: $crate::execution::values::Dictionary
+            | -> ExpressionResult<$crate::execution::values::Value> {
+                signature
+                    .argument_type
+                    .check_other_qualifies(argument.struct_def())
+                    .map_err(|error| error.to_error($context.stack_trace.iter()))?;
+
+                // Argument is potentially unused if we take no arguments.
+                let mut _argument = signature.argument_type.fill_defaults(argument);
+
+                let _data = std::sync::Arc::make_mut(&mut _argument.data);
+                $($(let $arg: $ty = _data.members.remove(stringify!($arg))
+                        .expect("Argument was not present after argument check.").downcast::<$ty>($context.stack_trace)?;)*)?
+
+                let result: $return_type = {
+                    $code?
+                };
+                Ok(result.into())
+            },
             signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
+            name: $name.into(),
         }
     }};
 }
@@ -470,15 +486,6 @@ macro_rules! build_function {
 
         $database.register::<$ident>(Box::new(callable))
     }};
-    // ($database:ident,
-    //     $forward_ident:ident, $forward_name:literal, ($forward_context:ident: &ExecutionContext $(, $($forward_arg:ident: $forward_ty:path $(= $forward_default:expr)?),+)?) -> $forward_return_type:ty $forward_code:block,
-    //     reverse = $reverse_ident:ident, $reverse_name:literal, ($reverse_context:ident: &ExecutionContext $(, $($reverse_arg:ident: $reverse_ty:path $(= $reverse_default:expr)?),+)?) -> $reverse_return_type:ty $reverse_code:block
-    // ) => {{
-    //     let $crate::build_function_callable!($forward_name ($forward_context: &ExecutionContext $(, $($forward_arg: $forward_ty $(= $forward_default)?),+)?) -> $forward_return_type $forward_code);
-    //     let reverse = $crate::build_function_callable!($reverse_name ($reverse_context: &ExecutionContext $(, $($reverse_arg: $reverse_ty $(= $reverse_default)?),+)?) -> $reverse_return_type $reverse_code);
-
-    //     $database.register_with_inverse::<$forward_ident, $reverse_ident>(Box::new(forward), Box::new(reverse))
-    // }};
 }
 
 #[macro_export]
