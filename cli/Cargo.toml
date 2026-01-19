@@ -12,3 +12,4 @@ anyhow = "1.0.100"
 ariadne = { workspace = true }
 type-sitter = { workspace = true }
 tree-sitter = { workspace = true }
+nu-ansi-term = "0.50.3"

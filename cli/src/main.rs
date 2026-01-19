@@ -5,7 +5,7 @@ use anyhow::{anyhow, Context, Result};
 use arguments::Arguments;
 use ariadne::{Cache, Label, Report, ReportKind, Source};
 use clap::Parser as _;
-use reedline::{DefaultPrompt, Reedline, Signal};
+use reedline::{DefaultHinter, DefaultPrompt, Reedline, Signal};
 use type_sitter::Node as _;
 
 use crate::arguments::Commands;
@@ -61,7 +61,13 @@ impl<'i> Cache<Arc<PathBuf>> for ReplFileCache<'i> {
 }
 
 fn repl() {
-    let mut line_editor = Reedline::create();
+    let mut line_editor = Reedline::create().with_hinter(Box::new(
+        DefaultHinter::default().with_style(
+            nu_ansi_term::Style::new()
+                .italic()
+                .fg(nu_ansi_term::Color::DarkGray),
+        ),
+    ));
     let prompt = DefaultPrompt::default();
     println!("Welcome to REPL mode. Press Ctrl-C or Ctrl-D to exit");
 

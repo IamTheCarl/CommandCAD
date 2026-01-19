@@ -231,6 +231,7 @@ dependencies = [
  "ariadne",
  "clap",
  "interpreter",
+ "nu-ansi-term",
  "reedline",
  "termimad",
  "tree-sitter",
