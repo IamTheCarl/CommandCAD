@@ -6,7 +6,7 @@ use type_sitter::{HasChild, Node};
 use unwrap_enum::EnumAs;
 
 use crate::{
-    compile::{formula::Formula, unwrap_missing, Scalar},
+    compile::{constraint_set::ConstraintSet, unwrap_missing, Scalar},
     execution::find_all_variable_accesses_in_expression,
 };
 
@@ -108,7 +108,7 @@ pub enum Expression {
     FunctionCall(AstNode<Box<FunctionCall>>),
     MethodCall(AstNode<Box<MethodCall>>),
     LetIn(AstNode<Box<LetIn>>),
-    Formula(AstNode<Formula>),
+    ConstraintSet(AstNode<Arc<ConstraintSet>>),
     Malformed(ImString),
 }
 
@@ -130,18 +130,18 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for Expression {
     }
 }
 
-impl<'t> Parse<'t, nodes::Formula<'t>> for Expression {
+impl<'t> Parse<'t, nodes::ConstraintSet<'t>> for Expression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::Formula<'t>,
+        value: nodes::ConstraintSet<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         unwrap_missing(&value)?;
 
         Ok(AstNode::new(
             file,
             &value,
-            Self::Formula(Formula::parse(file, input, value)?),
+            Self::ConstraintSet(ConstraintSet::parse(file, input, value)?.into_arc()),
         ))
     }
 }
@@ -536,7 +536,7 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
             }
             ChildType::FunctionCall(function_call) => Self::parse(file, input, function_call),
             ChildType::MethodCall(method_call) => Self::parse(file, input, method_call),
-            ChildType::Formula(formula) => Self::parse(file, input, formula),
+            ChildType::ConstraintSet(constraint_set) => Self::parse(file, input, constraint_set),
             ChildType::LetIn(let_in) => Self::parse(file, input, let_in),
         };
 

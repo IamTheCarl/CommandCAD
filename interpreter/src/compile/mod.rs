@@ -1,5 +1,5 @@
+pub mod constraint_set;
 mod expressions;
-mod formula;
 
 use ariadne::Span;
 use common_data_types::{ConversionFactor, Dimension, Float, RawFloat};
@@ -57,6 +57,13 @@ impl<N> AstNode<N> {
         AstNode {
             reference: self.reference,
             node: Box::new(self.node),
+        }
+    }
+
+    fn into_arc(self) -> AstNode<Arc<N>> {
+        AstNode {
+            reference: self.reference,
+            node: Arc::new(self.node),
         }
     }
 }

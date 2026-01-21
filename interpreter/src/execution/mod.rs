@@ -25,6 +25,7 @@ use crate::{
         stack::ScopeType,
         values::BuiltinCallableDatabase,
     },
+    values::{constraint_set::find_all_captured_variables_in_constraint_set, ConstraintSet},
     SourceReference,
 };
 
@@ -155,9 +156,8 @@ pub fn find_all_variable_accesses_in_expression(
             Ok(())
         }
         Expression::Identifier(ast_node) => access_collector(ast_node),
-        Expression::Formula(_) => {
-            // Formulas cannot access external variables.
-            Ok(())
+        Expression::ConstraintSet(constraint_set) => {
+            find_all_captured_variables_in_constraint_set(&constraint_set.node, access_collector)
         }
         Expression::Boolean(_)
         | Expression::Scalar(_)
@@ -305,8 +305,8 @@ pub fn execute_expression(
             compile::Expression::FunctionCall(ast_node) => execute_function_call(context, ast_node),
             compile::Expression::MethodCall(ast_node) => execute_method_call(context, ast_node),
             compile::Expression::LetIn(ast_node) => execute_let_in(context, ast_node),
-            compile::Expression::Formula(formula) => {
-                todo!()
+            compile::Expression::ConstraintSet(constraint_set) => {
+                ConstraintSet::from_ast(context, constraint_set).map(|set| set.into())
             }
             compile::Expression::Malformed(kind) => Err(GenericFailure(
                 format!("Malformed syntax, expected {kind}").into(),

@@ -18,7 +18,7 @@
 use std::{borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
 
 use common_data_types::Dimension;
-use hashable_map::HashableMap;
+use hashable_map::{HashableMap, HashableSet};
 use imstr::ImString;
 
 use super::{
@@ -60,6 +60,7 @@ pub enum ValueType {
     MultiType(Box<ValueType>, Box<ValueType>),
     File,
     Any,
+    ConstraintSet(Arc<HashableSet<ImString>>),
 }
 
 impl From<StructDefinition> for ValueType {
@@ -179,6 +180,24 @@ impl Display for ValueType {
             Self::MultiType(left, right) => write!(f, "{left} | {right}"),
             Self::List(Some(ty)) => write!(f, "[{ty}]"),
             Self::List(Option::None) => write!(f, "[]"),
+            Self::ConstraintSet(variables) => {
+                write!(f, "<<<")?;
+
+                // To get a consistent output, sort the variables.
+                let mut variables: Vec<_> = variables.iter().collect();
+                variables.sort_unstable();
+                let mut variables = variables.iter().peekable();
+
+                while let Some(variable) = variables.next() {
+                    if variables.peek().is_some() {
+                        write!(f, "{variable}, ")?;
+                    } else {
+                        write!(f, "{variable}")?;
+                    }
+                }
+
+                write!(f, ": _ >>>")
+            }
             _ => write!(f, "{}", self.name()),
         }
     }

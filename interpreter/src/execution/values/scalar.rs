@@ -538,22 +538,6 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: this.dimension / 2,
                 value: Float::new(this.value.sqrt()).unwrap_not_nan(context.stack_trace)?
             })
-        },
-        formula = |context: &ExecutionContext, value: Value| -> ExpressionResult<Value> {
-            let value = value.downcast_for_binary_op::<Scalar>(context.stack_trace)?;
-
-            Ok(Scalar {
-                dimension: value.dimension / 2,
-                value: Float::new(value.value.sqrt()).unwrap_not_nan(context.stack_trace)?
-            }.into())
-        },
-        inverse = |context: &ExecutionContext, value: Value| -> ExpressionResult<Value> {
-            let value = value.downcast_for_binary_op::<Scalar>(context.stack_trace)?;
-
-            Ok(Scalar {
-                dimension: value.dimension * 2,
-                value: Float::new(value.value.powi(2)).unwrap_not_nan(context.stack_trace)?
-            }.into())
         }
     );
     build_method!(

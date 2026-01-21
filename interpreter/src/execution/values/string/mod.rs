@@ -199,28 +199,6 @@ fn register_format_method(database: &mut BuiltinCallableDatabase) {
             Ok(IString(ImString::from(output)).into())
         }
 
-        fn formula_call(
-            &self,
-            context: &ExecutionContext,
-            _value: Value,
-        ) -> ExpressionResult<Value> {
-            Err(
-                GenericFailure("Method String::format cannot be used in formulas".into())
-                    .to_error(context.stack_trace),
-            )
-        }
-
-        fn formula_inverse(
-            &self,
-            context: &ExecutionContext,
-            _value: Value,
-        ) -> ExpressionResult<Value> {
-            Err(
-                GenericFailure("Method String::format does not have an inverse".into())
-                    .to_error(context.stack_trace),
-            )
-        }
-
         fn name(&self) -> &str {
             "String::format"
         }

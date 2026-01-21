@@ -56,6 +56,9 @@ pub use string::{formatting::Style, IString};
 mod file;
 pub use file::File;
 
+pub mod constraint_set;
+pub use constraint_set::ConstraintSet;
+
 mod value_type;
 pub use value_type::{StructDefinition, StructMember, ValueType};
 
@@ -284,6 +287,7 @@ pub enum Value {
     Vector3(Vector3),
     Vector4(Vector4),
     File,
+    ConstraintSet,
     // Quaternion,
 }
 

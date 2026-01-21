@@ -1,0 +1,54 @@
+==================
+Equal
+==================
+
+<<<a:a == 1>>>
+
+---
+
+(source_file
+  (expression
+    (constraint_set
+      (constraint_set_fields
+        (identifier))
+      (constraint_set_expression
+        (identifier))
+      (constraint_set_expression
+        (scalar
+          (number))))))
+
+==================
+Precedence
+==================
+
+<<<a, b, c, d: (a + b * c) + c == 1>>>
+
+---
+
+(source_file
+  (expression
+    (constraint_set
+      (constraint_set_fields
+        (identifier)
+        (identifier)
+        (identifier)
+        (identifier))
+      (constraint_set_expression
+        (constraint_set_binary_expression
+          (constraint_set_expression
+            (constraint_set_parenthesis
+              (constraint_set_expression
+                (constraint_set_binary_expression
+                  (constraint_set_expression
+                    (identifier))
+                  (constraint_set_expression
+                    (constraint_set_binary_expression
+                      (constraint_set_expression
+                        (identifier))
+                      (constraint_set_expression
+                        (identifier))))))))
+          (constraint_set_expression
+            (identifier))))
+      (constraint_set_expression
+        (scalar
+          (number))))))

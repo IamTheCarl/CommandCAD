@@ -173,6 +173,251 @@
     }
   },
   {
+    "type": "constraint_set",
+    "named": true,
+    "fields": {
+      "lhs": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "constraint_set_expression",
+            "named": true
+          }
+        ]
+      },
+      "relation": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "!=",
+            "named": false
+          },
+          {
+            "type": "<",
+            "named": false
+          },
+          {
+            "type": "<=",
+            "named": false
+          },
+          {
+            "type": "==",
+            "named": false
+          },
+          {
+            "type": ">",
+            "named": false
+          },
+          {
+            "type": ">=",
+            "named": false
+          }
+        ]
+      },
+      "rhs": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "constraint_set_expression",
+            "named": true
+          }
+        ]
+      },
+      "variables": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "constraint_set_fields",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "constraint_set_binary_expression",
+    "named": true,
+    "fields": {
+      "a": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "constraint_set_expression",
+            "named": true
+          }
+        ]
+      },
+      "b": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "constraint_set_expression",
+            "named": true
+          }
+        ]
+      },
+      "op": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "*",
+            "named": false
+          },
+          {
+            "type": "+",
+            "named": false
+          },
+          {
+            "type": "-",
+            "named": false
+          },
+          {
+            "type": "/",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "constraint_set_expression",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "constraint_set_binary_expression",
+          "named": true
+        },
+        {
+          "type": "constraint_set_method_call",
+          "named": true
+        },
+        {
+          "type": "constraint_set_parenthesis",
+          "named": true
+        },
+        {
+          "type": "constraint_set_unary_expression",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "scalar",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "constraint_set_fields",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "constraint_set_method_call",
+    "named": true,
+    "fields": {
+      "argument": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "constraint_set_expression",
+            "named": true
+          }
+        ]
+      },
+      "self_dictionary": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "constraint_set_expression",
+            "named": true
+          }
+        ]
+      },
+      "to_call": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "constraint_set_parenthesis",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "constraint_set_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "constraint_set_unary_expression",
+    "named": true,
+    "fields": {
+      "op": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "+",
+            "named": false
+          },
+          {
+            "type": "-",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "constraint_set_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "declaration_type",
     "named": true,
     "fields": {},
@@ -254,11 +499,11 @@
           "named": true
         },
         {
-          "type": "dictionary_construction",
+          "type": "constraint_set",
           "named": true
         },
         {
-          "type": "formula",
+          "type": "dictionary_construction",
           "named": true
         },
         {
@@ -334,408 +579,6 @@
           "named": true
         }
       ]
-    }
-  },
-  {
-    "type": "formula",
-    "named": true,
-    "fields": {
-      "lhs": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "relation": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "!=",
-            "named": false
-          },
-          {
-            "type": "<",
-            "named": false
-          },
-          {
-            "type": "<=",
-            "named": false
-          },
-          {
-            "type": "==",
-            "named": false
-          },
-          {
-            "type": ">",
-            "named": false
-          },
-          {
-            "type": ">=",
-            "named": false
-          }
-        ]
-      },
-      "rhs": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "formula_binary_expression",
-    "named": true,
-    "fields": {
-      "a": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "b": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "op": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "&&",
-            "named": false
-          },
-          {
-            "type": "*",
-            "named": false
-          },
-          {
-            "type": "**",
-            "named": false
-          },
-          {
-            "type": "+",
-            "named": false
-          },
-          {
-            "type": "-",
-            "named": false
-          },
-          {
-            "type": "/",
-            "named": false
-          },
-          {
-            "type": "^^",
-            "named": false
-          },
-          {
-            "type": "||",
-            "named": false
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "formula_expression",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "boolean",
-          "named": true
-        },
-        {
-          "type": "formula_binary_expression",
-          "named": true
-        },
-        {
-          "type": "formula_function_call",
-          "named": true
-        },
-        {
-          "type": "formula_method_call",
-          "named": true
-        },
-        {
-          "type": "formula_parenthesis",
-          "named": true
-        },
-        {
-          "type": "formula_unary_expression",
-          "named": true
-        },
-        {
-          "type": "formula_vector2",
-          "named": true
-        },
-        {
-          "type": "formula_vector3",
-          "named": true
-        },
-        {
-          "type": "formula_vector4",
-          "named": true
-        },
-        {
-          "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "scalar",
-          "named": true
-        },
-        {
-          "type": "signed_integer",
-          "named": true
-        },
-        {
-          "type": "unsigned_integer",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "formula_function_call",
-    "named": true,
-    "fields": {
-      "argument": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "to_call": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "formula_method_call",
-    "named": true,
-    "fields": {
-      "argument": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "self_dictionary": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "to_call": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "formula_parenthesis",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "formula_expression",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "formula_unary_expression",
-    "named": true,
-    "fields": {
-      "op": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "!",
-            "named": false
-          },
-          {
-            "type": "+",
-            "named": false
-          },
-          {
-            "type": "-",
-            "named": false
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "formula_expression",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "formula_vector2",
-    "named": true,
-    "fields": {
-      "x": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "y": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "formula_vector3",
-    "named": true,
-    "fields": {
-      "x": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "y": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "z": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "formula_vector4",
-    "named": true,
-    "fields": {
-      "w": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "x": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "y": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      },
-      "z": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "formula_expression",
-            "named": true
-          }
-        ]
-      }
     }
   },
   {

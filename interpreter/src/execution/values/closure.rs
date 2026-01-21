@@ -53,6 +53,7 @@ impl BuiltinCallableDatabase {
         super::list::register_methods(&mut database);
         super::file::register_methods(&mut database);
         super::string::register_methods(&mut database);
+        super::constraint_set::register_methods(&mut database);
 
         database
     }
@@ -282,10 +283,6 @@ impl StaticTypeName for UserClosure {
 pub trait BuiltinCallable: Sync + Send {
     fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value>;
 
-    fn formula_call(&self, context: &ExecutionContext, _value: Value) -> ExpressionResult<Value>;
-    fn formula_inverse(&self, context: &ExecutionContext, _value: Value)
-        -> ExpressionResult<Value>;
-
     fn name(&self) -> &str;
 
     fn signature(&self) -> &Arc<Signature>;
@@ -417,28 +414,6 @@ macro_rules! build_function_callable {
                 (self.function)(context, &self.signature, argument)
             }
 
-            fn formula_call(
-                &self,
-                context: &$crate::execution::ExecutionContext,
-                _value: $crate::execution::values::Value
-            ) -> ExpressionResult<$crate::execution::values::Value> {
-                Err(
-                    $crate::execution::errors::GenericFailure(format!("Function {} cannot be used in formulas", self.name()).into())
-                        .to_error(context.stack_trace),
-                )
-            }
-
-            fn formula_inverse(
-                &self,
-                context: &$crate::execution::ExecutionContext,
-                _value: $crate::execution::values::Value,
-            ) -> ExpressionResult<$crate::execution::values::Value> {
-                Err(
-                    $crate::execution::errors::GenericFailure(format!("Function {} does not have an inverse", self.name()).into())
-                        .to_error(context.stack_trace),
-                )
-            }
-
             fn name(&self) -> &str {
                 &self.name
             }
@@ -491,26 +466,20 @@ macro_rules! build_function {
 #[macro_export]
 macro_rules! build_method_callable {
     ($name:expr,
-        ($context:ident: &ExecutionContext, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block,
-        formula = $formula:expr,
-        inverse = $inverse:expr
+        ($context:ident: &ExecutionContext, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block
     ) => {{
-        struct BuiltFunction<F, FC, FI>
+        struct BuiltFunction<F>
         where
             F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> ExpressionResult<$crate::execution::values::Value>
         {
             function: F,
-            formula: FC,
-            inverse: FI,
             signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
             name: String,
         }
 
-        impl<F, FC, FI> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F, FC, FI>
+        impl<F> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F>
         where
             F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync,
-            FC: Fn(&$crate::execution::ExecutionContext, $crate::execution::values::Value) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync,
-            FI: Fn(&$crate::execution::ExecutionContext, $crate::execution::values::Value) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync
         {
             fn call(
                 &self,
@@ -518,22 +487,6 @@ macro_rules! build_method_callable {
                 argument: $crate::execution::values::Dictionary,
             ) -> $crate::execution::errors::ExpressionResult<$crate::execution::values::Value> {
                 (self.function)(context, &self.signature, argument)
-            }
-
-            fn formula_call(
-                &self,
-                context: &$crate::execution::ExecutionContext,
-                value: $crate::execution::values::Value
-            ) -> ExpressionResult<$crate::execution::values::Value> {
-                (self.formula)(context, value)
-            }
-
-            fn formula_inverse(
-                &self,
-                context: &$crate::execution::ExecutionContext,
-                value: $crate::execution::values::Value,
-            ) -> ExpressionResult<$crate::execution::values::Value> {
-                (self.inverse)(context, value)
             }
 
             fn name(&self) -> &str {
@@ -551,8 +504,6 @@ macro_rules! build_method_callable {
                 signature: &$crate::execution::values::closure::Signature,
                 argument: $crate::execution::values::Dictionary
             | -> ExpressionResult<$crate::execution::values::Value> {
-                // use $crate::execution::errors::Raise;
-
                 let $this = $context.get_variable(
                     $crate::execution::logging::LocatedStr {
                         location: $context.stack_trace.bottom().clone(),
@@ -577,8 +528,6 @@ macro_rules! build_method_callable {
                 };
                 Ok(result.into())
             },
-            formula: $formula,
-            inverse: $inverse,
             signature: $crate::build_closure_signature!(($($($arg: $ty $(= $default)?),*)*) -> $return_type),
             name: $name.into(),
         }
@@ -591,32 +540,7 @@ macro_rules! build_method {
         $ident:ty, $name:expr, ($context:ident: &ExecutionContext, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block
     ) => {{
         let callable = $crate::build_method_callable!($name,
-            ($context: &ExecutionContext, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code,
-            formula = |context: &$crate::execution::ExecutionContext, _value| {
-                Err(
-                    $crate::execution::errors::GenericFailure(format!("Method {} cannot be used in formulas", stringify!($name)).into())
-                        .to_error(context.stack_trace),
-                )
-            },
-            inverse = |context: &$crate::execution::ExecutionContext, _value| {
-                Err(
-                    $crate::execution::errors::GenericFailure(format!("Method {} does not have an inverse", stringify!($name)).into())
-                        .to_error(context.stack_trace),
-                )
-            }
-        );
-
-        $database.register::<$ident>(Box::new(callable))
-    }};
-    ($database:ident,
-        $ident:ty, $name:expr, ($context:ident: &ExecutionContext, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block,
-        formula = $formula:expr,
-        inverse = $inverse:expr
-    ) => {{
-        let callable = $crate::build_method_callable!($name,
-            ($context: &ExecutionContext, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code,
-            formula = $formula,
-            inverse = $inverse
+            ($context: &ExecutionContext, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code
         );
 
         $database.register::<$ident>(Box::new(callable))

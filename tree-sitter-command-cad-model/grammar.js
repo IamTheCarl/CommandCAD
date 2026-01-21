@@ -32,7 +32,7 @@ const PREC = {
 };
 
 const unary_operator_table = ['-', '+', '!'];
-const formula_unary_operator_table = ['-', '+', '!'];
+const constraint_set_unary_operator_table = ['-', '+'];
 
 function make_unary_expression(table, expression) {
   return choice(...table.map((operator) => seq(
@@ -68,18 +68,12 @@ const binary_operator_table = [
   [PREC.xor, '^^'],
 ];
 
-const formula_binary_operator_table = [
-  [PREC.exponential, '**'],
-
+const constraint_set_binary_operator_table = [
   [PREC.multiplicative, '*'],
   [PREC.multiplicative, '/'],
 
   [PREC.additive, '+'],
   [PREC.additive, '-'],
-  
-  [PREC.and, '&&'],
-  [PREC.or, '||'],
-  [PREC.xor, '^^'],
 ];
 
 function make_binary_expression(table, expression) {
@@ -164,7 +158,7 @@ module.exports = grammar({
       $.binary_expression,
       $.function_call,
       $.method_call,
-      $.formula,
+      $.constraint_set,
       $.let_in
     ),
     unary_expression: $=> make_unary_expression(unary_operator_table, $.expression),
@@ -185,7 +179,7 @@ module.exports = grammar({
     list: $ => seq(
       '[',
       repeat(seq($.expression, ',')),
-      optional(seq($.expression)),
+      optional($.expression),
       ']'
     ),
 
@@ -223,38 +217,30 @@ module.exports = grammar({
       field('expression', $.expression),
     )),
     
-    _formula_relation: $ => choice('>', '>=', '==', '<=', '<', '!='),
-    formula: $ => seq('<<<', field('lhs', $.formula_expression), field('relation', $._formula_relation), field('rhs', $.formula_expression), '>>>'),
-    formula_expression: $ => choice(
-      $.formula_parenthesis,
-      $.signed_integer,
-      $.unsigned_integer,
-      $.boolean,
+    _constraint_set_relation: $ => choice('>', '>=', '==', '<=', '<', '!='),
+    constraint_set_fields: $ => seq(repeat(seq($.identifier, ',')), $.identifier),
+    constraint_set: $ => seq(
+      '<<<',
+      field('variables', $.constraint_set_fields), ':',
+      field('lhs', $.constraint_set_expression),
+      field('relation', $._constraint_set_relation),
+      field('rhs', $.constraint_set_expression),
+      '>>>'),
+    constraint_set_expression: $ => choice(
+      $.constraint_set_parenthesis,
       $.scalar,
-      $.formula_vector2,
-      $.formula_vector3,
-      $.formula_vector4,
       $.identifier,
-      $.formula_unary_expression,
-      $.formula_binary_expression,
-      $.formula_method_call,
-      $.formula_function_call
+      $.constraint_set_unary_expression,
+      $.constraint_set_binary_expression,
+      $.constraint_set_method_call,
     ),
-    formula_parenthesis: $ => seq('(', $.formula_expression, ')'),
-    formula_unary_expression: $ => make_unary_expression(formula_unary_operator_table, $.formula_expression),
-    formula_binary_expression: $ => make_binary_expression(formula_binary_operator_table, $.formula_expression),
-    formula_method_call: $ => seq(
+    constraint_set_parenthesis: $ => seq('(', $.constraint_set_expression, ')'),
+    constraint_set_unary_expression: $ => make_unary_expression(constraint_set_unary_operator_table, $.constraint_set_expression),
+    constraint_set_binary_expression: $ => make_binary_expression(constraint_set_binary_operator_table, $.constraint_set_expression),
+    constraint_set_method_call: $ => seq(
       prec.left(PREC.method_call, seq(
-        field('self_dictionary', $.formula_expression), '::', field('to_call', $.identifier), '(', field("argument", $.formula_expression), ')' 
+        field('self_dictionary', $.constraint_set_expression), '::', field('to_call', $.identifier), '(', field("argument", $.constraint_set_expression), ')' 
       ))
     ), 
-    formula_function_call: $ => seq(
-      prec.left(PREC.function_call, seq(
-        field('to_call', $.formula_expression), '(', field("argument", $.formula_expression, ')'),
-      ))
-    ), 
-    formula_vector2: $ => seq('<(', field('x', $.formula_expression), ',', field('y', $.formula_expression), ')>'),
-    formula_vector3: $ => seq('<(', field('x', $.formula_expression), ',', field('y', $.formula_expression), ',', field('z', $.formula_expression), ')>'),
-    formula_vector4: $ => seq('<(', field('x', $.formula_expression), ',', field('y', $.formula_expression), ',', field('z', $.formula_expression), ',', field('w', $.formula_expression), ')>'),
   }
 });
