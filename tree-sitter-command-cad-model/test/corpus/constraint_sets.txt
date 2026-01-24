@@ -11,11 +11,13 @@ Equal
     (constraint_set
       (constraint_set_fields
         (identifier))
-      (constraint_set_expression
-        (identifier))
-      (constraint_set_expression
-        (scalar
-          (number))))))
+      (constraint_set_constraints
+        (constraint
+          (constraint_expression
+            (identifier))
+          (constraint_expression
+            (scalar
+              (number))))))))
 
 ==================
 Precedence
@@ -33,22 +35,57 @@ Precedence
         (identifier)
         (identifier)
         (identifier))
-      (constraint_set_expression
-        (constraint_set_binary_expression
-          (constraint_set_expression
-            (constraint_set_parenthesis
-              (constraint_set_expression
-                (constraint_set_binary_expression
-                  (constraint_set_expression
-                    (identifier))
-                  (constraint_set_expression
-                    (constraint_set_binary_expression
-                      (constraint_set_expression
+      (constraint_set_constraints
+        (constraint
+          (constraint_expression
+            (constraint_binary_expression
+              (constraint_expression
+                (constraint_set_parenthesis
+                  (constraint_expression
+                    (constraint_binary_expression
+                      (constraint_expression
                         (identifier))
-                      (constraint_set_expression
-                        (identifier))))))))
-          (constraint_set_expression
-            (identifier))))
-      (constraint_set_expression
-        (scalar
-          (number))))))
+                      (constraint_expression
+                        (constraint_binary_expression
+                          (constraint_expression
+                            (identifier))
+                          (constraint_expression
+                            (identifier))))))))
+              (constraint_expression
+                (identifier))))
+          (constraint_expression
+            (scalar
+              (number))))))))
+
+==================
+Muultiple constraints
+==================
+
+<<<a: a == 1, a == 2, a == 3>>>
+
+---
+
+(source_file
+  (expression
+    (constraint_set
+      (constraint_set_fields
+        (identifier))
+      (constraint_set_constraints
+        (constraint
+          (constraint_expression
+            (identifier))
+          (constraint_expression
+            (scalar
+              (number))))
+        (constraint
+          (constraint_expression
+            (identifier))
+          (constraint_expression
+            (scalar
+              (number))))
+        (constraint
+          (constraint_expression
+            (identifier))
+          (constraint_expression
+            (scalar
+              (number))))))))

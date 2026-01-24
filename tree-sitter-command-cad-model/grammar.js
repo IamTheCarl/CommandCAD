@@ -217,29 +217,33 @@ module.exports = grammar({
       field('expression', $.expression),
     )),
     
-    _constraint_set_relation: $ => choice('>', '>=', '==', '<=', '<', '!='),
+    _constraint_relation: $ => choice('>', '>=', '==', '<=', '<', '!='),
     constraint_set_fields: $ => seq(repeat(seq($.identifier, ',')), $.identifier),
+    constraint_set_constraints: $ => seq(repeat(seq($.constraint, ',')), $.constraint),
+    constraint: $ => seq(
+      field('lhs', $.constraint_expression),
+      field('relation', $._constraint_relation),
+      field('rhs', $.constraint_expression)
+    ),
     constraint_set: $ => seq(
       '<<<',
       field('variables', $.constraint_set_fields), ':',
-      field('lhs', $.constraint_set_expression),
-      field('relation', $._constraint_set_relation),
-      field('rhs', $.constraint_set_expression),
+      field('constraints', $.constraint_set_constraints),
       '>>>'),
-    constraint_set_expression: $ => choice(
+    constraint_expression: $ => choice(
       $.constraint_set_parenthesis,
       $.scalar,
       $.identifier,
-      $.constraint_set_unary_expression,
-      $.constraint_set_binary_expression,
-      $.constraint_set_method_call,
+      $.constraint_unary_expression,
+      $.constraint_binary_expression,
+      $.constraint_method_call,
     ),
-    constraint_set_parenthesis: $ => seq('(', $.constraint_set_expression, ')'),
-    constraint_set_unary_expression: $ => make_unary_expression(constraint_set_unary_operator_table, $.constraint_set_expression),
-    constraint_set_binary_expression: $ => make_binary_expression(constraint_set_binary_operator_table, $.constraint_set_expression),
-    constraint_set_method_call: $ => seq(
+    constraint_set_parenthesis: $ => seq('(', $.constraint_expression, ')'),
+    constraint_unary_expression: $ => make_unary_expression(constraint_set_unary_operator_table, $.constraint_expression),
+    constraint_binary_expression: $ => make_binary_expression(constraint_set_binary_operator_table, $.constraint_expression),
+    constraint_method_call: $ => seq(
       prec.left(PREC.method_call, seq(
-        field('self_dictionary', $.constraint_set_expression), '::', field('to_call', $.identifier), '(', field("argument", $.constraint_set_expression), ')' 
+        field('self_dictionary', $.constraint_expression), '::', field('to_call', $.identifier), '(', field("argument", $.constraint_expression), ')' 
       ))
     ), 
   }

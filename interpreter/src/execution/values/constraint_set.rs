@@ -19,12 +19,11 @@
 use common_data_types::{Dimension, Float};
 use hashable_map::{HashableMap, HashableSet};
 use imstr::ImString;
-use selen::api::{add, div, eq, float, ge, gt, le, lt, mul, ne, sub, ExprBuilder, Model, VarId};
 
 use crate::{
     compile::{
         constraint_set::{
-            BinaryExpressionOperation, ConstraintSet as AstConstraintSet, ConstraintSetExpression,
+            BinaryExpressionOperation, ConstraintExpression, ConstraintSet as AstConstraintSet,
             Relation, UnaryExpressionOperation,
         },
         AstNode,
@@ -56,14 +55,14 @@ pub fn find_all_captured_variables_in_constraint_set(
 
     fn search_expression(
         variables: &Vec<AstNode<ImString>>,
-        expression: &constraint_set::ConstraintSetExpression,
+        expression: &constraint_set::ConstraintExpression,
         access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
     ) -> ExpressionResult<()> {
         match expression {
-            ConstraintSetExpression::Parenthesis(expression) => {
+            ConstraintExpression::Parenthesis(expression) => {
                 search_expression(variables, &expression.node, access_collector)
             }
-            ConstraintSetExpression::Identifier(ast_node) => {
+            ConstraintExpression::Identifier(ast_node) => {
                 if !variables
                     .iter()
                     .any(|variable| variable.node == ast_node.node)
@@ -74,15 +73,15 @@ pub fn find_all_captured_variables_in_constraint_set(
                     Ok(())
                 }
             }
-            ConstraintSetExpression::UnaryExpression(ast_node) => {
+            ConstraintExpression::UnaryExpression(ast_node) => {
                 search_expression(variables, &ast_node.node.expression.node, access_collector)
             }
-            ConstraintSetExpression::BinaryExpression(ast_node) => {
+            ConstraintExpression::BinaryExpression(ast_node) => {
                 search_expression(variables, &ast_node.node.a.node, access_collector)?;
                 search_expression(variables, &ast_node.node.b.node, access_collector)?;
                 Ok(())
             }
-            ConstraintSetExpression::MethodCall(ast_node) => {
+            ConstraintExpression::MethodCall(ast_node) => {
                 search_expression(
                     variables,
                     &ast_node.node.self_dictionary.node,
@@ -92,20 +91,22 @@ pub fn find_all_captured_variables_in_constraint_set(
 
                 Ok(())
             }
-            ConstraintSetExpression::Scalar(_) => Ok(()),
+            ConstraintExpression::Scalar(_) => Ok(()),
         }
     }
 
-    search_expression(
-        &constraint_set.variables,
-        &constraint_set.left.node,
-        access_collector,
-    )?;
-    search_expression(
-        &constraint_set.variables,
-        &constraint_set.right.node,
-        access_collector,
-    )?;
+    for constraint in constraint_set.constraints.iter() {
+        search_expression(
+            &constraint_set.variables,
+            &constraint.node.left.node,
+            access_collector,
+        )?;
+        search_expression(
+            &constraint_set.variables,
+            &constraint.node.right.node,
+            access_collector,
+        )?;
+    }
 
     Ok(())
 }
@@ -113,13 +114,13 @@ pub fn find_all_captured_variables_in_constraint_set(
 fn display_expression(
     context: &ExecutionContext,
     captured_values: &HashableMap<ImString, Value>,
-    expression: &ConstraintSetExpression,
+    expression: &ConstraintExpression,
     f: &mut dyn std::fmt::Write,
     style: Style,
     precision: Option<u8>,
 ) -> std::fmt::Result {
     match expression {
-        ConstraintSetExpression::Parenthesis(ast_node) => {
+        ConstraintExpression::Parenthesis(ast_node) => {
             write!(f, "(")?;
             display_expression(
                 context,
@@ -133,19 +134,19 @@ fn display_expression(
 
             Ok(())
         }
-        ConstraintSetExpression::Scalar(ast_node) => values::Scalar {
+        ConstraintExpression::Scalar(ast_node) => values::Scalar {
             dimension: ast_node.node.dimension,
             value: ast_node.node.value,
         }
         .format(context, f, style, precision),
-        ConstraintSetExpression::Identifier(ast_node) => {
+        ConstraintExpression::Identifier(ast_node) => {
             if let Some(value) = captured_values.get(&ast_node.node) {
                 value.format(context, f, style, precision)
             } else {
                 write!(f, "{}", ast_node.node)
             }
         }
-        ConstraintSetExpression::UnaryExpression(ast_node) => {
+        ConstraintExpression::UnaryExpression(ast_node) => {
             let operation = match ast_node.node.operation.node {
                 UnaryExpressionOperation::Add => "+",
                 UnaryExpressionOperation::Sub => "-",
@@ -161,7 +162,7 @@ fn display_expression(
                 precision,
             )
         }
-        ConstraintSetExpression::BinaryExpression(ast_node) => {
+        ConstraintExpression::BinaryExpression(ast_node) => {
             let operation = match ast_node.node.operation.node {
                 BinaryExpressionOperation::Mul => "*",
                 BinaryExpressionOperation::Add => "+",
@@ -187,7 +188,7 @@ fn display_expression(
                 precision,
             )
         }
-        ConstraintSetExpression::MethodCall(ast_node) => {
+        ConstraintExpression::MethodCall(ast_node) => {
             display_expression(
                 context,
                 captured_values,
@@ -273,54 +274,62 @@ impl Object for ConstraintSet {
         style: Style,
         precision: Option<u8>,
     ) -> std::fmt::Result {
-        write!(f, "<<<")?;
+        todo!()
+        // write!(f, "<<<")?;
 
-        let mut variables: Vec<_> = self.variables.iter().collect();
-        variables.sort_unstable();
+        // {
+        //     let mut variables: Vec<_> = self.variables.iter().collect();
+        //     variables.sort_unstable();
+        //     let mut variables = self.variables.iter().peekable();
 
-        let mut variables = self.variables.iter().peekable();
+        //     while let Some(variable) = variables.next() {
+        //         if variables.peek().is_some() {
+        //             write!(f, "{variable}, ")?;
+        //         } else {
+        //             write!(f, "{variable}")?;
+        //         }
+        //     }
+        // }
 
-        while let Some(variable) = variables.next() {
-            if variables.peek().is_some() {
-                write!(f, "{variable}, ")?;
-            } else {
-                write!(f, "{variable}")?;
-            }
-        }
+        // write!(f, ": ")?;
 
-        write!(f, ": ")?;
+        // {
+        //     let mut constraints = self.constraints.iter().peekable();
 
-        display_expression(
-            context,
-            &self.captured_values,
-            &self.source.left.node,
-            f,
-            style,
-            precision,
-        )?;
+        //     while let Some(constraint) = constraints.next() {
+        //         display_expression(
+        //             context,
+        //             &self.captured_values,
+        //             &self.constraint.left.node,
+        //             f,
+        //             style,
+        //             precision,
+        //         )?;
 
-        let relation = match self.source.relation {
-            Relation::Less => "<",
-            Relation::LessEqual => "<=",
-            Relation::Equal => "==",
-            Relation::GreaterEqual => ">=",
-            Relation::Greater => ">",
-            Relation::NotEqual => "!=",
-        };
-        write!(f, " {} ", relation)?;
+        //         let relation = match self.source.relation {
+        //             Relation::Less => "<",
+        //             Relation::LessEqual => "<=",
+        //             Relation::Equal => "==",
+        //             Relation::GreaterEqual => ">=",
+        //             Relation::Greater => ">",
+        //             Relation::NotEqual => "!=",
+        //         };
+        //         write!(f, " {} ", relation)?;
 
-        display_expression(
-            context,
-            &self.captured_values,
-            &self.source.right.node,
-            f,
-            style,
-            precision,
-        )?;
+        //         display_expression(
+        //             context,
+        //             &self.captured_values,
+        //             &self.source.right.node,
+        //             f,
+        //             style,
+        //             precision,
+        //         )?;
+        //     }
+        // }
 
-        write!(f, ">>>")?;
+        // write!(f, ">>>")?;
 
-        Ok(())
+        // Ok(())
     }
 
     fn get_attribute(
@@ -362,202 +371,7 @@ impl ConstraintSet {
             captured: &self.captured_values,
         };
 
-        let mut m = Model::default();
-        let mut dimension = Option::None;
-
-        let mut variables = HashMap::new();
-
-        let left = Self::model_expression(
-            context,
-            &value_provider,
-            &mut m,
-            &mut variables,
-            &mut dimension,
-            &self.source.left.node,
-        )?;
-        let right = Self::model_expression(
-            context,
-            &value_provider,
-            &mut m,
-            &mut variables,
-            &mut dimension,
-            &self.source.right.node,
-        )?;
-
-        Self::build_relation(&mut m, &self.source.relation, left, right);
-        let solution = m
-            .solve()
-            .map_err(|error| SolverError(error).to_error(context.stack_trace))?;
-
-        let dimension = dimension.ok_or_else(|| {
-            GenericFailure("Could not determine dimension of constraint set".into())
-                .to_error(context.stack_trace)
-        })?;
-
-        let mut members = HashMap::new();
-        for (variable_name, variable_id) in variables {
-            // Values that do not get solved are our inputs.
-            if let Some(value) = solution.as_float(variable_id) {
-                members.insert(
-                    variable_name,
-                    Scalar {
-                        dimension,
-                        value: Float::new(value).unwrap_not_nan(context.stack_trace)?,
-                    }
-                    .into(),
-                );
-            }
-        }
-
-        // Include the provided values.
-        for (name, value) in provided.data.members.iter() {
-            members.entry(name.clone()).or_insert(value.clone());
-        }
-
-        Ok(Dictionary::new(context, members))
-    }
-
-    fn build_relation(
-        m: &mut Model,
-        relation: &Relation,
-        left: impl Into<ExprBuilder>,
-        right: impl Into<ExprBuilder>,
-    ) {
-        match relation {
-            Relation::Less => lt(m, left, right),
-            Relation::LessEqual => le(m, left, right),
-            Relation::Equal => eq(m, left, right),
-            Relation::GreaterEqual => ge(m, left, right),
-            Relation::Greater => gt(m, left, right),
-            Relation::NotEqual => ne(m, left, right),
-        }
-    }
-
-    fn model_expression(
-        context: &ExecutionContext,
-        value_provider: &ValueProvider<'_>,
-        m: &mut Model,
-        variables: &mut HashMap<ImString, VarId>,
-        dimension: &mut Option<Dimension>,
-        expression: &ConstraintSetExpression,
-    ) -> ExpressionResult<ExprBuilder> {
-        match expression {
-            ConstraintSetExpression::Parenthesis(ast_node) => Self::model_expression(
-                context,
-                value_provider,
-                m,
-                variables,
-                dimension,
-                &ast_node.node,
-            ),
-            ConstraintSetExpression::Scalar(ast_node) => {
-                let value = Scalar {
-                    dimension: ast_node.node.dimension,
-                    value: ast_node.node.value,
-                };
-
-                context.trace_scope(ast_node.reference.clone(), |context| {
-                    Self::build_scalar(context, dimension, value)
-                })
-            }
-            ConstraintSetExpression::Identifier(ast_node) => {
-                context.trace_scope(ast_node.reference.clone(), |context| {
-                    let name = &ast_node.node;
-                    if let Some(value) = value_provider
-                        .get(name)
-                        .filter(|value| !matches!(value, Value::ValueNone(_)))
-                    {
-                        match value {
-                            Value::Scalar(scalar) => {
-                                Self::build_scalar(context, dimension, scalar.clone())
-                            }
-                            value => Err(GenericFailure(
-                                format!(
-                                    "{} types are not supported in constraint sets",
-                                    value.type_name()
-                                )
-                                .into(),
-                            )
-                            .to_error(context.stack_trace)),
-                        }
-                    } else {
-                        let variable = variables
-                            .entry(name.clone())
-                            .or_insert_with(|| m.float(f64::MIN, f64::MAX));
-                        Ok(ExprBuilder::Var(*variable))
-                    }
-                })
-            }
-            ConstraintSetExpression::UnaryExpression(ast_node) => {
-                let expression = Self::model_expression(
-                    context,
-                    value_provider,
-                    m,
-                    variables,
-                    dimension,
-                    &ast_node.node.expression.node,
-                )?;
-
-                match ast_node.node.operation.node {
-                    UnaryExpressionOperation::Add => Ok(expression),
-                    UnaryExpressionOperation::Sub => Ok(expression.mul(-1)),
-                }
-            }
-            ConstraintSetExpression::BinaryExpression(ast_node) => {
-                let a = Self::model_expression(
-                    context,
-                    value_provider,
-                    m,
-                    variables,
-                    dimension,
-                    &ast_node.node.a.node,
-                )?;
-                let b = Self::model_expression(
-                    context,
-                    value_provider,
-                    m,
-                    variables,
-                    dimension,
-                    &ast_node.node.b.node,
-                )?;
-
-                match ast_node.node.operation.node {
-                    BinaryExpressionOperation::Mul => Ok(mul(a, b)),
-                    BinaryExpressionOperation::Add => Ok(add(a, b)),
-                    BinaryExpressionOperation::Sub => Ok(sub(a, b)),
-                    BinaryExpressionOperation::Div => Ok(div(a, b)),
-                }
-            }
-            ConstraintSetExpression::MethodCall(ast_node) => {
-                context.trace_scope(ast_node.reference.clone(), |context| {
-                    Err(
-                        GenericFailure("Methods are not yet supported in constraint sets".into())
-                            .to_error(context.stack_trace),
-                    )
-                })
-            }
-        }
-    }
-
-    fn build_scalar(
-        context: &ExecutionContext,
-        dimension: &mut Option<Dimension>,
-        value: Scalar,
-    ) -> ExpressionResult<ExprBuilder> {
-        if let Some(dimension) = dimension {
-            if value.dimension != Dimension::zero() && *dimension != value.dimension {
-                return Err(GenericFailure(
-                    "All measurements in constraint set must be of the same dimension".into(),
-                )
-                .to_error(context.stack_trace));
-            }
-        } else {
-            if value.dimension != Dimension::zero() {
-                *dimension = Some(value.dimension);
-            }
-        }
-
-        Ok(ExprBuilder::Val(float(*value.value)))
+        Err(GenericFailure("Solver not implemented".into()).to_error(context.stack_trace))
     }
 }
 
@@ -592,17 +406,6 @@ impl std::fmt::Display for DuplicateVariablesError {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Debug)]
-struct SolverError(selen::api::SolverError);
-
-impl ErrorType for SolverError {}
-
-impl std::fmt::Display for SolverError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
     }
 }
 
@@ -658,7 +461,39 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     database.register::<methods::Solve>(Box::new(callable))
 }
 
-// TODO test variable capturing.
 // TODO test formatting
-// TODO test explicitly passing none.
+// TODO test explicitly passing none for a variable.
 // TODO test all 6 constraint types.
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::compile::full_compile;
+
+    #[test]
+    fn capture_variables() {
+        let constraint_set = full_compile("<<<x, y, z, w: a + x == b + y, z + c == w + d>>>");
+        let constraint_set = constraint_set.node.as_constraintset().unwrap();
+
+        let mut captured_variables = HashSet::new();
+        find_all_captured_variables_in_constraint_set(
+            &constraint_set.node,
+            &mut |captured_variable| {
+                captured_variables.insert(captured_variable.node.clone());
+
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            captured_variables,
+            HashSet::from([
+                ImString::from("a"),
+                ImString::from("b"),
+                ImString::from("c"),
+                ImString::from("d")
+            ])
+        );
+    }
+}

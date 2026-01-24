@@ -28,9 +28,7 @@ use unwrap_enum::EnumAs;
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct ConstraintSet {
     pub variables: Vec<AstNode<ImString>>,
-    pub left: AstNode<ConstraintSetExpression>,
-    pub right: AstNode<ConstraintSetExpression>,
-    pub relation: Relation,
+    pub constraints: Vec<AstNode<Constraint>>,
 }
 
 impl<'t> Parse<'t, nodes::ConstraintSet<'t>> for ConstraintSet {
@@ -53,8 +51,46 @@ impl<'t> Parse<'t, nodes::ConstraintSet<'t>> for ConstraintSet {
             variables
         };
 
-        let left = ConstraintSetExpression::parse(file, input, value.lhs()?)?;
-        let right = ConstraintSetExpression::parse(file, input, value.rhs()?)?;
+        let constraints = {
+            let constraints_node = value.constraints()?;
+            let mut cursor = constraints_node.walk();
+
+            let mut constraints = Vec::new();
+            for constraint in constraints_node.constraints(&mut cursor) {
+                constraints.push(Constraint::parse(file, input, constraint?)?);
+            }
+
+            constraints
+        };
+
+        Ok(AstNode::new(
+            file,
+            &value,
+            Self {
+                variables,
+                constraints,
+            },
+        ))
+    }
+}
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub struct Constraint {
+    pub left: AstNode<ConstraintExpression>,
+    pub right: AstNode<ConstraintExpression>,
+    pub relation: Relation,
+}
+
+impl<'t> Parse<'t, nodes::Constraint<'t>> for Constraint {
+    fn parse<'i>(
+        file: &Arc<PathBuf>,
+        input: &'i str,
+        value: nodes::Constraint<'t>,
+    ) -> Result<AstNode<Self>, Error<'t, 'i>> {
+        unwrap_missing(&value)?;
+
+        let left = ConstraintExpression::parse(file, input, value.lhs()?)?;
+        let right = ConstraintExpression::parse(file, input, value.rhs()?)?;
 
         type Operator<'t> = nodes::anon_unions::NotEq_Lt_LtEq_EqEq_Gt_GtEq<'t>;
         let relation = match value.relation()? {
@@ -70,7 +106,6 @@ impl<'t> Parse<'t, nodes::ConstraintSet<'t>> for ConstraintSet {
             file,
             &value,
             Self {
-                variables: variables,
                 left,
                 right,
                 relation,
@@ -90,8 +125,8 @@ pub enum Relation {
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, EnumAs)]
-pub enum ConstraintSetExpression {
-    Parenthesis(Box<AstNode<ConstraintSetExpression>>),
+pub enum ConstraintExpression {
+    Parenthesis(Box<AstNode<ConstraintExpression>>),
     Scalar(AstNode<Scalar>),
     Identifier(AstNode<ImString>),
     UnaryExpression(Box<AstNode<UnaryExpression>>),
@@ -99,18 +134,18 @@ pub enum ConstraintSetExpression {
     MethodCall(Box<AstNode<MethodCall>>),
 }
 
-impl<'t> Parse<'t, nodes::ConstraintSetExpression<'t>> for ConstraintSetExpression {
+impl<'t> Parse<'t, nodes::ConstraintExpression<'t>> for ConstraintExpression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::ConstraintSetExpression<'t>,
+        value: nodes::ConstraintExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        type ChildType<'t> = <nodes::ConstraintSetExpression<'t> as HasChild<'t>>::Child;
+        type ChildType<'t> = <nodes::ConstraintExpression<'t> as HasChild<'t>>::Child;
 
         unwrap_missing(&value)?;
 
         match value.child()? {
-            ChildType::ConstraintSetBinaryExpression(binary_expression) => {
+            ChildType::ConstraintBinaryExpression(binary_expression) => {
                 Self::parse(file, input, binary_expression)
             }
             ChildType::ConstraintSetParenthesis(parenthesis) => {
@@ -122,21 +157,19 @@ impl<'t> Parse<'t, nodes::ConstraintSetExpression<'t>> for ConstraintSetExpressi
                 Self::Identifier(ImString::parse(file, input, ident)?),
             )),
             ChildType::Scalar(scalar) => Self::parse(file, input, scalar),
-            ChildType::ConstraintSetUnaryExpression(unary_expression) => {
+            ChildType::ConstraintUnaryExpression(unary_expression) => {
                 Self::parse(file, input, unary_expression)
             }
-            ChildType::ConstraintSetMethodCall(method_call) => {
-                Self::parse(file, input, method_call)
-            }
+            ChildType::ConstraintMethodCall(method_call) => Self::parse(file, input, method_call),
         }
     }
 }
 
-impl<'t> Parse<'t, nodes::ConstraintSetBinaryExpression<'t>> for ConstraintSetExpression {
+impl<'t> Parse<'t, nodes::ConstraintBinaryExpression<'t>> for ConstraintExpression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::ConstraintSetBinaryExpression<'t>,
+        value: nodes::ConstraintBinaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         unwrap_missing(&value)?;
 
@@ -148,7 +181,7 @@ impl<'t> Parse<'t, nodes::ConstraintSetBinaryExpression<'t>> for ConstraintSetEx
     }
 }
 
-impl<'t> Parse<'t, nodes::ConstraintSetParenthesis<'t>> for ConstraintSetExpression {
+impl<'t> Parse<'t, nodes::ConstraintSetParenthesis<'t>> for ConstraintExpression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
@@ -156,7 +189,7 @@ impl<'t> Parse<'t, nodes::ConstraintSetParenthesis<'t>> for ConstraintSetExpress
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         unwrap_missing(&value)?;
 
-        let expression = value.constraint_set_expression()?;
+        let expression = value.constraint_expression()?;
         Ok(AstNode::new(
             file,
             &value,
@@ -165,7 +198,7 @@ impl<'t> Parse<'t, nodes::ConstraintSetParenthesis<'t>> for ConstraintSetExpress
     }
 }
 
-impl<'t> Parse<'t, nodes::Scalar<'t>> for ConstraintSetExpression {
+impl<'t> Parse<'t, nodes::Scalar<'t>> for ConstraintExpression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
@@ -181,11 +214,11 @@ impl<'t> Parse<'t, nodes::Scalar<'t>> for ConstraintSetExpression {
     }
 }
 
-impl<'t> Parse<'t, nodes::ConstraintSetUnaryExpression<'t>> for ConstraintSetExpression {
+impl<'t> Parse<'t, nodes::ConstraintUnaryExpression<'t>> for ConstraintExpression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::ConstraintSetUnaryExpression<'t>,
+        value: nodes::ConstraintUnaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         unwrap_missing(&value)?;
 
@@ -197,11 +230,11 @@ impl<'t> Parse<'t, nodes::ConstraintSetUnaryExpression<'t>> for ConstraintSetExp
     }
 }
 
-impl<'t> Parse<'t, nodes::ConstraintSetMethodCall<'t>> for ConstraintSetExpression {
+impl<'t> Parse<'t, nodes::ConstraintMethodCall<'t>> for ConstraintExpression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::ConstraintSetMethodCall<'t>,
+        value: nodes::ConstraintMethodCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         unwrap_missing(&value)?;
 
@@ -222,14 +255,14 @@ pub enum UnaryExpressionOperation {
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct UnaryExpression {
     pub operation: AstNode<UnaryExpressionOperation>,
-    pub expression: AstNode<ConstraintSetExpression>,
+    pub expression: AstNode<ConstraintExpression>,
 }
 
-impl<'t> Parse<'t, nodes::ConstraintSetUnaryExpression<'t>> for UnaryExpression {
+impl<'t> Parse<'t, nodes::ConstraintUnaryExpression<'t>> for UnaryExpression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::ConstraintSetUnaryExpression<'t>,
+        value: nodes::ConstraintUnaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         unwrap_missing(&value)?;
 
@@ -244,8 +277,7 @@ impl<'t> Parse<'t, nodes::ConstraintSetUnaryExpression<'t>> for UnaryExpression 
             }
         };
 
-        let expression =
-            ConstraintSetExpression::parse(file, input, value.constraint_set_expression()?)?;
+        let expression = ConstraintExpression::parse(file, input, value.constraint_expression()?)?;
 
         Ok(AstNode::new(
             file,
@@ -269,15 +301,15 @@ pub enum BinaryExpressionOperation {
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct BinaryExpression {
     pub operation: AstNode<BinaryExpressionOperation>,
-    pub a: AstNode<ConstraintSetExpression>,
-    pub b: AstNode<ConstraintSetExpression>,
+    pub a: AstNode<ConstraintExpression>,
+    pub b: AstNode<ConstraintExpression>,
 }
 
-impl<'t> Parse<'t, nodes::ConstraintSetBinaryExpression<'t>> for BinaryExpression {
+impl<'t> Parse<'t, nodes::ConstraintBinaryExpression<'t>> for BinaryExpression {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::ConstraintSetBinaryExpression<'t>,
+        value: nodes::ConstraintBinaryExpression<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         unwrap_missing(&value)?;
 
@@ -293,10 +325,10 @@ impl<'t> Parse<'t, nodes::ConstraintSetBinaryExpression<'t>> for BinaryExpressio
         };
 
         let a = value.a()?;
-        let a = ConstraintSetExpression::parse(file, input, a)?;
+        let a = ConstraintExpression::parse(file, input, a)?;
 
         let b = value.b()?;
-        let b = ConstraintSetExpression::parse(file, input, b)?;
+        let b = ConstraintExpression::parse(file, input, b)?;
 
         Ok(AstNode::new(file, &value, Self { operation, a, b }))
     }
@@ -304,36 +336,35 @@ impl<'t> Parse<'t, nodes::ConstraintSetBinaryExpression<'t>> for BinaryExpressio
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct Vector2 {
-    pub x: AstNode<ConstraintSetExpression>,
-    pub y: AstNode<ConstraintSetExpression>,
+    pub x: AstNode<ConstraintExpression>,
+    pub y: AstNode<ConstraintExpression>,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct Vector3 {
-    pub x: AstNode<ConstraintSetExpression>,
-    pub y: AstNode<ConstraintSetExpression>,
-    pub z: AstNode<ConstraintSetExpression>,
+    pub x: AstNode<ConstraintExpression>,
+    pub y: AstNode<ConstraintExpression>,
+    pub z: AstNode<ConstraintExpression>,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 pub struct MethodCall {
-    pub self_dictionary: AstNode<ConstraintSetExpression>,
+    pub self_dictionary: AstNode<ConstraintExpression>,
     pub to_call: AstNode<ImString>,
-    pub argument: AstNode<ConstraintSetExpression>,
+    pub argument: AstNode<ConstraintExpression>,
 }
 
-impl<'t> Parse<'t, nodes::ConstraintSetMethodCall<'t>> for MethodCall {
+impl<'t> Parse<'t, nodes::ConstraintMethodCall<'t>> for MethodCall {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::ConstraintSetMethodCall<'t>,
+        value: nodes::ConstraintMethodCall<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         unwrap_missing(&value)?;
 
-        let self_dictionary =
-            ConstraintSetExpression::parse(file, input, value.self_dictionary()?)?;
+        let self_dictionary = ConstraintExpression::parse(file, input, value.self_dictionary()?)?;
         let to_call = ImString::parse(file, input, value.to_call()?)?;
-        let argument = ConstraintSetExpression::parse(file, input, value.argument()?)?;
+        let argument = ConstraintExpression::parse(file, input, value.argument()?)?;
 
         Ok(AstNode::new(
             file,
@@ -358,11 +389,12 @@ mod test {
 
     fn comparison_test(input: &str, relation: Relation) {
         let root = full_compile(input);
-        let formula = root.node.as_constraintset().unwrap();
-        let a = &formula.node.variables[0];
-        let left = &formula.node.left;
+        let constraint_set = root.node.as_constraintset().unwrap();
+        let a = &constraint_set.node.variables[0];
+        let constraint = &constraint_set.node.constraints[0];
+        let left = &constraint.node.left;
         let left_ident = left.node.as_identifier().unwrap();
-        let right = &formula.node.right;
+        let right = &constraint.node.right;
         let right_ident = right.node.as_identifier().unwrap();
 
         assert_eq!(
@@ -370,27 +402,32 @@ mod test {
             AstNode {
                 reference: root.reference.clone(),
                 node: Expression::ConstraintSet(AstNode {
-                    reference: formula.reference.clone(),
+                    reference: constraint_set.reference.clone(),
                     node: Arc::new(ConstraintSet {
                         variables: vec![AstNode {
                             reference: a.reference.clone(),
                             node: ImString::from("a")
                         }],
-                        left: AstNode {
-                            reference: left.reference.clone(),
-                            node: ConstraintSetExpression::Identifier(AstNode {
-                                reference: left_ident.reference.clone(),
-                                node: ImString::from("a")
-                            })
-                        },
-                        right: AstNode {
-                            reference: right.reference.clone(),
-                            node: ConstraintSetExpression::Identifier(AstNode {
-                                reference: right_ident.reference.clone(),
-                                node: ImString::from("a")
-                            })
-                        },
-                        relation
+                        constraints: vec![AstNode {
+                            reference: constraint.reference.clone(),
+                            node: Constraint {
+                                left: AstNode {
+                                    reference: left.reference.clone(),
+                                    node: ConstraintExpression::Identifier(AstNode {
+                                        reference: left_ident.reference.clone(),
+                                        node: ImString::from("a")
+                                    })
+                                },
+                                right: AstNode {
+                                    reference: right.reference.clone(),
+                                    node: ConstraintExpression::Identifier(AstNode {
+                                        reference: right_ident.reference.clone(),
+                                        node: ImString::from("a")
+                                    })
+                                },
+                                relation
+                            }
+                        }]
                     })
                 })
             }
@@ -424,13 +461,14 @@ mod test {
 
     fn expression_test(
         input: &str,
-        expression_builder: impl FnOnce(&ConstraintSetExpression) -> ConstraintSetExpression,
+        expression_builder: impl FnOnce(&ConstraintExpression) -> ConstraintExpression,
     ) {
         let root = full_compile(input);
-        let formula = root.node.as_constraintset().unwrap();
-        let a = &formula.node.variables[0];
-        let left = &formula.node.left;
-        let right = &formula.node.right;
+        let constraint_set = root.node.as_constraintset().unwrap();
+        let a = &constraint_set.node.variables[0];
+        let constraint = &constraint_set.node.constraints[0];
+        let left = &constraint.node.left;
+        let right = &constraint.node.right;
         let right_ident = right.node.as_identifier().unwrap();
 
         assert_eq!(
@@ -438,24 +476,29 @@ mod test {
             AstNode {
                 reference: root.reference.clone(),
                 node: Expression::ConstraintSet(AstNode {
-                    reference: formula.reference.clone(),
+                    reference: constraint_set.reference.clone(),
                     node: Arc::new(ConstraintSet {
                         variables: vec![AstNode {
                             reference: a.reference.clone(),
                             node: ImString::from("a")
                         }],
-                        left: AstNode {
-                            reference: left.reference.clone(),
-                            node: expression_builder(&left.node)
-                        },
-                        right: AstNode {
-                            reference: right.reference.clone(),
-                            node: ConstraintSetExpression::Identifier(AstNode {
-                                reference: right_ident.reference.clone(),
-                                node: ImString::from("a")
-                            })
-                        },
-                        relation: Relation::Equal
+                        constraints: vec![AstNode {
+                            reference: constraint.reference.clone(),
+                            node: Constraint {
+                                left: AstNode {
+                                    reference: left.reference.clone(),
+                                    node: expression_builder(&left.node)
+                                },
+                                right: AstNode {
+                                    reference: right.reference.clone(),
+                                    node: ConstraintExpression::Identifier(AstNode {
+                                        reference: right_ident.reference.clone(),
+                                        node: ImString::from("a")
+                                    })
+                                },
+                                relation: Relation::Equal
+                            }
+                        }]
                     })
                 })
             }
@@ -467,9 +510,9 @@ mod test {
         expression_test("<<<a: (a) == a>>>", |expression| {
             let paren = expression.as_parenthesis().unwrap();
             let ident = paren.node.as_identifier().unwrap();
-            ConstraintSetExpression::Parenthesis(Box::new(AstNode {
+            ConstraintExpression::Parenthesis(Box::new(AstNode {
                 reference: paren.reference.clone(),
-                node: ConstraintSetExpression::Identifier(AstNode {
+                node: ConstraintExpression::Identifier(AstNode {
                     reference: ident.reference.clone(),
                     node: ImString::from("a"),
                 }),
@@ -481,7 +524,7 @@ mod test {
     fn scalar() {
         expression_test("<<<a: 5m == a>>>", |expression| {
             let value = expression.as_scalar().unwrap();
-            ConstraintSetExpression::Scalar(AstNode {
+            ConstraintExpression::Scalar(AstNode {
                 reference: value.reference.clone(),
                 node: Scalar {
                     dimension: Dimension::length(),
@@ -496,7 +539,7 @@ mod test {
             let unary = expression.as_unaryexpression().unwrap();
             let operation_ref = &unary.node.operation.reference;
             let ident = unary.node.expression.node.as_identifier().unwrap();
-            ConstraintSetExpression::UnaryExpression(Box::new(AstNode {
+            ConstraintExpression::UnaryExpression(Box::new(AstNode {
                 reference: unary.reference.clone(),
                 node: UnaryExpression {
                     operation: AstNode {
@@ -505,7 +548,7 @@ mod test {
                     },
                     expression: AstNode {
                         reference: unary.node.expression.reference.clone(),
-                        node: ConstraintSetExpression::Identifier(AstNode {
+                        node: ConstraintExpression::Identifier(AstNode {
                             reference: ident.reference.clone(),
                             node: ImString::from("a"),
                         }),
@@ -531,7 +574,7 @@ mod test {
             let operation_ref = &binary.node.operation.reference;
             let ident_a = binary.node.a.node.as_identifier().unwrap();
             let ident_b = binary.node.b.node.as_identifier().unwrap();
-            ConstraintSetExpression::BinaryExpression(Box::new(AstNode {
+            ConstraintExpression::BinaryExpression(Box::new(AstNode {
                 reference: binary.reference.clone(),
                 node: BinaryExpression {
                     operation: AstNode {
@@ -540,14 +583,14 @@ mod test {
                     },
                     a: AstNode {
                         reference: binary.node.a.reference.clone(),
-                        node: ConstraintSetExpression::Identifier(AstNode {
+                        node: ConstraintExpression::Identifier(AstNode {
                             reference: ident_a.reference.clone(),
                             node: ImString::from("c"),
                         }),
                     },
                     b: AstNode {
                         reference: binary.node.b.reference.clone(),
-                        node: ConstraintSetExpression::Identifier(AstNode {
+                        node: ConstraintExpression::Identifier(AstNode {
                             reference: ident_b.reference.clone(),
                             node: ImString::from("b"),
                         }),
@@ -589,12 +632,12 @@ mod test {
                 .unwrap();
             let to_call = &method_call.node.to_call;
             let argument = method_call.node.argument.node.as_identifier().unwrap();
-            ConstraintSetExpression::MethodCall(Box::new(AstNode {
+            ConstraintExpression::MethodCall(Box::new(AstNode {
                 reference: method_call.reference.clone(),
                 node: MethodCall {
                     self_dictionary: AstNode {
                         reference: method_call.node.self_dictionary.reference.clone(),
-                        node: ConstraintSetExpression::Identifier(AstNode {
+                        node: ConstraintExpression::Identifier(AstNode {
                             reference: self_dictionary.reference.clone(),
                             node: ImString::from("b"),
                         }),
@@ -605,7 +648,7 @@ mod test {
                     },
                     argument: AstNode {
                         reference: method_call.node.argument.reference.clone(),
-                        node: ConstraintSetExpression::Identifier(AstNode {
+                        node: ConstraintExpression::Identifier(AstNode {
                             reference: argument.reference.clone(),
                             node: ImString::from("c"),
                         }),
@@ -618,11 +661,12 @@ mod test {
     #[test]
     fn multiple_variables() {
         let root = full_compile("<<<a, b: a == b>>>");
-        let formula = root.node.as_constraintset().unwrap();
-        let variables = &formula.node.variables;
-        let left = &formula.node.left;
+        let constraint_set = root.node.as_constraintset().unwrap();
+        let variables = &constraint_set.node.variables;
+        let constraint = &constraint_set.node.constraints[0];
+        let left = &constraint.node.left;
         let left_ident = left.node.as_identifier().unwrap();
-        let right = &formula.node.right;
+        let right = &constraint.node.right;
         let right_ident = right.node.as_identifier().unwrap();
 
         assert_eq!(
@@ -630,7 +674,7 @@ mod test {
             AstNode {
                 reference: root.reference.clone(),
                 node: Expression::ConstraintSet(AstNode {
-                    reference: formula.reference.clone(),
+                    reference: constraint_set.reference.clone(),
                     node: Arc::new(ConstraintSet {
                         variables: vec![
                             AstNode {
@@ -642,21 +686,26 @@ mod test {
                                 node: ImString::from("b")
                             }
                         ],
-                        left: AstNode {
-                            reference: left.reference.clone(),
-                            node: ConstraintSetExpression::Identifier(AstNode {
-                                reference: left_ident.reference.clone(),
-                                node: ImString::from("a")
-                            })
-                        },
-                        right: AstNode {
-                            reference: right.reference.clone(),
-                            node: ConstraintSetExpression::Identifier(AstNode {
-                                reference: right_ident.reference.clone(),
-                                node: ImString::from("b")
-                            })
-                        },
-                        relation: Relation::Equal
+                        constraints: vec![AstNode {
+                            reference: constraint.reference.clone(),
+                            node: Constraint {
+                                left: AstNode {
+                                    reference: left.reference.clone(),
+                                    node: ConstraintExpression::Identifier(AstNode {
+                                        reference: left_ident.reference.clone(),
+                                        node: ImString::from("a")
+                                    })
+                                },
+                                right: AstNode {
+                                    reference: right.reference.clone(),
+                                    node: ConstraintExpression::Identifier(AstNode {
+                                        reference: right_ident.reference.clone(),
+                                        node: ImString::from("b")
+                                    })
+                                },
+                                relation: Relation::Equal
+                            }
+                        }]
                     })
                 })
             }

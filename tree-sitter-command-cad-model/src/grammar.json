@@ -1763,7 +1763,7 @@
         ]
       }
     },
-    "_constraint_set_relation": {
+    "_constraint_relation": {
       "type": "CHOICE",
       "members": [
         {
@@ -1817,6 +1817,60 @@
         }
       ]
     },
+    "constraint_set_constraints": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "constraint"
+              },
+              {
+                "type": "STRING",
+                "value": ","
+              }
+            ]
+          }
+        },
+        {
+          "type": "SYMBOL",
+          "name": "constraint"
+        }
+      ]
+    },
+    "constraint": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "FIELD",
+          "name": "lhs",
+          "content": {
+            "type": "SYMBOL",
+            "name": "constraint_expression"
+          }
+        },
+        {
+          "type": "FIELD",
+          "name": "relation",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_constraint_relation"
+          }
+        },
+        {
+          "type": "FIELD",
+          "name": "rhs",
+          "content": {
+            "type": "SYMBOL",
+            "name": "constraint_expression"
+          }
+        }
+      ]
+    },
     "constraint_set": {
       "type": "SEQ",
       "members": [
@@ -1838,26 +1892,10 @@
         },
         {
           "type": "FIELD",
-          "name": "lhs",
+          "name": "constraints",
           "content": {
             "type": "SYMBOL",
-            "name": "constraint_set_expression"
-          }
-        },
-        {
-          "type": "FIELD",
-          "name": "relation",
-          "content": {
-            "type": "SYMBOL",
-            "name": "_constraint_set_relation"
-          }
-        },
-        {
-          "type": "FIELD",
-          "name": "rhs",
-          "content": {
-            "type": "SYMBOL",
-            "name": "constraint_set_expression"
+            "name": "constraint_set_constraints"
           }
         },
         {
@@ -1866,7 +1904,7 @@
         }
       ]
     },
-    "constraint_set_expression": {
+    "constraint_expression": {
       "type": "CHOICE",
       "members": [
         {
@@ -1883,15 +1921,15 @@
         },
         {
           "type": "SYMBOL",
-          "name": "constraint_set_unary_expression"
+          "name": "constraint_unary_expression"
         },
         {
           "type": "SYMBOL",
-          "name": "constraint_set_binary_expression"
+          "name": "constraint_binary_expression"
         },
         {
           "type": "SYMBOL",
-          "name": "constraint_set_method_call"
+          "name": "constraint_method_call"
         }
       ]
     },
@@ -1904,7 +1942,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "constraint_set_expression"
+          "name": "constraint_expression"
         },
         {
           "type": "STRING",
@@ -1912,7 +1950,7 @@
         }
       ]
     },
-    "constraint_set_unary_expression": {
+    "constraint_unary_expression": {
       "type": "CHOICE",
       "members": [
         {
@@ -1931,7 +1969,7 @@
                 },
                 {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               ]
             }
@@ -1953,7 +1991,7 @@
                 },
                 {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               ]
             }
@@ -1961,7 +1999,7 @@
         }
       ]
     },
-    "constraint_set_binary_expression": {
+    "constraint_binary_expression": {
       "type": "CHOICE",
       "members": [
         {
@@ -1975,7 +2013,7 @@
                 "name": "a",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               },
               {
@@ -1991,7 +2029,7 @@
                 "name": "b",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               }
             ]
@@ -2008,7 +2046,7 @@
                 "name": "a",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               },
               {
@@ -2024,7 +2062,7 @@
                 "name": "b",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               }
             ]
@@ -2041,7 +2079,7 @@
                 "name": "a",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               },
               {
@@ -2057,7 +2095,7 @@
                 "name": "b",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               }
             ]
@@ -2074,7 +2112,7 @@
                 "name": "a",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               },
               {
@@ -2090,7 +2128,7 @@
                 "name": "b",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               }
             ]
@@ -2098,7 +2136,7 @@
         }
       ]
     },
-    "constraint_set_method_call": {
+    "constraint_method_call": {
       "type": "SEQ",
       "members": [
         {
@@ -2112,7 +2150,7 @@
                 "name": "self_dictionary",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               },
               {
@@ -2136,7 +2174,7 @@
                 "name": "argument",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "constraint_set_expression"
+                  "name": "constraint_expression"
                 }
               },
               {
