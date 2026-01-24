@@ -16,26 +16,19 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use common_data_types::{Dimension, Float};
+use common_data_types::Float;
 use hashable_map::{HashableMap, HashableSet};
 use imstr::ImString;
 
 use crate::{
-    compile::{
-        constraint_set::{
-            BinaryExpressionOperation, ConstraintExpression, ConstraintSet as AstConstraintSet,
-            Relation, UnaryExpressionOperation,
-        },
-        AstNode,
-    },
+    compile::{constraint_set::ConstraintSet as AstConstraintSet, AstNode},
     execution::{
         errors::{ErrorType, ExpressionResult, GenericFailure, Raise},
+        find_all_variable_accesses_in_expression,
         logging::LocatedStr,
     },
     values::{
-        self,
         closure::{BuiltinCallable, Signature},
-        scalar::UnwrapNotNan,
         BuiltinCallableDatabase, BuiltinFunction, Dictionary, MissingAttributeError, Object,
         Scalar, StaticTypeName, StructDefinition, Style, Value, ValueType,
     },
@@ -51,163 +44,31 @@ pub fn find_all_captured_variables_in_constraint_set(
     constraint_set: &AstConstraintSet,
     access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
 ) -> ExpressionResult<()> {
-    use crate::compile::constraint_set;
-
-    fn search_expression(
-        variables: &Vec<AstNode<ImString>>,
-        expression: &constraint_set::ConstraintExpression,
-        access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-    ) -> ExpressionResult<()> {
-        match expression {
-            ConstraintExpression::Parenthesis(expression) => {
-                search_expression(variables, &expression.node, access_collector)
-            }
-            ConstraintExpression::Identifier(ast_node) => {
-                if !variables
-                    .iter()
-                    .any(|variable| variable.node == ast_node.node)
-                {
-                    access_collector(ast_node)
-                } else {
-                    // Is not a captured variable.
-                    Ok(())
-                }
-            }
-            ConstraintExpression::UnaryExpression(ast_node) => {
-                search_expression(variables, &ast_node.node.expression.node, access_collector)
-            }
-            ConstraintExpression::BinaryExpression(ast_node) => {
-                search_expression(variables, &ast_node.node.a.node, access_collector)?;
-                search_expression(variables, &ast_node.node.b.node, access_collector)?;
-                Ok(())
-            }
-            ConstraintExpression::MethodCall(ast_node) => {
-                search_expression(
-                    variables,
-                    &ast_node.node.self_dictionary.node,
-                    access_collector,
-                )?;
-                search_expression(variables, &ast_node.node.argument.node, access_collector)?;
-
-                Ok(())
-            }
-            ConstraintExpression::Scalar(_) => Ok(()),
+    let mut access_collector = |name: &AstNode<ImString>| {
+        if !constraint_set
+            .variables
+            .iter()
+            .any(|variable| variable.node == name.node)
+        {
+            access_collector(name)
+        } else {
+            // Is not a captured variable.
+            Ok(())
         }
-    }
+    };
 
     for constraint in constraint_set.constraints.iter() {
-        search_expression(
-            &constraint_set.variables,
+        find_all_variable_accesses_in_expression(
             &constraint.node.left.node,
-            access_collector,
+            &mut access_collector,
         )?;
-        search_expression(
-            &constraint_set.variables,
+        find_all_variable_accesses_in_expression(
             &constraint.node.right.node,
-            access_collector,
+            &mut access_collector,
         )?;
     }
 
     Ok(())
-}
-
-fn display_expression(
-    context: &ExecutionContext,
-    captured_values: &HashableMap<ImString, Value>,
-    expression: &ConstraintExpression,
-    f: &mut dyn std::fmt::Write,
-    style: Style,
-    precision: Option<u8>,
-) -> std::fmt::Result {
-    match expression {
-        ConstraintExpression::Parenthesis(ast_node) => {
-            write!(f, "(")?;
-            display_expression(
-                context,
-                captured_values,
-                &ast_node.node,
-                f,
-                style,
-                precision,
-            )?;
-            write!(f, ")")?;
-
-            Ok(())
-        }
-        ConstraintExpression::Scalar(ast_node) => values::Scalar {
-            dimension: ast_node.node.dimension,
-            value: ast_node.node.value,
-        }
-        .format(context, f, style, precision),
-        ConstraintExpression::Identifier(ast_node) => {
-            if let Some(value) = captured_values.get(&ast_node.node) {
-                value.format(context, f, style, precision)
-            } else {
-                write!(f, "{}", ast_node.node)
-            }
-        }
-        ConstraintExpression::UnaryExpression(ast_node) => {
-            let operation = match ast_node.node.operation.node {
-                UnaryExpressionOperation::Add => "+",
-                UnaryExpressionOperation::Sub => "-",
-            };
-
-            write!(f, "{operation}")?;
-            display_expression(
-                context,
-                captured_values,
-                &ast_node.node.expression.node,
-                f,
-                style,
-                precision,
-            )
-        }
-        ConstraintExpression::BinaryExpression(ast_node) => {
-            let operation = match ast_node.node.operation.node {
-                BinaryExpressionOperation::Mul => "*",
-                BinaryExpressionOperation::Add => "+",
-                BinaryExpressionOperation::Sub => "-",
-                BinaryExpressionOperation::Div => "/",
-            };
-
-            display_expression(
-                context,
-                captured_values,
-                &ast_node.node.a.node,
-                f,
-                style,
-                precision,
-            )?;
-            write!(f, " {operation} ")?;
-            display_expression(
-                context,
-                captured_values,
-                &ast_node.node.b.node,
-                f,
-                style,
-                precision,
-            )
-        }
-        ConstraintExpression::MethodCall(ast_node) => {
-            display_expression(
-                context,
-                captured_values,
-                &ast_node.node.self_dictionary.node,
-                f,
-                style,
-                precision,
-            )?;
-            write!(f, "::")?;
-            display_expression(
-                context,
-                captured_values,
-                &ast_node.node.argument.node,
-                f,
-                style,
-                precision,
-            )
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -235,6 +96,13 @@ impl ConstraintSet {
                 variables: duplicate_variables,
             }
             .to_error(context.stack_trace));
+        }
+
+        if variables.contains("config") {
+            return Err(
+                GenericFailure("`config` is a reserved name for constraint sets".into())
+                    .to_error(context.stack_trace),
+            );
         }
 
         let mut captured_values = HashMap::new();
@@ -269,67 +137,30 @@ impl Object for ConstraintSet {
 
     fn format(
         &self,
-        context: &ExecutionContext,
+        _context: &ExecutionContext,
         f: &mut dyn std::fmt::Write,
-        style: Style,
-        precision: Option<u8>,
+        _style: Style,
+        _precision: Option<u8>,
     ) -> std::fmt::Result {
-        todo!()
-        // write!(f, "<<<")?;
+        write!(f, "<<<")?;
 
-        // {
-        //     let mut variables: Vec<_> = self.variables.iter().collect();
-        //     variables.sort_unstable();
-        //     let mut variables = self.variables.iter().peekable();
+        {
+            let mut variables: Vec<_> = self.variables.iter().collect();
+            variables.sort();
+            let mut variables = variables.iter().peekable();
 
-        //     while let Some(variable) = variables.next() {
-        //         if variables.peek().is_some() {
-        //             write!(f, "{variable}, ")?;
-        //         } else {
-        //             write!(f, "{variable}")?;
-        //         }
-        //     }
-        // }
+            while let Some(variable) = variables.next() {
+                if variables.peek().is_some() {
+                    write!(f, "{variable}, ")?;
+                } else {
+                    write!(f, "{variable}")?;
+                }
+            }
+        }
 
-        // write!(f, ": ")?;
+        write!(f, ": {} constraints>>>", self.source.constraints.len())?;
 
-        // {
-        //     let mut constraints = self.constraints.iter().peekable();
-
-        //     while let Some(constraint) = constraints.next() {
-        //         display_expression(
-        //             context,
-        //             &self.captured_values,
-        //             &self.constraint.left.node,
-        //             f,
-        //             style,
-        //             precision,
-        //         )?;
-
-        //         let relation = match self.source.relation {
-        //             Relation::Less => "<",
-        //             Relation::LessEqual => "<=",
-        //             Relation::Equal => "==",
-        //             Relation::GreaterEqual => ">=",
-        //             Relation::Greater => ">",
-        //             Relation::NotEqual => "!=",
-        //         };
-        //         write!(f, " {} ", relation)?;
-
-        //         display_expression(
-        //             context,
-        //             &self.captured_values,
-        //             &self.source.right.node,
-        //             f,
-        //             style,
-        //             precision,
-        //         )?;
-        //     }
-        // }
-
-        // write!(f, ">>>")?;
-
-        // Ok(())
+        Ok(())
     }
 
     fn get_attribute(
@@ -349,6 +180,7 @@ impl Object for ConstraintSet {
 
 struct ValueProvider<'l> {
     provided: &'l Dictionary,
+    guesses: &'l HashMap<ImString, Scalar>,
     captured: &'l HashableMap<ImString, Value>,
 }
 
@@ -366,8 +198,25 @@ impl ConstraintSet {
         context: &ExecutionContext,
         provided: Dictionary,
     ) -> ExpressionResult<Dictionary> {
+        // TODO we should permit user configuration, such as precision requirements and initial guesses.
+        let guesses: HashMap<_, _> = self
+            .variables
+            .iter()
+            .filter(|name| provided.data.members.contains_key(name.as_str()))
+            .map(|name| {
+                (
+                    name.clone(),
+                    Scalar {
+                        dimension: todo!(),
+                        value: Float::new(0.0).expect("Zero is somehow NaN"),
+                    },
+                )
+            })
+            .collect();
+
         let value_provider = ValueProvider {
             provided: &provided,
+            guesses: &guesses,
             captured: &self.captured_values,
         };
 
@@ -461,18 +310,17 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     database.register::<methods::Solve>(Box::new(callable))
 }
 
-// TODO test formatting
 // TODO test explicitly passing none for a variable.
 // TODO test all 6 constraint types.
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::compile::full_compile;
+    use crate::{compile::full_compile, execution::test_run, values};
 
     #[test]
     fn capture_variables() {
-        let constraint_set = full_compile("<<<x, y, z, w: a + x == b + y, z + c == w + d>>>");
+        let constraint_set = full_compile("<<<x, y, z, w: a + x :==: b + y, z + c :==: w + d>>>");
         let constraint_set = constraint_set.node.as_constraintset().unwrap();
 
         let mut captured_variables = HashSet::new();
@@ -495,5 +343,11 @@ mod test {
                 ImString::from("d")
             ])
         );
+    }
+
+    #[test]
+    fn formatting() {
+        let product = test_run("\"{value}\"::format(value = <<<x, y: x + y :==: 1m, y + x :==: 2m>>>) == \"<<<x, y: 2 constraints>>>\"").unwrap();
+        assert_eq!(product, values::Boolean(true).into());
     }
 }

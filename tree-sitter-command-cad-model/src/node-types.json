@@ -181,7 +181,7 @@
         "required": true,
         "types": [
           {
-            "type": "constraint_expression",
+            "type": "expression",
             "named": true
           }
         ]
@@ -221,126 +221,7 @@
         "required": true,
         "types": [
           {
-            "type": "constraint_expression",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "constraint_binary_expression",
-    "named": true,
-    "fields": {
-      "a": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "constraint_expression",
-            "named": true
-          }
-        ]
-      },
-      "b": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "constraint_expression",
-            "named": true
-          }
-        ]
-      },
-      "op": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "*",
-            "named": false
-          },
-          {
-            "type": "+",
-            "named": false
-          },
-          {
-            "type": "-",
-            "named": false
-          },
-          {
-            "type": "/",
-            "named": false
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "constraint_expression",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "constraint_binary_expression",
-          "named": true
-        },
-        {
-          "type": "constraint_method_call",
-          "named": true
-        },
-        {
-          "type": "constraint_set_parenthesis",
-          "named": true
-        },
-        {
-          "type": "constraint_unary_expression",
-          "named": true
-        },
-        {
-          "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "scalar",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "constraint_method_call",
-    "named": true,
-    "fields": {
-      "argument": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "constraint_expression",
-            "named": true
-          }
-        ]
-      },
-      "self_dictionary": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "constraint_expression",
-            "named": true
-          }
-        ]
-      },
-      "to_call": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "identifier",
+            "type": "expression",
             "named": true
           }
         ]
@@ -398,51 +279,6 @@
       "types": [
         {
           "type": "identifier",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "constraint_set_parenthesis",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "constraint_expression",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "constraint_unary_expression",
-    "named": true,
-    "fields": {
-      "op": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "+",
-            "named": false
-          },
-          {
-            "type": "-",
-            "named": false
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "constraint_expression",
           "named": true
         }
       ]

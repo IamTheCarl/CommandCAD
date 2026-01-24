@@ -1763,7 +1763,7 @@
         ]
       }
     },
-    "_constraint_relation": {
+    "_relation": {
       "type": "CHOICE",
       "members": [
         {
@@ -1850,23 +1850,31 @@
           "name": "lhs",
           "content": {
             "type": "SYMBOL",
-            "name": "constraint_expression"
+            "name": "expression"
           }
+        },
+        {
+          "type": "STRING",
+          "value": ":"
         },
         {
           "type": "FIELD",
           "name": "relation",
           "content": {
             "type": "SYMBOL",
-            "name": "_constraint_relation"
+            "name": "_relation"
           }
+        },
+        {
+          "type": "STRING",
+          "value": ":"
         },
         {
           "type": "FIELD",
           "name": "rhs",
           "content": {
             "type": "SYMBOL",
-            "name": "constraint_expression"
+            "name": "expression"
           }
         }
       ]
@@ -1901,288 +1909,6 @@
         {
           "type": "STRING",
           "value": ">>>"
-        }
-      ]
-    },
-    "constraint_expression": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "SYMBOL",
-          "name": "constraint_set_parenthesis"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "scalar"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "identifier"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "constraint_unary_expression"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "constraint_binary_expression"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "constraint_method_call"
-        }
-      ]
-    },
-    "constraint_set_parenthesis": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "("
-        },
-        {
-          "type": "SYMBOL",
-          "name": "constraint_expression"
-        },
-        {
-          "type": "STRING",
-          "value": ")"
-        }
-      ]
-    },
-    "constraint_unary_expression": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "SEQ",
-          "members": [
-            {
-              "type": "SEQ",
-              "members": [
-                {
-                  "type": "FIELD",
-                  "name": "op",
-                  "content": {
-                    "type": "STRING",
-                    "value": "-"
-                  }
-                },
-                {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "SEQ",
-          "members": [
-            {
-              "type": "SEQ",
-              "members": [
-                {
-                  "type": "FIELD",
-                  "name": "op",
-                  "content": {
-                    "type": "STRING",
-                    "value": "+"
-                  }
-                },
-                {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "constraint_binary_expression": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "PREC_LEFT",
-          "value": 10,
-          "content": {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "FIELD",
-                "name": "a",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "op",
-                "content": {
-                  "type": "STRING",
-                  "value": "*"
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "b",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "PREC_LEFT",
-          "value": 10,
-          "content": {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "FIELD",
-                "name": "a",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "op",
-                "content": {
-                  "type": "STRING",
-                  "value": "/"
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "b",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "PREC_LEFT",
-          "value": 9,
-          "content": {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "FIELD",
-                "name": "a",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "op",
-                "content": {
-                  "type": "STRING",
-                  "value": "+"
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "b",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "PREC_LEFT",
-          "value": 9,
-          "content": {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "FIELD",
-                "name": "a",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "op",
-                "content": {
-                  "type": "STRING",
-                  "value": "-"
-                }
-              },
-              {
-                "type": "FIELD",
-                "name": "b",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "constraint_method_call": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "PREC_LEFT",
-          "value": 15,
-          "content": {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "FIELD",
-                "name": "self_dictionary",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              },
-              {
-                "type": "STRING",
-                "value": "::"
-              },
-              {
-                "type": "FIELD",
-                "name": "to_call",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "identifier"
-                }
-              },
-              {
-                "type": "STRING",
-                "value": "("
-              },
-              {
-                "type": "FIELD",
-                "name": "argument",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "constraint_expression"
-                }
-              },
-              {
-                "type": "STRING",
-                "value": ")"
-              }
-            ]
-          }
         }
       ]
     }

@@ -2,10 +2,10 @@
 Equal
 ==================
 
-<<<a:a == 1>>>
+<<<a:a :==: 1>>>
 
 ---
-
+    
 (source_file
   (expression
     (constraint_set
@@ -13,9 +13,9 @@ Equal
         (identifier))
       (constraint_set_constraints
         (constraint
-          (constraint_expression
+          (expression
             (identifier))
-          (constraint_expression
+          (expression
             (scalar
               (number))))))))
 
@@ -23,10 +23,10 @@ Equal
 Precedence
 ==================
 
-<<<a, b, c, d: (a + b * c) + c == 1>>>
+<<<a, b, c, d: (a + b * c) + c :==: 1>>>
 
 ---
-
+    
 (source_file
   (expression
     (constraint_set
@@ -37,23 +37,23 @@ Precedence
         (identifier))
       (constraint_set_constraints
         (constraint
-          (constraint_expression
-            (constraint_binary_expression
-              (constraint_expression
-                (constraint_set_parenthesis
-                  (constraint_expression
-                    (constraint_binary_expression
-                      (constraint_expression
+          (expression
+            (binary_expression
+              (expression
+                (parenthesis
+                  (expression
+                    (binary_expression
+                      (expression
                         (identifier))
-                      (constraint_expression
-                        (constraint_binary_expression
-                          (constraint_expression
+                      (expression
+                        (binary_expression
+                          (expression
                             (identifier))
-                          (constraint_expression
+                          (expression
                             (identifier))))))))
-              (constraint_expression
+              (expression
                 (identifier))))
-          (constraint_expression
+          (expression
             (scalar
               (number))))))))
 
@@ -61,7 +61,7 @@ Precedence
 Muultiple constraints
 ==================
 
-<<<a: a == 1, a == 2, a == 3>>>
+<<<a: a :==: 1, a :==: 2, a :==: 3>>>
 
 ---
 
@@ -72,20 +72,20 @@ Muultiple constraints
         (identifier))
       (constraint_set_constraints
         (constraint
-          (constraint_expression
+          (expression
             (identifier))
-          (constraint_expression
+          (expression
             (scalar
               (number))))
         (constraint
-          (constraint_expression
+          (expression
             (identifier))
-          (constraint_expression
+          (expression
             (scalar
               (number))))
         (constraint
-          (constraint_expression
+          (expression
             (identifier))
-          (constraint_expression
+          (expression
             (scalar
               (number))))))))
