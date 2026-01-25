@@ -42,6 +42,8 @@ use imstr::ImString;
 use logging::LocatedStr;
 pub use logging::{LogLevel, LogMessage, RuntimeLog, StackTrace};
 pub use stack::StackScope;
+mod store;
+pub use store::Store;
 
 use values::{
     closure::find_all_variable_accesses_in_closure_capture,
@@ -178,6 +180,7 @@ pub struct ExecutionContext<'c> {
     pub stack_trace: &'c StackTrace<'c>,
     pub stack: &'c StackScope<'c>,
     pub database: &'c BuiltinCallableDatabase,
+    pub store: &'c Store,
 }
 
 impl<'c> ExecutionContext<'c> {
@@ -187,10 +190,8 @@ impl<'c> ExecutionContext<'c> {
     {
         self.stack_trace.trace_scope(reference, move |stack_trace| {
             let context = ExecutionContext {
-                log: self.log,
                 stack_trace: &stack_trace,
-                stack: self.stack,
-                database: self.database,
+                ..*self
             };
 
             code(&context)
@@ -222,10 +223,9 @@ impl<'c> ExecutionContext<'c> {
         self.stack
             .scope(self.stack_trace, mode, variables, |stack, stack_trace| {
                 let context = ExecutionContext {
-                    log: self.log,
                     stack_trace: &stack_trace,
                     stack: &stack,
-                    database: self.database,
+                    ..*self
                 };
 
                 block(&context)
@@ -375,10 +375,9 @@ fn execute_let_in(
                 let mut buffer = Vec::new();
                 for group in expression.node.compute_groups() {
                     let context = ExecutionContext {
-                        log: context.log,
                         stack_trace,
                         stack,
-                        database: context.database,
+                        ..*context
                     };
 
                     buffer.par_extend(group.par_iter().map(|assignment| {
@@ -395,10 +394,9 @@ fn execute_let_in(
                 }
 
                 let context = ExecutionContext {
-                    log: context.log,
                     stack_trace,
                     stack,
-                    database: context.database,
+                    ..*context
                 };
 
                 let node = &expression.node;
@@ -496,21 +494,48 @@ pub fn execute_if_expression(
 
 #[cfg(test)]
 pub(crate) fn test_run(input: &str) -> ExpressionResult<Value> {
+    let root = compile::full_compile(input);
+
+    test_context([], |context| execute_expression(context, &root))
+}
+
+#[cfg(test)]
+pub(crate) fn test_context<R>(
+    extra_prelude: impl IntoIterator<Item = (ImString, Value)>,
+    f: impl FnOnce(&ExecutionContext) -> R,
+) -> R {
+    let database = BuiltinCallableDatabase::new();
+    test_context_custom_database(database, extra_prelude, f)
+}
+
+#[cfg(test)]
+pub(crate) fn test_context_custom_database<R>(
+    database: BuiltinCallableDatabase,
+    extra_prelude: impl IntoIterator<Item = (ImString, Value)>,
+    f: impl FnOnce(&ExecutionContext) -> R,
+) -> R {
     use standard_environment::build_prelude;
     use std::sync::Mutex;
+    use tempfile::TempDir;
 
-    let root = compile::full_compile(input);
-    let database = BuiltinCallableDatabase::new();
-    let prelude = build_prelude(&database);
+    let mut prelude = build_prelude(&database).unwrap();
+
+    for (name, value) in extra_prelude.into_iter() {
+        prelude.insert(name, value);
+    }
+
+    let store_directory = TempDir::new().unwrap();
+    let store = Store::new(store_directory.path());
 
     let context = ExecutionContext {
         log: &Mutex::new(Vec::new()),
         stack_trace: &StackTrace::test(),
         stack: &StackScope::top(&prelude),
         database: &database,
+        store: &store,
     };
 
-    execute_expression(&context, &root)
+    f(&context)
 }
 
 #[cfg(test)]

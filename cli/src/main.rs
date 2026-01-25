@@ -6,6 +6,7 @@ use arguments::Arguments;
 use ariadne::{Cache, Label, Report, ReportKind, Source};
 use clap::Parser as _;
 use reedline::{DefaultHinter, DefaultPrompt, Reedline, Signal};
+use tempfile::TempDir;
 use type_sitter::Node as _;
 
 use crate::arguments::Commands;
@@ -18,14 +19,18 @@ use interpreter::{
     new_parser,
     values::{Object, Style, Value},
     ExecutionContext, ImString, LogMessage, Parser, RuntimeLog, SourceReference, StackScope,
-    StackTrace,
+    StackTrace, Store,
 };
 
 fn main() {
     let arguments = Arguments::parse();
 
-    match arguments.command {
+    let result = match arguments.command {
         Commands::Repl => repl(),
+    };
+
+    if let Err(error) = result {
+        println!("Fatal error: {error:?}");
     }
 }
 
@@ -60,7 +65,7 @@ impl<'i> Cache<Arc<PathBuf>> for ReplFileCache<'i> {
     }
 }
 
-fn repl() {
+fn repl() -> Result<()> {
     let mut line_editor = Reedline::create().with_hinter(Box::new(
         DefaultHinter::default().with_style(
             nu_ansi_term::Style::new()
@@ -75,7 +80,7 @@ fn repl() {
     let mut parser = new_parser();
 
     let database = BuiltinCallableDatabase::new();
-    let prelude = build_prelude(&database);
+    let prelude = build_prelude(&database).context("Failed to build prelude")?;
 
     loop {
         let sig = line_editor.read_line(&prompt);
@@ -89,7 +94,7 @@ fn repl() {
             }
             Ok(Signal::CtrlD) | Ok(Signal::CtrlC) => {
                 println!("\nAborted!");
-                break;
+                break Ok(());
             }
             x => {
                 println!("Event: {:?}", x);
@@ -155,12 +160,19 @@ fn run_line(
     let root =
         compile(&repl_file, input, &tree).map_err(|error| anyhow!("Failed to compile: {error}"))?;
 
+    let store_directory = TempDir::new().unwrap();
+    let store = Store::new(store_directory.path());
+
+    println!("Store is located at {:?}", store_directory.path());
+    println!("Store will be deleted on exit.");
+
     let log = StderrLog;
     let context = ExecutionContext {
         log: &log as &dyn RuntimeLog,
         stack_trace: &StackTrace::top(root.reference.clone()),
         stack: &StackScope::top(&prelude),
         database: &database,
+        store: &store,
     };
 
     if let Some(report) = build_syntax_errors(&tree, repl_file, root.reference.clone()) {

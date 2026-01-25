@@ -24,13 +24,13 @@ use tempfile::NamedTempFile;
 use crate::{
     build_method,
     execution::{
-        errors::{GenericFailure, Raise as _},
+        errors::GenericFailure,
         logging::{LogLevel, LogMessage},
         values::{
             string::formatting::Style, BuiltinCallableDatabase, IString, Object, StaticTypeName,
             ValueType,
         },
-        ExecutionContext, ExpressionResult,
+        ExecutionContext,
     },
 };
 

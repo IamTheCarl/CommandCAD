@@ -526,9 +526,8 @@ impl Display for TypeQualificationError {
 #[cfg(test)]
 mod test {
     use pretty_assertions::assert_eq;
-    use std::sync::Mutex;
 
-    use crate::execution::{build_prelude, logging::StackTrace, stack::StackScope, test_run};
+    use crate::execution::{test_context, test_run};
 
     use super::*;
 
@@ -654,155 +653,106 @@ mod test {
 
     #[test]
     fn type_closure() {
-        let closure = test_run("() -> std.types.None: std.consts.None").unwrap();
-        let closure = closure.as_userclosure().unwrap();
+        test_context([], |context| {
+            let closure = test_run("() -> std.types.None: std.consts.None").unwrap();
+            let closure = closure.as_userclosure().unwrap();
 
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        closure
-            .get_type(&context)
-            .check_other_qualifies(&closure.get_type(&context))
-            .unwrap();
+            closure
+                .get_type(&context)
+                .check_other_qualifies(&closure.get_type(&context))
+                .unwrap();
+        })
     }
 
     #[test]
     fn type_empty_dictionary() {
-        let structure = test_run("()").unwrap();
-        let structure = structure.as_dictionary().unwrap();
+        test_context([], |context| {
+            let structure = test_run("()").unwrap();
+            let structure = structure.as_dictionary().unwrap();
 
-        let dictionary = test_run("()").unwrap();
-        let dictionary = dictionary.as_dictionary().unwrap();
+            let dictionary = test_run("()").unwrap();
+            let dictionary = dictionary.as_dictionary().unwrap();
 
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        structure
-            .get_type(&context)
-            .check_other_qualifies(&dictionary.get_type(&context))
-            .unwrap();
+            structure
+                .get_type(&context)
+                .check_other_qualifies(&dictionary.get_type(&context))
+                .unwrap();
+        })
     }
 
     #[test]
     fn type_dictionary_with_value() {
-        let structure = test_run("(a: std.types.None)").unwrap();
-        let structure = structure.as_valuetype().unwrap();
+        test_context([], |context| {
+            let structure = test_run("(a: std.types.None)").unwrap();
+            let structure = structure.as_valuetype().unwrap();
 
-        let dictionary = test_run("(a = std.consts.None)").unwrap();
-        let dictionary = dictionary.as_dictionary().unwrap();
+            let dictionary = test_run("(a = std.consts.None)").unwrap();
+            let dictionary = dictionary.as_dictionary().unwrap();
 
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        structure
-            .check_other_qualifies(&dictionary.get_type(&context))
-            .unwrap();
+            structure
+                .check_other_qualifies(&dictionary.get_type(&context))
+                .unwrap();
+        })
     }
 
     #[test]
     fn type_dictionary_with_length() {
-        let structure = test_run("(a: std.scalar.Length)").unwrap();
-        let structure = structure.as_valuetype().unwrap();
+        test_context([], |context| {
+            let structure = test_run("(a: std.scalar.Length)").unwrap();
+            let structure = structure.as_valuetype().unwrap();
 
-        let dictionary = test_run("(a = 1m)").unwrap();
-        let dictionary = dictionary.as_dictionary().unwrap();
+            let dictionary = test_run("(a = 1m)").unwrap();
+            let dictionary = dictionary.as_dictionary().unwrap();
 
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        structure
-            .check_other_qualifies(&dictionary.get_type(&context))
-            .unwrap();
+            structure
+                .check_other_qualifies(&dictionary.get_type(&context))
+                .unwrap();
+        })
     }
 
     #[test]
     fn type_dictionary_with_extra_value() {
-        let structure = test_run("(a: std.types.None)").unwrap();
-        let structure = structure.as_valuetype().unwrap();
+        test_context([], |context| {
+            let structure = test_run("(a: std.types.None)").unwrap();
+            let structure = structure.as_valuetype().unwrap();
 
-        let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
-        let dictionary = dictionary.as_dictionary().unwrap();
+            let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
+            let dictionary = dictionary.as_dictionary().unwrap();
 
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        structure
-            .check_other_qualifies(&dictionary.get_type(&context))
-            .unwrap_err();
+            structure
+                .check_other_qualifies(&dictionary.get_type(&context))
+                .unwrap_err();
+        })
     }
 
     #[test]
     fn type_dictionary_varadic() {
-        let structure = test_run("(a: std.types.None, ...)").unwrap();
-        let structure = structure.as_valuetype().unwrap();
+        test_context([], |context| {
+            let structure = test_run("(a: std.types.None, ...)").unwrap();
+            let structure = structure.as_valuetype().unwrap();
 
-        let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
-        let dictionary = dictionary.as_dictionary().unwrap();
+            let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
+            let dictionary = dictionary.as_dictionary().unwrap();
 
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        structure
-            .check_other_qualifies(&dictionary.get_type(&context))
-            .unwrap();
+            structure
+                .check_other_qualifies(&dictionary.get_type(&context))
+                .unwrap();
+        })
     }
 
     #[test]
     fn type_dictionary_nested() {
-        let structure = test_run("(a: (b: std.types.None))").unwrap();
-        let structure = structure.as_valuetype().unwrap();
+        test_context([], |context| {
+            let structure = test_run("(a: (b: std.types.None))").unwrap();
+            let structure = structure.as_valuetype().unwrap();
 
-        let dictionary = test_run("(a = (b = std.consts.None))").unwrap();
-        let dictionary = dictionary.as_dictionary().unwrap();
+            let dictionary = test_run("(a = (b = std.consts.None))").unwrap();
+            let dictionary = dictionary.as_dictionary().unwrap();
 
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        structure
-            .check_other_qualifies(&dictionary.get_type(&context))
-            .unwrap();
+            structure
+                .check_other_qualifies(&dictionary.get_type(&context))
+                .unwrap();
+        })
     }
 
     #[test]
@@ -858,61 +808,45 @@ mod test {
 
     #[test]
     fn value_type_any_value() {
-        ValueType::Any
-            .check_other_qualifies(&ValueType::TypeNone)
-            .unwrap();
+        test_context([], |context| {
+            ValueType::Any
+                .check_other_qualifies(&ValueType::TypeNone)
+                .unwrap();
 
-        ValueType::Any
-            .check_other_qualifies(&ValueType::Boolean)
-            .unwrap();
+            ValueType::Any
+                .check_other_qualifies(&ValueType::Boolean)
+                .unwrap();
 
-        ValueType::Any
-            .check_other_qualifies(&ValueType::SignedInteger)
-            .unwrap();
+            ValueType::Any
+                .check_other_qualifies(&ValueType::SignedInteger)
+                .unwrap();
 
-        ValueType::Any
-            .check_other_qualifies(&ValueType::UnsignedInteger)
-            .unwrap();
+            ValueType::Any
+                .check_other_qualifies(&ValueType::UnsignedInteger)
+                .unwrap();
 
-        ValueType::Any
-            .check_other_qualifies(&ValueType::Scalar(Some(Dimension::length())))
-            .unwrap();
+            ValueType::Any
+                .check_other_qualifies(&ValueType::Scalar(Some(Dimension::length())))
+                .unwrap();
 
-        let closure = test_run("() -> std.types.None: std.consts.None").unwrap();
-        let closure = closure.as_userclosure().unwrap();
+            let closure = test_run("() -> std.types.None: std.consts.None").unwrap();
+            let closure = closure.as_userclosure().unwrap();
 
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
+            ValueType::Any
+                .check_other_qualifies(&closure.get_type(&context))
+                .unwrap();
 
-        ValueType::Any
-            .check_other_qualifies(&closure.get_type(&context))
-            .unwrap();
+            let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
+            let dictionary = dictionary.as_dictionary().unwrap();
 
-        let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
-        let dictionary = dictionary.as_dictionary().unwrap();
+            ValueType::Any
+                .check_other_qualifies(&dictionary.get_type(&context))
+                .unwrap();
 
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        ValueType::Any
-            .check_other_qualifies(&dictionary.get_type(&context))
-            .unwrap();
-
-        ValueType::Any
-            .check_other_qualifies(&ValueType::ValueType)
-            .unwrap();
+            ValueType::Any
+                .check_other_qualifies(&ValueType::ValueType)
+                .unwrap();
+        })
     }
 
     #[test]

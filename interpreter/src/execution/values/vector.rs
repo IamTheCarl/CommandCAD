@@ -974,91 +974,72 @@ impl StaticType for nalgebra::Vector4<Float> {
 
 #[cfg(test)]
 mod test {
-    use crate::execution::{build_prelude, stack::StackScope, test_run, values::Boolean};
+    use crate::execution::{test_context, test_run, values::Boolean};
     use pretty_assertions::assert_eq;
-    use std::sync::Mutex;
 
     use super::*;
 
     #[test]
     fn construct_vector2() {
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-        let product = test_run("<(1m, 2m)>").unwrap();
-        assert_eq!(
-            product,
-            Vector2::new(&context, Dimension::length(), [1.0, 2.0])
-                .unwrap()
-                .into()
-        );
+        test_context([], |context| {
+            let product = test_run("<(1m, 2m)>").unwrap();
+            assert_eq!(
+                product,
+                Vector2::new(&context, Dimension::length(), [1.0, 2.0])
+                    .unwrap()
+                    .into()
+            );
 
-        let product = test_run("<(-1m, -2m)>").unwrap();
-        assert_eq!(
-            product,
-            Vector2::new(&context, Dimension::length(), [-1.0, -2.0])
-                .unwrap()
-                .into()
-        );
+            let product = test_run("<(-1m, -2m)>").unwrap();
+            assert_eq!(
+                product,
+                Vector2::new(&context, Dimension::length(), [-1.0, -2.0])
+                    .unwrap()
+                    .into()
+            );
+        })
     }
 
     #[test]
     fn construct_vector3() {
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-        let product = test_run("<(1m, 2m, 3m)>").unwrap();
-        assert_eq!(
-            product,
-            Vector3::new(&context, Dimension::length(), [1.0, 2.0, 3.0])
-                .unwrap()
-                .into()
-        );
+        test_context([], |context| {
+            let product = test_run("<(1m, 2m, 3m)>").unwrap();
+            assert_eq!(
+                product,
+                Vector3::new(&context, Dimension::length(), [1.0, 2.0, 3.0])
+                    .unwrap()
+                    .into()
+            );
 
-        let product = test_run("<(-1m, -2m, -3m)>").unwrap();
-        assert_eq!(
-            product,
-            Vector3::new(&context, Dimension::length(), [-1.0, -2.0, -3.0])
-                .unwrap()
-                .into()
-        );
+            let product = test_run("<(-1m, -2m, -3m)>").unwrap();
+            assert_eq!(
+                product,
+                Vector3::new(&context, Dimension::length(), [-1.0, -2.0, -3.0])
+                    .unwrap()
+                    .into()
+            );
+        })
     }
 
     #[test]
     fn construct_vector4() {
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-        let product = test_run("<(1m, 2m, 3m, 4m)>").unwrap();
-        assert_eq!(
-            product,
-            Vector4::new(&context, Dimension::length(), [1.0, 2.0, 3.0, 4.0])
-                .unwrap()
-                .into()
-        );
+        test_context([], |context| {
+            let product = test_run("<(1m, 2m, 3m, 4m)>").unwrap();
+            assert_eq!(
+                product,
+                Vector4::new(&context, Dimension::length(), [1.0, 2.0, 3.0, 4.0])
+                    .unwrap()
+                    .into()
+            );
 
-        let product = test_run("<(-1m, -2m, -3m, -4m)>").unwrap();
-        assert_eq!(
-            product,
-            Vector4::new(&context, Dimension::length(), [-1.0, -2.0, -3.0, -4.0])
-                .unwrap()
-                .into()
-        );
+            let product = test_run("<(-1m, -2m, -3m, -4m)>").unwrap();
+            assert_eq!(
+                product,
+                Vector4::new(&context, Dimension::length(), [-1.0, -2.0, -3.0, -4.0])
+                    .unwrap()
+                    .into()
+            );
+        })
     }
 
     #[test]

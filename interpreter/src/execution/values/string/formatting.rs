@@ -293,15 +293,11 @@ impl<R> UnwrapFormattingResult<R> for std::result::Result<R, std::fmt::Error> {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, sync::Mutex};
+    use std::collections::HashMap;
 
     use common_data_types::{Dimension, Float};
 
-    use crate::execution::{
-        build_prelude,
-        stack::StackScope,
-        values::{BuiltinCallableDatabase, Scalar},
-    };
+    use crate::execution::{test_context, values::Scalar};
 
     use super::*;
 
@@ -429,68 +425,60 @@ mod test {
 
     #[test]
     fn do_format() {
-        let database = BuiltinCallableDatabase::new();
-        let prelude = build_prelude(&database);
-
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        let mut formatted = String::default();
-        Format::parse("Test {value}")
-            .unwrap()
-            .1
-            .format(
-                &context,
-                &mut formatted,
-                Dictionary::new(
+        test_context([], |context| {
+            let mut formatted = String::default();
+            Format::parse("Test {value}")
+                .unwrap()
+                .1
+                .format(
                     &context,
-                    HashMap::from_iter([(
-                        "value".into(),
-                        Scalar {
-                            dimension: Dimension::zero(),
-                            value: Float::new(42.24).unwrap(),
-                        }
-                        .into(),
-                    )]),
-                ),
-            )
-            .unwrap();
-        assert_eq!(formatted, "Test 42.24");
-
-        let mut formatted = String::default();
-        Format::parse("Test {one} {two}")
-            .unwrap()
-            .1
-            .format(
-                &context,
-                &mut formatted,
-                Dictionary::new(
-                    &context,
-                    HashMap::from_iter([
-                        (
-                            "one".into(),
+                    &mut formatted,
+                    Dictionary::new(
+                        &context,
+                        HashMap::from_iter([(
+                            "value".into(),
                             Scalar {
                                 dimension: Dimension::zero(),
-                                value: Float::new(1.0).unwrap(),
+                                value: Float::new(42.24).unwrap(),
                             }
                             .into(),
-                        ),
-                        (
-                            "two".into(),
-                            Scalar {
-                                dimension: Dimension::zero(),
-                                value: Float::new(2.0).unwrap(),
-                            }
-                            .into(),
-                        ),
-                    ]),
-                ),
-            )
-            .unwrap();
-        assert_eq!(formatted, "Test 1 2");
+                        )]),
+                    ),
+                )
+                .unwrap();
+            assert_eq!(formatted, "Test 42.24");
+
+            let mut formatted = String::default();
+            Format::parse("Test {one} {two}")
+                .unwrap()
+                .1
+                .format(
+                    &context,
+                    &mut formatted,
+                    Dictionary::new(
+                        &context,
+                        HashMap::from_iter([
+                            (
+                                "one".into(),
+                                Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(1.0).unwrap(),
+                                }
+                                .into(),
+                            ),
+                            (
+                                "two".into(),
+                                Scalar {
+                                    dimension: Dimension::zero(),
+                                    value: Float::new(2.0).unwrap(),
+                                }
+                                .into(),
+                            ),
+                        ]),
+                    ),
+                )
+                .unwrap();
+            assert_eq!(formatted, "Test 1 2");
+        })
     }
 }

@@ -14,17 +14,20 @@ file-guard = "0.2.0"
 enum_dispatch = "0.3"
 enum_downcast = { version = "0.1", features = [ "derive" ] }
 num-traits = "0.2"
-hashable-map = "0.4.0"
+hashable-map = { version = "0.4.0", features = ["serde"] }
 imstr = "0.2.0"
 nalgebra = "0.34.1"
 stack = "0.4.0"
 paste = "1.0.15"
-tempfile = "3.24.0"
+tempfile = { workspace = true }
 rayon = "1.11.0"
 nom = "8.0.0"
 ariadne = { workspace = true }
 levenshtein = "1.0.5"
 selen = "0.15.5"
+sha2 = "0.10.9"
+serde = { version = "1.0.228", features = ["derive"] }
+hex = "0.4.3"
 
 [build-dependencies]
 type-sitter-gen = "0.8"

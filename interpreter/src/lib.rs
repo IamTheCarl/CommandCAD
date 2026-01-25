@@ -22,7 +22,7 @@ pub mod execution;
 pub use compile::{compile, new_parser, Parser, SourceReference};
 pub use execution::{
     build_prelude, execute_expression, values, Error, ExecutionContext, LogLevel, LogMessage,
-    RuntimeLog, StackScope, StackTrace,
+    RuntimeLog, StackScope, StackTrace, Store,
 };
 pub use imstr::ImString;
 pub use tree_sitter::{Point as TextPoint, Range as TextRange};
