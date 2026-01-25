@@ -153,8 +153,8 @@ impl Object for Scalar {
         let value = Float::new(*self.value + *rhs.value).unwrap_not_nan(context.stack_trace)?;
 
         Ok(Self {
+            dimension: self.dimension | rhs.dimension,
             value,
-            ..self.clone()
         }
         .into())
     }
@@ -164,8 +164,8 @@ impl Object for Scalar {
         let value = Float::new(*self.value - *rhs.value).unwrap_not_nan(context.stack_trace)?;
 
         Ok(Self {
+            dimension: self.dimension | rhs.dimension,
             value,
-            ..self.clone()
         }
         .into())
     }
@@ -320,7 +320,7 @@ impl Scalar {
     }
 
     fn check_trig_compatible(&self, stack_trace: &StackTrace) -> ExpressionResult<()> {
-        if self.dimension.is_zero_dimension() && self.dimension.ratio_type_hint.is_angle() {
+        if self.dimension.is_zero_dimension() && self.dimension.bitset.is_angle() {
             Ok(())
         } else {
             Err(

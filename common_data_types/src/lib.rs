@@ -22,8 +22,8 @@ pub struct UnitDescription {
     pub plural_name: String,
 }
 
-#[derive(Serialize, PartialEq, Eq, Hash, Clone, Copy, Default)]
-pub struct RatioTypeHint(pub u8);
+#[derive(Serialize, Hash, Eq, PartialEq, Clone, Copy, Default)]
+pub struct DimensionBitSet(pub u8);
 
 macro_rules! bit_getter_setter {
     ($mask:path, $name:ident) => {
@@ -43,13 +43,14 @@ macro_rules! bit_getter_setter {
     };
 }
 
-impl RatioTypeHint {
+impl DimensionBitSet {
     const ANGLE_KIND_MASK: u8 = 0x01;
     const CONSTITUENT_CONCENTRATION_MASK: u8 = 0x02;
     const INFORMATION_MASK: u8 = 0x04;
     const SOLID_ANGLE_MASK: u8 = 0x08;
     const TEMPRATURE_MASK: u8 = 0x10;
     const PIXEL_MASK: u8 = 0x20;
+    const INHERIT_MASK: u8 = 0x40;
 
     bit_getter_setter!(Self::ANGLE_KIND_MASK, angle);
     bit_getter_setter!(
@@ -60,9 +61,10 @@ impl RatioTypeHint {
     bit_getter_setter!(Self::SOLID_ANGLE_MASK, solid_angle);
     bit_getter_setter!(Self::TEMPRATURE_MASK, temperature);
     bit_getter_setter!(Self::PIXEL_MASK, pixel);
+    bit_getter_setter!(Self::INHERIT_MASK, inherit);
 }
 
-impl std::fmt::Display for RatioTypeHint {
+impl std::fmt::Display for DimensionBitSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.is_angle() {
             write!(f, "-ANGLE")?;
@@ -92,17 +94,20 @@ impl std::fmt::Display for RatioTypeHint {
     }
 }
 
-impl std::ops::BitOr for RatioTypeHint {
+impl std::ops::BitOr for DimensionBitSet {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        Self(self.0 | rhs.0)
+        let mut new = Self(self.0 | rhs.0);
+        new.set_is_inherit(false);
+
+        new
     }
 }
 
-impl std::fmt::Debug for RatioTypeHint {
+impl std::fmt::Debug for DimensionBitSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RatioTypeHint")
+        f.debug_struct("DimensionBitSet")
             .field("is_angle", &self.is_angle())
             .field(
                 "is_constituent_concentration",
@@ -112,11 +117,12 @@ impl std::fmt::Debug for RatioTypeHint {
             .field("is_solid_angle", &self.is_solid_angle())
             .field("is_temperature", &self.is_temperature())
             .field("is_pixel", &self.is_pixel())
+            .field("is_inherit", &self.is_inherit())
             .finish()
     }
 }
 
-#[derive(Debug, Serialize, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Serialize, Hash, Clone, Copy)]
 pub struct Dimension {
     // Meter
     pub length: i8,
@@ -139,8 +145,25 @@ pub struct Dimension {
     // Candela
     pub luminous_intensity: i8,
 
-    // Hints of type for ratios.
-    pub ratio_type_hint: RatioTypeHint,
+    // Boolean aspects of a dimension.
+    pub bitset: DimensionBitSet,
+}
+
+impl Eq for Dimension {}
+
+impl PartialEq for Dimension {
+    fn eq(&self, rhs: &Self) -> bool {
+        self.bitset.is_inherit()
+            || rhs.bitset.is_inherit()
+            || (self.length == rhs.length
+                && self.mass == rhs.mass
+                && self.time == rhs.time
+                && self.electric_current == rhs.electric_current
+                && self.thermodynamic_temprature == rhs.thermodynamic_temprature
+                && self.amount_of_substance == rhs.amount_of_substance
+                && self.luminous_intensity == rhs.luminous_intensity
+                && self.bitset == rhs.bitset)
+    }
 }
 
 impl std::ops::Add for Dimension {
@@ -155,7 +178,7 @@ impl std::ops::Add for Dimension {
             thermodynamic_temprature: self.thermodynamic_temprature + rhs.thermodynamic_temprature,
             amount_of_substance: self.amount_of_substance + rhs.amount_of_substance,
             luminous_intensity: self.luminous_intensity + rhs.luminous_intensity,
-            ratio_type_hint: self.ratio_type_hint | rhs.ratio_type_hint,
+            bitset: self.bitset | rhs.bitset,
         }
     }
 }
@@ -172,7 +195,7 @@ impl std::ops::Sub for Dimension {
             thermodynamic_temprature: self.thermodynamic_temprature - rhs.thermodynamic_temprature,
             amount_of_substance: self.amount_of_substance - rhs.amount_of_substance,
             luminous_intensity: self.luminous_intensity - rhs.luminous_intensity,
-            ratio_type_hint: self.ratio_type_hint | rhs.ratio_type_hint,
+            bitset: self.bitset | rhs.bitset,
         }
     }
 }
@@ -189,7 +212,37 @@ impl std::ops::Neg for Dimension {
             thermodynamic_temprature: -self.thermodynamic_temprature,
             amount_of_substance: -self.amount_of_substance,
             luminous_intensity: -self.luminous_intensity,
-            ratio_type_hint: self.ratio_type_hint,
+            bitset: self.bitset,
+        }
+    }
+}
+
+impl std::ops::BitOr for Dimension {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self {
+        match (self.bitset.is_inherit(), rhs.bitset.is_inherit()) {
+            (true, false) => Self {
+                length: self.length,
+                mass: self.mass,
+                time: self.time,
+                electric_current: self.electric_current,
+                thermodynamic_temprature: self.thermodynamic_temprature,
+                amount_of_substance: self.amount_of_substance,
+                luminous_intensity: self.luminous_intensity,
+                bitset: self.bitset | rhs.bitset,
+            },
+            (false, true) => Self {
+                length: rhs.length,
+                mass: rhs.mass,
+                time: rhs.time,
+                electric_current: rhs.electric_current,
+                thermodynamic_temprature: rhs.thermodynamic_temprature,
+                amount_of_substance: rhs.amount_of_substance,
+                luminous_intensity: rhs.luminous_intensity,
+                bitset: self.bitset | rhs.bitset,
+            },
+            (_, _) => self,
         }
     }
 }
@@ -206,7 +259,7 @@ impl std::ops::Mul<i8> for Dimension {
             thermodynamic_temprature: self.thermodynamic_temprature * rhs,
             amount_of_substance: self.amount_of_substance * rhs,
             luminous_intensity: self.luminous_intensity * rhs,
-            ratio_type_hint: self.ratio_type_hint,
+            bitset: self.bitset,
         }
     }
 }
@@ -223,7 +276,7 @@ impl std::ops::Div<i8> for Dimension {
             thermodynamic_temprature: self.thermodynamic_temprature / rhs,
             amount_of_substance: self.amount_of_substance / rhs,
             luminous_intensity: self.luminous_intensity / rhs,
-            ratio_type_hint: self.ratio_type_hint,
+            bitset: self.bitset,
         }
     }
 }
@@ -238,7 +291,7 @@ impl Dimension {
             thermodynamic_temprature: 0,
             amount_of_substance: 0,
             luminous_intensity: 0,
-            ratio_type_hint: RatioTypeHint(0),
+            bitset: DimensionBitSet(0),
         }
     }
 
@@ -251,7 +304,20 @@ impl Dimension {
             thermodynamic_temprature: 0,
             amount_of_substance: 0,
             luminous_intensity: 0,
-            ratio_type_hint: RatioTypeHint(RatioTypeHint::ANGLE_KIND_MASK),
+            bitset: DimensionBitSet(DimensionBitSet::ANGLE_KIND_MASK),
+        }
+    }
+
+    pub const fn inherit() -> Self {
+        Self {
+            length: 0,
+            mass: 0,
+            time: 0,
+            electric_current: 0,
+            thermodynamic_temprature: 0,
+            amount_of_substance: 0,
+            luminous_intensity: 0,
+            bitset: DimensionBitSet(DimensionBitSet::INHERIT_MASK),
         }
     }
 
@@ -264,7 +330,7 @@ impl Dimension {
             thermodynamic_temprature: 0,
             amount_of_substance: 0,
             luminous_intensity: 0,
-            ratio_type_hint: RatioTypeHint(0),
+            bitset: DimensionBitSet(0),
         }
     }
 
@@ -277,7 +343,7 @@ impl Dimension {
             thermodynamic_temprature: 0,
             amount_of_substance: 0,
             luminous_intensity: 0,
-            ratio_type_hint: RatioTypeHint(0),
+            bitset: DimensionBitSet(0),
         }
     }
 
@@ -320,7 +386,7 @@ mod test {
 
     #[test]
     fn ratio_type_hint_storage() {
-        let mut hint = RatioTypeHint(0);
+        let mut hint = DimensionBitSet(0);
 
         assert!(!hint.is_angle());
         hint.set_is_angle(true);

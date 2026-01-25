@@ -16,16 +16,23 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use common_data_types::Float;
+use common_data_types::{Dimension, Float};
 use hashable_map::{HashableMap, HashableSet};
 use imstr::ImString;
 
 use crate::{
-    compile::{constraint_set::ConstraintSet as AstConstraintSet, AstNode},
+    compile::{
+        constraint_set::{
+            Constraint as AstConstraint, ConstraintSet as AstConstraintSet, Relation,
+        },
+        AstNode, BinaryExpression, BinaryExpressionOperation, Expression,
+    },
+    execute_expression,
     execution::{
         errors::{ErrorType, ExpressionResult, GenericFailure, Raise},
         find_all_variable_accesses_in_expression,
         logging::LocatedStr,
+        stack::ScopeType,
     },
     values::{
         closure::{BuiltinCallable, Signature},
@@ -39,6 +46,8 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+
+const DEFAULT_PRECISION: f64 = 0.0001;
 
 pub fn find_all_captured_variables_in_constraint_set(
     constraint_set: &AstConstraintSet,
@@ -71,17 +80,65 @@ pub fn find_all_captured_variables_in_constraint_set(
     Ok(())
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct Constraint {
+    relation: Relation,
+
+    /// This expression is the left side minus the right side. We are comparing it to zero.
+    expression: AstNode<Expression>,
+}
+
+impl Constraint {
+    fn from_ast(
+        context: &ExecutionContext,
+        source: &AstNode<AstConstraint>,
+    ) -> ExpressionResult<Self> {
+        let expression = Expression::BinaryExpression(AstNode {
+            reference: context.stack_trace.bottom().clone(),
+            node: Box::new(BinaryExpression {
+                operation: AstNode {
+                    reference: context.stack_trace.bottom().clone(),
+                    node: BinaryExpressionOperation::Sub,
+                },
+                a: source.node.left.clone(),
+                b: source.node.right.clone(),
+            }),
+        });
+
+        Ok(Self {
+            relation: source.node.relation.clone(),
+            expression: AstNode {
+                reference: context.stack_trace.bottom().clone(),
+                node: expression,
+            },
+        })
+    }
+
+    fn evaluate(&self, context: &ExecutionContext, precision: f64) -> ExpressionResult<f64> {
+        let value = execute_expression(context, &self.expression)?;
+        let value = value.downcast::<Scalar>(context.stack_trace)?;
+
+        let matches = value.value.abs() <= precision;
+
+        match (self.relation, matches) {
+            (Relation::LessEqual | Relation::Equal | Relation::GreaterEqual, true) => Ok(0.0),
+            (Relation::NotEqual, true) => Ok(f64::NAN),
+            _ => Ok(*value.value),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct ConstraintSet {
     variables: Arc<HashableSet<ImString>>,
     captured_values: Arc<HashableMap<ImString, Value>>,
-    source: Arc<AstConstraintSet>,
+    constraints: Arc<Vec<Constraint>>,
 }
 
 impl ConstraintSet {
     pub fn from_ast(
         context: &ExecutionContext,
-        source: &AstNode<Arc<AstConstraintSet>>,
+        source: &AstNode<AstConstraintSet>,
     ) -> ExpressionResult<Self> {
         let mut variables = HashSet::new();
         let mut duplicate_variables = Vec::new();
@@ -122,10 +179,15 @@ impl ConstraintSet {
             Ok(())
         })?;
 
+        let mut constraints = Vec::new();
+        for constraint in source.node.constraints.iter() {
+            constraints.push(Constraint::from_ast(context, constraint)?);
+        }
+
         Ok(Self {
             variables: Arc::new(HashableSet::from(HashSet::from_iter(variables))),
             captured_values: Arc::new(HashableMap::from(captured_values)),
-            source: source.node.clone(),
+            constraints: Arc::new(constraints),
         })
     }
 }
@@ -158,7 +220,7 @@ impl Object for ConstraintSet {
             }
         }
 
-        write!(f, ": {} constraints>>>", self.source.constraints.len())?;
+        write!(f, ": {} constraints>>>", self.constraints.len())?;
 
         Ok(())
     }
@@ -178,20 +240,6 @@ impl Object for ConstraintSet {
     }
 }
 
-struct ValueProvider<'l> {
-    provided: &'l Dictionary,
-    guesses: &'l HashMap<ImString, Scalar>,
-    captured: &'l HashableMap<ImString, Value>,
-}
-
-impl<'l> ValueProvider<'l> {
-    fn get(&self, name: &ImString) -> Option<&Value> {
-        self.provided
-            .get(name.as_str())
-            .or_else(|| self.captured.get(name))
-    }
-}
-
 impl ConstraintSet {
     fn solve(
         &self,
@@ -199,27 +247,55 @@ impl ConstraintSet {
         provided: Dictionary,
     ) -> ExpressionResult<Dictionary> {
         // TODO we should permit user configuration, such as precision requirements and initial guesses.
-        let guesses: HashMap<_, _> = self
+        // That information should come from the config parameter.
+
+        let mut provided = Arc::unwrap_or_clone(provided.data).members;
+
+        let variables_to_guess: Vec<_> = self
             .variables
             .iter()
-            .filter(|name| provided.data.members.contains_key(name.as_str()))
-            .map(|name| {
-                (
-                    name.clone(),
-                    Scalar {
-                        dimension: todo!(),
-                        value: Float::new(0.0).expect("Zero is somehow NaN"),
-                    },
-                )
-            })
+            .filter(|name| provided.contains_key(name.as_str()))
             .collect();
 
-        let value_provider = ValueProvider {
-            provided: &provided,
-            guesses: &guesses,
-            captured: &self.captured_values,
-        };
+        let initial_guesses = variables_to_guess.iter().map(|name| {
+            (
+                (*name).clone(),
+                Scalar {
+                    dimension: Dimension::inherit(),
+                    value: Float::new(0.0).expect("Zero is somehow NaN"),
+                }
+                .into(),
+            )
+        });
 
+        let mut step_size = f64::MAX;
+
+        // TODO I don't like using an iterator to move the contents of `provided` here.
+        context.stack_scope(ScopeType::Isolated, provided.drain().collect(), |context| {
+            context.stack.scope_mut(
+                context.stack_trace,
+                ScopeType::Inherited,
+                initial_guesses.collect(),
+                |stack, stack_trace| {
+                    let context = ExecutionContext {
+                        log: context.log,
+                        stack_trace,
+                        stack,
+                        database: context.database,
+                    };
+
+                    for constraint in self.constraints.iter() {
+                        let status = constraint.evaluate(&context, DEFAULT_PRECISION)?;
+                    }
+
+                    Ok(())
+                },
+            )??;
+
+            Ok(())
+        })??;
+
+        // TODO set `is_inherit` on all values to false on completion.
         Err(GenericFailure("Solver not implemented".into()).to_error(context.stack_trace))
     }
 }

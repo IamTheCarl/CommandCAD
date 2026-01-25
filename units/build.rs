@@ -3,8 +3,8 @@ use std::{collections::HashMap, fs::File};
 use serde::Deserialize;
 
 use common_data_types::{
-    BaseUnits, ConversionFactor, ConversionFactorDatabase, Dimension, DimensionNameDatabase,
-    RatioTypeHint, UnitDescription, UnitList,
+    BaseUnits, ConversionFactor, ConversionFactorDatabase, Dimension, DimensionBitSet,
+    DimensionNameDatabase, UnitDescription, UnitList,
 };
 
 #[derive(Debug, Deserialize)]
@@ -74,7 +74,7 @@ fn main() {
             row.keyboard_friendly_abbreviation.clone(),
         );
 
-        let mut ratio_type_hint = RatioTypeHint::default();
+        let mut ratio_type_hint = DimensionBitSet::default();
 
         ratio_type_hint.set_is_angle(row.angle_kind);
         ratio_type_hint.set_is_constituent_concentration(row.constituent_concentration_kind);
@@ -91,7 +91,7 @@ fn main() {
             thermodynamic_temprature: row.thermodynamic_temperature,
             amount_of_substance: row.amount_of_substance,
             luminous_intensity: row.luminous_intensity,
-            ratio_type_hint,
+            bitset: ratio_type_hint,
         };
 
         dimension_base_units.insert(row.singular.clone(), dimension);

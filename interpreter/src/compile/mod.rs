@@ -36,7 +36,7 @@ impl Span for SourceReference {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct AstNode<N> {
     pub reference: SourceReference,
     pub node: N,
@@ -57,13 +57,6 @@ impl<N> AstNode<N> {
         AstNode {
             reference: self.reference,
             node: Box::new(self.node),
-        }
-    }
-
-    fn into_arc(self) -> AstNode<Arc<N>> {
-        AstNode {
-            reference: self.reference,
-            node: Arc::new(self.node),
         }
     }
 }
@@ -184,7 +177,7 @@ impl<'t> Parse<'t, nodes::UnsignedInteger<'t>> for u64 {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct Scalar {
     pub dimension: Dimension,
     pub value: Float,

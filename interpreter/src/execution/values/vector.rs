@@ -81,13 +81,13 @@ where
         let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
         let value = self.value + rhs.value;
 
-        Ok(Self::new_raw(context, self.dimension, value)?.into())
+        Ok(Self::new_raw(context, self.dimension | rhs.dimension, value)?.into())
     }
     fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
         let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
         let value = self.value - rhs.value;
 
-        Ok(Self::new_raw(context, self.dimension, value)?.into())
+        Ok(Self::new_raw(context, self.dimension | rhs.dimension, value)?.into())
     }
     fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
         let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;

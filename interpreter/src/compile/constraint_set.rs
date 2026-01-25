@@ -24,7 +24,7 @@ use super::AstNode;
 use imstr::ImString;
 use type_sitter::Node;
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct ConstraintSet {
     pub variables: Vec<AstNode<ImString>>,
     pub constraints: Vec<AstNode<Constraint>>,
@@ -73,7 +73,7 @@ impl<'t> Parse<'t, nodes::ConstraintSet<'t>> for ConstraintSet {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct Constraint {
     pub left: AstNode<Expression>,
     pub right: AstNode<Expression>,
@@ -113,7 +113,7 @@ impl<'t> Parse<'t, nodes::Constraint<'t>> for Constraint {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum Relation {
     Less,
     LessEqual,
@@ -147,7 +147,7 @@ mod test {
                 reference: root.reference.clone(),
                 node: Expression::ConstraintSet(AstNode {
                     reference: constraint_set.reference.clone(),
-                    node: Arc::new(ConstraintSet {
+                    node: ConstraintSet {
                         variables: vec![AstNode {
                             reference: a.reference.clone(),
                             node: ImString::from("a")
@@ -172,7 +172,7 @@ mod test {
                                 relation
                             }
                         }]
-                    })
+                    }
                 })
             }
         );
@@ -220,7 +220,7 @@ mod test {
                 reference: root.reference.clone(),
                 node: Expression::ConstraintSet(AstNode {
                     reference: constraint_set.reference.clone(),
-                    node: Arc::new(ConstraintSet {
+                    node: ConstraintSet {
                         variables: vec![
                             AstNode {
                                 reference: variables[0].reference.clone(),
@@ -251,7 +251,7 @@ mod test {
                                 relation: Relation::Equal
                             }
                         }]
-                    })
+                    }
                 })
             }
         );

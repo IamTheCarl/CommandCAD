@@ -1,6 +1,6 @@
 use common_data_types::{
-    BaseUnits, ConversionFactor, ConversionFactorDatabase, Dimension, DimensionNameDatabase,
-    RatioTypeHint, UnitDescription, UnitList,
+    BaseUnits, ConversionFactor, ConversionFactorDatabase, Dimension, DimensionBitSet,
+    DimensionNameDatabase, UnitDescription, UnitList,
 };
 use std::{
     borrow::{Borrow, Cow},
@@ -36,7 +36,7 @@ pub fn get_dimension_name(dimension: &Dimension) -> Cow<'static, str> {
             dimension.thermodynamic_temprature,
             dimension.amount_of_substance,
             dimension.luminous_intensity,
-            dimension.ratio_type_hint
+            dimension.bitset
         )
         .into()
     }

@@ -84,7 +84,7 @@ pub struct ParseNumberError<'t> {
     pub node: nodes::Number<'t>,
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, EnumAs)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, EnumAs)]
 pub enum Expression {
     BinaryExpression(AstNode<Box<BinaryExpression>>),
     Boolean(AstNode<bool>),
@@ -108,7 +108,7 @@ pub enum Expression {
     FunctionCall(AstNode<Box<FunctionCall>>),
     MethodCall(AstNode<Box<MethodCall>>),
     LetIn(AstNode<Box<LetIn>>),
-    ConstraintSet(AstNode<Arc<ConstraintSet>>),
+    ConstraintSet(AstNode<ConstraintSet>),
     Malformed(ImString),
 }
 
@@ -141,7 +141,7 @@ impl<'t> Parse<'t, nodes::ConstraintSet<'t>> for Expression {
         Ok(AstNode::new(
             file,
             &value,
-            Self::ConstraintSet(ConstraintSet::parse(file, input, value)?.into_arc()),
+            Self::ConstraintSet(ConstraintSet::parse(file, input, value)?),
         ))
     }
 }
@@ -552,14 +552,14 @@ impl<'t> Parse<'t, nodes::Expression<'t>> for Expression {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum UnaryExpressionOperation {
     Add,
     Sub,
     Not,
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct UnaryExpression {
     pub operation: AstNode<UnaryExpressionOperation>,
     pub expression: AstNode<Expression>,
@@ -598,7 +598,7 @@ impl<'t> Parse<'t, nodes::UnaryExpression<'t>> for UnaryExpression {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum BinaryExpressionOperation {
     NotEq,
     And,
@@ -621,7 +621,7 @@ pub enum BinaryExpressionOperation {
     OrOr,
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct BinaryExpression {
     pub operation: AstNode<BinaryExpressionOperation>,
     pub a: AstNode<Expression>,
@@ -680,7 +680,7 @@ impl<'t> Parse<'t, nodes::BinaryExpression<'t>> for BinaryExpression {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct MemberAccess {
     pub base: AstNode<Expression>,
     pub member: AstNode<ImString>,
@@ -699,7 +699,7 @@ impl<'t> Parse<'t, nodes::MemberAccess<'t>> for MemberAccess {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct Self_;
 
 impl<'t> Parse<'t, nodes::Self_<'t>> for Self_ {
@@ -712,7 +712,7 @@ impl<'t> Parse<'t, nodes::Self_<'t>> for Self_ {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct Vector2 {
     pub x: AstNode<Expression>,
     pub y: AstNode<Expression>,
@@ -734,7 +734,7 @@ impl<'t> Parse<'t, nodes::Vector2<'t>> for Vector2 {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct Vector3 {
     pub x: AstNode<Expression>,
     pub y: AstNode<Expression>,
@@ -760,7 +760,7 @@ impl<'t> Parse<'t, nodes::Vector3<'t>> for Vector3 {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct Vector4 {
     pub x: AstNode<Expression>,
     pub y: AstNode<Expression>,
@@ -790,7 +790,7 @@ impl<'t> Parse<'t, nodes::Vector4<'t>> for Vector4 {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct IfExpression {
     pub condition: AstNode<Expression>,
     pub on_true: AstNode<Expression>,
@@ -821,7 +821,7 @@ impl<'t> Parse<'t, nodes::If<'t>> for IfExpression {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct DictionaryMemberAssignment {
     pub index: usize,
     pub dependencies: HashableSet<ImString>,
@@ -875,7 +875,7 @@ impl DependentOperation for AstNode<DictionaryMemberAssignment> {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct DictionaryConstruction {
     pub assignments: Vec<AstNode<DictionaryMemberAssignment>>,
     pub compute_groups: Vec<std::ops::Range<usize>>,
@@ -930,7 +930,7 @@ impl<'t> Parse<'t, nodes::DictionaryConstruction<'t>> for DictionaryConstruction
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct ClosureDefinition {
     pub argument_type: AstNode<StructDefinition>,
     pub return_type: AstNode<Expression>,
@@ -968,7 +968,7 @@ impl<'t> Parse<'t, nodes::ClosureDefinition<'t>> for ClosureDefinition {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct StructMember {
     pub name: AstNode<ImString>,
     pub ty: AstNode<Expression>,
@@ -998,7 +998,7 @@ impl<'t> Parse<'t, nodes::StructMember<'t>> for StructMember {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct StructDefinition {
     pub members: Vec<AstNode<StructMember>>,
     pub variadic: bool,
@@ -1045,7 +1045,7 @@ impl<'t> Parse<'t, nodes::StructDefinition<'t>> for StructDefinition {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct FunctionCall {
     pub to_call: AstNode<Expression>,
     pub argument: AstNode<DictionaryConstruction>,
@@ -1064,7 +1064,7 @@ impl<'t> Parse<'t, nodes::FunctionCall<'t>> for FunctionCall {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct MethodCall {
     pub self_dictionary: AstNode<Expression>,
     pub to_call: AstNode<ImString>,
@@ -1093,7 +1093,7 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for MethodCall {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct LetInAssignment {
     pub index: usize,
     pub ident: AstNode<ImString>,
@@ -1147,7 +1147,7 @@ impl<'t> Parse<'t, nodes::LetInAssignment<'t>> for LetInAssignment {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct LetIn {
     pub assignments: Vec<AstNode<LetInAssignment>>,
     pub compute_groups: Vec<std::ops::Range<usize>>,
