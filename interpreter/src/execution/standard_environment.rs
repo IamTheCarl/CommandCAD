@@ -20,10 +20,12 @@ use std::{collections::HashMap, sync::Mutex};
 
 use common_data_types::{Dimension, Float};
 use imstr::ImString;
+use tempfile::TempDir;
 
 use crate::execution::{
     logging::StackTrace,
     stack::StackScope,
+    store::Store,
     values::{BuiltinCallableDatabase, Scalar, SignedInteger, UnsignedInteger, ValueNone},
     ExecutionContext,
 };
@@ -31,19 +33,25 @@ use crate::execution::{
 use super::values::{Dictionary, Value, ValueType};
 
 /// Builds standard library.
-pub fn build_prelude(database: &BuiltinCallableDatabase) -> HashMap<ImString, Value> {
+pub fn build_prelude(
+    database: &BuiltinCallableDatabase,
+) -> std::io::Result<HashMap<ImString, Value>> {
     // Build an incomplete context for bootstrapping.
     let prelude = HashMap::new();
+    let store_directory = TempDir::new()?;
+    let store = Store::new(store_directory.path());
+
     let context = ExecutionContext {
         log: &Mutex::new(Vec::new()),
         stack_trace: &StackTrace::bootstrap(),
         stack: &StackScope::top(&prelude),
         database: &database,
+        store: &store,
     };
 
     let global = HashMap::from([("std".into(), build_std(&context).into())]);
 
-    global
+    Ok(global)
 }
 
 fn build_std(context: &ExecutionContext) -> Dictionary {

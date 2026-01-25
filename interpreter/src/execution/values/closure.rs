@@ -54,6 +54,7 @@ impl BuiltinCallableDatabase {
         super::file::register_methods(&mut database);
         super::string::register_methods(&mut database);
         super::constraint_set::register_methods(&mut database);
+        crate::execution::flake::register_methods(&mut database);
 
         database
     }
@@ -306,7 +307,7 @@ macro_rules! build_member_from_sig {
     ($name:ident: $ty:ty) => {
         (
             imstr::ImString::from(stringify!($name)),
-            $crate::execution::values::value_type::StructMember {
+            $crate::execution::values::StructMember {
                 ty: <$ty as crate::execution::values::StaticType>::static_type(),
                 default: None,
             },
@@ -315,7 +316,7 @@ macro_rules! build_member_from_sig {
     ($name:ident: $ty:ty = $default:expr) => {
         (
             imstr::ImString::from(stringify!($name)),
-            $crate::execution::values::value_type::StructMember {
+            $crate::execution::values::StructMember {
                 ty: <$ty as crate::execution::values::StaticType>::static_type(),
                 default: Some($default),
             },
@@ -326,21 +327,26 @@ macro_rules! build_member_from_sig {
 #[macro_export]
 macro_rules! build_argument_signature_list {
     ($($arg:ident: $ty:path $(= $default:expr)?),*) => {{
-        let list: [(imstr::ImString, $crate::execution::values::value_type::StructMember); _] = [$($crate::build_member_from_sig!($arg: $ty $(= $default)?),)*];
+        let list: [(imstr::ImString, $crate::execution::values::StructMember); _] = [$($crate::build_member_from_sig!($arg: $ty $(= $default)?),)*];
         list
+    }};
+}
+
+#[macro_export]
+macro_rules! build_struct_definition {
+    (variadic: $variadic:literal, ($($arg:ident: $ty:path $(= $default:expr)?),*)) => {{
+        $crate::execution::values::StructDefinition {
+            members: std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from($crate::build_argument_signature_list!($($arg: $ty $(= $default)?),*)))),
+            variadic: $variadic,
+        }
     }};
 }
 
 #[macro_export]
 macro_rules! build_closure_signature {
     (($($arg:ident: $ty:path $(= $default:expr)?),*) -> $return_type:ty) => {{
-        let members = std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from($crate::build_argument_signature_list!($($arg: $ty $(= $default)?),*))));
-
         std::sync::Arc::new($crate::execution::values::closure::Signature {
-            argument_type: crate::execution::values::StructDefinition {
-                members,
-                variadic: false,
-            },
+            argument_type: $crate::build_struct_definition!(variadic: false, ($($arg: $ty $(= $default)?),*)),
             return_type: <$return_type as $crate::execution::values::StaticType>::static_type(),
         })
     }};
@@ -395,7 +401,7 @@ macro_rules! build_function_callable {
     ($name:literal ($context:ident: &ExecutionContext $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block) => {{
         struct BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> ExpressionResult<$crate::execution::values::Value>
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value>
         {
             function: F,
             signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
@@ -404,7 +410,7 @@ macro_rules! build_function_callable {
 
         impl<F> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync,
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value> + Send + Sync,
         {
             fn call(
                 &self,
@@ -428,7 +434,9 @@ macro_rules! build_function_callable {
                 $context: &$crate::execution::ExecutionContext,
                 signature: &$crate::execution::values::closure::Signature,
                 argument: $crate::execution::values::Dictionary
-            | -> ExpressionResult<$crate::execution::values::Value> {
+            | -> $crate::execution::ExpressionResult<$crate::execution::values::Value> {
+                use crate::execution::errors::Raise as _;
+
                 signature
                     .argument_type
                     .check_other_qualifies(argument.struct_def())
@@ -470,7 +478,7 @@ macro_rules! build_method_callable {
     ) => {{
         struct BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> ExpressionResult<$crate::execution::values::Value>
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value>
         {
             function: F,
             signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
@@ -479,7 +487,7 @@ macro_rules! build_method_callable {
 
         impl<F> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> ExpressionResult<$crate::execution::values::Value> + Send + Sync,
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value> + Send + Sync,
         {
             fn call(
                 &self,
@@ -503,7 +511,9 @@ macro_rules! build_method_callable {
                 $context: &$crate::execution::ExecutionContext,
                 signature: &$crate::execution::values::closure::Signature,
                 argument: $crate::execution::values::Dictionary
-            | -> ExpressionResult<$crate::execution::values::Value> {
+            | -> $crate::execution::ExpressionResult<$crate::execution::values::Value> {
+                use crate::execution::errors::Raise as _;
+
                 let $this = $context.get_variable(
                     $crate::execution::logging::LocatedStr {
                         location: $context.stack_trace.bottom().clone(),
@@ -609,14 +619,11 @@ impl StaticTypeName for BuiltinFunction {
 mod test {
     use super::*;
     use crate::execution::{
-        logging::StackTrace,
-        stack::StackScope,
-        test_run,
+        test_context_custom_database, test_run,
         values::{self, SignedInteger, StructMember, UnsignedInteger},
     };
     use hashable_map::HashableMap;
     use pretty_assertions::assert_eq;
-    use std::sync::Mutex;
 
     #[test]
     fn define_closure() {
@@ -771,7 +778,7 @@ mod test {
 
     #[test]
     fn builtin_function_no_args() {
-        let mut database = BuiltinCallableDatabase::default();
+        let mut database = BuiltinCallableDatabase::new();
 
         struct TestFunction;
         build_function!(
@@ -783,29 +790,24 @@ mod test {
             }
         );
 
-        use crate::execution::standard_environment::build_prelude;
-
         let root = crate::compile::full_compile("test_function()");
-        let mut prelude = build_prelude(&database);
-        prelude.insert(
-            "test_function".into(),
-            BuiltinFunction::new::<TestFunction>().into(),
-        );
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
+        test_context_custom_database(
+            database,
+            [(
+                "test_function".into(),
+                BuiltinFunction::new::<TestFunction>().into(),
+            )],
+            |context| {
+                let product = execute_expression(&context, &root).unwrap();
 
-        let product = execute_expression(&context, &root).unwrap();
-
-        assert_eq!(product, values::UnsignedInteger::from(846).into());
+                assert_eq!(product, values::UnsignedInteger::from(846).into());
+            },
+        )
     }
 
     #[test]
     fn builtin_function_with_args() {
-        let mut database = BuiltinCallableDatabase::default();
+        let mut database = BuiltinCallableDatabase::new();
 
         struct TestFunction;
         build_function!(
@@ -819,29 +821,24 @@ mod test {
             }
         );
 
-        use crate::execution::standard_environment::build_prelude;
-
         let root = crate::compile::full_compile("test_function(a = 1u, b = 2u)");
-        let mut prelude = build_prelude(&database);
-        prelude.insert(
-            "test_function".into(),
-            BuiltinFunction::new::<TestFunction>().into(),
-        );
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
+        test_context_custom_database(
+            database,
+            [(
+                "test_function".into(),
+                BuiltinFunction::new::<TestFunction>().into(),
+            )],
+            |context| {
+                let product = execute_expression(&context, &root).unwrap();
 
-        let product = execute_expression(&context, &root).unwrap();
-
-        assert_eq!(product, values::UnsignedInteger::from(3).into());
+                assert_eq!(product, values::UnsignedInteger::from(3).into());
+            },
+        )
     }
 
     #[test]
     fn builtin_function_with_default_value() {
-        let mut database = BuiltinCallableDatabase::default();
+        let mut database = BuiltinCallableDatabase::new();
         struct TestFunction;
         build_function!(
             database,
@@ -854,29 +851,24 @@ mod test {
             }
         );
 
-        use crate::execution::standard_environment::build_prelude;
-
         let root = crate::compile::full_compile("test_function(a = 1u)");
-        let mut prelude = build_prelude(&database);
-        prelude.insert(
-            "test_function".into(),
-            BuiltinFunction::new::<TestFunction>().into(),
-        );
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
+        test_context_custom_database(
+            database,
+            [(
+                "test_function".into(),
+                BuiltinFunction::new::<TestFunction>().into(),
+            )],
+            |context| {
+                let product = execute_expression(&context, &root).unwrap();
 
-        let product = execute_expression(&context, &root).unwrap();
-
-        assert_eq!(product, values::UnsignedInteger::from(3).into());
+                assert_eq!(product, values::UnsignedInteger::from(3).into());
+            },
+        )
     }
 
     #[test]
     fn builtin_function_captured_value() {
-        let mut database = BuiltinCallableDatabase::default();
+        let mut database = BuiltinCallableDatabase::new();
         let b = 2;
 
         struct TestFunction;
@@ -890,29 +882,24 @@ mod test {
             }
         );
 
-        use crate::execution::standard_environment::build_prelude;
-
         let root = crate::compile::full_compile("test_function(a = 1u)");
-        let mut prelude = build_prelude(&database);
-        prelude.insert(
-            "test_function".into(),
-            BuiltinFunction::new::<TestFunction>().into(),
-        );
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
+        test_context_custom_database(
+            database,
+            [(
+                "test_function".into(),
+                BuiltinFunction::new::<TestFunction>().into(),
+            )],
+            |context| {
+                let product = execute_expression(&context, &root).unwrap();
 
-        let product = execute_expression(&context, &root).unwrap();
-
-        assert_eq!(product, values::UnsignedInteger::from(3).into());
+                assert_eq!(product, values::UnsignedInteger::from(3).into());
+            },
+        )
     }
 
     #[test]
     fn builtin_method() {
-        let mut database = BuiltinCallableDatabase::default();
+        let mut database = BuiltinCallableDatabase::new();
         struct TestMethod;
         build_method!(
             database,
@@ -921,31 +908,26 @@ mod test {
             }
         );
 
-        use crate::execution::standard_environment::build_prelude;
-
         let root = crate::compile::full_compile(
             "let object = (value = 5u, test_method = provided_test_method); in object::test_method()",
         );
-        let mut prelude = build_prelude(&database);
-        prelude.insert(
-            "provided_test_method".into(),
-            BuiltinFunction::new::<TestMethod>().into(),
-        );
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
+        test_context_custom_database(
+            database,
+            [(
+                "provided_test_method".into(),
+                BuiltinFunction::new::<TestMethod>().into(),
+            )],
+            |context| {
+                let product = execute_expression(&context, &root).unwrap();
 
-        let product = execute_expression(&context, &root).unwrap();
-
-        assert_eq!(product, values::UnsignedInteger::from(5).into());
+                assert_eq!(product, values::UnsignedInteger::from(5).into());
+            },
+        )
     }
 
     #[test]
     fn builtin_method_with_argument() {
-        let mut database = BuiltinCallableDatabase::default();
+        let mut database = BuiltinCallableDatabase::new();
         struct TestMethod;
 
         build_method!(
@@ -961,26 +943,20 @@ mod test {
             }
         );
 
-        use crate::execution::standard_environment::build_prelude;
-
         let root = crate::compile::full_compile(
             "let object = (value = 5u, test_method = provided_test_method); in object::test_method(to_add = 10u)",
         );
+        test_context_custom_database(
+            database,
+            [(
+                "provided_test_method".into(),
+                BuiltinFunction::new::<TestMethod>().into(),
+            )],
+            |context| {
+                let product = execute_expression(&context, &root).unwrap();
 
-        let mut prelude = build_prelude(&database);
-        prelude.insert(
-            "provided_test_method".into(),
-            BuiltinFunction::new::<TestMethod>().into(),
-        );
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-
-        let product = execute_expression(&context, &root).unwrap();
-
-        assert_eq!(product, values::UnsignedInteger::from(15).into());
+                assert_eq!(product, values::UnsignedInteger::from(15).into());
+            },
+        )
     }
 }

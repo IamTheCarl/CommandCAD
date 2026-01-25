@@ -58,6 +58,12 @@
             fenix-channel.rustc
             fenix-channel.cargo
             cargo-expand
+            openssl
+	    pkg-config
+          ];
+
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+            openssl
           ];
 
 	  shellHook = ''

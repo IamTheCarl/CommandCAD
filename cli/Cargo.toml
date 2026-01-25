@@ -13,3 +13,4 @@ ariadne = { workspace = true }
 type-sitter = { workspace = true }
 tree-sitter = { workspace = true }
 nu-ansi-term = "0.50.3"
+tempfile = { workspace = true }

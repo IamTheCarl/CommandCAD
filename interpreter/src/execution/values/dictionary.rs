@@ -32,6 +32,7 @@ use crate::{
         values::string::formatting::Style,
         ExecutionContext,
     },
+    values::StaticType,
 };
 
 use super::{
@@ -120,6 +121,18 @@ impl StaticTypeName for Dictionary {
     }
 }
 
+impl StaticType for Dictionary {
+    fn static_type() -> ValueType {
+        static TYPE: std::sync::OnceLock<std::sync::Arc<HashableMap<ImString, StructMember>>> =
+            std::sync::OnceLock::new();
+        let signature = TYPE.get_or_init(|| Arc::new(HashableMap::new()));
+        ValueType::Dictionary(StructDefinition {
+            members: signature.clone(),
+            variadic: true,
+        })
+    }
+}
+
 impl Dictionary {
     pub fn struct_def(&self) -> &StructDefinition {
         &self.data.struct_def
@@ -144,6 +157,7 @@ impl Dictionary {
                             stack_trace,
                             stack,
                             database: context.database,
+                            store: context.store,
                         };
 
                         buffer.par_extend(group.par_iter().map(|assignment| {

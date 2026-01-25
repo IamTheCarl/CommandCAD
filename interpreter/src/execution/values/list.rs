@@ -674,103 +674,75 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 mod test {
     use super::*;
     use crate::execution::{
-        build_prelude,
-        logging::StackTrace,
-        stack::StackScope,
-        test_run,
+        test_context, test_run,
         values::{Boolean, SignedInteger, UnsignedInteger},
     };
-    use std::sync::Mutex;
 
     #[test]
     fn create_empty() {
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-        let product = test_run("[]").unwrap();
-        assert_eq!(product, List::from_iter(&context, []).into());
+        test_context([], |context| {
+            let product = test_run("[]").unwrap();
+            assert_eq!(product, List::from_iter(&context, []).into());
+        })
     }
 
     #[test]
     fn create() {
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-        let product = test_run("[1u, 2u, 3u]").unwrap();
-        assert_eq!(
-            product,
-            List::from_iter(
-                &context,
-                [
-                    UnsignedInteger::from(1).into(),
-                    UnsignedInteger::from(2).into(),
-                    UnsignedInteger::from(3).into()
-                ]
-            )
-            .into()
-        );
+        test_context([], |context| {
+            let product = test_run("[1u, 2u, 3u]").unwrap();
+            assert_eq!(
+                product,
+                List::from_iter(
+                    &context,
+                    [
+                        UnsignedInteger::from(1).into(),
+                        UnsignedInteger::from(2).into(),
+                        UnsignedInteger::from(3).into()
+                    ]
+                )
+                .into()
+            );
+        })
     }
 
     #[test]
     fn create_multi_type() {
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-        let product = test_run("[1u, 2i, 3u]").unwrap();
-        assert_eq!(
-            product,
-            List::from_iter(
-                &context,
-                [
-                    UnsignedInteger::from(1).into(),
-                    SignedInteger::from(2).into(),
-                    UnsignedInteger::from(3).into()
-                ]
-            )
-            .into()
-        );
+        test_context([], |context| {
+            let product = test_run("[1u, 2i, 3u]").unwrap();
+            assert_eq!(
+                product,
+                List::from_iter(
+                    &context,
+                    [
+                        UnsignedInteger::from(1).into(),
+                        SignedInteger::from(2).into(),
+                        UnsignedInteger::from(3).into()
+                    ]
+                )
+                .into()
+            );
+        })
     }
 
     #[test]
     fn type_detection() {
-        let database = BuiltinCallableDatabase::default();
-        let prelude = build_prelude(&database);
-        let context = ExecutionContext {
-            log: &Mutex::new(Vec::new()),
-            stack_trace: &StackTrace::test(),
-            stack: &StackScope::top(&prelude),
-            database: &database,
-        };
-        assert_eq!(
-            List::from_iter(
-                &context,
-                [
-                    UnsignedInteger::from(1).into(),
-                    SignedInteger::from(2).into(),
-                    UnsignedInteger::from(3).into()
-                ]
-            )
-            .internal_type,
-            Some(ValueType::MultiType(
-                Box::new(ValueType::UnsignedInteger),
-                Box::new(ValueType::SignedInteger)
-            ))
-        );
+        test_context([], |context| {
+            assert_eq!(
+                List::from_iter(
+                    &context,
+                    [
+                        UnsignedInteger::from(1).into(),
+                        SignedInteger::from(2).into(),
+                        UnsignedInteger::from(3).into()
+                    ]
+                )
+                .internal_type,
+                Some(ValueType::MultiType(
+                    Box::new(ValueType::UnsignedInteger),
+                    Box::new(ValueType::SignedInteger)
+                ))
+            );
+        })
     }
 
     #[test]

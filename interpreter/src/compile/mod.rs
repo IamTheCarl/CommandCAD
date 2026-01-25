@@ -36,7 +36,7 @@ impl Span for SourceReference {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct AstNode<N> {
     pub reference: SourceReference,
     pub node: N,
@@ -65,6 +65,19 @@ impl<N> AstNode<N> {
             reference: self.reference,
             node: Arc::new(self.node),
         }
+    }
+}
+
+impl<N> std::hash::Hash for AstNode<N>
+where
+    N: std::hash::Hash,
+{
+    fn hash<H>(&self, hash: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        // We only hash the node, not the location of it.
+        self.node.hash(hash)
     }
 }
 
