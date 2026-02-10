@@ -144,6 +144,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "boolmesh"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b5e804fa333a4996316770fff780c7cd006371c58bc7824bd8798f17396eac2"
+dependencies = [
+ "glam 0.30.10",
+ "rayon",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -870,6 +880,7 @@ name = "interpreter"
 version = "0.1.0"
 dependencies = [
  "ariadne",
+ "boolmesh",
  "common_data_types",
  "enum_dispatch",
  "enum_downcast",

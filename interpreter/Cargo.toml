@@ -28,6 +28,7 @@ selen = "0.15.5"
 sha2 = "0.10.9"
 serde = { version = "1.0.228", features = ["derive"] }
 hex = "0.4.3"
+boolmesh = { version = "0.1.7", features = ["rayon"] }
 
 [build-dependencies]
 type-sitter-gen = "0.8"

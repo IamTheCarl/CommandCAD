@@ -869,7 +869,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
 macro_rules! build_scalar_type {
     ($name:ident = $dimension:expr) => {
-        struct $name(Scalar);
+        pub struct $name(Scalar);
 
         impl StaticType for $name {
             fn static_type() -> ValueType {
@@ -902,11 +902,18 @@ macro_rules! build_scalar_type {
                 &self.0
             }
         }
+
+        impl Into<common_data_types::RawFloat> for $name {
+            fn into(self) -> common_data_types::RawFloat {
+                *self.value
+            }
+        }
     };
 }
 
 build_scalar_type!(Zero = Dimension::zero());
 build_scalar_type!(Angle = Dimension::angle());
+build_scalar_type!(Length = Dimension::length());
 
 #[cfg(test)]
 mod test {

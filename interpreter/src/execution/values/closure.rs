@@ -54,6 +54,7 @@ impl BuiltinCallableDatabase {
         super::file::register_methods(&mut database);
         super::string::register_methods(&mut database);
         super::constraint_set::register_methods(&mut database);
+        super::manifold_mesh::register_methods_and_functions(&mut database);
 
         database
     }
@@ -462,7 +463,7 @@ macro_rules! build_function_callable {
 #[macro_export]
 macro_rules! build_function {
     ($database:ident,
-        $ident:ident, $name:literal, ($context:ident: &ExecutionContext $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block
+        $ident:ty, $name:literal, ($context:ident: &ExecutionContext $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block
     ) => {{
         let callable = $crate::build_function_callable!($name ($context: &ExecutionContext $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code);
 

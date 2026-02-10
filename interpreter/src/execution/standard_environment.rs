@@ -22,12 +22,15 @@ use common_data_types::{Dimension, Float};
 use imstr::ImString;
 use tempfile::TempDir;
 
-use crate::execution::{
-    logging::StackTrace,
-    stack::StackScope,
-    store::Store,
-    values::{BuiltinCallableDatabase, Scalar, SignedInteger, UnsignedInteger, ValueNone},
-    ExecutionContext,
+use crate::{
+    execution::{
+        logging::StackTrace,
+        stack::StackScope,
+        store::Store,
+        values::{BuiltinCallableDatabase, Scalar, SignedInteger, UnsignedInteger, ValueNone},
+        ExecutionContext,
+    },
+    values::BuiltinFunction,
 };
 
 use super::values::{Dictionary, Value, ValueType};
@@ -74,6 +77,7 @@ fn build_std(context: &ExecutionContext) -> Dictionary {
             build_dimension_types(context, ValueType::Vector4).into(),
         ),
         ("consts".into(), build_consts(context).into()),
+        ("mesh3d".into(), build_mesh_3d(context).into()),
     ]);
     Dictionary::new(context, std)
 }
@@ -116,6 +120,7 @@ fn build_types(context: &ExecutionContext) -> Dictionary {
             ("UInt".into(), ValueType::UnsignedInteger.into()),
             ("String".into(), ValueType::String.into()),
             ("ValueType".into(), ValueType::ValueType.into()),
+            ("ManifoldMesh".into(), ValueType::ManifoldMesh3D.into()),
             // TODO we need File types.
             // TODO we'll need a function to build custom function signature types.
             // ("Function".into(), ValueType::Closure(Arc<ClosureSignature>)),
@@ -138,5 +143,34 @@ fn build_dimension_types(
             .map(move |(name, dimension)| (name.into(), type_builder(dimension).into())),
     );
 
+    Dictionary::new(context, types)
+}
+
+fn build_mesh_3d(context: &ExecutionContext) -> Dictionary {
+    use crate::values::manifold_mesh::methods::*;
+
+    let types: HashMap<ImString, Value> = HashMap::from_iter(
+        [
+            ("cone".into(), BuiltinFunction::new::<GenerateCone>().into()),
+            ("cube".into(), BuiltinFunction::new::<GenerateCube>().into()),
+            (
+                "cylinder".into(),
+                BuiltinFunction::new::<GenerateCylinder>().into(),
+            ),
+            (
+                "icosphere".into(),
+                BuiltinFunction::new::<GenerateIcosphere>().into(),
+            ),
+            (
+                "torus".into(),
+                BuiltinFunction::new::<GenerateTorus>().into(),
+            ),
+            (
+                "uv_sphere".into(),
+                BuiltinFunction::new::<GenerateUvSphere>().into(),
+            ),
+        ]
+        .into_iter(),
+    );
     Dictionary::new(context, types)
 }

@@ -218,6 +218,14 @@ where
         }
     }
 
+    pub fn dimension(&self) -> Dimension {
+        self.dimension
+    }
+
+    pub fn raw_value(&self) -> I {
+        self.value
+    }
+
     fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExpressionResult<Self> {
         let rhs: Vector<I> = rhs.downcast_for_binary_op(stack_trace)?;
 
@@ -715,6 +723,15 @@ impl StaticType for nalgebra::Vector2<Float> {
     }
 }
 
+impl Into<boolmesh::Vec2> for Vector2 {
+    fn into(self) -> boolmesh::Vec2 {
+        boolmesh::Vec2 {
+            x: self.value.x,
+            y: self.value.y,
+        }
+    }
+}
+
 impl VectorInternalType for nalgebra::Vector3<Float> {
     type BuildFrom = [Float; 3];
     type NodeType = compile::Vector3;
@@ -837,6 +854,16 @@ impl StaticTypeName for nalgebra::Vector3<Float> {
 impl StaticType for nalgebra::Vector3<Float> {
     fn static_type() -> ValueType {
         ValueType::Vector3(None)
+    }
+}
+
+impl Into<boolmesh::Vec3> for Vector3 {
+    fn into(self) -> boolmesh::Vec3 {
+        boolmesh::Vec3 {
+            x: self.value.x,
+            y: self.value.y,
+            z: self.value.z,
+        }
     }
 }
 
@@ -971,6 +998,76 @@ impl StaticType for nalgebra::Vector4<Float> {
         ValueType::Vector4(None)
     }
 }
+
+impl Into<boolmesh::Vec4> for Vector4 {
+    fn into(self) -> boolmesh::Vec4 {
+        boolmesh::Vec4 {
+            x: self.value.x,
+            y: self.value.y,
+            z: self.value.z,
+            w: self.value.w,
+        }
+    }
+}
+
+macro_rules! equivalent_boolmesh_vector {
+    (Vector2) => {
+        boolmesh::Vec2
+    };
+    (Vector3) => {
+        boolmesh::Vec3
+    };
+    (Vector4) => {
+        boolmesh::Vec4
+    };
+}
+
+macro_rules! build_vector_type {
+    ($name:ident: $type:tt = $dimension:expr) => {
+        pub struct $name($type);
+
+        impl StaticTypeName for $name {
+            fn static_type_name() -> Cow<'static, str> {
+                stringify!($name).into()
+            }
+        }
+
+        impl StaticType for $name {
+            fn static_type() -> ValueType {
+                ValueType::$type(Some($dimension))
+            }
+        }
+
+        impl enum_downcast::IntoVariant<$name> for Value {
+            fn into_variant(self) -> Result<$name, Value> {
+                Ok($name(self.into_variant()?))
+            }
+        }
+
+        impl Into<$type> for $name {
+            fn into(self) -> $type {
+                self.0
+            }
+        }
+
+        impl Into<equivalent_boolmesh_vector!($type)> for $name {
+            fn into(self) -> equivalent_boolmesh_vector!($type) {
+                self.0.into()
+            }
+        }
+
+        impl std::ops::Deref for $name {
+            type Target = $type;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    };
+}
+
+build_vector_type!(Length2: Vector2 = Dimension::length());
+build_vector_type!(Length3: Vector3 = Dimension::length());
 
 #[cfg(test)]
 mod test {

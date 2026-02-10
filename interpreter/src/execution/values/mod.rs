@@ -22,7 +22,10 @@ use enum_dispatch::enum_dispatch;
 use enum_downcast::{AsVariant, EnumDowncast, IntoVariant};
 use unwrap_enum::EnumAs;
 
-use crate::execution::{logging::StackTrace, stack::ScopeType, ExecutionContext};
+use crate::{
+    execution::{logging::StackTrace, stack::ScopeType, ExecutionContext},
+    values::manifold_mesh::ManifoldMesh3D,
+};
 
 use super::errors::{ErrorType, ExpressionResult, Raise as _};
 
@@ -58,6 +61,8 @@ pub use file::File;
 
 pub mod constraint_set;
 pub use constraint_set::ConstraintSet;
+
+pub mod manifold_mesh;
 
 mod value_type;
 pub use value_type::{StructDefinition, StructMember, ValueType};
@@ -288,6 +293,7 @@ pub enum Value {
     Vector4(Vector4),
     File,
     ConstraintSet,
+    ManifoldMesh3D,
     // Quaternion,
 }
 
