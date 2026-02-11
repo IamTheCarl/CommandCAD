@@ -16,10 +16,9 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{borrow::Cow, io::Read, sync::Arc};
+use std::{borrow::Cow, path::PathBuf, sync::Arc};
 
 use imstr::ImString;
-use tempfile::NamedTempFile;
 
 use crate::{
     build_method,
@@ -32,18 +31,19 @@ use crate::{
         },
         ExecutionContext,
     },
+    values::StaticType,
 };
 
 #[derive(Debug, Clone)]
 pub struct File {
-    content: Arc<NamedTempFile>,
+    pub path: Arc<PathBuf>,
 }
 
 impl Eq for File {}
 
 impl PartialEq for File {
     fn eq(&self, other: &Self) -> bool {
-        self.content.path() == other.content.path()
+        self.path == other.path
     }
 }
 
@@ -75,13 +75,19 @@ impl Object for File {
             });
         }
 
-        write!(f, "{:?}", self.content.path())
+        write!(f, "{:?}", self.path)
     }
 }
 
 impl StaticTypeName for File {
     fn static_type_name() -> Cow<'static, str> {
         "File".into()
+    }
+}
+
+impl StaticType for File {
+    fn static_type() -> ValueType {
+        ValueType::File
     }
 }
 
@@ -96,10 +102,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: File
         ) -> IString {
-            let mut file = this.content.reopen().map_err(|error| GenericFailure(format!("Failed to re-open file: {error:?}").into()).to_error(context.stack_trace))?;
-
-            let mut content = String::new();
-            file.read_to_string(&mut content).map_err(|error| GenericFailure(format!("File was not UTF8 encoded: {error:?}").into()).to_error(context.stack_trace))?;
+            let content = std::fs::read_to_string(this.path.as_path())
+                .map_err(|error| GenericFailure(format!("Failed to read file to string: {error:?}").into()).to_error(context.stack_trace))?;
 
             Ok(IString(ImString::from(content)))
         }
