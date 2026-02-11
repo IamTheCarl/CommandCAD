@@ -82,13 +82,24 @@ fn repl() -> Result<()> {
     let database = BuiltinCallableDatabase::new();
     let prelude = build_prelude(&database).context("Failed to build prelude")?;
 
+    let store_directory = TempDir::new().unwrap();
+    let store = Store::new(store_directory.path());
+
+    println!("Store is located at {:?}", store_directory.path());
+    println!("Store will be deleted on exit.");
+
     loop {
         let sig = line_editor.read_line(&prompt);
         match sig {
             Ok(Signal::Success(input)) => {
-                if let Err(error) =
-                    run_line(&mut parser, &prelude, &database, &repl_file, input.as_str())
-                {
+                if let Err(error) = run_line(
+                    &mut parser,
+                    &prelude,
+                    &database,
+                    &store,
+                    &repl_file,
+                    input.as_str(),
+                ) {
                     eprintln!("Failed to run line: {error}");
                 }
             }
@@ -151,6 +162,7 @@ fn run_line(
     parser: &mut Parser,
     prelude: &HashMap<ImString, Value>,
     database: &BuiltinCallableDatabase,
+    store: &Store,
     repl_file: &Arc<PathBuf>,
     input: &str,
 ) -> Result<()> {
@@ -160,19 +172,13 @@ fn run_line(
     let root =
         compile(&repl_file, input, &tree).map_err(|error| anyhow!("Failed to compile: {error}"))?;
 
-    let store_directory = TempDir::new().unwrap();
-    let store = Store::new(store_directory.path());
-
-    println!("Store is located at {:?}", store_directory.path());
-    println!("Store will be deleted on exit.");
-
     let log = StderrLog;
     let context = ExecutionContext {
         log: &log as &dyn RuntimeLog,
         stack_trace: &StackTrace::top(root.reference.clone()),
         stack: &StackScope::top(&prelude),
         database: &database,
-        store: &store,
+        store,
     };
 
     if let Some(report) = build_syntax_errors(&tree, repl_file, root.reference.clone()) {
