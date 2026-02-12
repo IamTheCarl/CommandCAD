@@ -17,8 +17,12 @@
  */
 
 use boolmesh::prelude::*;
-use common_data_types::{Dimension, RawFloat};
-use std::{borrow::Cow, io::Write as _, sync::Arc};
+use common_data_types::{Dimension, Float, RawFloat};
+use std::{
+    borrow::Cow,
+    io::{BufWriter, Write as _},
+    sync::Arc,
+};
 
 use crate::{
     build_function, build_method,
@@ -27,9 +31,11 @@ use crate::{
         store::IoError,
     },
     values::{
-        scalar::Length, vector::Length3, BuiltinCallableDatabase, BuiltinFunction,
-        DowncastForBinaryOpError, File, IString, MissingAttributeError, Object, StaticType,
-        StaticTypeName, Style, UnsignedInteger, Value, ValueType, Vector3,
+        scalar::{Length, UnwrapNotNan},
+        vector::Length3,
+        Boolean, BuiltinCallableDatabase, BuiltinFunction, DowncastForBinaryOpError, File, IString,
+        MissingAttributeError, Object, Scalar, StaticType, StaticTypeName, Style, UnsignedInteger,
+        Value, ValueType, Vector3,
     },
     ExecutionContext,
 };
@@ -269,39 +275,94 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
     build_method!(
         database,
-        methods::ToStl, "ManifoldMesh3D::to_stl", (context: &ExecutionContext, this: ManifoldMesh3D, name: IString) -> File {
-            let mut mesh = Vec::new();
+        methods::ToStl, "ManifoldMesh3D::to_stl", (
+            context: &ExecutionContext,
+            this: ManifoldMesh3D,
+            name: IString,
+            scale: Length = Scalar {
+                dimension: Dimension::length(),
+                value: Float::new(1.0/1000.0).expect("Default stl scale was NaN")
+            }.into(),
+            ascii: Boolean = Boolean(false).into()
+        ) -> File {
+            if !ascii.0 {
+                // Produce a binary STL
+                let mut mesh = Vec::new();
 
-            use stl_io::{Triangle, Vertex, write_stl};
+                use stl_io::{Triangle, Vertex, write_stl};
 
-            for (face_id, halfedge) in this.0.hs.chunks(3).enumerate() {
-                let p0 = this.0.ps[halfedge[0].tail];
-                let p1 = this.0.ps[halfedge[1].tail];
-                let p2 = this.0.ps[halfedge[2].tail];
-                let normal  = this.0.face_normals[face_id];
+                for (normal, halfedge) in this.0.face_normals.iter().zip(this.0.hs.chunks(3)) {
+                    let p0 = this.0.ps[halfedge[0].tail];
+                    let p1 = this.0.ps[halfedge[1].tail];
+                    let p2 = this.0.ps[halfedge[2].tail];
 
-                let triangle = Triangle {
-                    normal: Vertex::new([normal.x as f32, normal.y as f32, normal.z as f32]),
-                    vertices: [Vertex::new([p0.x as f32, p0.y as f32, p0.z as f32]),
-                               Vertex::new([p1.x as f32, p1.y as f32, p1.z as f32]),
-                               Vertex::new([p2.x as f32, p2.y as f32, p2.z as f32])]
-                };
+                    let scale = 1.0 / *scale.value;
 
-                mesh.push(triangle);
+                    let triangle = Triangle {
+                        normal: Vertex::new([(normal.x * scale) as f32, (normal.y * scale) as f32, (normal.z * scale) as f32]),
+                        vertices: [Vertex::new([(p0.x * scale) as f32, (p0.y * scale) as f32, (p0.z * scale) as f32]),
+                                   Vertex::new([(p1.x * scale) as f32, (p1.y * scale) as f32, (p1.z * scale) as f32]),
+                                   Vertex::new([(p2.x * scale) as f32, (p2.y * scale) as f32, (p2.z * scale) as f32])]
+                    };
+
+                    mesh.push(triangle);
+                }
+
+                // This thing doesn't kick back IO errors, so we'll collect to an infaulable
+                // structure and then write that ourselves.
+                let mut serialized = Vec::new();
+                write_stl(&mut serialized, mesh.iter()).map_err(|_| GenericFailure("Failed to serialize STL file".into()).to_error(context.stack_trace))?;
+
+                let path = context.store.get_or_init_file(context, &(&this, "ascii"), format!("{}.stl", name.0), |file| {
+                    file.write_all(&serialized).map_err(|error| IoError(error).to_error(context.stack_trace))?;
+
+                    Ok(())
+                })?;
+
+                Ok(File { path: Arc::new(path) })
+            } else {
+                let path = context.store.get_or_init_file(context, &(&this, "binary"), format!("{}.stl", name.0), |file| {
+                    let mut file = BufWriter::new(file);
+                    let scale = *Float::new(1.0 / *scale.value).unwrap_not_nan(context.stack_trace)?;
+
+                    // file.write_all(&serialized).map_err(|error| IoError(error).to_error(context.stack_trace))?;
+                    let mut trampoline = || -> std::io::Result<()> {
+                        writeln!(file, "solid {}", name.0)?;
+
+                        for (normal, halfedge) in this.0.face_normals.iter().zip(this.0.hs.chunks(3)) {
+                            let p0 = this.0.ps[halfedge[0].tail];
+                            let p1 = this.0.ps[halfedge[1].tail];
+                            let p2 = this.0.ps[halfedge[2].tail];
+
+                            writeln!(file, "\tfacet normal {} {} {}", normal.x, normal.y, normal.z)?;
+
+                            {
+                                writeln!(file, "\t\touter loop")?;
+
+                                {
+                                    writeln!(file, "\t\t\tvertex {} {} {}", p0.x * scale, p0.y * scale, p0.z * scale)?;
+                                    writeln!(file, "\t\t\tvertex {} {} {}", p1.x * scale, p1.y * scale, p1.z * scale)?;
+                                    writeln!(file, "\t\t\tvertex {} {} {}", p2.x * scale, p2.y * scale, p2.z * scale)?;
+                                }
+
+                                writeln!(file, "\t\tendloop")?;
+                            }
+
+                            writeln!(file, "\tendfacet")?;
+                        }
+
+                        writeln!(file, "endsolid {}", name.0)?;
+
+                        Ok(())
+                    };
+
+                    trampoline().map_err(|error| IoError(error).to_error(context.stack_trace))?;
+
+                    Ok(())
+                })?;
+
+                Ok(File { path: Arc::new(path) })
             }
-
-            // This thing doesn't kick back IO errors, so we'll collect to an infaulable
-            // structure and then write that ourselves.
-            let mut serialized = Vec::new();
-            write_stl(&mut serialized, mesh.iter()).map_err(|_| GenericFailure("Failed to serialize STL file".into()).to_error(context.stack_trace))?;
-
-            let path = context.store.get_or_init_file(context, &this, format!("{}.stl", name.0), |file| {
-                file.write_all(&serialized).map_err(|error| IoError(error).to_error(context.stack_trace))?;
-
-                Ok(())
-            })?;
-
-            Ok(File { path: Arc::new(path) })
         }
     );
 }
