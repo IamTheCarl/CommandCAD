@@ -869,6 +869,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
 macro_rules! build_scalar_type {
     ($name:ident = $dimension:expr) => {
+        #[derive(Debug, Hash, Clone)]
         pub struct $name(Scalar);
 
         impl StaticType for $name {

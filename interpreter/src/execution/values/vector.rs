@@ -1066,6 +1066,7 @@ macro_rules! build_vector_type {
     };
 }
 
+build_vector_type!(Zero3: Vector3 = Dimension::length());
 build_vector_type!(Length2: Vector2 = Dimension::length());
 build_vector_type!(Length3: Vector3 = Dimension::length());
 

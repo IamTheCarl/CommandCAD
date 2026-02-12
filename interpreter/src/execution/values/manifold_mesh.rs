@@ -32,10 +32,10 @@ use crate::{
     },
     values::{
         scalar::{Length, UnwrapNotNan},
-        vector::Length3,
-        Boolean, BuiltinCallableDatabase, BuiltinFunction, DowncastForBinaryOpError, File, IString,
+        vector::{Length3, Zero3},
+        Boolean, BuiltinCallableDatabase, BuiltinFunction, DowncastError, File, IString,
         MissingAttributeError, Object, Scalar, StaticType, StaticTypeName, Style, UnsignedInteger,
-        Value, ValueType, Vector3,
+        Value, ValueNone, ValueType, Vector3,
     },
     ExecutionContext,
 };
@@ -99,7 +99,7 @@ impl Object for ManifoldMesh3D {
     }
 
     fn multiply(mut self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let input = Self::unpack_transform_input(context, 1.0, rhs)?;
+        let input = rhs.downcast::<Zero3>(context.stack_trace)?;
         let vector = input.raw_value();
         let manifold = Arc::make_mut(&mut self.0);
         manifold.scale(vector.x, vector.y, vector.z);
@@ -149,7 +149,7 @@ impl ManifoldMesh3D {
         input: Value,
     ) -> ExpressionResult<Vector3> {
         let build_type_error = || {
-            DowncastForBinaryOpError {
+            DowncastError {
                 expected: "Vector2 or Vector3 of lengths".into(),
                 got: input.get_type(context).name(),
             }
@@ -197,6 +197,28 @@ pub mod methods {
     pub struct ToStl;
 }
 
+fn unpack_radius(
+    context: &ExecutionContext,
+    radius: Option<Length>,
+    diameter: Option<Length>,
+) -> ExpressionResult<RawFloat> {
+    match (radius, diameter) {
+        (Some(radius), Option::None) => Ok(radius.into()),
+        (Option::None, Some(diameter)) => {
+            let diameter: RawFloat = diameter.into();
+            Ok(diameter / 2.0)
+        }
+        (Some(_), Some(_)) => Err(GenericFailure(
+            "You must provide the radius or the diameter, not both".into(),
+        )
+        .to_error(context.stack_trace)),
+        (Option::None, Option::None) => Err(GenericFailure(
+            "You must provide the radius or the diameter, neither were provided".into(),
+        )
+        .to_error(context.stack_trace)),
+    }
+}
+
 pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
     build_function!(
         database,
@@ -204,10 +226,13 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             apex: Length3,
             center: Length3,
-            radius: Length,
+            radius: Option<Length> = ValueNone.into(),
+            diameter: Option<Length> = ValueNone.into(),
             divide: UnsignedInteger) -> ManifoldMesh3D
         {
-            let manifold = generate_cone(apex.into(), center.into(), radius.into(), divide.0 as usize)
+            let radius = unpack_radius(context, radius, diameter)?;
+
+            let manifold = generate_cone(apex.into(), center.into(), radius, divide.0 as usize)
                 .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
             Ok(ManifoldMesh3D(Arc::new(manifold)).into())
         }
@@ -224,13 +249,15 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
         database,
         methods::GenerateCylinder, "ManifoldMesh3D::cylinder", (
             context: &ExecutionContext,
-            radius: Length,
+            radius: Option<Length> = ValueNone.into(),
+            diameter: Option<Length> = ValueNone.into(),
             height: Length,
             sectors: UnsignedInteger,
             stacks: UnsignedInteger
-        ) -> ManifoldMesh3D
-        {
-            let manifold = generate_cylinder(radius.into(), height.into(), sectors.0 as usize, stacks.0 as usize)
+        ) -> ManifoldMesh3D {
+            let radius = unpack_radius(context, radius, diameter)?;
+
+            let manifold = generate_cylinder(radius, height.into(), sectors.0 as usize, stacks.0 as usize)
                 .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
             Ok(ManifoldMesh3D(Arc::new(manifold)).into())
         }
@@ -239,10 +266,16 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
         database,
         methods::GenerateIcosphere, "ManifoldMesh3D::icosphere", (
             context: &ExecutionContext,
-            subdivions: UnsignedInteger) -> ManifoldMesh3D
-        {
-            let manifold = generate_icosphere(subdivions.0 as u32)
+            subdivions: UnsignedInteger,
+            radius: Option<Length> = ValueNone.into(),
+            diameter: Option<Length> = ValueNone.into()
+        ) -> ManifoldMesh3D {
+            let scale = unpack_radius(context, radius, diameter)?;
+
+            let mut manifold = generate_icosphere(subdivions.0 as u32)
                 .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
+            manifold.scale(scale, scale, scale);
+
             Ok(ManifoldMesh3D(Arc::new(manifold)).into())
         }
     );
@@ -253,8 +286,8 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             major_radius: Length,
             minor_raidus: Length,
             rings: UnsignedInteger,
-            sectors: UnsignedInteger) -> ManifoldMesh3D
-        {
+            sectors: UnsignedInteger
+        ) -> ManifoldMesh3D {
             let manifold = generate_torus(major_radius.into(), minor_raidus.into(), rings.0 as usize, sectors.0 as usize)
                 .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
             Ok(ManifoldMesh3D(Arc::new(manifold)).into())
@@ -265,10 +298,16 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
         methods::GenerateUvSphere, "ManifoldMesh3D::uv_sphere", (
             context: &ExecutionContext,
             sectors: UnsignedInteger,
-            stacks: UnsignedInteger) -> ManifoldMesh3D
-        {
-            let manifold = generate_uv_sphere(sectors.0 as usize, stacks.0 as usize)
+            stacks: UnsignedInteger,
+            radius: Option<Length> = ValueNone.into(),
+            diameter: Option<Length> = ValueNone.into()
+        ) -> ManifoldMesh3D {
+            let scale = unpack_radius(context, radius, diameter)?;
+
+            let mut manifold = generate_uv_sphere(sectors.0 as usize, stacks.0 as usize)
                 .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
+            manifold.scale(scale, scale, scale);
+
             Ok(ManifoldMesh3D(Arc::new(manifold)).into())
         }
     );
@@ -313,7 +352,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                 let mut serialized = Vec::new();
                 write_stl(&mut serialized, mesh.iter()).map_err(|_| GenericFailure("Failed to serialize STL file".into()).to_error(context.stack_trace))?;
 
-                let path = context.store.get_or_init_file(context, &(&this, "ascii"), format!("{}.stl", name.0), |file| {
+                let path = context.store.get_or_init_file(context, &(&this, &scale, "ascii"), format!("{}.stl", name.0), |file| {
                     file.write_all(&serialized).map_err(|error| IoError(error).to_error(context.stack_trace))?;
 
                     Ok(())
@@ -321,7 +360,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
                 Ok(File { path: Arc::new(path) })
             } else {
-                let path = context.store.get_or_init_file(context, &(&this, "binary"), format!("{}.stl", name.0), |file| {
+                let path = context.store.get_or_init_file(context, &(&this, &scale, "binary"), format!("{}.stl", name.0), |file| {
                     let mut file = BufWriter::new(file);
                     let scale = *Float::new(1.0 / *scale.value).unwrap_not_nan(context.stack_trace)?;
 
