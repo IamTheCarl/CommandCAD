@@ -1,0 +1,5 @@
+[
+  [1, 2, 3, 4] * 1m, # An arithmetic operation applied to a list is applied to all its members
+  [1, 2, 3, 4]::map(f = (c: std.scalar.Number) -> std.scalar.Length: c * 2m + 1ft), # Map values in a list, producing a new list of the mapped values
+  [1, 2, 3, 4]::fold(init = 0, f = (previous: std.scalar.Number, c: std.scalar.Number) -> std.scalar.Number: previous + c) # Fold all values of the list into a single value
+]

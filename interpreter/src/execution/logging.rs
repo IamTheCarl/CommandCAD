@@ -16,8 +16,11 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use ariadne::{Cache, Source};
+use imstr::ImString;
 use std::{
     borrow::Cow,
+    collections::HashMap,
     fmt::Display,
     ops::{Deref, DerefMut},
     path::PathBuf,
@@ -29,11 +32,26 @@ use crate::compile::SourceReference;
 
 pub trait RuntimeLog: std::fmt::Debug + Send + Sync {
     fn push_message(&self, message: LogMessage);
+    fn collect_syntax_errors<'t>(
+        &self,
+        input: &str,
+        tree: &'t crate::compile::RootTree,
+        file: &'t Arc<PathBuf>,
+        span: SourceReference,
+    );
 }
 
 impl RuntimeLog for Mutex<Vec<LogMessage>> {
     fn push_message(&self, message: LogMessage) {
         self.lock().expect("Log was poisoned").push(message);
+    }
+    fn collect_syntax_errors<'t>(
+        &self,
+        _input: &str,
+        _tree: &'t crate::compile::RootTree,
+        _file: &'t Arc<PathBuf>,
+        _span: SourceReference,
+    ) {
     }
 }
 
@@ -231,4 +249,22 @@ impl std::fmt::Display for LogMessage {
 pub enum LogLevel {
     Info,
     Warning,
+}
+
+pub struct ExecutionFileCache<'i>(pub &'i HashMap<Arc<PathBuf>, Source<ImString>>);
+
+impl<'i> Cache<Arc<PathBuf>> for ExecutionFileCache<'i> {
+    type Storage = ImString;
+
+    fn fetch(&mut self, id: &Arc<PathBuf>) -> Result<&Source<Self::Storage>, impl std::fmt::Debug> {
+        if let Some(source) = self.0.get(id) {
+            Ok(source)
+        } else {
+            Err("File was never loaded during execution")
+        }
+    }
+
+    fn display<'a>(&self, id: &'a Arc<PathBuf>) -> Option<impl std::fmt::Display + 'a> {
+        Some(id.as_path().display().to_string())
+    }
 }

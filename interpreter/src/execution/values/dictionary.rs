@@ -158,6 +158,7 @@ impl Dictionary {
                             stack,
                             database: context.database,
                             store: context.store,
+                            file_cache: context.file_cache,
                         };
 
                         buffer.par_extend(group.par_iter().map(|assignment| {

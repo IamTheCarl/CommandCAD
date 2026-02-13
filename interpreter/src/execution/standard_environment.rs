@@ -43,6 +43,7 @@ pub fn build_prelude(
     let prelude = HashMap::new();
     let store_directory = TempDir::new()?;
     let store = Store::new(store_directory.path());
+    let file_cache = Mutex::new(HashMap::new());
 
     let context = ExecutionContext {
         log: &Mutex::new(Vec::new()),
@@ -50,6 +51,7 @@ pub fn build_prelude(
         stack: &StackScope::top(&prelude),
         database: &database,
         store: &store,
+        file_cache: &file_cache,
     };
 
     let global = HashMap::from([("std".into(), build_std(&context).into())]);

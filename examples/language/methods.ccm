@@ -1,0 +1,7 @@
+# Call methods on objects
+[
+  5deg::sin(),
+  1rad::sin(),
+  9::cbrt(),
+  9 'm^3'::cbrt()
+]

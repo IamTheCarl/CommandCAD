@@ -1,10 +1,15 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 mod arguments;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use arguments::Arguments;
 use ariadne::{Cache, Label, Report, ReportKind, Source};
 use clap::Parser as _;
+use git2::Repository;
 use reedline::{DefaultHinter, DefaultPrompt, Reedline, Signal};
 use tempfile::TempDir;
 use type_sitter::Node as _;
@@ -16,10 +21,10 @@ use interpreter::{
     compile::{compile, iter_raw_nodes},
     execute_expression,
     execution::values::BuiltinCallableDatabase,
-    new_parser,
+    new_parser, run_file,
     values::{Object, Style, Value},
-    ExecutionContext, ImString, LogMessage, Parser, RuntimeLog, SourceReference, StackScope,
-    StackTrace, Store,
+    ExecutionContext, ExecutionFileCache, ImString, LogMessage, Parser, RuntimeLog,
+    SourceReference, StackScope, StackTrace, Store,
 };
 
 fn main() {
@@ -27,6 +32,7 @@ fn main() {
 
     let result = match arguments.command {
         Commands::Repl => repl(),
+        Commands::File { file } => process_file(file),
     };
 
     if let Err(error) = result {
@@ -46,6 +52,88 @@ impl RuntimeLog for StderrLog {
 
         eprintln!("{}: {}: {}", level_char, message.origin, message);
     }
+
+    fn collect_syntax_errors<'t>(
+        &self,
+        input: &str,
+        tree: &'t interpreter::compile::RootTree,
+        file: &'t Arc<PathBuf>,
+        span: SourceReference,
+    ) {
+        if let Some(report) = build_syntax_errors(&tree, file, span) {
+            if let Err(error) = report.eprint(ReplFileCache(Source::from(input))) {
+                eprintln!("Failed to print syntax error message: {error}");
+            }
+        }
+    }
+}
+
+fn process_file(file: PathBuf) -> Result<()> {
+    if !file.exists() {
+        bail!("File does not exist");
+    }
+
+    if file.is_dir() {
+        bail!("File is a directory");
+    }
+
+    let database = BuiltinCallableDatabase::new();
+    let prelude = build_prelude(&database).context("Failed to build prelude")?;
+
+    let parent = file
+        .parent()
+        .context("Could not get parent directory of file")?;
+
+    let store_directory = match Repository::discover(parent) {
+        Ok(repository) => {
+            let git_directory = repository.path();
+            let project_directory = git_directory
+                .parent()
+                .context("Failed to get parent directory of .git")?;
+            project_directory.join(".ccad/store")
+        }
+        Err(error) => {
+            eprintln!("Failed to discover project directory (is this project in a git repository?): {error}");
+            eprintln!("Current directory will be used for the store.");
+            PathBuf::from("./.ccad/store")
+        }
+    };
+    std::fs::create_dir_all(&store_directory).context("Failed to create store directory")?;
+
+    let store = Store::new(store_directory);
+    let log = StderrLog;
+    let files = Mutex::new(HashMap::new());
+
+    let context = ExecutionContext {
+        log: &log as &dyn RuntimeLog,
+        stack_trace: &StackTrace::bootstrap(),
+        stack: &StackScope::top(&prelude),
+        database: &database,
+        store: &store,
+        file_cache: &files,
+    };
+
+    let result = run_file(&context, file);
+    match result {
+        Ok(result) => {
+            let mut output = String::new();
+            result
+                .format(&context, &mut output, Style::Default, None)
+                .context("Failed to write output to display")?;
+
+            println!("{output}");
+        }
+        Err(error) => {
+            let file_cache = context.file_cache.lock().expect("File cache was poisoned");
+
+            let report = error.report();
+            report
+                .eprint(ExecutionFileCache(&*file_cache))
+                .context("Failed to format error message")?;
+        }
+    }
+
+    Ok(())
 }
 
 struct ReplFileCache<'i>(Source<&'i str>);
@@ -173,12 +261,15 @@ fn run_line(
         compile(&repl_file, input, &tree).map_err(|error| anyhow!("Failed to compile: {error}"))?;
 
     let log = StderrLog;
+    let files = Mutex::new(HashMap::new());
+
     let context = ExecutionContext {
         log: &log as &dyn RuntimeLog,
         stack_trace: &StackTrace::top(root.reference.clone()),
         stack: &StackScope::top(&prelude),
         database: &database,
         store,
+        file_cache: &files,
     };
 
     if let Some(report) = build_syntax_errors(&tree, repl_file, root.reference.clone()) {
@@ -188,7 +279,6 @@ fn run_line(
     }
 
     let result = execute_expression(&context, &root);
-
     match result {
         Ok(result) => {
             let mut output = String::new();

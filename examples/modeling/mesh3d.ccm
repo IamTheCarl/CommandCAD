@@ -1,0 +1,6 @@
+[
+  std.mesh3d.icosphere(subdivions = 5u, diameter = 2cm)::to_stl(name="my_sphere"),
+  (std.mesh3d.icosphere(subdivions = 5u, diameter = 2cm) | std.mesh3d.cube() + <(0.5m, 0m, 0m)>)::to_stl(name="my_cube_sphere_or"),
+  (std.mesh3d.icosphere(subdivions = 5u, diameter = 2cm) & std.mesh3d.cube() + <(0.5m, 0m, 0m)>)::to_stl(name="my_cube_sphere_and"),
+  (std.mesh3d.icosphere(subdivions = 5u, diameter = 2cm) ^ std.mesh3d.cube() + <(0.5m, 0m, 0m)>)::to_stl(name="my_cube_sphere_xor")
+]

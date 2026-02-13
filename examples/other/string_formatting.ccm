@@ -1,0 +1,7 @@
+let
+  a = 1m;
+  b = 1ft;
+  c = b / 1ft; # Units of measurement are always presented with their internal representation. You can use this trick to print them as a specific unit.
+  d = "hello";
+in
+  "{a} {b} {c}ft {d} {e}"::format(e = "world")

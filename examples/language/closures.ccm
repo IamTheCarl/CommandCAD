@@ -1,0 +1,6 @@
+# Show the feature set of closures.
+[
+  let fn = () -> std.scalar.Length: 5m; in fn(),
+  let fn = (input: std.scalar.Length) -> std.scalar.Length: input * 2; in fn(input = 2m),
+  let x = 5; fn = (input: std.scalar.Length) -> std.scalar.Length: input * x; in fn(input = 2m), # Closure capture
+]

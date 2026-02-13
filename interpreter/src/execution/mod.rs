@@ -16,7 +16,12 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, collections::HashMap};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     compile::{self, AstNode, BinaryExpressionOperation, Expression, UnaryExpressionOperation},
@@ -25,10 +30,12 @@ use crate::{
         stack::ScopeType,
         values::BuiltinCallableDatabase,
     },
+    new_parser,
     values::{constraint_set::find_all_captured_variables_in_constraint_set, ConstraintSet},
     SourceReference,
 };
 
+use ariadne::Source;
 use rayon::{join, prelude::*};
 
 mod errors;
@@ -37,10 +44,10 @@ mod logging;
 mod stack;
 mod standard_environment;
 pub mod values;
-use errors::ExpressionResult;
+pub use errors::ExpressionResult;
 use imstr::ImString;
 use logging::LocatedStr;
-pub use logging::{LogLevel, LogMessage, RuntimeLog, StackTrace};
+pub use logging::{ExecutionFileCache, LogLevel, LogMessage, RuntimeLog, StackTrace};
 pub use stack::StackScope;
 mod store;
 pub use store::Store;
@@ -181,6 +188,7 @@ pub struct ExecutionContext<'c> {
     pub stack: &'c StackScope<'c>,
     pub database: &'c BuiltinCallableDatabase,
     pub store: &'c Store,
+    pub file_cache: &'c Mutex<HashMap<Arc<PathBuf>, Source<ImString>>>,
 }
 
 impl<'c> ExecutionContext<'c> {
@@ -527,15 +535,59 @@ pub(crate) fn test_context_custom_database<R>(
     let store_directory = TempDir::new().unwrap();
     let store = Store::new(store_directory.path());
 
+    let file_cache = Mutex::new(HashMap::new());
+
     let context = ExecutionContext {
         log: &Mutex::new(Vec::new()),
         stack_trace: &StackTrace::test(),
         stack: &StackScope::top(&prelude),
         database: &database,
         store: &store,
+        file_cache: &file_cache,
     };
 
     f(&context)
+}
+
+pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> ExpressionResult<Value> {
+    // TODO can/should we make the parser part of the execution context rather than build a new one
+    // every time we load a file?
+    let mut parser = new_parser();
+
+    let file = file.into();
+
+    let mut files = context.file_cache.lock().map_err(|_error| {
+        GenericFailure("Failed to lock file cache".into()).to_error(context.stack_trace)
+    })?;
+    let file = Arc::new(file);
+    let input = match files.entry(file.clone()) {
+        std::collections::hash_map::Entry::Occupied(entry) => entry,
+        std::collections::hash_map::Entry::Vacant(vacency) => {
+            let input = std::fs::read_to_string(file.as_path()).map_err(|error| {
+                GenericFailure(format!("Failed to read file {:?} from disk: {error}", file).into())
+                    .to_error(context.stack_trace)
+            })?;
+            let input = ImString::from(input);
+
+            vacency.insert_entry(Source::from(input))
+        }
+    };
+    let input = input.get().text();
+
+    let tree = parser.parse(input, None).map_err(|error| {
+        GenericFailure(format!("Failed to parse input: {error:?}").into())
+            .to_error(context.stack_trace)
+    })?;
+
+    let root = crate::compile(&file, input, &tree).map_err(|error| {
+        GenericFailure(format!("Failed to compile: {error}").into()).to_error(context.stack_trace)
+    })?;
+
+    context
+        .log
+        .collect_syntax_errors(&input, &tree, &file, root.reference.clone());
+
+    execute_expression(&context, &root)
 }
 
 #[cfg(test)]
