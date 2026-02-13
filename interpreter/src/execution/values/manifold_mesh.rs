@@ -83,19 +83,41 @@ impl Object for ManifoldMesh3D {
     }
 
     fn addition(mut self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let input = Self::unpack_transform_input(context, 0.0, rhs)?;
-        let vector = input.raw_value();
-        let manifold = Arc::make_mut(&mut self.0);
-        manifold.translate(vector.x, vector.y, vector.z);
-        Ok(self.into())
+        let input = Self::unpack_arithmetic_input(context, 0.0, rhs)?;
+        match input {
+            ArethmeticInput::Vector(vector) => {
+                let vector = vector.raw_value();
+                let manifold = Arc::make_mut(&mut self.0);
+                manifold.translate(vector.x, vector.y, vector.z);
+                Ok(self.into())
+            }
+            ArethmeticInput::Manifold(rhs) => {
+                let manifold =
+                    compute_boolean(&self.0, &rhs.0, OpType::Add).map_err(|message| {
+                        GenericFailure(message.into()).to_error(context.stack_trace)
+                    })?;
+                Ok(Self(Arc::new(manifold)).into())
+            }
+        }
     }
 
     fn subtraction(mut self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let input = Self::unpack_transform_input(context, 0.0, rhs)?;
-        let vector = input.raw_value();
-        let manifold = Arc::make_mut(&mut self.0);
-        manifold.translate(-vector.x, -vector.y, -vector.z);
-        Ok(self.into())
+        let input = Self::unpack_arithmetic_input(context, 0.0, rhs)?;
+        match input {
+            ArethmeticInput::Vector(vector) => {
+                let vector = vector.raw_value();
+                let manifold = Arc::make_mut(&mut self.0);
+                manifold.translate(-vector.x, -vector.y, -vector.z);
+                Ok(self.into())
+            }
+            ArethmeticInput::Manifold(rhs) => {
+                let manifold =
+                    compute_boolean(&self.0, &rhs.0, OpType::Subtract).map_err(|message| {
+                        GenericFailure(message.into()).to_error(context.stack_trace)
+                    })?;
+                Ok(Self(Arc::new(manifold)).into())
+            }
+        }
     }
 
     fn multiply(mut self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
@@ -115,9 +137,20 @@ impl Object for ManifoldMesh3D {
 
     fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
-        let manifold = compute_boolean(&self.0, &rhs.0, OpType::Subtract)
+
+        // To compute xor, get the intersectiona and then subtract it from the union of the two
+        // shapes.
+
+        let intersection = compute_boolean(&self.0, &rhs.0, OpType::Intersect)
             .map_err(|message| GenericFailure(message.into()).to_error(context.stack_trace))?;
-        Ok(Self(Arc::new(manifold)).into())
+
+        let union = compute_boolean(&self.0, &rhs.0, OpType::Add)
+            .map_err(|message| GenericFailure(message.into()).to_error(context.stack_trace))?;
+
+        let difference = compute_boolean(&union, &intersection, OpType::Subtract)
+            .map_err(|message| GenericFailure(message.into()).to_error(context.stack_trace))?;
+
+        Ok(Self(Arc::new(difference)).into())
     }
 
     fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
@@ -142,34 +175,51 @@ impl Object for ManifoldMesh3D {
     }
 }
 
+enum ArethmeticInput {
+    Vector(Vector3),
+    Manifold(ManifoldMesh3D),
+}
+
 impl ManifoldMesh3D {
-    fn unpack_transform_input(
+    fn unpack_arithmetic_input(
         context: &ExecutionContext,
         default: RawFloat,
         input: Value,
-    ) -> ExpressionResult<Vector3> {
-        let build_type_error = || {
-            DowncastError {
-                expected: "Vector2 or Vector3 of lengths".into(),
-                got: input.get_type(context).name(),
-            }
-            .to_error(context.stack_trace)
-        };
-
-        let vector = match &input {
+    ) -> ExpressionResult<ArethmeticInput> {
+        let value = match input {
             Value::Vector2(v) => {
                 let raw = v.raw_value();
-                Vector3::new(context, v.dimension(), [raw.x, raw.y, default])
+                Ok(ArethmeticInput::Vector(Vector3::new(
+                    context,
+                    v.dimension(),
+                    [raw.x, raw.y, default],
+                )?))
             }
-            Value::Vector3(v) => Ok(v.clone()),
-            _ => Err(build_type_error()),
+            Value::Vector3(v) => Ok(ArethmeticInput::Vector(v.clone())),
+            Value::ManifoldMesh3D(manifold) => Ok(ArethmeticInput::Manifold(manifold)),
+            value => Err(DowncastError {
+                expected: "Vector2 or Vector3 of lengths, or another ManifoldMesh3D".into(),
+                got: value.get_type(context).name(),
+            }
+            .to_error(context.stack_trace)),
         }?;
 
-        if vector.dimension() != Dimension::length() {
-            // Wrong dimension type.
-            Err(build_type_error())
-        } else {
-            Ok(vector)
+        match value {
+            // We need to validate the value of the dimension.
+            ArethmeticInput::Vector(vector) => {
+                if vector.dimension() != Dimension::length() {
+                    // Wrong dimension type.
+                    Err(DowncastError {
+                        expected: "Vector2 or Vector3 of lengths, or another ManifoldMesh3D".into(),
+                        got: vector.get_type(context).name(),
+                    }
+                    .to_error(context.stack_trace))
+                } else {
+                    Ok(ArethmeticInput::Vector(vector))
+                }
+            }
+            // Everything else can be passed as is.
+            value => Ok(value),
         }
     }
 }
@@ -239,9 +289,16 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
     );
     build_function!(
         database,
-        methods::GenerateCube, "ManifoldMesh3D::cube", (context: &ExecutionContext) -> ManifoldMesh3D
-        {
-            let manifold = generate_cube().map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
+        methods::GenerateCube, "ManifoldMesh3D::cube", (
+            context: &ExecutionContext,
+            size: Length3
+        ) -> ManifoldMesh3D {
+            let size: Vector3 = size.into();
+            let size = size.raw_value();
+
+            let mut manifold = generate_cube().map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
+            manifold.scale(size.x, size.y, size.z);
+
             Ok(ManifoldMesh3D(Arc::new(manifold)).into())
         }
     );
