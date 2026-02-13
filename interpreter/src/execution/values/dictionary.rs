@@ -153,12 +153,9 @@ impl Dictionary {
                 for group in ast_node.node.compute_groups() {
                     {
                         let context = ExecutionContext {
-                            log: context.log,
                             stack_trace,
                             stack,
-                            database: context.database,
-                            store: context.store,
-                            file_cache: context.file_cache,
+                            ..context.clone()
                         };
 
                         buffer.par_extend(group.par_iter().map(|assignment| {

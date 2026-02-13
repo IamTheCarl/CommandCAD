@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -111,6 +111,8 @@ fn process_file(file: PathBuf) -> Result<()> {
         database: &database,
         store: &store,
         file_cache: &files,
+        working_directory: Path::new("."),
+        import_limit: 100,
     };
 
     let result = run_file(&context, file);
@@ -270,6 +272,8 @@ fn run_line(
         database: &database,
         store,
         file_cache: &files,
+        working_directory: Path::new("."),
+        import_limit: 100,
     };
 
     if let Some(report) = build_syntax_errors(&tree, repl_file, root.reference.clone()) {

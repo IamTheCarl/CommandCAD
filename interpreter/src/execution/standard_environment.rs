@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, path::Path, sync::Mutex};
 
 use common_data_types::{Dimension, Float};
 use imstr::ImString;
@@ -24,6 +24,7 @@ use tempfile::TempDir;
 
 use crate::{
     execution::{
+        functions::Import,
         logging::StackTrace,
         stack::StackScope,
         store::Store,
@@ -45,6 +46,8 @@ pub fn build_prelude(
     let store = Store::new(store_directory.path());
     let file_cache = Mutex::new(HashMap::new());
 
+    let working_directory = Path::new(".");
+
     let context = ExecutionContext {
         log: &Mutex::new(Vec::new()),
         stack_trace: &StackTrace::bootstrap(),
@@ -52,6 +55,8 @@ pub fn build_prelude(
         database: &database,
         store: &store,
         file_cache: &file_cache,
+        working_directory: &working_directory,
+        import_limit: 100,
     };
 
     let global = HashMap::from([("std".into(), build_std(&context).into())]);
@@ -80,6 +85,7 @@ fn build_std(context: &ExecutionContext) -> Dictionary {
         ),
         ("consts".into(), build_consts(context).into()),
         ("mesh3d".into(), build_mesh_3d(context).into()),
+        ("import".into(), BuiltinFunction::new::<Import>().into()),
     ]);
     Dictionary::new(context, std)
 }
@@ -117,6 +123,7 @@ fn build_types(context: &ExecutionContext) -> Dictionary {
     let types: HashMap<ImString, Value> = HashMap::from_iter(
         [
             ("None".into(), ValueType::TypeNone.into()),
+            ("Any".into(), ValueType::Any.into()),
             ("Bool".into(), ValueType::Boolean.into()),
             ("SInt".into(), ValueType::SignedInteger.into()),
             ("UInt".into(), ValueType::UnsignedInteger.into()),

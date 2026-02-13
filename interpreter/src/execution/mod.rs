@@ -19,11 +19,12 @@
 use std::{
     cmp::Ordering,
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
 use crate::{
+    build_function,
     compile::{self, AstNode, BinaryExpressionOperation, Expression, UnaryExpressionOperation},
     execution::{
         errors::{GenericFailure, Raise},
@@ -31,7 +32,9 @@ use crate::{
         values::BuiltinCallableDatabase,
     },
     new_parser,
-    values::{constraint_set::find_all_captured_variables_in_constraint_set, ConstraintSet},
+    values::{
+        constraint_set::find_all_captured_variables_in_constraint_set, ConstraintSet, IString,
+    },
     SourceReference,
 };
 
@@ -181,7 +184,7 @@ pub fn find_all_variable_accesses_in_expression(
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExecutionContext<'c> {
     pub log: &'c dyn RuntimeLog,
     pub stack_trace: &'c StackTrace<'c>,
@@ -189,6 +192,8 @@ pub struct ExecutionContext<'c> {
     pub database: &'c BuiltinCallableDatabase,
     pub store: &'c Store,
     pub file_cache: &'c Mutex<HashMap<Arc<PathBuf>, Source<ImString>>>,
+    pub working_directory: &'c Path,
+    pub import_limit: usize,
 }
 
 impl<'c> ExecutionContext<'c> {
@@ -536,6 +541,7 @@ pub(crate) fn test_context_custom_database<R>(
     let store = Store::new(store_directory.path());
 
     let file_cache = Mutex::new(HashMap::new());
+    let working_directory = Path::new(".");
 
     let context = ExecutionContext {
         log: &Mutex::new(Vec::new()),
@@ -544,6 +550,8 @@ pub(crate) fn test_context_custom_database<R>(
         database: &database,
         store: &store,
         file_cache: &file_cache,
+        working_directory: &working_directory,
+        import_limit: 100,
     };
 
     f(&context)
@@ -556,38 +564,89 @@ pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> Express
 
     let file = file.into();
 
-    let mut files = context.file_cache.lock().map_err(|_error| {
-        GenericFailure("Failed to lock file cache".into()).to_error(context.stack_trace)
-    })?;
-    let file = Arc::new(file);
-    let input = match files.entry(file.clone()) {
-        std::collections::hash_map::Entry::Occupied(entry) => entry,
-        std::collections::hash_map::Entry::Vacant(vacency) => {
-            let input = std::fs::read_to_string(file.as_path()).map_err(|error| {
-                GenericFailure(format!("Failed to read file {:?} from disk: {error}", file).into())
-                    .to_error(context.stack_trace)
-            })?;
-            let input = ImString::from(input);
+    if file.is_absolute() {
+        return Err(
+            GenericFailure("Absolute paths cannot be used for importing files".into())
+                .to_error(context.stack_trace),
+        );
+    }
 
-            vacency.insert_entry(Source::from(input))
-        }
-    };
-    let input = input.get().text();
+    if context.import_limit <= 0 {
+        return Err(
+            GenericFailure("Import recursion depth has been exceeded".into())
+                .to_error(context.stack_trace),
+        );
+    }
 
-    let tree = parser.parse(input, None).map_err(|error| {
-        GenericFailure(format!("Failed to parse input: {error:?}").into())
+    let file = context.working_directory.join(file);
+    let parent_dir = file.parent().ok_or_else(|| {
+        GenericFailure("Failed to get parent directory of file: {error}".into())
             .to_error(context.stack_trace)
     })?;
 
-    let root = crate::compile(&file, input, &tree).map_err(|error| {
-        GenericFailure(format!("Failed to compile: {error}").into()).to_error(context.stack_trace)
-    })?;
+    let root = {
+        let mut files = context.file_cache.lock().map_err(|_error| {
+            GenericFailure("Failed to lock file cache".into()).to_error(context.stack_trace)
+        })?;
+        let file = Arc::new(file.clone());
+        let input = match files.entry(file.clone()) {
+            std::collections::hash_map::Entry::Occupied(entry) => entry,
+            std::collections::hash_map::Entry::Vacant(vacency) => {
+                let input = std::fs::read_to_string(file.as_path()).map_err(|error| {
+                    GenericFailure(
+                        format!("Failed to read file {:?} from disk: {error}", file).into(),
+                    )
+                    .to_error(context.stack_trace)
+                })?;
+                let input = ImString::from(input);
 
-    context
-        .log
-        .collect_syntax_errors(&input, &tree, &file, root.reference.clone());
+                vacency.insert_entry(Source::from(input))
+            }
+        };
+        let input = input.get().text();
+
+        let tree = parser.parse(input, None).map_err(|error| {
+            GenericFailure(format!("Failed to parse input: {error:?}").into())
+                .to_error(context.stack_trace)
+        })?;
+
+        let root = crate::compile(&file, input, &tree).map_err(|error| {
+            GenericFailure(format!("Failed to compile: {error}").into())
+                .to_error(context.stack_trace)
+        })?;
+
+        context
+            .log
+            .collect_syntax_errors(&input, &tree, &file, root.reference.clone());
+
+        root
+    };
+
+    let context = ExecutionContext {
+        working_directory: &parent_dir,
+        import_limit: context.import_limit - 1,
+        ..context.clone()
+    };
 
     execute_expression(&context, &root)
+}
+
+pub mod functions {
+    pub struct Import;
+}
+
+pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
+    build_function!(
+        database,
+        functions::Import, "std::import", (
+            context: &ExecutionContext,
+            path: IString
+        ) -> Value
+        {
+            let file = PathBuf::from(path.0.as_str());
+            run_file(context, file)
+        }
+    );
 }
 
 #[cfg(test)]
@@ -675,5 +734,23 @@ mod test {
 
         let product = test_run("if false then 1u else 2u").unwrap();
         assert_eq!(product, values::UnsignedInteger::from(2).into());
+    }
+
+    #[test]
+    fn import() {
+        let product = test_run("std.import(path = \"./test_assets/import_me.ccm\")").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn recursive_import() {
+        let product =
+            test_run("std.import(path = \"./test_assets/recursive_import.ccm\")").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn infinite_recursion_import() {
+        test_run("std.import(path = \"./test_assets/infinite_recursion_import.ccm\")").unwrap_err();
     }
 }

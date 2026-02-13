@@ -1,0 +1,7 @@
+[
+  std.import(path = "../language/arithmatic.ccm"),
+  std.import(path = "../language/closures.ccm"),
+  std.import(path = "../language/lists.ccm"),
+  std.import(path = "../language/methods.ccm"),
+  std.import(path = "../language/vectors.ccm")
+]

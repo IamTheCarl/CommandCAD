@@ -1,0 +1,2 @@
+# Import ourselves infinitely. Very bad.
+std.import(path = "./infinite_recursion_import.ccm")
