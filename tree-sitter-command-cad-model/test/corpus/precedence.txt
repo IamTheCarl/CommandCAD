@@ -1,0 +1,65 @@
+==================
+Precedence
+==================
+
+(a + b * c ** d >= e) + c
+
+---
+
+(source_file
+  (expression
+    (binary_expression
+      (expression
+        (parenthesis
+          (expression
+            (binary_expression
+              (expression
+                (binary_expression
+                  (expression
+                    (identifier))
+                  (expression
+                    (binary_expression
+                      (expression
+                        (identifier))
+                      (expression
+                        (binary_expression
+                          (expression
+                            (identifier))
+                          (expression
+                            (identifier))))))))
+              (expression
+                (identifier))))))
+      (expression
+        (identifier)))))
+
+==================
+Vectors
+==================
+
+<(a, b)> + <(a, b)> == <(a, b)>
+
+---
+
+(source_file
+  (expression
+    (binary_expression
+      (expression
+        (binary_expression
+          (expression
+            (vector2
+              (expression
+                (identifier))
+              (expression
+                (identifier))))
+          (expression
+            (vector2
+              (expression
+                (identifier))
+              (expression
+                (identifier))))))
+      (expression
+        (vector2
+          (expression
+            (identifier))
+          (expression
+            (identifier)))))))

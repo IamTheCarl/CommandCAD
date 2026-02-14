@@ -1,0 +1,289 @@
+==================
+String
+==================
+
+"Some text"
+
+---
+
+(source_file
+  (expression
+    (string)))
+
+==================
+Escaped string
+==================
+
+"Some \"text\""
+
+---
+
+(source_file
+  (expression
+    (string)))
+
+==================
+Unsigned Integer
+==================
+
+123u
+
+---
+
+(source_file
+  (expression
+    (unsigned_integer (integer (base_ten)))))
+
+==================
+Signed Integer Positive
+==================
+
+123i
+
+---
+
+(source_file
+  (expression
+    (signed_integer (integer (base_ten)))))
+
+
+==================
+Unsigned Integer Octal
+==================
+
+0o123u
+
+---
+
+(source_file
+  (expression
+    (unsigned_integer (integer (octal)))))
+
+==================
+Signed Integer Positive Octal
+==================
+
+0o123i
+
+---
+
+(source_file
+  (expression
+    (signed_integer (integer (octal)))))
+
+==================
+Unsigned Integer hex
+==================
+
+0xABCu
+
+---
+
+(source_file
+  (expression
+    (unsigned_integer (integer (hex)))))
+
+==================
+Signed Integer Positive Hex
+==================
+
+0xABCi
+
+---
+
+(source_file
+  (expression
+    (signed_integer (integer (hex)))))
+
+==================
+Unsigned Integer Binary
+==================
+
+0b1010u
+
+---
+
+(source_file
+  (expression
+    (unsigned_integer (integer (binary)))))
+
+==================
+Signed Integer Positive Binary
+==================
+
+0b1010i
+
+---
+
+(source_file
+  (expression
+    (signed_integer (integer (binary)))))
+
+==================
+Signed Integer Positive with plus
+==================
+
++123 i
+
+---
+
+(source_file
+  (expression
+    (unary_expression
+      (expression
+        (signed_integer (integer (base_ten)))))))
+
+==================
+Signed Integer Positive with minus
+==================
+
+-123i
+
+---
+
+(source_file
+  (expression
+    (unary_expression
+      (expression
+        (signed_integer (integer (base_ten)))))))
+
+==================
+Scalar no decimal no unit
+==================
+
+123
+
+---
+
+(source_file
+  (expression
+    (scalar
+      (number))))
+
+==================
+Scalar no unit
+==================
+
+123.321
+
+---
+
+(source_file
+  (expression
+    (scalar
+      (number)
+      (number))))
+
+==================
+Scalar with unquoted unit
+==================
+
+123 mm
+
+---
+
+(source_file
+  (expression
+    (scalar
+      (number)
+      (identifier))))
+
+==================
+Scalar with quoted unit
+==================
+
+123 'mm'
+
+---
+
+(source_file
+  (expression
+    (scalar
+      (number)
+      (unit_quote))))
+
+==================
+Scalar with quoted unit that would not work as an identifier
+==================
+
+123 'm^2'
+
+---
+
+(source_file
+  (expression
+    (scalar
+      (number)
+      (unit_quote))))
+
+==================
+Vector2
+==================
+
+<(1m, 2m)>
+
+---
+
+(source_file
+  (expression
+    (vector2
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier))))))
+
+==================
+Vector3
+==================
+
+<(1m, 2m, 3m)>
+
+---
+
+(source_file
+  (expression
+    (vector3
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier))))))
+
+==================
+Vector4
+==================
+
+<(1m, 2m, 3m, 4m)>
+
+---
+
+(source_file
+  (expression
+    (vector4
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier)))
+      (expression
+        (scalar
+          (number)
+          (identifier))))))

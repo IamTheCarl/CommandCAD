@@ -1,0 +1,83 @@
+==================
+Empty
+==================
+
+()
+
+---
+
+(source_file
+  (expression
+    (dictionary_construction)))
+
+==================
+One
+==================
+
+(one = a)
+
+---
+
+(source_file
+  (expression
+    (dictionary_construction
+      (dictionary_member_assignment
+        (identifier)
+        (expression
+          (identifier))))))
+
+==================
+One,
+==================
+
+(one = a,)
+
+---
+
+(source_file
+  (expression
+    (dictionary_construction
+      (dictionary_member_assignment
+        (identifier)
+        (expression
+          (identifier))))))
+
+==================
+One, two
+==================
+
+(one = a, two = b)
+
+---
+
+(source_file
+  (expression
+    (dictionary_construction
+      (dictionary_member_assignment
+        (identifier)
+        (expression
+          (identifier)))
+      (dictionary_member_assignment
+        (identifier)
+        (expression
+          (identifier))))))
+
+==================
+One, two,
+==================
+
+(one = a, two = b,)
+
+---
+
+(source_file
+  (expression
+    (dictionary_construction
+      (dictionary_member_assignment
+        (identifier)
+        (expression
+          (identifier)))
+      (dictionary_member_assignment
+        (identifier)
+        (expression
+          (identifier))))))

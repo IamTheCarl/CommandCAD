@@ -1,0 +1,6 @@
+[
+  <(1, 2)>, <(1, 2, 3)>, <(1, 2, 3, 4)>, # Three different sizes of vector are available
+  <(1m, 2m, 3m)>, # Vectors can have units
+  <(1, 2, 3)> * 1m, # Arithmetic operations on the vector are applied to the vector's components.
+  [<(1, 2, 3)>, <(4, 5, 6)>, <(7, 8, 9)>, <(10, 11, 12)>] * 1mm # Use this with a list to mass-apply a unit
+]

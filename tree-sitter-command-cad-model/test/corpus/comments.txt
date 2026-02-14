@@ -1,0 +1,35 @@
+==================
+Comment
+==================
+
+# There's a comment before the code.
+""
+
+---
+
+(source_file
+  (comment)
+  (expression
+    (string)))
+
+==================
+Comment before closure
+==================
+
+# There's a comment before the code.
+()->std.None: ""
+
+---
+
+(source_file
+  (comment)
+  (expression
+    (closure_definition
+      (struct_definition)
+      (expression
+        (member_access
+          (expression
+            (identifier))
+          (identifier)))
+      (expression
+        (string)))))

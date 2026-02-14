@@ -1,0 +1,10 @@
+[package]
+name = "formatter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+tree-sitter-command-cad-model= { path = "../tree-sitter-command-cad-model" }
+# topiary-core = "0.5.1"
+clap = { version = "4.4", features = [ "derive", "wrap_help" ] }

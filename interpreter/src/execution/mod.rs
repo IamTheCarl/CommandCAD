@@ -1,0 +1,784 @@
+/*
+ * Copyright 2025 James Carl
+ * AGPL-3.0-only or AGPL-3.0-or-later
+ *
+ * This file is part of Command Cad.
+ *
+ * Command CAD is free software: you can redistribute it and/or modify it under the terms of
+ * the GNU Affero General Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along with this
+ * program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
+
+use crate::{
+    build_function,
+    compile::{self, AstNode, BinaryExpressionOperation, Expression, UnaryExpressionOperation},
+    execution::{
+        errors::{GenericFailure, Raise},
+        stack::ScopeType,
+        values::BuiltinCallableDatabase,
+    },
+    new_parser,
+    values::{
+        constraint_set::find_all_captured_variables_in_constraint_set, ConstraintSet, IString,
+    },
+    SourceReference,
+};
+
+use ariadne::Source;
+use rayon::{join, prelude::*};
+
+mod errors;
+pub use errors::Error;
+mod logging;
+mod stack;
+mod standard_environment;
+pub mod values;
+pub use errors::ExpressionResult;
+use imstr::ImString;
+use logging::LocatedStr;
+pub use logging::{ExecutionFileCache, LogLevel, LogMessage, RuntimeLog, StackTrace};
+pub use stack::StackScope;
+mod store;
+pub use store::Store;
+
+use values::{
+    closure::find_all_variable_accesses_in_closure_capture,
+    dictionary::find_all_variable_accesses_in_dictionary_construction, Object, Value, ValueType,
+};
+
+pub use standard_environment::build_prelude;
+
+pub fn find_all_variable_accesses_in_expression(
+    expression: &Expression,
+    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
+) -> ExpressionResult<()> {
+    match expression {
+        Expression::BinaryExpression(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node.a.node, access_collector)?;
+            find_all_variable_accesses_in_expression(&ast_node.node.b.node, access_collector)?;
+
+            Ok(())
+        }
+        Expression::ClosureDefinition(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.return_type.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_closure_capture(&ast_node.node, access_collector)?;
+
+            Ok(())
+        }
+        Expression::DictionaryConstruction(ast_node) => {
+            find_all_variable_accesses_in_dictionary_construction(&ast_node.node, access_collector)
+        }
+        Expression::If(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.condition.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.on_true.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.on_false.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::List(ast_node) => {
+            for expression in ast_node.node.iter() {
+                find_all_variable_accesses_in_expression(&expression.node, access_collector)?;
+            }
+
+            Ok(())
+        }
+        Expression::Parenthesis(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node, access_collector)
+        }
+        Expression::MemberAccess(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node.base.node, access_collector)
+        }
+        Expression::StructDefinition(ast_node) => {
+            for member in ast_node.node.members.iter() {
+                find_all_variable_accesses_in_expression(&member.node.ty.node, access_collector)?;
+                if let Some(default) = member.node.default.as_ref() {
+                    find_all_variable_accesses_in_expression(&default.node, access_collector)?;
+                }
+            }
+
+            Ok(())
+        }
+        Expression::UnaryExpression(ast_node) => find_all_variable_accesses_in_expression(
+            &ast_node.node.expression.node,
+            access_collector,
+        ),
+        Expression::FunctionCall(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.to_call.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_dictionary_construction(
+                &ast_node.node.argument.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::MethodCall(ast_node) => {
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.self_dictionary.node,
+                access_collector,
+            )?;
+            find_all_variable_accesses_in_dictionary_construction(
+                &ast_node.node.argument.node,
+                access_collector,
+            )?;
+
+            Ok(())
+        }
+        Expression::LetIn(ast_node) => {
+            for assignment in ast_node.node.assignments.iter() {
+                find_all_variable_accesses_in_expression(
+                    &assignment.node.value.node,
+                    access_collector,
+                )?;
+            }
+
+            let variable_names: Vec<&ImString> = {
+                let mut variable_names = Vec::with_capacity(ast_node.node.assignments.len());
+
+                for argument in ast_node.node.assignments.iter() {
+                    variable_names.push(&argument.node.ident.node);
+                }
+
+                // We typically won't have more than 6 arguments, so a binary search will typically
+                // outperform a hashset.
+                variable_names.sort();
+
+                variable_names
+            };
+
+            find_all_variable_accesses_in_expression(
+                &ast_node.node.expression.node,
+                &mut move |variable_name| {
+                    if variable_names.binary_search(&&variable_name.node).is_err() {
+                        // This is not an argument, which means it must be captured from the environment.
+                        access_collector(variable_name)?;
+                    }
+
+                    Ok(())
+                },
+            )?;
+
+            Ok(())
+        }
+        Expression::Identifier(ast_node) => access_collector(ast_node),
+        Expression::ConstraintSet(constraint_set) => {
+            find_all_captured_variables_in_constraint_set(&constraint_set.node, access_collector)
+        }
+        Expression::Boolean(_)
+        | Expression::Scalar(_)
+        | Expression::Vector2(_)
+        | Expression::Vector3(_)
+        | Expression::Vector4(_)
+        | Expression::SignedInteger(_)
+        | Expression::String(_)
+        | Expression::UnsignedInteger(_)
+        | Expression::Self_(_)
+        | Expression::Malformed(_) => Ok(()),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ExecutionContext<'c> {
+    pub log: &'c dyn RuntimeLog,
+    pub stack_trace: &'c StackTrace<'c>,
+    pub stack: &'c StackScope<'c>,
+    pub database: &'c BuiltinCallableDatabase,
+    pub store: &'c Store,
+    pub file_cache: &'c Mutex<HashMap<Arc<PathBuf>, Source<ImString>>>,
+    pub working_directory: &'c Path,
+    pub import_limit: usize,
+}
+
+impl<'c> ExecutionContext<'c> {
+    pub fn trace_scope<F, R>(&'c self, reference: impl Into<SourceReference>, code: F) -> R
+    where
+        F: FnOnce(&ExecutionContext<'_>) -> R,
+    {
+        self.stack_trace.trace_scope(reference, move |stack_trace| {
+            let context = ExecutionContext {
+                stack_trace: &stack_trace,
+                ..*self
+            };
+
+            code(&context)
+        })
+    }
+
+    pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(&self, name: S) -> ExpressionResult<&Value> {
+        self.stack.get_variable(self.stack_trace, [], name)
+    }
+
+    pub fn get_variable_for_closure<'s, S: Into<LocatedStr<'s>>>(
+        &self,
+        local_variables: impl IntoIterator<Item = ImString>,
+        name: S,
+    ) -> ExpressionResult<&Value> {
+        self.stack
+            .get_variable(self.stack_trace, local_variables, name)
+    }
+
+    pub fn stack_scope<B, R>(
+        &self,
+        mode: ScopeType,
+        variables: HashMap<ImString, Value>,
+        block: B,
+    ) -> ExpressionResult<R>
+    where
+        B: FnOnce(&ExecutionContext) -> R,
+    {
+        self.stack
+            .scope(self.stack_trace, mode, variables, |stack, stack_trace| {
+                let context = ExecutionContext {
+                    stack_trace,
+                    stack,
+                    ..*self
+                };
+
+                block(&context)
+            })
+    }
+}
+
+pub fn execute_expression(
+    context: &ExecutionContext,
+    expression: &compile::AstNode<compile::Expression>,
+) -> ExpressionResult<Value> {
+    context.trace_scope(expression.reference.clone(), |context| {
+        match &expression.node {
+            compile::Expression::BinaryExpression(ast_node) => {
+                execute_binary_expression(context, ast_node)
+            }
+            compile::Expression::Boolean(ast_node) => Ok(values::Boolean(ast_node.node).into()),
+            compile::Expression::ClosureDefinition(ast_node) => {
+                Ok(values::UserClosure::from_ast(context, ast_node)?.into())
+            }
+            compile::Expression::DictionaryConstruction(ast_node) => {
+                Ok(values::Dictionary::from_ast(context, ast_node)?.into())
+            }
+            compile::Expression::If(ast_node) => execute_if_expression(context, ast_node),
+            compile::Expression::List(ast_node) => {
+                Ok(values::List::from_ast(context, ast_node)?.into())
+            }
+            compile::Expression::Parenthesis(ast_node) => execute_expression(context, ast_node),
+            compile::Expression::MemberAccess(ast_node) => {
+                let base = execute_expression(context, &ast_node.node.base)?;
+
+                context.trace_scope(ast_node.node.member.reference.clone(), |context| {
+                    base.get_attribute(context, &ast_node.node.member.node)
+                })
+            }
+            compile::Expression::Self_(ast_node) => context
+                .get_variable(LocatedStr {
+                    location: ast_node.reference.clone(),
+                    string: "self",
+                })
+                .cloned(),
+            compile::Expression::Identifier(ast_node) => context
+                .get_variable(LocatedStr {
+                    location: ast_node.reference.clone(),
+                    string: ast_node.node.as_str(),
+                })
+                .cloned(),
+            compile::Expression::Scalar(ast_node) => Ok(values::Scalar {
+                dimension: ast_node.node.dimension,
+                value: ast_node.node.value,
+            }
+            .into()),
+            compile::Expression::Vector2(vector) => {
+                Ok(values::Vector2::from_ast(context, vector)?.into())
+            }
+            compile::Expression::Vector3(vector) => {
+                Ok(values::Vector3::from_ast(context, vector)?.into())
+            }
+            compile::Expression::Vector4(vector) => {
+                Ok(values::Vector4::from_ast(context, vector)?.into())
+            }
+            compile::Expression::SignedInteger(ast_node) => {
+                Ok(values::SignedInteger::from(ast_node.node).into())
+            }
+            compile::Expression::String(ast_node) => {
+                Ok(values::IString::from(ast_node.node.clone()).into())
+            }
+            compile::Expression::StructDefinition(ast_node) => {
+                Ok(ValueType::from(values::StructDefinition::new(context, ast_node)?).into())
+            }
+            compile::Expression::UnaryExpression(ast_node) => {
+                execute_unary_expression(context, ast_node)
+            }
+            compile::Expression::UnsignedInteger(ast_node) => {
+                Ok(values::UnsignedInteger::from(ast_node.node).into())
+            }
+            compile::Expression::FunctionCall(ast_node) => execute_function_call(context, ast_node),
+            compile::Expression::MethodCall(ast_node) => execute_method_call(context, ast_node),
+            compile::Expression::LetIn(ast_node) => execute_let_in(context, ast_node),
+            compile::Expression::ConstraintSet(constraint_set) => {
+                ConstraintSet::from_ast(context, constraint_set).map(|set| set.into())
+            }
+            compile::Expression::Malformed(kind) => Err(GenericFailure(
+                format!("Malformed syntax, expected {kind}").into(),
+            )
+            .to_error(context.stack_trace)),
+        }
+    })
+}
+
+fn execute_unary_expression(
+    context: &ExecutionContext,
+    expression: &compile::AstNode<Box<compile::UnaryExpression>>,
+) -> ExpressionResult<Value> {
+    context.trace_scope(expression.reference.clone(), |context| {
+        let node = &expression.node;
+        let value = execute_expression(context, &node.expression)?;
+        match node.operation.node {
+            UnaryExpressionOperation::Add => value.unary_plus(context),
+            UnaryExpressionOperation::Sub => value.unary_minus(context),
+            UnaryExpressionOperation::Not => value.unary_not(context),
+        }
+    })
+}
+
+fn execute_function_call(
+    context: &ExecutionContext,
+    call: &compile::AstNode<Box<compile::FunctionCall>>,
+) -> ExpressionResult<Value> {
+    let to_call = execute_expression(context, &call.node.to_call)?;
+    let argument = values::Dictionary::from_ast(context, &call.node.argument)?;
+
+    context.stack_scope(
+        to_call.call_scope_type(context),
+        HashMap::new(),
+        |context| to_call.call(context, argument),
+    )?
+}
+
+fn execute_method_call(
+    context: &ExecutionContext,
+    call: &compile::AstNode<Box<compile::MethodCall>>,
+) -> ExpressionResult<Value> {
+    let self_dictionary = execute_expression(context, &call.node.self_dictionary)?;
+    let to_call = self_dictionary
+        .get_attribute(context, &call.node.to_call.node)?
+        .clone();
+    let argument = values::Dictionary::from_ast(context, &call.node.argument)?;
+
+    context.stack_scope(
+        to_call.call_scope_type(context),
+        HashMap::from_iter([(ImString::from("self"), self_dictionary)]),
+        |context| to_call.call(context, argument),
+    )?
+}
+
+fn execute_let_in(
+    context: &ExecutionContext,
+    expression: &compile::AstNode<Box<compile::LetIn>>,
+) -> ExpressionResult<Value> {
+    context.trace_scope(expression.reference.clone(), |context| {
+        context.stack.scope_mut(
+            context.stack_trace,
+            ScopeType::Inherited,
+            HashMap::with_capacity(expression.node.assignments.len()),
+            |stack, stack_trace| {
+                let mut buffer = Vec::new();
+                for group in expression.node.compute_groups() {
+                    let context = ExecutionContext {
+                        stack_trace,
+                        stack,
+                        ..*context
+                    };
+
+                    buffer.par_extend(group.par_iter().map(|assignment| {
+                        (
+                            assignment.node.ident.node.clone(),
+                            execute_expression(&context, &assignment.node.value),
+                        )
+                    }));
+
+                    for (name, result) in buffer.drain(..) {
+                        let value = result?;
+                        stack.insert_value(name, value);
+                    }
+                }
+
+                let context = ExecutionContext {
+                    stack_trace,
+                    stack,
+                    ..*context
+                };
+
+                let node = &expression.node;
+                execute_expression(&context, &node.expression)
+            },
+        )?
+    })
+}
+
+fn execute_binary_expression(
+    context: &ExecutionContext,
+    expression: &compile::AstNode<Box<compile::BinaryExpression>>,
+) -> ExpressionResult<Value> {
+    context.trace_scope(expression.reference.clone(), |context| {
+        let node = &expression.node;
+
+        let (result_a, result_b) = join(
+            || execute_expression(context, &node.a),
+            || execute_expression(context, &node.b),
+        );
+
+        let value_a = result_a?;
+        let value_b = result_b?;
+
+        match node.operation.node {
+            BinaryExpressionOperation::NotEq => Ok(values::Boolean(
+                !value_a
+                    .clone()
+                    .cmp(context, value_b.clone())
+                    .map(|ord| matches!(ord, Ordering::Equal))
+                    .or_else(|_| value_a.eq(context, value_b))?,
+            )
+            .into()),
+            BinaryExpressionOperation::And => value_a.bit_and(context, value_b),
+            BinaryExpressionOperation::AndAnd => value_a.and(context, value_b),
+            BinaryExpressionOperation::Mul => value_a.multiply(context, value_b),
+            BinaryExpressionOperation::MulMul => value_a.exponent(context, value_b),
+            BinaryExpressionOperation::Add => value_a.addition(context, value_b),
+            BinaryExpressionOperation::Sub => value_a.subtraction(context, value_b),
+            BinaryExpressionOperation::Div => value_a.divide(context, value_b),
+            BinaryExpressionOperation::Lt => Ok(values::Boolean(matches!(
+                value_a.cmp(context, value_b)?,
+                Ordering::Less
+            ))
+            .into()),
+            BinaryExpressionOperation::LtLt => value_a.left_shift(context, value_b),
+            BinaryExpressionOperation::LtEq => Ok(values::Boolean(matches!(
+                value_a.cmp(context, value_b)?,
+                Ordering::Less | Ordering::Equal
+            ))
+            .into()),
+            BinaryExpressionOperation::EqEq => Ok(values::Boolean(
+                value_a
+                    .clone()
+                    .cmp(context, value_b.clone())
+                    .map(|ord| matches!(ord, Ordering::Equal))
+                    .or_else(|_| value_a.eq(context, value_b))?,
+            )
+            .into()),
+            BinaryExpressionOperation::Gt => Ok(values::Boolean(matches!(
+                value_a.cmp(context, value_b)?,
+                Ordering::Greater
+            ))
+            .into()),
+            BinaryExpressionOperation::GtEq => Ok(values::Boolean(matches!(
+                value_a.cmp(context, value_b)?,
+                Ordering::Equal | Ordering::Greater
+            ))
+            .into()),
+            BinaryExpressionOperation::GtGt => value_a.right_shift(context, value_b),
+            BinaryExpressionOperation::BitXor => value_a.bit_xor(context, value_b),
+            BinaryExpressionOperation::Xor => value_a.xor(context, value_b),
+            BinaryExpressionOperation::Or => value_a.bit_or(context, value_b),
+            BinaryExpressionOperation::OrOr => value_a.or(context, value_b),
+        }
+    })
+}
+
+pub fn execute_if_expression(
+    context: &ExecutionContext,
+    expression: &compile::AstNode<Box<compile::IfExpression>>,
+) -> ExpressionResult<Value> {
+    let condition = execute_expression(context, &expression.node.condition)?
+        .downcast::<values::Boolean>(context.stack_trace)?
+        .0;
+
+    let expression = if condition {
+        &expression.node.on_true
+    } else {
+        &expression.node.on_false
+    };
+
+    execute_expression(context, expression)
+}
+
+#[cfg(test)]
+pub(crate) fn test_run(input: &str) -> ExpressionResult<Value> {
+    let root = compile::full_compile(input);
+
+    test_context([], |context| execute_expression(context, &root))
+}
+
+#[cfg(test)]
+pub(crate) fn test_context<R>(
+    extra_prelude: impl IntoIterator<Item = (ImString, Value)>,
+    f: impl FnOnce(&ExecutionContext) -> R,
+) -> R {
+    let database = BuiltinCallableDatabase::new();
+    test_context_custom_database(database, extra_prelude, f)
+}
+
+#[cfg(test)]
+pub(crate) fn test_context_custom_database<R>(
+    database: BuiltinCallableDatabase,
+    extra_prelude: impl IntoIterator<Item = (ImString, Value)>,
+    f: impl FnOnce(&ExecutionContext) -> R,
+) -> R {
+    use standard_environment::build_prelude;
+    use std::sync::Mutex;
+    use tempfile::TempDir;
+
+    let mut prelude = build_prelude(&database).unwrap();
+
+    for (name, value) in extra_prelude.into_iter() {
+        prelude.insert(name, value);
+    }
+
+    let store_directory = TempDir::new().unwrap();
+    let store = Store::new(store_directory.path());
+
+    let file_cache = Mutex::new(HashMap::new());
+    let working_directory = Path::new(".");
+
+    let context = ExecutionContext {
+        log: &Mutex::new(Vec::new()),
+        stack_trace: &StackTrace::test(),
+        stack: &StackScope::top(&prelude),
+        database: &database,
+        store: &store,
+        file_cache: &file_cache,
+        working_directory,
+        import_limit: 100,
+    };
+
+    f(&context)
+}
+
+pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> ExpressionResult<Value> {
+    // TODO can/should we make the parser part of the execution context rather than build a new one
+    // every time we load a file?
+    let mut parser = new_parser();
+
+    let file = file.into();
+
+    if file.is_absolute() {
+        return Err(
+            GenericFailure("Absolute paths cannot be used for importing files".into())
+                .to_error(context.stack_trace),
+        );
+    }
+
+    if context.import_limit == 0 {
+        return Err(
+            GenericFailure("Import recursion depth has been exceeded".into())
+                .to_error(context.stack_trace),
+        );
+    }
+
+    let file = context.working_directory.join(file);
+    let parent_dir = file.parent().ok_or_else(|| {
+        GenericFailure("Failed to get parent directory of file: {error}".into())
+            .to_error(context.stack_trace)
+    })?;
+
+    let root = {
+        let mut files = context.file_cache.lock().map_err(|_error| {
+            GenericFailure("Failed to lock file cache".into()).to_error(context.stack_trace)
+        })?;
+        let file = Arc::new(file.clone());
+        let input = match files.entry(file.clone()) {
+            std::collections::hash_map::Entry::Occupied(entry) => entry,
+            std::collections::hash_map::Entry::Vacant(vacency) => {
+                let input = std::fs::read_to_string(file.as_path()).map_err(|error| {
+                    GenericFailure(
+                        format!("Failed to read file {:?} from disk: {error}", file).into(),
+                    )
+                    .to_error(context.stack_trace)
+                })?;
+                let input = ImString::from(input);
+
+                vacency.insert_entry(Source::from(input))
+            }
+        };
+        let input = input.get().text();
+
+        let tree = parser.parse(input, None).map_err(|error| {
+            GenericFailure(format!("Failed to parse input: {error:?}").into())
+                .to_error(context.stack_trace)
+        })?;
+
+        let root = crate::compile(&file, input, &tree).map_err(|error| {
+            GenericFailure(format!("Failed to compile: {error}").into())
+                .to_error(context.stack_trace)
+        })?;
+
+        context
+            .log
+            .collect_syntax_errors(input, &tree, &file, root.reference.clone());
+
+        root
+    };
+
+    let context = ExecutionContext {
+        working_directory: parent_dir,
+        import_limit: context.import_limit - 1,
+        ..context.clone()
+    };
+
+    execute_expression(&context, &root)
+}
+
+pub mod functions {
+    pub struct Import;
+}
+
+pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
+    build_function!(
+        database,
+        functions::Import, "std::import", (
+            context: &ExecutionContext,
+            path: IString
+        ) -> Value
+        {
+            let file = PathBuf::from(path.0.as_str());
+            run_file(context, file)
+        }
+    );
+}
+
+#[cfg(test)]
+mod test {
+    use hashable_map::HashableMap;
+    use std::{collections::HashMap, sync::Arc};
+
+    use super::*;
+
+    #[test]
+    fn boolean_type() {
+        let product = test_run("true").unwrap();
+        assert_eq!(product, values::Boolean(true).into());
+    }
+
+    #[test]
+    fn signed_integer_type() {
+        let product = test_run("5i").unwrap();
+        assert_eq!(product, values::SignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn unsigned_integer_type() {
+        let product = test_run("5u").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn parenthesis() {
+        // Fails because of a type mismatch.
+        let product = test_run("(1i + 2i) * 3i").unwrap();
+        assert_eq!(product, values::SignedInteger::from(9).into());
+    }
+
+    #[test]
+    fn struct_definition() {
+        let product = test_run("(name: std.types.None = std.consts.None, ...)").unwrap();
+        assert_eq!(
+            product,
+            values::ValueType::Dictionary(values::StructDefinition {
+                members: Arc::new(HashableMap::from(HashMap::from([(
+                    "name".into(),
+                    values::StructMember {
+                        ty: ValueType::TypeNone,
+                        default: Some(Value::ValueNone(values::ValueNone))
+                    }
+                )]))),
+                variadic: true
+            })
+            .into()
+        );
+    }
+
+    #[test]
+    fn nested_value_access() {
+        let product = test_run("let dictionary = (a = (b = 23u)); in dictionary.a.b").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(23).into());
+    }
+
+    #[test]
+    fn let_in() {
+        let product = test_run("let value = 23u; in value").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(23).into());
+    }
+
+    #[test]
+    fn let_in_self_ref() {
+        let product = test_run("let value = 23u; value2 = value + 2u; in value2").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(25).into());
+    }
+
+    #[test]
+    fn variable_access_collection_for_let_in() {
+        let product =
+            test_run("let fn = () -> std.types.UInt: let value = 5u; in value; in fn()").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn string() {
+        let product = test_run("\"a simple string of text\"").unwrap();
+        assert_eq!(
+            product,
+            values::IString::from("a simple string of text").into()
+        );
+    }
+
+    #[test]
+    fn if_expression() {
+        let product = test_run("if true then 1u else 2u").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(1).into());
+
+        let product = test_run("if false then 1u else 2u").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(2).into());
+    }
+
+    #[test]
+    fn import() {
+        let product = test_run("std.import(path = \"./test_assets/import_me.ccm\")").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn recursive_import() {
+        let product =
+            test_run("std.import(path = \"./test_assets/recursive_import.ccm\")").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn infinite_recursion_import() {
+        test_run("std.import(path = \"./test_assets/infinite_recursion_import.ccm\")").unwrap_err();
+    }
+}

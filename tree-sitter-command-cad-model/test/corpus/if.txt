@@ -1,0 +1,40 @@
+==================
+If else
+==================
+
+if true then "" else "" 
+
+---
+
+(source_file
+  (expression
+    (if
+      (expression
+        (boolean (true)))
+          (expression
+            (string))
+          (expression
+            (string)))))
+
+==================
+With other operations
+==================
+
+1 + if true then "" else "" 
+
+---
+
+(source_file
+  (expression
+    (binary_expression
+      (expression
+        (scalar
+          (number)))
+      (expression
+        (if
+          (expression
+            (boolean (true)))
+              (expression
+                (string))
+              (expression
+                (string)))))))

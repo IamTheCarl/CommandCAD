@@ -1,0 +1,219 @@
+==================
+Empty
+==================
+
+() -> std.None: "" 
+
+---
+
+(source_file
+  (expression
+    (closure_definition
+      (struct_definition)
+        (expression
+          (member_access
+            (expression
+              (identifier))
+            (identifier)))
+        (expression
+          (string)))))
+
+==================
+With argument
+==================
+
+(argument: std.types.UInt) -> std.None: "" 
+
+---
+
+(source_file
+  (expression
+    (closure_definition
+      (struct_definition
+        (struct_member
+          (identifier)
+          (declaration_type
+            (expression
+              (member_access
+                (expression
+                  (member_access
+                    (expression
+                      (identifier))
+                    (identifier)))
+                (identifier))))))
+      (expression
+        (member_access
+          (expression
+            (identifier))
+          (identifier)))
+      (expression
+        (string)))))
+
+==================
+With Binary Expression
+==================
+
+(argument: std.types.UInt) -> std.None: a + b 
+
+---
+
+(source_file
+  (expression
+    (closure_definition
+      (struct_definition
+        (struct_member
+          (identifier)
+          (declaration_type
+            (expression
+              (member_access
+                (expression
+                  (member_access
+                    (expression
+                      (identifier))
+                    (identifier)))
+                (identifier))))))
+      (expression
+        (member_access
+          (expression
+            (identifier))
+          (identifier)))
+      (expression
+        (binary_expression
+          (expression
+            (identifier))
+          (expression
+            (identifier)))))))
+
+==================
+Call function
+==================
+
+value(value=value)
+
+---
+
+(source_file
+  (expression
+    (function_call
+      (expression
+        (identifier))
+      (dictionary_construction
+        (dictionary_member_assignment
+          (identifier)
+          (expression
+            (identifier)))))))
+
+==================
+Call no arguments
+==================
+
+value()
+
+---
+
+(source_file
+  (expression
+    (function_call
+      (expression
+        (identifier))
+      (dictionary_construction))))
+
+==================
+Call function deep in tree
+==================
+
+value.value(value=value)
+
+---
+
+(source_file
+  (expression
+    (function_call
+      (expression
+        (member_access
+          (expression
+            (identifier))
+          (identifier)))
+      (dictionary_construction
+        (dictionary_member_assignment
+          (identifier)
+          (expression
+            (identifier)))))))
+
+==================
+Call method
+==================
+
+value::value(value=value)
+
+---
+
+(source_file
+  (expression
+    (method_call
+      (expression
+        (identifier))
+      (identifier)
+      (dictionary_construction
+        (dictionary_member_assignment
+          (identifier)
+          (expression
+            (identifier)))))))
+
+==================
+Call method no arguments
+==================
+
+value::value()
+
+---
+
+(source_file
+  (expression
+    (method_call
+      (expression
+        (identifier))
+      (identifier)
+      (dictionary_construction))))
+
+==================
+Call method deep in tree
+==================
+
+value.value::value(value=value)
+
+---
+
+(source_file
+  (expression
+    (method_call
+      (expression
+        (member_access
+          (expression
+            (identifier))
+          (identifier)))
+      (identifier)
+      (dictionary_construction
+        (dictionary_member_assignment
+          (identifier)
+          (expression
+            (identifier)))))))
+
+==================
+Call method inside parenthasis
+==================
+
+(value::value())
+
+---
+
+(source_file
+  (expression
+    (parenthesis
+      (expression
+        (method_call
+          (expression
+            (identifier))
+          (identifier)
+          (dictionary_construction))))))
+

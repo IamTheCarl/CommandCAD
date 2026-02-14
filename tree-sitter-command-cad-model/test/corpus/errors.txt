@@ -1,0 +1,15 @@
+==================
+Missing second operand
+==================
+
+a +
+
+---
+
+(source_file
+  (expression
+    (binary_expression
+      (expression
+        (identifier))
+      (expression
+        (MISSING identifier)))))

@@ -1,0 +1,65 @@
+==================
+Empty
+==================
+
+[]
+
+---
+
+(source_file
+  (expression
+    (list)))
+
+==================
+Single
+==================
+
+[this,]
+
+---
+
+(source_file
+  (expression
+    (list
+      (expression
+        (identifier)))))
+
+==================
+Multi
+==================
+
+[this, is, a, test]
+
+---
+
+(source_file
+  (expression
+    (list
+      (expression
+        (identifier))
+      (expression
+        (identifier))
+      (expression
+        (identifier))
+      (expression
+        (identifier)))))
+
+==================
+Multi with comma at the end
+==================
+
+[this, is, a, test,]
+
+---
+
+(source_file
+  (expression
+    (list
+      (expression
+        (identifier))
+      (expression
+        (identifier))
+      (expression
+        (identifier))
+      (expression
+        (identifier)))))

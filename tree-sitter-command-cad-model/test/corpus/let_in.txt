@@ -1,0 +1,65 @@
+==================
+Empty
+==================
+
+let
+in
+""
+
+---
+
+(source_file
+  (expression
+    (let_in
+      (expression
+        (string)))))
+
+==================
+1 Assignment
+==================
+
+let
+  first = 1;
+in
+""
+
+---
+
+(source_file
+  (expression
+    (let_in
+      (let_in_assignment
+        (identifier)
+        (expression
+          (scalar
+            (number))))
+      (expression
+        (string)))))
+
+==================
+2 Assignments
+==================
+
+let
+  first = 1;
+  second = 2;
+in
+""
+
+---
+
+(source_file
+  (expression
+    (let_in
+      (let_in_assignment
+        (identifier)
+        (expression
+          (scalar
+            (number))))
+      (let_in_assignment
+        (identifier)
+        (expression
+          (scalar
+            (number))))
+      (expression
+        (string)))))

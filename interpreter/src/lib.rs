@@ -1,0 +1,29 @@
+/*
+ * Copyright 2025 James Carl
+ * AGPL-3.0-only or AGPL-3.0-or-later
+ *
+ * This file is part of Command Cad.
+ *
+ * Command CAD is free software: you can redistribute it and/or modify it under the terms of
+ * the GNU Affero General Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along with this
+ * program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+pub mod compile;
+pub mod execution;
+
+pub use compile::{compile, new_parser, Parser, SourceReference};
+pub use execution::{
+    build_prelude, execute_expression, run_file, values, Error, ExecutionContext,
+    ExecutionFileCache, ExpressionResult, LogLevel, LogMessage, RuntimeLog, StackScope, StackTrace,
+    Store,
+};
+pub use imstr::ImString;
+pub use tree_sitter::{Point as TextPoint, Range as TextRange};

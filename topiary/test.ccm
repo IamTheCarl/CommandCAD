@@ -1,0 +1,22 @@
+# This is a comment
+()[] -> std.None {
+  let value = 5i; # This is some text.
+  let value = 3i;
+
+  let some_text = "This is some text my man.";
+
+  if this {
+    # True
+  } else {
+    # False
+  }
+
+  # This is some other text.
+  let value = 1i + 2i * 3i;
+
+  for i in list { }
+
+  value = 3i;
+
+  let my_function = (a: std.Length, b: std.Length)[value, value2] -> std.None { };
+}
