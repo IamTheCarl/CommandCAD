@@ -57,6 +57,7 @@
             fenix-channel.rustfmt
             fenix-channel.rustc
             fenix-channel.cargo
+            fenix-channel.clippy
             cargo-expand
             openssl
 	    pkg-config
