@@ -1,0 +1,20 @@
+let
+    nominal_angle_to_sun = 60deg;
+
+    # 30watts per square meter multiplied by square meters results in watts.
+    nominal_power_output = (main_body: std.scalar.Length) -> std.scalar.Power:
+      let 
+        # A length * by a length gives an area.
+        solar_panel_size = main_body * 1m;
+      in
+        solar_panel_size * nominal_angle_to_sun::sin() * (30W/1 'm^2');
+
+    # We need 3cm of cooling surface for each watt this produces
+    cooling_fin_size = nominal_power_output(main_body = 15cm) / 1W * 3cm;
+in
+    std.mesh3d.cylinder(
+        diameter = cooling_fin_size,
+        height = 1cm,
+        sectors = 360u,
+        stacks = 1u
+    )::to_stl(name = "cooling_plate")
