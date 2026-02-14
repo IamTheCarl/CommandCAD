@@ -131,7 +131,7 @@ impl Store {
         store_path: &Path,
     ) -> ExpressionResult<()> {
         // Move the file into the store.
-        match std::fs::rename(temp_path, &store_path) {
+        match std::fs::rename(temp_path, store_path) {
             Ok(_) => Ok(store_path),
             Err(error) => {
                 let result = match error.kind() {

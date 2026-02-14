@@ -104,12 +104,12 @@ where
         Ok(Self::new_raw(context, dimension, value)?.into())
     }
     fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
-        Ok(self.clone().into())
+        Ok(self.into())
     }
     fn unary_minus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(Self {
             value: -self.value,
-            ..self.clone()
+            ..self
         }
         .into())
     }
@@ -618,7 +618,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
     }
 
     fn build(value: Self::BuildFrom) -> Self {
-        Self::from_iterator(value.into_iter())
+        Self::from_iterator(value)
     }
 
     fn from_ast(
@@ -723,11 +723,11 @@ impl StaticType for nalgebra::Vector2<Float> {
     }
 }
 
-impl Into<boolmesh::Vec2> for Vector2 {
-    fn into(self) -> boolmesh::Vec2 {
-        boolmesh::Vec2 {
-            x: self.value.x,
-            y: self.value.y,
+impl From<Vector2> for boolmesh::Vec2 {
+    fn from(value: Vector2) -> Self {
+        Self {
+            x: value.value.x,
+            y: value.value.y,
         }
     }
 }
@@ -742,7 +742,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
     }
 
     fn build(value: Self::BuildFrom) -> Self {
-        Self::from_iterator(value.into_iter())
+        Self::from_iterator(value)
     }
 
     fn from_ast(
@@ -857,12 +857,12 @@ impl StaticType for nalgebra::Vector3<Float> {
     }
 }
 
-impl Into<boolmesh::Vec3> for Vector3 {
-    fn into(self) -> boolmesh::Vec3 {
-        boolmesh::Vec3 {
-            x: self.value.x,
-            y: self.value.y,
-            z: self.value.z,
+impl From<Vector3> for boolmesh::Vec3 {
+    fn from(value: Vector3) -> Self {
+        Self {
+            x: value.value.x,
+            y: value.value.y,
+            z: value.value.z,
         }
     }
 }
@@ -877,7 +877,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
     }
 
     fn build(value: Self::BuildFrom) -> Self {
-        Self::from_iterator(value.into_iter())
+        Self::from_iterator(value)
     }
 
     fn from_ast(
@@ -999,13 +999,13 @@ impl StaticType for nalgebra::Vector4<Float> {
     }
 }
 
-impl Into<boolmesh::Vec4> for Vector4 {
-    fn into(self) -> boolmesh::Vec4 {
-        boolmesh::Vec4 {
-            x: self.value.x,
-            y: self.value.y,
-            z: self.value.z,
-            w: self.value.w,
+impl From<Vector4> for boolmesh::Vec4 {
+    fn from(value: Vector4) -> Self {
+        Self {
+            x: value.value.x,
+            y: value.value.y,
+            z: value.value.z,
+            w: value.value.w,
         }
     }
 }
@@ -1044,15 +1044,15 @@ macro_rules! build_vector_type {
             }
         }
 
-        impl Into<$type> for $name {
-            fn into(self) -> $type {
-                self.0
+        impl From<$name> for $type {
+            fn from(value: $name) -> $type {
+                value.0
             }
         }
 
-        impl Into<equivalent_boolmesh_vector!($type)> for $name {
-            fn into(self) -> equivalent_boolmesh_vector!($type) {
-                self.0.into()
+        impl From<$name> for equivalent_boolmesh_vector!($type) {
+            fn from(value: $name) -> Self {
+                value.0.into()
             }
         }
 
@@ -1083,7 +1083,7 @@ mod test {
             let product = test_run("<(1m, 2m)>").unwrap();
             assert_eq!(
                 product,
-                Vector2::new(&context, Dimension::length(), [1.0, 2.0])
+                Vector2::new(context, Dimension::length(), [1.0, 2.0])
                     .unwrap()
                     .into()
             );
@@ -1091,7 +1091,7 @@ mod test {
             let product = test_run("<(-1m, -2m)>").unwrap();
             assert_eq!(
                 product,
-                Vector2::new(&context, Dimension::length(), [-1.0, -2.0])
+                Vector2::new(context, Dimension::length(), [-1.0, -2.0])
                     .unwrap()
                     .into()
             );
@@ -1104,7 +1104,7 @@ mod test {
             let product = test_run("<(1m, 2m, 3m)>").unwrap();
             assert_eq!(
                 product,
-                Vector3::new(&context, Dimension::length(), [1.0, 2.0, 3.0])
+                Vector3::new(context, Dimension::length(), [1.0, 2.0, 3.0])
                     .unwrap()
                     .into()
             );
@@ -1112,7 +1112,7 @@ mod test {
             let product = test_run("<(-1m, -2m, -3m)>").unwrap();
             assert_eq!(
                 product,
-                Vector3::new(&context, Dimension::length(), [-1.0, -2.0, -3.0])
+                Vector3::new(context, Dimension::length(), [-1.0, -2.0, -3.0])
                     .unwrap()
                     .into()
             );
@@ -1125,7 +1125,7 @@ mod test {
             let product = test_run("<(1m, 2m, 3m, 4m)>").unwrap();
             assert_eq!(
                 product,
-                Vector4::new(&context, Dimension::length(), [1.0, 2.0, 3.0, 4.0])
+                Vector4::new(context, Dimension::length(), [1.0, 2.0, 3.0, 4.0])
                     .unwrap()
                     .into()
             );
@@ -1133,7 +1133,7 @@ mod test {
             let product = test_run("<(-1m, -2m, -3m, -4m)>").unwrap();
             assert_eq!(
                 product,
-                Vector4::new(&context, Dimension::length(), [-1.0, -2.0, -3.0, -4.0])
+                Vector4::new(context, Dimension::length(), [-1.0, -2.0, -3.0, -4.0])
                     .unwrap()
                     .into()
             );

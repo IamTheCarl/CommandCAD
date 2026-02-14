@@ -73,11 +73,11 @@ impl From<StructDefinition> for ValueType {
 impl ValueType {
     pub fn name(&self) -> Cow<'static, str> {
         match self {
-            Self::TypeNone => ValueNone::static_type_name().into(),
-            Self::Boolean => Boolean::static_type_name().into(),
-            Self::SignedInteger => SignedInteger::static_type_name().into(),
-            Self::UnsignedInteger => UnsignedInteger::static_type_name().into(),
-            Self::Scalar(Some(dimension)) => units::get_dimension_name(dimension).into(),
+            Self::TypeNone => ValueNone::static_type_name(),
+            Self::Boolean => Boolean::static_type_name(),
+            Self::SignedInteger => SignedInteger::static_type_name(),
+            Self::UnsignedInteger => UnsignedInteger::static_type_name(),
+            Self::Scalar(Some(dimension)) => units::get_dimension_name(dimension),
             Self::Scalar(Option::None) => "Scalar".into(),
             Self::Vector2(Some(dimension)) => {
                 format!("Vector2<{}>", units::get_dimension_name(dimension)).into()
@@ -91,8 +91,8 @@ impl ValueType {
             Self::Vector2(Option::None) => "Vector2".into(),
             Self::Vector3(Option::None) => "Vector3".into(),
             Self::Vector4(Option::None) => "Vector4".into(),
-            Self::String => IString::static_type_name().into(),
-            Self::File => File::static_type_name().into(),
+            Self::String => IString::static_type_name(),
+            Self::File => File::static_type_name(),
             Self::Any => "Any".into(),
             Self::ManifoldMesh3D => "ManifoldMesh3D".into(),
             _ => format!("{}", self).into(),
@@ -392,16 +392,14 @@ impl StructDefinition {
                         error,
                     });
                 }
-            } else {
-                if member.default.is_none() {
-                    errors.push(MissmatchedField {
-                        name: name.clone(),
-                        error: TypeQualificationError::This {
-                            expected: member.ty.clone(),
-                            got: ValueType::TypeNone,
-                        },
-                    });
-                }
+            } else if member.default.is_none() {
+                errors.push(MissmatchedField {
+                    name: name.clone(),
+                    error: TypeQualificationError::This {
+                        expected: member.ty.clone(),
+                        got: ValueType::TypeNone,
+                    },
+                });
             }
         }
 
@@ -661,8 +659,8 @@ mod test {
             let closure = closure.as_userclosure().unwrap();
 
             closure
-                .get_type(&context)
-                .check_other_qualifies(&closure.get_type(&context))
+                .get_type(context)
+                .check_other_qualifies(&closure.get_type(context))
                 .unwrap();
         })
     }
@@ -677,8 +675,8 @@ mod test {
             let dictionary = dictionary.as_dictionary().unwrap();
 
             structure
-                .get_type(&context)
-                .check_other_qualifies(&dictionary.get_type(&context))
+                .get_type(context)
+                .check_other_qualifies(&dictionary.get_type(context))
                 .unwrap();
         })
     }
@@ -693,7 +691,7 @@ mod test {
             let dictionary = dictionary.as_dictionary().unwrap();
 
             structure
-                .check_other_qualifies(&dictionary.get_type(&context))
+                .check_other_qualifies(&dictionary.get_type(context))
                 .unwrap();
         })
     }
@@ -708,7 +706,7 @@ mod test {
             let dictionary = dictionary.as_dictionary().unwrap();
 
             structure
-                .check_other_qualifies(&dictionary.get_type(&context))
+                .check_other_qualifies(&dictionary.get_type(context))
                 .unwrap();
         })
     }
@@ -723,7 +721,7 @@ mod test {
             let dictionary = dictionary.as_dictionary().unwrap();
 
             structure
-                .check_other_qualifies(&dictionary.get_type(&context))
+                .check_other_qualifies(&dictionary.get_type(context))
                 .unwrap_err();
         })
     }
@@ -738,7 +736,7 @@ mod test {
             let dictionary = dictionary.as_dictionary().unwrap();
 
             structure
-                .check_other_qualifies(&dictionary.get_type(&context))
+                .check_other_qualifies(&dictionary.get_type(context))
                 .unwrap();
         })
     }
@@ -753,7 +751,7 @@ mod test {
             let dictionary = dictionary.as_dictionary().unwrap();
 
             structure
-                .check_other_qualifies(&dictionary.get_type(&context))
+                .check_other_qualifies(&dictionary.get_type(context))
                 .unwrap();
         })
     }
@@ -836,14 +834,14 @@ mod test {
             let closure = closure.as_userclosure().unwrap();
 
             ValueType::Any
-                .check_other_qualifies(&closure.get_type(&context))
+                .check_other_qualifies(&closure.get_type(context))
                 .unwrap();
 
             let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
             let dictionary = dictionary.as_dictionary().unwrap();
 
             ValueType::Any
-                .check_other_qualifies(&dictionary.get_type(&context))
+                .check_other_qualifies(&dictionary.get_type(context))
                 .unwrap();
 
             ValueType::Any

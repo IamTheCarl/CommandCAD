@@ -318,7 +318,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             f: MapClosure
         ) -> IString {
             let mut string = String::new();
-            let result: ExpressionResult<()> = this.0.chars().map(|c| {
+            let result: ExpressionResult<()> = this.0.chars().try_for_each(|c| {
                 let result = f.call(context, Dictionary::new(context, HashMap::from_iter([
                     (
                         "c".into(),
@@ -328,10 +328,10 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 string.push_str(&result.0);
 
                 Ok(())
-            }).collect();
+            });
             result?;
 
-            Ok(IString(ImString::from(string)).into())
+            Ok(IString(ImString::from(string)))
         }
     );
     build_method!(
@@ -381,7 +381,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 }
             }
 
-            Ok(IString(ImString::from(product)).into())
+            Ok(IString(ImString::from(product)))
         }
     );
     build_method!(
@@ -391,7 +391,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: IString
         ) -> IString {
             let reversed: String = this.0.as_str().chars().rev().collect();
-            Ok(IString(ImString::from(reversed)).into())
+            Ok(IString(ImString::from(reversed)))
         }
     );
     build_method!(
@@ -414,7 +414,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: IString
         ) -> IString {
             let text = this.0.as_str().to_lowercase();
-            Ok(IString(ImString::from(text)).into())
+            Ok(IString(ImString::from(text)))
         }
     );
     build_method!(
@@ -424,7 +424,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: IString
         ) -> IString {
             let text = this.0.as_str().to_uppercase();
-            Ok(IString(ImString::from(text)).into())
+            Ok(IString(ImString::from(text)))
         }
     );
     build_method!(
@@ -449,7 +449,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         ) -> UnsignedInteger {
             let value = this.0.parse::<u64>()
                 .map_err(|error| GenericFailure(format!("Failed to parse unsigned integer: {error:?}").into()).to_error(context.stack_trace))?;
-            Ok(UnsignedInteger::from(value).into())
+            Ok(UnsignedInteger::from(value))
         }
     );
     build_method!(
@@ -460,7 +460,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         ) -> SignedInteger {
             let value = this.0.parse::<i64>()
                 .map_err(|error| GenericFailure(format!("Failed to parse signed integer: {error:?}").into()).to_error(context.stack_trace))?;
-            Ok(SignedInteger::from(value).into())
+            Ok(SignedInteger::from(value))
         }
     );
     build_method!(
@@ -471,7 +471,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             pattern: IString
         ) -> Boolean {
             let contained = this.0.contains(pattern.0.as_str());
-            Ok(Boolean(contained).into())
+            Ok(Boolean(contained))
         }
     );
 }

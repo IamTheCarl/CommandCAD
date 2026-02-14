@@ -48,7 +48,7 @@ impl<I> From<I> for Integer<I> {
     }
 }
 
-const INTEGER_FORMAT_WARNING_MESSAGE: &'static str =
+const INTEGER_FORMAT_WARNING_MESSAGE: &str =
     "Integer formats such as Octal and Hex ignore precision";
 
 impl<I> Object for Integer<I>
@@ -194,10 +194,10 @@ where
         Ok(Self(self.0 >> rhs.0).into())
     }
     fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
-        Ok(self.clone().into())
+        Ok(self.into())
     }
     fn unary_minus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
-        self.0.neg(context.stack_trace).into()
+        self.0.neg(context.stack_trace)
     }
     fn unary_not(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(Self(!self.0).into())
@@ -436,7 +436,7 @@ impl IntOps for u64 {
 
     fn neg(&self, stack_trace: &StackTrace) -> ExpressionResult<Value> {
         Err(super::UnsupportedOperationError {
-            type_name: UnsignedInteger::static_type_name().into(),
+            type_name: UnsignedInteger::static_type_name(),
             operation_name: "negate",
         }
         .to_error(stack_trace))

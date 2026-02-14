@@ -105,7 +105,7 @@ impl Parameter {
             nom_char('{'),
             cut(map(
                 pair(
-                    map(ident, |name| ImString::from(name)),
+                    map(ident, ImString::from),
                     alt((
                         preceded(
                             nom_char(':'),
@@ -238,7 +238,7 @@ impl Format {
                     style,
                     precision,
                 }) => {
-                    let precision = get_precision(context, &precision, &arguments)?;
+                    let precision = get_precision(context, precision, &arguments)?;
 
                     if let Some(argument) = arguments.get(name.as_str()).or_else(|| {
                         context
@@ -431,10 +431,10 @@ mod test {
                 .unwrap()
                 .1
                 .format(
-                    &context,
+                    context,
                     &mut formatted,
                     Dictionary::new(
-                        &context,
+                        context,
                         HashMap::from_iter([(
                             "value".into(),
                             Scalar {
@@ -453,7 +453,7 @@ mod test {
                 .unwrap()
                 .1
                 .format(
-                    &context,
+                    context,
                     &mut formatted,
                     Dictionary::new(
                         &context,

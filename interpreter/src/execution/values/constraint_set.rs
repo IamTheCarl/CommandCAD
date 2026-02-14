@@ -469,7 +469,7 @@ impl ConstraintSet {
                     {
                         match value {
                             Value::Scalar(scalar) => {
-                                Self::build_scalar(context, dimension, scalar.clone())
+                                Self::build_scalar(context, dimension, *scalar)
                             }
                             value => Err(GenericFailure(
                                 format!(
@@ -551,10 +551,8 @@ impl ConstraintSet {
                 )
                 .to_error(context.stack_trace));
             }
-        } else {
-            if value.dimension != Dimension::zero() {
-                *dimension = Some(value.dimension);
-            }
+        } else if value.dimension != Dimension::zero() {
+            *dimension = Some(value.dimension);
         }
 
         Ok(ExprBuilder::Val(float(*value.value)))

@@ -67,14 +67,14 @@ impl List {
         let values: Vec<_> = iterator.into_iter().collect();
 
         let internal_type =
-            if let Some(initial_type) = values.first().map(|first| first.get_type(context)) {
-                Some(values.iter().fold(initial_type, |accumulated, next| {
-                    accumulated.merge(next.get_type(context))
-                }))
-            } else {
-                // This is an empty list.
-                None
-            };
+            values
+                .first()
+                .map(|first| first.get_type(context))
+                .map(|initial_type| {
+                    values.iter().fold(initial_type, |accumulated, next| {
+                        accumulated.merge(next.get_type(context))
+                    })
+                });
 
         Self {
             internal_type,
@@ -390,7 +390,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             let slice = this.values.get(start..end);
 
             if let Some(slice) = slice {
-                Ok(List::from_iter(context, slice.into_iter().cloned()))
+                Ok(List::from_iter(context, slice.iter().cloned()))
             } else {
                 Err(GenericFailure("Slice out of range".into()).to_error(context.stack_trace))
             }
@@ -423,7 +423,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             fn wrap_chunks<'i, I: Iterator<Item = &'i [Value]>>(context: &ExecutionContext, chunks: I) -> List {
                 let mut list = Vec::new();
                 for chunk in chunks {
-                    list.push(List::from_iter(context, chunk.into_iter().cloned()).into());
+                    list.push(List::from_iter(context, chunk.iter().cloned()).into());
                 }
                 List::from_iter(context, list.into_iter())
             }
@@ -682,7 +682,7 @@ mod test {
     fn create_empty() {
         test_context([], |context| {
             let product = test_run("[]").unwrap();
-            assert_eq!(product, List::from_iter(&context, []).into());
+            assert_eq!(product, List::from_iter(context, []).into());
         })
     }
 
@@ -693,7 +693,7 @@ mod test {
             assert_eq!(
                 product,
                 List::from_iter(
-                    &context,
+                    context,
                     [
                         UnsignedInteger::from(1).into(),
                         UnsignedInteger::from(2).into(),
@@ -712,7 +712,7 @@ mod test {
             assert_eq!(
                 product,
                 List::from_iter(
-                    &context,
+                    context,
                     [
                         UnsignedInteger::from(1).into(),
                         SignedInteger::from(2).into(),
@@ -729,7 +729,7 @@ mod test {
         test_context([], |context| {
             assert_eq!(
                 List::from_iter(
-                    &context,
+                    context,
                     [
                         UnsignedInteger::from(1).into(),
                         SignedInteger::from(2).into(),

@@ -10,6 +10,8 @@ use type_sitter::{HasChild, IncorrectKind, Node, UntypedNode};
 
 pub use expressions::*;
 
+// This thing is packed with generated clippy violations.
+#[allow(clippy::all)]
 pub mod nodes {
     include!(concat!(env!("OUT_DIR"), "/nodes.rs"));
 }
@@ -142,7 +144,7 @@ impl<'t> Parse<'t, nodes::SignedInteger<'t>> for i64 {
             }
             nodes::anon_unions::BaseTen_Binary_Hex_Octal::BaseTen(value) => {
                 let text = &input[value.byte_range()];
-                i64::from_str_radix(text, 10)
+                text.parse::<i64>()
             }
             nodes::anon_unions::BaseTen_Binary_Hex_Octal::Octal(value) => {
                 let text = &input[value.byte_range()][2..];
@@ -177,7 +179,7 @@ impl<'t> Parse<'t, nodes::UnsignedInteger<'t>> for u64 {
             }
             nodes::anon_unions::BaseTen_Binary_Hex_Octal::BaseTen(value) => {
                 let text = &input[value.byte_range()];
-                u64::from_str_radix(text, 10)
+                text.parse::<u64>()
             }
             nodes::anon_unions::BaseTen_Binary_Hex_Octal::Octal(value) => {
                 let text = &input[value.byte_range()][2..];
@@ -358,12 +360,12 @@ pub type RootTree = type_sitter::Tree<nodes::SourceFile<'static>>;
 pub fn iter_raw_nodes<'t>(tree: &'t RootTree) -> impl Iterator<Item = UntypedNode<'t>> {
     let mut cursor: type_sitter::TreeCursor = tree.walk();
 
-    std::iter::from_fn(move || loop {
+    std::iter::from_fn(move || {
         let node = cursor.node();
 
         // Go to the first child, or the next sibling.
         if cursor.goto_first_child() || cursor.goto_next_sibling() {
-            break Some(node);
+            Some(node)
         } else {
             // No more children.
             // Work your way back up the tree until you can reach another sibling, or you reach the

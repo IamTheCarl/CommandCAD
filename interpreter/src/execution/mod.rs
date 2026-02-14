@@ -257,8 +257,8 @@ impl<'c> ExecutionContext<'c> {
         self.stack
             .scope(self.stack_trace, mode, variables, |stack, stack_trace| {
                 let context = ExecutionContext {
-                    stack_trace: &stack_trace,
-                    stack: &stack,
+                    stack_trace,
+                    stack,
                     ..*self
                 };
 
@@ -287,7 +287,7 @@ pub fn execute_expression(
             compile::Expression::List(ast_node) => {
                 Ok(values::List::from_ast(context, ast_node)?.into())
             }
-            compile::Expression::Parenthesis(ast_node) => execute_expression(context, &ast_node),
+            compile::Expression::Parenthesis(ast_node) => execute_expression(context, ast_node),
             compile::Expression::MemberAccess(ast_node) => {
                 let base = execute_expression(context, &ast_node.node.base)?;
 
@@ -391,7 +391,7 @@ fn execute_method_call(
 
     context.stack_scope(
         to_call.call_scope_type(context),
-        HashMap::from_iter([(ImString::from("self"), self_dictionary.into())]),
+        HashMap::from_iter([(ImString::from("self"), self_dictionary)]),
         |context| to_call.call(context, argument),
     )?
 }
@@ -571,7 +571,7 @@ pub(crate) fn test_context_custom_database<R>(
         database: &database,
         store: &store,
         file_cache: &file_cache,
-        working_directory: &working_directory,
+        working_directory,
         import_limit: 100,
     };
 
@@ -592,7 +592,7 @@ pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> Express
         );
     }
 
-    if context.import_limit <= 0 {
+    if context.import_limit == 0 {
         return Err(
             GenericFailure("Import recursion depth has been exceeded".into())
                 .to_error(context.stack_trace),
@@ -638,13 +638,13 @@ pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> Express
 
         context
             .log
-            .collect_syntax_errors(&input, &tree, &file, root.reference.clone());
+            .collect_syntax_errors(input, &tree, &file, root.reference.clone());
 
         root
     };
 
     let context = ExecutionContext {
-        working_directory: &parent_dir,
+        working_directory: parent_dir,
         import_limit: context.import_limit - 1,
         ..context.clone()
     };

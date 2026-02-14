@@ -185,11 +185,7 @@ impl UserClosure {
 
         let mut captured_values = HashableMap::new();
         find_all_variable_accesses_in_closure_capture(&source.node, &mut |field_name| {
-            let local_variables = signature
-                .argument_type
-                .members
-                .iter()
-                .map(|(name, _value): (&ImString, _)| name.clone());
+            let local_variables = signature.argument_type.members.keys().cloned();
 
             let value = context
                 .get_variable_for_closure(
@@ -309,7 +305,7 @@ macro_rules! build_member_from_sig {
         (
             imstr::ImString::from(stringify!($name)),
             $crate::execution::values::StructMember {
-                ty: <$ty as crate::execution::values::StaticType>::static_type(),
+                ty: <$ty as $crate::execution::values::StaticType>::static_type(),
                 default: None,
             },
         )
@@ -318,7 +314,7 @@ macro_rules! build_member_from_sig {
         (
             imstr::ImString::from(stringify!($name)),
             $crate::execution::values::StructMember {
-                ty: <$ty as crate::execution::values::StaticType>::static_type(),
+                ty: <$ty as $crate::execution::values::StaticType>::static_type(),
                 default: Some($default),
             },
         )
@@ -361,7 +357,7 @@ macro_rules! build_closure_type {
         impl $crate::execution::values::StaticType for $name {
             fn static_type() -> $crate::execution::values::ValueType {
                 static TYPE: std::sync::OnceLock<
-                    std::sync::Arc<crate::execution::values::closure::Signature>,
+                    std::sync::Arc<$crate::execution::values::closure::Signature>,
                 > = std::sync::OnceLock::new();
                 let signature = TYPE.get_or_init(|| $crate::build_closure_signature!(($($arg: $ty $(= $default)?),*) -> $return_type));
 
@@ -381,9 +377,9 @@ macro_rules! build_closure_type {
             }
         }
 
-        impl Into<$crate::execution::values::UserClosure> for $name {
-            fn into(self) -> $crate::execution::values::UserClosure {
-                self.0
+        impl From<$name> for $crate::execution::values::UserClosure {
+            fn from(value: $name) -> Self {
+                value.0
             }
         }
 
@@ -436,7 +432,7 @@ macro_rules! build_function_callable {
                 signature: &$crate::execution::values::closure::Signature,
                 argument: $crate::execution::values::Dictionary
             | -> $crate::execution::ExpressionResult<$crate::execution::values::Value> {
-                use crate::execution::errors::Raise as _;
+                use $crate::execution::errors::Raise as _;
 
                 signature
                     .argument_type
@@ -513,7 +509,7 @@ macro_rules! build_method_callable {
                 signature: &$crate::execution::values::closure::Signature,
                 argument: $crate::execution::values::Dictionary
             | -> $crate::execution::ExpressionResult<$crate::execution::values::Value> {
-                use crate::execution::errors::Raise as _;
+                use $crate::execution::errors::Raise as _;
 
                 let $this = $context.get_variable(
                     $crate::execution::logging::LocatedStr {
@@ -799,7 +795,7 @@ mod test {
                 BuiltinFunction::new::<TestFunction>().into(),
             )],
             |context| {
-                let product = execute_expression(&context, &root).unwrap();
+                let product = execute_expression(context, &root).unwrap();
 
                 assert_eq!(product, values::UnsignedInteger::from(846).into());
             },
@@ -830,7 +826,7 @@ mod test {
                 BuiltinFunction::new::<TestFunction>().into(),
             )],
             |context| {
-                let product = execute_expression(&context, &root).unwrap();
+                let product = execute_expression(context, &root).unwrap();
 
                 assert_eq!(product, values::UnsignedInteger::from(3).into());
             },
@@ -860,7 +856,7 @@ mod test {
                 BuiltinFunction::new::<TestFunction>().into(),
             )],
             |context| {
-                let product = execute_expression(&context, &root).unwrap();
+                let product = execute_expression(context, &root).unwrap();
 
                 assert_eq!(product, values::UnsignedInteger::from(3).into());
             },
@@ -891,7 +887,7 @@ mod test {
                 BuiltinFunction::new::<TestFunction>().into(),
             )],
             |context| {
-                let product = execute_expression(&context, &root).unwrap();
+                let product = execute_expression(context, &root).unwrap();
 
                 assert_eq!(product, values::UnsignedInteger::from(3).into());
             },
@@ -919,7 +915,7 @@ mod test {
                 BuiltinFunction::new::<TestMethod>().into(),
             )],
             |context| {
-                let product = execute_expression(&context, &root).unwrap();
+                let product = execute_expression(context, &root).unwrap();
 
                 assert_eq!(product, values::UnsignedInteger::from(5).into());
             },
@@ -954,7 +950,7 @@ mod test {
                 BuiltinFunction::new::<TestMethod>().into(),
             )],
             |context| {
-                let product = execute_expression(&context, &root).unwrap();
+                let product = execute_expression(context, &root).unwrap();
 
                 assert_eq!(product, values::UnsignedInteger::from(15).into());
             },

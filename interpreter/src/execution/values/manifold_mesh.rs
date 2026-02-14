@@ -195,7 +195,7 @@ impl ManifoldMesh3D {
                     [raw.x, raw.y, default],
                 )?))
             }
-            Value::Vector3(v) => Ok(ArethmeticInput::Vector(v.clone())),
+            Value::Vector3(v) => Ok(ArethmeticInput::Vector(v)),
             Value::ManifoldMesh3D(manifold) => Ok(ArethmeticInput::Manifold(manifold)),
             value => Err(DowncastError {
                 expected: "Vector2 or Vector3 of lengths, or another ManifoldMesh3D".into(),
@@ -284,7 +284,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
             let manifold = generate_cone(apex.into(), center.into(), radius, divide.0 as usize)
                 .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
-            Ok(ManifoldMesh3D(Arc::new(manifold)).into())
+            Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
     build_function!(
@@ -299,7 +299,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let mut manifold = generate_cube().map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
             manifold.scale(size.x, size.y, size.z);
 
-            Ok(ManifoldMesh3D(Arc::new(manifold)).into())
+            Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
     build_function!(
@@ -316,7 +316,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
             let manifold = generate_cylinder(radius, height.into(), sectors.0 as usize, stacks.0 as usize)
                 .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
-            Ok(ManifoldMesh3D(Arc::new(manifold)).into())
+            Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
     build_function!(
@@ -333,7 +333,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                 .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
             manifold.scale(scale, scale, scale);
 
-            Ok(ManifoldMesh3D(Arc::new(manifold)).into())
+            Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
     build_function!(
@@ -347,7 +347,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
         ) -> ManifoldMesh3D {
             let manifold = generate_torus(major_radius.into(), minor_raidus.into(), rings.0 as usize, sectors.0 as usize)
                 .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
-            Ok(ManifoldMesh3D(Arc::new(manifold)).into())
+            Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
     build_function!(
@@ -365,7 +365,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                 .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
             manifold.scale(scale, scale, scale);
 
-            Ok(ManifoldMesh3D(Arc::new(manifold)).into())
+            Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
 

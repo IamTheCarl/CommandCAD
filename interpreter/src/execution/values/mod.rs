@@ -181,7 +181,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
     ) -> std::fmt::Result;
 
     fn type_name(&self) -> Cow<'static, str> {
-        Self::static_type_name().into()
+        Self::static_type_name()
     }
 
     fn and(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
@@ -365,7 +365,7 @@ impl Value {
         T: StaticTypeName,
         Self: AsVariant<T>,
     {
-        self.downcast_ref(stack_trace).map_err(|error| error.into())
+        self.downcast_ref(stack_trace)
     }
 
     pub fn downcast_for_binary_op<T>(self, stack_trace: &StackTrace) -> ExpressionResult<T>
@@ -373,7 +373,7 @@ impl Value {
         T: StaticTypeName,
         Self: IntoVariant<T>,
     {
-        self.downcast(stack_trace).map_err(|error| error.into())
+        self.downcast(stack_trace)
     }
 
     pub fn downcast_ref<T>(&self, stack_trace: &StackTrace) -> ExpressionResult<&T>
@@ -385,7 +385,7 @@ impl Value {
             Ok(value)
         } else {
             Err(DowncastForBinaryOpError {
-                expected: T::static_type_name().into(),
+                expected: T::static_type_name(),
                 got: self.type_name(),
             }
             .to_error(stack_trace))
@@ -400,7 +400,7 @@ impl Value {
         match self.into_variant() {
             Ok(value) => Ok(value),
             Err(original) => Err(DowncastForBinaryOpError {
-                expected: T::static_type_name().into(),
+                expected: T::static_type_name(),
                 got: original.type_name(),
             }
             .to_error(stack_trace)),

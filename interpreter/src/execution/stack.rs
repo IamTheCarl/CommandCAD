@@ -51,7 +51,7 @@ impl<'p> StackScope<'p> {
         }
     }
 
-    pub fn scope<'s, B, R>(
+    pub fn scope<B, R>(
         &'p self,
         stack_trace: &StackTrace,
         mode: ScopeType,
@@ -73,7 +73,7 @@ impl<'p> StackScope<'p> {
         Ok(result)
     }
 
-    pub fn scope_mut<'s, B, R>(
+    pub fn scope_mut<B, R>(
         &'p self,
         stack_trace: &StackTrace,
         mode: ScopeType,
@@ -120,7 +120,7 @@ impl<'p> StackScope<'p> {
         let mut names: Vec<_> = self
             .iter_visible_variables()
             .map(|(name, _value)| name.clone())
-            .chain(local_variables.into_iter())
+            .chain(local_variables)
             .collect();
         names.sort_by(|name_a, name_b| {
             match (name_a.starts_with(name), name_b.starts_with(name)) {
@@ -250,7 +250,7 @@ mod test {
                 |stack, stack_trace| {
                     stack
                         .scope(
-                            &stack_trace,
+                            stack_trace,
                             ScopeType::Inherited,
                             HashMap::from_iter([("c".into(), UnsignedInteger::from(3).into())]),
                             |stack, _stack_trace| {
@@ -289,7 +289,7 @@ mod test {
                 |stack, stack_trace| {
                     stack
                         .scope(
-                            &stack_trace,
+                            stack_trace,
                             ScopeType::Isolated,
                             HashMap::from_iter([("c".into(), UnsignedInteger::from(3).into())]),
                             |stack, _stack_trace| {

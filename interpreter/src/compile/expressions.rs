@@ -19,7 +19,7 @@ trait DependentOperation {
     fn dependencies(&self) -> &HashableSet<ImString>;
 }
 
-fn sort_and_group_dependencies<D>(deps: &mut Vec<D>) -> Vec<std::ops::Range<usize>>
+fn sort_and_group_dependencies<D>(deps: &mut [D]) -> Vec<std::ops::Range<usize>>
 where
     D: DependentOperation,
 {
@@ -2276,7 +2276,7 @@ mod test {
                 index,
                 name: name.into(),
                 dependencies: HashableSet::from(HashSet::from_iter(
-                    dependencies.into_iter().map(|name| ImString::from(name)),
+                    dependencies.into_iter().map(ImString::from),
                 )),
             }
         }

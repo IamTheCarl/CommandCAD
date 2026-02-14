@@ -7,6 +7,8 @@ use std::{
     sync::OnceLock,
 };
 
+// One conversion factors approximates f64::consts::TAU.
+#[allow(clippy::approx_constant)]
 pub fn get_conversion_factor(name: &str) -> Option<&'static ConversionFactor> {
     static CONVERSION_FACTORS: OnceLock<ConversionFactorDatabase> = OnceLock::new();
     let database = CONVERSION_FACTORS

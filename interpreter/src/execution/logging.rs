@@ -227,7 +227,7 @@ impl<'s> From<&'s LocatedStr<'s>> for LocatedStr<'s> {
     fn from(value: &'s LocatedStr<'s>) -> Self {
         Self {
             location: value.location.clone(),
-            string: &value.string,
+            string: value.string,
         }
     }
 }

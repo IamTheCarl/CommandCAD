@@ -70,7 +70,7 @@ impl<'t> Parse<'t, nodes::ConstraintSet<'t>> for ConstraintSet {
             file,
             &value,
             Self {
-                variables: variables,
+                variables,
                 left,
                 right,
                 relation,

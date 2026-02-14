@@ -5,7 +5,7 @@ use std::{
 };
 
 mod arguments;
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{anyhow, bail, Context, Result};
 use arguments::Arguments;
 use ariadne::{Cache, Label, Report, ReportKind, Source};
 use clap::Parser as _;
@@ -17,13 +17,14 @@ use type_sitter::Node as _;
 use crate::arguments::Commands;
 
 use interpreter::{
-    ExecutionContext, ExecutionFileCache, ImString, LogMessage, Parser, RuntimeLog,
-    SourceReference, StackScope, StackTrace, Store, build_prelude,
+    build_prelude,
     compile::{compile, iter_raw_nodes},
     execute_expression,
     execution::values::BuiltinCallableDatabase,
     new_parser, run_file,
     values::{Object, Style, Value},
+    ExecutionContext, ExecutionFileCache, ImString, LogMessage, Parser, RuntimeLog,
+    SourceReference, StackScope, StackTrace, Store,
 };
 
 fn main() {
@@ -59,10 +60,11 @@ impl RuntimeLog for StderrLog {
         file: &'t Arc<PathBuf>,
         span: SourceReference,
     ) {
-        if let Some(report) = build_syntax_errors(&tree, file, span) {
-            if let Err(error) = report.eprint(ReplFileCache(Source::from(input))) {
-                eprintln!("Failed to print syntax error message: {error}");
-            }
+        let Some(report) = build_syntax_errors(tree, file, span) else {
+            return;
+        };
+        if let Err(error) = report.eprint(ReplFileCache(Source::from(input))) {
+            eprintln!("Failed to print syntax error message: {error}");
         }
     }
 }
@@ -131,7 +133,7 @@ fn process_file(file: PathBuf) -> Result<()> {
 
             let report = error.report();
             report
-                .eprint(ExecutionFileCache(&*file_cache))
+                .eprint(ExecutionFileCache(&file_cache))
                 .context("Failed to format error message")?;
         }
     }
@@ -261,7 +263,7 @@ fn run_line(
         .parse(input, None)
         .map_err(|error| anyhow!("Failed to parse input: {error:?}"))?;
     let root =
-        compile(&repl_file, input, &tree).map_err(|error| anyhow!("Failed to compile: {error}"))?;
+        compile(repl_file, input, &tree).map_err(|error| anyhow!("Failed to compile: {error}"))?;
 
     let log = StderrLog;
     let files = Mutex::new(HashMap::new());
@@ -269,8 +271,8 @@ fn run_line(
     let context = ExecutionContext {
         log: &log as &dyn RuntimeLog,
         stack_trace: &StackTrace::top(root.reference.clone()),
-        stack: &StackScope::top(&prelude),
-        database: &database,
+        stack: &StackScope::top(prelude),
+        database,
         store,
         file_cache: &files,
         working_directory: Path::new("."),

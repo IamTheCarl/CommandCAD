@@ -99,7 +99,7 @@ fn main() {
         // Record conversion factor.
         let already_exists = conversion_factors
             .insert(
-                row.keyboard_friendly_abbreviation.clone().into(),
+                row.keyboard_friendly_abbreviation.clone(),
                 ConversionFactor {
                     constant: row.conversion_constant,
                     coefficient: row.conversion_coefficient,
@@ -116,7 +116,7 @@ fn main() {
         }
 
         // Self-deduplicating  list of names for the dimensions.
-        dimension_names.insert(dimension, row.dimension_name.clone().into());
+        dimension_names.insert(dimension, row.dimension_name.clone());
 
         unit_list
             .entry(row.dimension_name)

@@ -152,22 +152,14 @@ impl Object for Scalar {
 
         let value = Float::new(*self.value + *rhs.value).unwrap_not_nan(context.stack_trace)?;
 
-        Ok(Self {
-            value,
-            ..self.clone()
-        }
-        .into())
+        Ok(Self { value, ..self }.into())
     }
     fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
         let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
 
         let value = Float::new(*self.value - *rhs.value).unwrap_not_nan(context.stack_trace)?;
 
-        Ok(Self {
-            value,
-            ..self.clone()
-        }
-        .into())
+        Ok(Self { value, ..self }.into())
     }
     fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
         let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
@@ -198,12 +190,12 @@ impl Object for Scalar {
         }
     }
     fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
-        Ok(self.clone().into())
+        Ok(self.into())
     }
     fn unary_minus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
         Ok(Self {
             value: -self.value,
-            ..self.clone()
+            ..self
         }
         .into())
     }
@@ -398,7 +390,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: Scalar) -> SignedInteger
         {
             if this.dimension.is_zero_dimension() {
-                Ok(values::SignedInteger::from(*this.value as i64).into())
+                Ok(values::SignedInteger::from(*this.value as i64))
             } else {
                 Err(GenericFailure("Only zero dimensional scalars can be converted into an integer".into())
                     .to_error(context.stack_trace))
@@ -413,7 +405,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             if this.dimension.is_zero_dimension() {
                 if *this.value >= 0.0 {
-                    Ok(values::UnsignedInteger::from(*this.value as u64).into())
+                    Ok(values::UnsignedInteger::from(*this.value as u64))
                 } else {
                     Err(GenericFailure("Negative values cannot be converted to signed integers".into())
                         .to_error(context.stack_trace))
@@ -500,7 +492,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             _context: &ExecutionContext,
             this: Scalar) -> Boolean
         {
-            Ok(values::Boolean(this.value.is_normal()).into())
+            Ok(values::Boolean(this.value.is_normal()))
         }
     );
     build_method!(
@@ -890,9 +882,9 @@ macro_rules! build_scalar_type {
             }
         }
 
-        impl Into<Scalar> for $name {
-            fn into(self) -> Scalar {
-                self.0
+        impl From<$name> for Scalar {
+            fn from(value: $name) -> Scalar {
+                value.0
             }
         }
 
@@ -904,9 +896,9 @@ macro_rules! build_scalar_type {
             }
         }
 
-        impl Into<common_data_types::RawFloat> for $name {
-            fn into(self) -> common_data_types::RawFloat {
-                *self.value
+        impl From<$name> for common_data_types::RawFloat {
+            fn from(value: $name) -> common_data_types::RawFloat {
+                *value.value
             }
         }
     };
