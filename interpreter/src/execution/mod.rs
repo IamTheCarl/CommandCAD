@@ -160,9 +160,30 @@ pub fn find_all_variable_accesses_in_expression(
                 )?;
             }
 
+            let variable_names: Vec<&ImString> = {
+                let mut variable_names = Vec::with_capacity(ast_node.node.assignments.len());
+
+                for argument in ast_node.node.assignments.iter() {
+                    variable_names.push(&argument.node.ident.node);
+                }
+
+                // We typically won't have more than 6 arguments, so a binary search will typically
+                // outperform a hashset.
+                variable_names.sort();
+
+                variable_names
+            };
+
             find_all_variable_accesses_in_expression(
                 &ast_node.node.expression.node,
-                access_collector,
+                &mut move |variable_name| {
+                    if variable_names.binary_search(&&variable_name.node).is_err() {
+                        // This is not an argument, which means it must be captured from the environment.
+                        access_collector(variable_name)?;
+                    }
+
+                    Ok(())
+                },
             )?;
 
             Ok(())
@@ -716,6 +737,13 @@ mod test {
     fn let_in_self_ref() {
         let product = test_run("let value = 23u; value2 = value + 2u; in value2").unwrap();
         assert_eq!(product, values::UnsignedInteger::from(25).into());
+    }
+
+    #[test]
+    fn variable_access_collection_for_let_in() {
+        let product =
+            test_run("let fn = () -> std.types.UInt: let value = 5u; in value; in fn()").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(5).into());
     }
 
     #[test]
