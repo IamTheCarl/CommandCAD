@@ -28,7 +28,10 @@ use crate::{
         logging::StackTrace,
         stack::StackScope,
         store::Store,
-        values::{BuiltinCallableDatabase, Scalar, SignedInteger, UnsignedInteger, ValueNone},
+        values::{
+            integer::functions::{RangeSInt, RangeUInt},
+            BuiltinCallableDatabase, Scalar, SignedInteger, UnsignedInteger, ValueNone,
+        },
         ExecutionContext,
     },
     values::BuiltinFunction,
@@ -86,8 +89,18 @@ fn build_std(context: &ExecutionContext) -> Dictionary {
         ("consts".into(), build_consts(context).into()),
         ("mesh3d".into(), build_mesh_3d(context).into()),
         ("import".into(), BuiltinFunction::new::<Import>().into()),
+        ("range".into(), build_range(context).into()),
     ]);
     Dictionary::new(context, std)
+}
+
+/// Adds library for range iteration.
+fn build_range(context: &ExecutionContext) -> Dictionary {
+    let range: HashMap<ImString, Value> = HashMap::from_iter([
+        ("UInt".into(), BuiltinFunction::new::<RangeUInt>().into()),
+        ("SInt".into(), BuiltinFunction::new::<RangeSInt>().into()),
+    ]);
+    Dictionary::new(context, range)
 }
 
 /// Adds library for constants.

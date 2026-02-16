@@ -24,7 +24,7 @@ use unwrap_enum::EnumAs;
 
 use crate::{
     execution::{logging::StackTrace, stack::ScopeType, ExecutionContext},
-    values::manifold_mesh::ManifoldMesh3D,
+    values::{iterators::ValueIterator, manifold_mesh::ManifoldMesh3D},
 };
 
 use super::errors::{ErrorType, ExpressionResult, Raise as _};
@@ -35,7 +35,7 @@ pub use void::ValueNone;
 mod boolean;
 pub use boolean::Boolean;
 
-mod integer;
+pub mod integer;
 pub use integer::{SignedInteger, UnsignedInteger};
 
 mod scalar;
@@ -62,6 +62,7 @@ pub use file::File;
 pub mod constraint_set;
 pub use constraint_set::ConstraintSet;
 
+mod iterators;
 pub mod manifold_mesh;
 
 mod value_type;
@@ -294,6 +295,7 @@ pub enum Value {
     File,
     ConstraintSet,
     ManifoldMesh3D,
+    ValueIterator,
     // Quaternion,
 }
 

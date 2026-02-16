@@ -28,6 +28,7 @@ use crate::{
         },
         ExecutionContext,
     },
+    values::iterators::{IterableObject, ValueIterator},
 };
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
@@ -160,8 +161,6 @@ impl Object for List {
             "get" => Ok(BuiltinFunction::new::<methods::Get>().into()),
             "chunks" => Ok(BuiltinFunction::new::<methods::Chunks>().into()),
 
-            "map" => Ok(BuiltinFunction::new::<methods::Map>().into()),
-            "fold" => Ok(BuiltinFunction::new::<methods::Fold>().into()),
             "retain" => Ok(BuiltinFunction::new::<methods::Retain>().into()),
 
             "sort" => Ok(BuiltinFunction::new::<methods::Sort>().into()),
@@ -176,6 +175,8 @@ impl Object for List {
                 Ok(BuiltinFunction::new::<methods::SymmetricDifference>().into())
             }
             "cartesian_product" => Ok(BuiltinFunction::new::<methods::CartesianProduct>().into()),
+            "iter" => Ok(BuiltinFunction::new::<methods::Iterate>().into()),
+            "iter_reverse" => Ok(BuiltinFunction::new::<methods::IterateReverse>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -277,6 +278,36 @@ impl StaticType for List {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct ListIterator {
+    list: List,
+}
+
+impl IterableObject for ListIterator {
+    fn iterate<R>(
+        &self,
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
+    ) -> ExpressionResult<R> {
+        let mut iter = self.list.values.iter().cloned();
+        callback(&mut iter)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct ListReverseIterator {
+    list: List,
+}
+
+impl IterableObject for ListReverseIterator {
+    fn iterate<R>(
+        &self,
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
+    ) -> ExpressionResult<R> {
+        let mut iter = self.list.values.iter().rev().cloned();
+        callback(&mut iter)
+    }
+}
+
 #[derive(Debug)]
 struct OperationMappingError {
     pub operation_name: &'static str,
@@ -332,8 +363,6 @@ mod methods {
     pub struct Get;
     pub struct Chunks;
 
-    pub struct Map;
-    pub struct Fold;
     pub struct Retain;
 
     pub struct Sort;
@@ -346,6 +375,9 @@ mod methods {
     pub struct Difference;
     pub struct SymmetricDifference;
     pub struct CartesianProduct;
+
+    pub struct Iterate;
+    pub struct IterateReverse;
 }
 
 pub fn register_methods(database: &mut BuiltinCallableDatabase) {
@@ -436,48 +468,6 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(chunks)
 
-        }
-    );
-    build_method!(
-        database,
-        methods::Map, "List::map",(
-            context: &ExecutionContext,
-            this: List,
-            f: MapClosure
-        ) -> List {
-            let values: Vec<Value> = this.values.iter().map(|c| f.call(context, Dictionary::new(context, HashMap::from_iter([
-                (
-                    "c".into(),
-                    c.clone()
-                )
-            ])))).collect::<ExpressionResult<_>>()?;
-
-            Ok(List::from_iter(context, values.into_iter()))
-        }
-    );
-    build_method!(
-        database,
-        methods::Fold, "List::fold",(
-            context: &ExecutionContext,
-            this: List,
-            init: Value,
-            f: FoldClosure
-        ) -> Value {
-            let mut accumulator = init;
-            for component in this.values.iter() {
-                accumulator = f.call(context, Dictionary::new(context, HashMap::from_iter([
-                    (
-                        "c".into(),
-                        component.clone()
-                    ),
-                    (
-                        "previous".into(),
-                        accumulator
-                    )
-                ])))?;
-            }
-
-            Ok(accumulator)
         }
     );
     build_method!(
@@ -666,6 +656,25 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             }
 
             Ok(List::from_iter(context, values.into_iter()))
+        }
+    );
+
+    build_method!(
+        database,
+        methods::Iterate, "List::iter",(
+            context: &ExecutionContext,
+            this: List
+        ) -> ValueIterator {
+            Ok(ValueIterator::new(ListIterator { list: this }))
+        }
+    );
+    build_method!(
+        database,
+        methods::IterateReverse, "List::iter_reverse",(
+            context: &ExecutionContext,
+            this: List
+        ) -> ValueIterator {
+            Ok(ValueIterator::new(ListReverseIterator { list: this }))
         }
     );
 }
@@ -883,22 +892,6 @@ mod test {
     }
 
     #[test]
-    fn method_map() {
-        let product = test_run(
-            "[1u, 2u, 3u, 4u]::map(f= (c: std.types.UInt) -> std.types.UInt: c + 1u) == [2u, 3u, 4u, 5u]",
-        )
-        .unwrap();
-        assert_eq!(product, Boolean(true).into());
-    }
-
-    #[test]
-    fn method_fold() {
-        let product =
-            test_run("[1u, 2u, 3u, 4u]::fold(init = 0u, f = (previous: std.types.UInt, c: std.types.UInt) -> std.types.UInt: previous + c) == 10u").unwrap();
-        assert_eq!(product, Boolean(true).into());
-    }
-
-    #[test]
     fn method_retain() {
         let product = test_run(
             "[1u, 2u, 3u, 4u]::retain(f = (c: std.types.UInt) -> std.types.Bool: c == 1u || c == 3u) == [1u, 3u]",
@@ -973,6 +966,18 @@ mod test {
 
         let product =
             test_run("\"{value:X}\"::format(value = [0xDEADBEEFu]) == \"[DEADBEEF]\"").unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn iterate() {
+        let product = test_run("[1, 2, 3]::iter()::collect_list() == [1, 2, 3]").unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn iterate_reverse() {
+        let product = test_run("[1, 2, 3]::iter_reverse()::collect_list() == [3, 2, 1]").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 }
