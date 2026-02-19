@@ -46,7 +46,7 @@ impl BuiltinCallableDatabase {
     pub fn new() -> Self {
         let mut database = Self::default();
 
-        super::integer::register_methods(&mut database);
+        super::integer::register_methods_and_functions(&mut database);
         super::scalar::register_methods(&mut database);
         super::vector::register_methods(&mut database);
         super::value_type::register_methods(&mut database);
@@ -56,6 +56,7 @@ impl BuiltinCallableDatabase {
         super::constraint_set::register_methods(&mut database);
         super::manifold_mesh::register_methods_and_functions(&mut database);
         crate::execution::register_methods_and_functions(&mut database);
+        super::iterators::register_methods(&mut database);
 
         database
     }
@@ -352,6 +353,7 @@ macro_rules! build_closure_signature {
 #[macro_export]
 macro_rules! build_closure_type {
     ($name:ident($($arg:ident: $ty:path $(= $default:expr)?),*) -> $return_type:ty) => {
+        #[derive(Debug, Eq, PartialEq, Clone)]
         struct $name(pub $crate::execution::values::UserClosure);
 
         impl $crate::execution::values::StaticType for $name {

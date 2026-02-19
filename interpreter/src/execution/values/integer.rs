@@ -27,14 +27,21 @@ use std::{
     ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr},
 };
 
-use crate::execution::{
-    errors::{ExpressionResult, GenericFailure, Raise},
-    logging::{LogLevel, LogMessage, StackTrace},
-    values::{
-        closure::BuiltinCallableDatabase, integer::methods::MethodSet, string::formatting::Style,
-        BuiltinFunction, MissingAttributeError, StaticType,
+use crate::{
+    build_function,
+    execution::{
+        errors::{ExpressionResult, GenericFailure, Raise},
+        logging::{LogLevel, LogMessage, StackTrace},
+        values::{
+            closure::BuiltinCallableDatabase, integer::methods::MethodSet,
+            string::formatting::Style, BuiltinFunction, MissingAttributeError, StaticType,
+        },
+        ExecutionContext,
     },
-    ExecutionContext,
+    values::{
+        iterators::{IterableObject, ValueIterator},
+        Boolean,
+    },
 };
 
 use super::{value_type::ValueType, Object, StaticTypeName, Value};
@@ -343,6 +350,9 @@ trait IntOps:
     fn is_positive(&self) -> bool;
     fn is_negative(&self) -> bool;
     fn midpoint(&self, rhs: Self) -> Self;
+
+    fn increment(&self) -> Self;
+    fn decrement(&self) -> Self;
 }
 
 // TODO cast_signed and cast_unsigned
@@ -416,6 +426,13 @@ impl IntOps for i64 {
 
     fn midpoint(&self, rhs: Self) -> Self {
         i64::midpoint(*self, rhs)
+    }
+
+    fn increment(&self) -> Self {
+        self + 1
+    }
+    fn decrement(&self) -> Self {
+        self - 1
     }
 }
 
@@ -508,6 +525,13 @@ impl IntOps for u64 {
 
     fn midpoint(&self, rhs: Self) -> Self {
         u64::midpoint(*self, rhs)
+    }
+
+    fn increment(&self) -> Self {
+        self + 1
+    }
+    fn decrement(&self) -> Self {
+        self - 1
     }
 }
 
@@ -760,9 +784,125 @@ mod methods {
 pub type SignedInteger = Integer<i64>;
 pub type UnsignedInteger = Integer<u64>;
 
-pub fn register_methods(database: &mut BuiltinCallableDatabase) {
+pub mod functions {
+    pub struct RangeUInt;
+    pub struct RangeSInt;
+}
+
+pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
     methods::register_methods::<u64>(database);
     methods::register_methods::<i64>(database);
+
+    build_function!(
+        database,
+        functions::RangeUInt, "std.range.UInt", (
+            context: &ExecutionContext,
+            inclusive: Boolean = Boolean(false).into(),
+            reverse: Boolean = Boolean(false).into(),
+            start: UnsignedInteger,
+            end: UnsignedInteger
+        ) -> ValueIterator {
+            let inclusive = inclusive.0;
+            let reverse = reverse.0;
+            let start = start.0;
+            let end = end.0;
+
+            if inclusive && reverse && end == 0 {
+                return Err(GenericFailure("Range ending will be less than zero, which is not possible for an unsigned integer".into()).to_error(context.stack_trace));
+            }
+
+            if reverse {
+                if start < end {
+                    return Err(GenericFailure("Start cannot be less than end when iterating a reversed range".into()).to_error(context.stack_trace));
+                }
+            } else if start > end {
+                return Err(GenericFailure("Start cannot be greater than end when iterating a range".into()).to_error(context.stack_trace));
+            }
+
+            Ok(ValueIterator::new(Range { start, end, inclusive, reverse }))
+        }
+    );
+    build_function!(
+        database,
+        functions::RangeSInt, "std.range.SInt", (
+            context: &ExecutionContext,
+            inclusive: Boolean = Boolean(false).into(),
+            reverse: Boolean = Boolean(false).into(),
+            start: SignedInteger,
+            end: SignedInteger
+        ) -> ValueIterator {
+            let inclusive = inclusive.0;
+            let reverse = reverse.0;
+            let start = start.0;
+            let end = end.0;
+
+            if reverse {
+                if start < end {
+                    return Err(GenericFailure("Start cannot be less than end when iterating a reversed range".into()).to_error(context.stack_trace));
+                }
+            } else if start > end {
+                return Err(GenericFailure("Start cannot be greater than end when iterating a range".into()).to_error(context.stack_trace));
+            }
+
+            Ok(ValueIterator::new(Range { start, end, inclusive, reverse }))
+        }
+    );
+}
+
+pub type RangeUInt = Range<u64>;
+pub type RangeSInt = Range<i64>;
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct Range<I> {
+    start: I,
+    end: I,
+    inclusive: bool,
+    reverse: bool,
+}
+
+impl<I> IterableObject for Range<I>
+where
+    I: IntOps,
+    Integer<I>: Into<Value>,
+{
+    fn iterate<R>(
+        &self,
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
+    ) -> ExpressionResult<R> {
+        // We had to implement a lot of this manually due to std::range::Step not being stable yet.
+        let mut index = self.start;
+        let end = match (self.inclusive, self.reverse) {
+            (true, true) => self.end.decrement(),
+            (true, false) => self.end.increment(),
+            (false, _) => self.end,
+        };
+
+        if self.reverse {
+            let mut iterator = std::iter::from_fn(|| {
+                if index != end {
+                    let value = index;
+                    index = index.decrement();
+                    Some(Integer(value).into())
+                } else {
+                    Option::None
+                }
+            });
+
+            callback(&mut iterator)
+        } else {
+            let mut iterator = std::iter::from_fn(|| {
+                if index != end {
+                    let value = index;
+                    index = index.increment();
+                    Some(Integer(value).into())
+                } else {
+                    Option::None
+                }
+            });
+
+            callback(&mut iterator)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1258,6 +1398,52 @@ mod test {
     #[test]
     fn signed_format() {
         let product = test_run("\"{a} {b:?} {c:o} {d:x} {e:X} {f:e} {g:E}\"::format(a = 10i, b = 32i, c = 0o123i, d = 0xDEADBEEFi, e = 0xDEADBEEFi, f = 1000i, g = 1000i) == \"10 32 123 deadbeef DEADBEEF 1e3 1E3\"").unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn range_uint() {
+        let product =
+            test_run("std.range.UInt(start = 0u, end = 4u)::collect_list() == [0u, 1u, 2u, 3u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.UInt(start = 0u, end = 4u, inclusive = true)::collect_list() == [0u, 1u, 2u, 3u, 4u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.UInt(start = 4u, end = 0u, reverse = true)::collect_list() == [4u, 3u, 2u, 1u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.UInt(start = 4u, end = 1u, inclusive = true, reverse = true)::collect_list() == [4u, 3u, 2u, 1u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn range_sint() {
+        let product =
+            test_run("std.range.SInt(start = 0i, end = 4i)::collect_list() == [0i, 1i, 2i, 3i]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.SInt(start = 0i, end = 4i, inclusive = true)::collect_list() == [0i, 1i, 2i, 3i, 4i]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.SInt(start = 4i, end = 0i, reverse = true)::collect_list() == [4i, 3i, 2i, 1i]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.SInt(start = 4i, end = 1i, inclusive = true, reverse = true)::collect_list() == [4i, 3i, 2i, 1i]")
+                .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 }

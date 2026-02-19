@@ -62,6 +62,7 @@ pub enum ValueType {
     Any,
     ConstraintSet(Arc<HashableSet<ImString>>),
     ManifoldMesh3D,
+    Iterator,
 }
 
 impl From<StructDefinition> for ValueType {
@@ -95,6 +96,7 @@ impl ValueType {
             Self::File => File::static_type_name(),
             Self::Any => "Any".into(),
             Self::ManifoldMesh3D => "ManifoldMesh3D".into(),
+            Self::Iterator => "Iterator".into(),
             _ => format!("{}", self).into(),
         }
     }

@@ -35,6 +35,7 @@ use crate::{
         },
         ExecutionContext,
     },
+    values::iterators::{IterableObject, ValueIterator},
 };
 
 use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
@@ -95,8 +96,6 @@ impl Object for IString {
             "chunks" => Ok(BuiltinFunction::new::<methods::Chunks>().into()),
             "lines" => Ok(BuiltinFunction::new::<methods::Lines>().into()),
 
-            "map" => Ok(BuiltinFunction::new::<methods::Map>().into()),
-            "fold" => Ok(BuiltinFunction::new::<methods::Fold>().into()),
             "retain" => Ok(BuiltinFunction::new::<methods::Retain>().into()),
 
             "reverse" => Ok(BuiltinFunction::new::<methods::Reverse>().into()),
@@ -114,6 +113,7 @@ impl Object for IString {
             }
 
             "contains" => Ok(BuiltinFunction::new::<methods::Contains>().into()),
+            "chars" => Ok(BuiltinFunction::new::<methods::Chars>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -143,6 +143,47 @@ where
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct CharIterator {
+    string: IString,
+}
+
+impl IterableObject for CharIterator {
+    fn iterate<R>(
+        &self,
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
+    ) -> ExpressionResult<R> {
+        let mut iter = self
+            .string
+            .0
+            .chars()
+            .map(|c| IString(format!("{c}").into()).into());
+        callback(&mut iter)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct LineIterator {
+    string: IString,
+    include_empty: bool,
+}
+
+impl IterableObject for LineIterator {
+    fn iterate<R>(
+        &self,
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
+    ) -> ExpressionResult<R> {
+        let mut iterator = self
+            .string
+            .0
+            .lines()
+            .filter(|line| self.include_empty || !line.is_empty())
+            .map(|line| IString(line).into());
+
+        callback(&mut iterator)
+    }
+}
+
 mod methods {
     pub struct Format;
 
@@ -151,8 +192,6 @@ mod methods {
     pub struct Chunks;
     pub struct Lines;
 
-    pub struct Map;
-    pub struct Fold;
     pub struct Retain;
 
     pub struct Reverse;
@@ -166,6 +205,8 @@ mod methods {
     pub struct ParseSignedInteger;
 
     pub struct Contains;
+
+    pub struct Chars;
 }
 
 fn register_format_method(database: &mut BuiltinCallableDatabase) {
@@ -300,63 +341,10 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: IString,
             include_empty: Boolean = Boolean(true).into()
-        ) -> List {
+        ) -> ValueIterator {
             let include_empty = include_empty.0;
-            let lines: Vec<Value> = if include_empty {
-                this.0.lines().map(|line| IString(line).into()).collect()
-            } else {
-                this.0.lines().filter(|line| !line.is_empty()).map(|line| IString(line).into()).collect()
-            };
-            Ok(List::from_iter(context, lines))
-        }
-    );
-    build_method!(
-        database,
-        methods::Map, "String::map", (
-            context: &ExecutionContext,
-            this: IString,
-            f: MapClosure
-        ) -> IString {
-            let mut string = String::new();
-            let result: ExpressionResult<()> = this.0.chars().try_for_each(|c| {
-                let result = f.call(context, Dictionary::new(context, HashMap::from_iter([
-                    (
-                        "c".into(),
-                        IString(ImString::from(format!("{c}"))).into()
-                    )
-                ])))?.downcast::<IString>(context.stack_trace)?;
-                string.push_str(&result.0);
 
-                Ok(())
-            });
-            result?;
-
-            Ok(IString(ImString::from(string)))
-        }
-    );
-    build_method!(
-        database,
-        methods::Fold, "String::fold", (
-            context: &ExecutionContext,
-            this: IString,
-            init: Value,
-            f: FoldClosure
-        ) -> Value {
-            let mut accumulator = init;
-            for c in this.0.chars() {
-                accumulator = f.call(context, Dictionary::new(context, HashMap::from_iter([
-                    (
-                        "c".into(),
-                        IString(ImString::from(format!("{c}"))).into()
-                    ),
-                    (
-                        "previous".into(),
-                        accumulator
-                    )
-                ])))?;
-            }
-
-            Ok(accumulator)
+            Ok(ValueIterator::new(LineIterator { string: this, include_empty }))
         }
     );
     build_method!(
@@ -474,6 +462,16 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             Ok(Boolean(contained))
         }
     );
+
+    build_method!(
+        database,
+        methods::Chars, "String::chars",(
+            context: &ExecutionContext,
+            this: IString
+        ) -> ValueIterator {
+            Ok(ValueIterator::new(CharIterator { string: this }))
+        }
+    );
 }
 
 #[cfg(test)]
@@ -526,63 +524,53 @@ mod test {
 
     #[test]
     fn method_lines() {
-        let product = test_run("\"12\\n34\\n56\"::lines() == [\"12\", \"34\", \"56\"]").unwrap();
-        assert_eq!(product, Boolean(true).into());
-
-        let product = test_run("\"12\\n34\\n56\\n\"::lines() == [\"12\", \"34\", \"56\"]").unwrap();
+        let product =
+            test_run("\"12\\n34\\n56\"::lines()::collect_list() == [\"12\", \"34\", \"56\"]")
+                .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let product =
-            test_run("\"12\\n34\\n\\n56\\n\"::lines() == [\"12\", \"34\", \"\", \"56\"]").unwrap();
+            test_run("\"12\\n34\\n56\\n\"::lines()::collect_list() == [\"12\", \"34\", \"56\"]")
+                .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let product = test_run(
-            "\"12\\n34\\n56\\n\"::lines(include_empty = false) == [\"12\", \"34\", \"56\"]",
+            "\"12\\n34\\n\\n56\\n\"::lines()::collect_list() == [\"12\", \"34\", \"\", \"56\"]",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let product = test_run(
-            "\"12\\n34\\n\\n56\\n\"::lines(include_empty = false) == [\"12\", \"34\", \"56\"]",
+            "\"12\\n34\\n56\\n\"::lines(include_empty = false)::collect_list() == [\"12\", \"34\", \"56\"]",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let product = test_run(
-            "\"12\\n34\\n56\\n\\n\"::lines(include_empty = true) == [\"12\", \"34\", \"56\", \"\"]",
-        )
-        .unwrap();
-        assert_eq!(product, Boolean(true).into());
-
-        let product = test_run("\"12\\n34\\n\\n56\\n\\n\"::lines(include_empty = true) == [\"12\", \"34\", \"\", \"56\", \"\"]").unwrap();
-        assert_eq!(product, Boolean(true).into());
-
-        let product = test_run(
-            "\"12\\n34\\n\\n56\"::lines(include_empty = true) == [\"12\", \"34\", \"\", \"56\"]",
+            "\"12\\n34\\n\\n56\\n\"::lines(include_empty = false)::collect_list() == [\"12\", \"34\", \"56\"]",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let product = test_run(
-            "\"12\\n34\\n\\n56\"::lines(include_empty = false) == [\"12\", \"34\", \"56\"]",
+            "\"12\\n34\\n56\\n\\n\"::lines(include_empty = true)::collect_list() == [\"12\", \"34\", \"56\", \"\"]",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());
-    }
 
-    #[test]
-    fn method_map() {
+        let product = test_run("\"12\\n34\\n\\n56\\n\\n\"::lines(include_empty = true)::collect_list() == [\"12\", \"34\", \"\", \"56\", \"\"]").unwrap();
+        assert_eq!(product, Boolean(true).into());
+
         let product = test_run(
-            "\"abcd\"::map(f= (c: std.types.String) -> std.types.String: if c == \"b\" then \"X\" else c) == \"aXcd\"",
+            "\"12\\n34\\n\\n56\"::lines(include_empty = true)::collect_list() == [\"12\", \"34\", \"\", \"56\"]",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());
-    }
 
-    #[test]
-    fn method_fold() {
-        let product =
-            test_run("\"aabbabaababb\"::fold(init = 0u, f = (previous: std.types.UInt, c: std.types.String) -> std.types.UInt: if c == \"a\" then previous + 1u else previous) == 6u").unwrap();
+        let product = test_run(
+            "\"12\\n34\\n\\n56\"::lines(include_empty = false)::collect_list() == [\"12\", \"34\", \"56\"]",
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
@@ -676,6 +664,13 @@ mod test {
             "\"outer text: {value}\"::format(value = \"inner text\") == \"outer text: inner text\"",
         )
         .unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn chars() {
+        let product =
+            test_run("\"test\"::chars()::collect_list() == [\"t\", \"e\", \"s\", \"t\"]").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 }

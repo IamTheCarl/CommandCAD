@@ -16,10 +16,13 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::execution::{
-    logging::{LogLevel, LogMessage},
-    values::{string::formatting::Style, StaticType},
-    ExecutionContext,
+use crate::{
+    execution::{
+        logging::{LogLevel, LogMessage},
+        values::{string::formatting::Style, StaticType},
+        ExecutionContext,
+    },
+    values::Value,
 };
 
 use super::{value_type::ValueType, Object, StaticTypeName};
@@ -58,6 +61,10 @@ impl Object for ValueNone {
         }
 
         write!(f, "None")
+    }
+
+    fn eq(self, _context: &ExecutionContext, rhs: Value) -> crate::ExpressionResult<bool> {
+        Ok(matches!(rhs, Value::ValueNone(_)))
     }
 }
 

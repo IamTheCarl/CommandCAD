@@ -1,0 +1,32 @@
+[
+  # You can iterate a list.
+  [1, 2, 3, 4]::iter(),
+
+  # You can iterate the individual characters of a string.
+  "abcd"::chars(),
+
+  # You can iterate the lines of a string.
+  "one\ntwo\nthree"::lines(),
+
+  # Or you can iterate a range of numbers.
+  std.range.UInt(start = 0u, end = 5u),
+  std.range.UInt(start = 0u, end = 5u, inclusive = true),
+  std.range.UInt(start = 5u, end = 1u, reverse = true),
+  std.range.UInt(start = 5u, end = 1u, reverse = true, inclusive = true),
+
+  # Iterators are lazily evaluated with a "finalizing" operation.
+  [1, 2, 3, 4]::iter()::sum(),
+  [1, 2, 3, 4]::iter()::product(),
+  [1, 2, 3, 4]::iter()::collect_list(),
+  ["hello", "world"]::iter()::collect_string(),
+
+
+  # You can chain iterator operations to create complex pipelines.
+  [1, 2, 3, 4]::iter()
+    ::filter(f = (c: std.scalar.Number) -> std.types.Bool: c != 3)
+    ::map(f = (c: std.scalar.Number) -> std.types.String: "{c}ft"::format()),
+
+  # Although filter and map operations can be combined to be a little more concise.
+  [1, 2, 3, 4]::iter()
+    ::filter_map(f = (c: std.scalar.Number) -> std.types.String | std.types.None: if c != 3 then "{c}ft"::format() else std.consts.None ),
+]
