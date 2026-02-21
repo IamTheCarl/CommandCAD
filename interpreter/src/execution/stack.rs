@@ -19,7 +19,7 @@
 use crate::execution::logging::StackTrace;
 
 use super::{
-    errors::{ErrorType, ExecutionResult, Raise},
+    errors::{ExecutionResult, Raise},
     logging::LocatedStr,
     values::Value,
 };
@@ -204,7 +204,7 @@ struct NotInScopeError {
     suggestions: Vec<ImString>,
 }
 
-impl ErrorType for NotInScopeError {}
+impl std::error::Error for NotInScopeError {}
 
 impl Display for NotInScopeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -27,7 +27,7 @@ use crate::{
     values::{iterators::ValueIterator, manifold_mesh::ManifoldMesh3D},
 };
 
-use super::errors::{ErrorType, ExecutionResult, Raise as _};
+use super::errors::{ExecutionResult, Raise as _};
 
 mod void;
 pub use void::ValueNone;
@@ -130,7 +130,7 @@ struct UnsupportedOperationError {
     pub operation_name: &'static str,
 }
 
-impl ErrorType for UnsupportedOperationError {}
+impl std::error::Error for UnsupportedOperationError {}
 
 impl Display for UnsupportedOperationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -161,7 +161,7 @@ struct MissingAttributeError {
     pub name: String,
 }
 
-impl ErrorType for MissingAttributeError {}
+impl std::error::Error for MissingAttributeError {}
 
 impl Display for MissingAttributeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -313,7 +313,7 @@ pub struct DowncastError {
     pub got: Cow<'static, str>,
 }
 
-impl ErrorType for DowncastError {}
+impl std::error::Error for DowncastError {}
 
 impl Display for DowncastError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -327,7 +327,7 @@ pub struct DowncastForBinaryOpError {
     pub got: Cow<'static, str>,
 }
 
-impl ErrorType for DowncastForBinaryOpError {}
+impl std::error::Error for DowncastForBinaryOpError {}
 
 impl Display for DowncastForBinaryOpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

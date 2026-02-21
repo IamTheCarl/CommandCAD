@@ -31,7 +31,7 @@ use crate::{
     compile::{self, AstNode},
     execute_expression,
     execution::{
-        errors::{ErrorType, ExecutionResult, Raise},
+        errors::{ExecutionResult, Raise},
         logging::{LogLevel, LogMessage},
         values::{
             self, closure::BuiltinCallableDatabase, dictionary::DictionaryData,
@@ -514,7 +514,7 @@ impl TypeQualificationError {
     }
 }
 
-impl ErrorType for TypeQualificationError {}
+impl std::error::Error for TypeQualificationError {}
 
 impl Display for TypeQualificationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

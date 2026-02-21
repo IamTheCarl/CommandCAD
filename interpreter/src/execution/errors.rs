@@ -60,7 +60,7 @@ impl std::error::Error for Error {}
 #[derive(Debug, Eq, PartialEq)]
 pub struct GenericFailure(pub Cow<'static, str>);
 
-impl ErrorType for GenericFailure {}
+impl std::error::Error for GenericFailure {}
 
 impl Display for GenericFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -68,7 +68,9 @@ impl Display for GenericFailure {
     }
 }
 
-pub trait ErrorType: std::fmt::Debug + std::fmt::Display + Any + Send + Sync {}
+pub trait ErrorType: std::error::Error + Send + Sync + Any {}
+
+impl<E> ErrorType for E where E: std::error::Error + Send + Sync + 'static {}
 
 pub trait Raise {
     fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error;
