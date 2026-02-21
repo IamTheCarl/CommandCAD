@@ -524,7 +524,7 @@ pub fn execute_if_expression(
     expression: &compile::AstNode<Box<compile::IfExpression>>,
 ) -> ExecutionResult<Value> {
     let condition = execute_expression(context, &expression.node.condition)?
-        .downcast::<values::Boolean>(context.stack_trace)?
+        .downcast::<values::Boolean>(context)?
         .0;
 
     let expression = if condition {

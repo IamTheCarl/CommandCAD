@@ -240,7 +240,7 @@ impl Object for ValueType {
     }
 
     fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: Self = rhs.downcast_for_binary_op(context.stack_trace)?;
+        let rhs: Self = rhs.downcast_for_binary_op(context)?;
 
         Ok(self.merge(rhs).into())
     }
@@ -304,8 +304,7 @@ impl StructMember {
         context: &ExecutionContext,
         source: &AstNode<compile::StructMember>,
     ) -> ExecutionResult<Self> {
-        let ty = execute_expression(context, &source.node.ty)?
-            .downcast::<ValueType>(context.stack_trace)?;
+        let ty = execute_expression(context, &source.node.ty)?.downcast::<ValueType>(context)?;
         let default = if let Some(default) = source.node.default.as_ref() {
             Some(execute_expression(context, default)?)
         } else {

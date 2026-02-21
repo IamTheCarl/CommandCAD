@@ -8,7 +8,6 @@ use crate::{
     execute_expression,
     execution::{
         errors::{ExecutionResult, Raise as _, StrError},
-        logging::StackTrace,
         values::{
             closure::BuiltinCallableDatabase, scalar::UnwrapNotNan, string::formatting::Style,
             BuiltinFunction, DowncastForBinaryOpError, MissingAttributeError, Object, Scalar,
@@ -78,26 +77,26 @@ where
     }
 
     fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
+        let rhs = self.unpack_same_dimension(context, rhs)?;
         let value = self.value + rhs.value;
 
         Ok(Self::new_raw(context, self.dimension, value)?.into())
     }
     fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
+        let rhs = self.unpack_same_dimension(context, rhs)?;
         let value = self.value - rhs.value;
 
         Ok(Self::new_raw(context, self.dimension, value)?.into())
     }
     fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
+        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context)?;
         let value = self.value * *rhs.value;
         let dimension = self.dimension + rhs.dimension;
 
         Ok(Self::new_raw(context, dimension, value)?.into())
     }
     fn divide(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
+        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context)?;
         let value = self.value / *rhs.value;
         let dimension = self.dimension - rhs.dimension;
 
@@ -115,7 +114,7 @@ where
     }
 
     fn eq(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<bool> {
-        let rhs: Self = rhs.downcast_for_binary_op(context.stack_trace)?;
+        let rhs: Self = rhs.downcast_for_binary_op(context)?;
         Ok(self.dimension == rhs.dimension && self.value == rhs.value)
     }
 
@@ -219,8 +218,12 @@ where
         self.value
     }
 
-    fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExecutionResult<Self> {
-        let rhs: Vector<I> = rhs.downcast_for_binary_op(stack_trace)?;
+    fn unpack_same_dimension(
+        self,
+        context: &ExecutionContext,
+        rhs: Value,
+    ) -> ExecutionResult<Self> {
+        let rhs: Vector<I> = rhs.downcast_for_binary_op(context)?;
 
         if self.dimension == rhs.dimension {
             Ok(rhs)
@@ -229,7 +232,7 @@ where
                 expected: self.type_name(),
                 got: rhs.type_name(),
             }
-            .to_error(stack_trace))
+            .to_error(context))
         }
     }
 }
@@ -360,7 +363,7 @@ mod methods {
                 context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.amax()).unwrap_not_nan(context.stack_trace)?;
+                let value = common_data_types::Float::new(this.value.amax()).unwrap_not_nan(context)?;
 
                 Ok(Scalar {
                     dimension: this.dimension,
@@ -374,7 +377,7 @@ mod methods {
                 context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.amin()).unwrap_not_nan(context.stack_trace)?;
+                let value = common_data_types::Float::new(this.value.amin()).unwrap_not_nan(context)?;
 
                 Ok(Scalar {
                     dimension: this.dimension,
@@ -390,7 +393,7 @@ mod methods {
                 rhs: Vector<I>) -> Scalar
             {
                 if this.dimension == rhs.dimension {
-                    let value = common_data_types::Float::new(this.value.dot(&rhs.value)).unwrap_not_nan(context.stack_trace)?;
+                    let value = common_data_types::Float::new(this.value.dot(&rhs.value)).unwrap_not_nan(context)?;
 
                     Ok(Scalar {
                         dimension: this.dimension,
@@ -411,7 +414,7 @@ mod methods {
                 context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.norm()).unwrap_not_nan(context.stack_trace)?;
+                let value = common_data_types::Float::new(this.value.norm()).unwrap_not_nan(context)?;
 
                 Ok(Scalar {
                     dimension: this.dimension,
@@ -436,7 +439,7 @@ mod methods {
                 this: Vector<I>,
                 other: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.angle(&other.value)).unwrap_not_nan(context.stack_trace)?;
+                let value = common_data_types::Float::new(this.value.angle(&other.value)).unwrap_not_nan(context)?;
 
                 Ok(Scalar {
                     dimension: Dimension::angle(),
@@ -456,12 +459,12 @@ mod methods {
                         "c".into(),
                         Scalar {
                             dimension: this.dimension,
-                            value: common_data_types::Float::new(c).unwrap_not_nan(context.stack_trace)?
+                            value: common_data_types::Float::new(c).unwrap_not_nan(context)?
                         }.into()
                     )
                 ])))).collect::<ExecutionResult<_>>()?;
 
-                let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(context.stack_trace)).collect::<ExecutionResult<_>>()?;
+                let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(context)).collect::<ExecutionResult<_>>()?;
 
                 // The smallest vector we support is 2, so this should never panic.
                 let dimension = result[0].dimension;
@@ -492,7 +495,7 @@ mod methods {
                             "c".into(),
                             Scalar {
                                 dimension: this.dimension,
-                                value: common_data_types::Float::new(component).unwrap_not_nan(context.stack_trace)?
+                                value: common_data_types::Float::new(component).unwrap_not_nan(context)?
                             }.into()
                         ),
                         (
@@ -599,8 +602,7 @@ where
 
 macro_rules! get_component {
     ($context:ident, $ast_node:ident, $c:ident) => {
-        execute_expression($context, &$ast_node.node.$c)?
-            .downcast::<Scalar>($context.stack_trace)?
+        execute_expression($context, &$ast_node.node.$c)?.downcast::<Scalar>($context)?
     };
 }
 
@@ -651,16 +653,14 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
             "x" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.x)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.x).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "y" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.y)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.y).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
@@ -773,24 +773,21 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
             "x" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.x)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.x).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "y" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.y)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.y).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "z" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.z)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.z).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
@@ -906,32 +903,28 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
             "x" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.x)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.x).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "y" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.y)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.y).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "z" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.z)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.z).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "w" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.w)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.w).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),

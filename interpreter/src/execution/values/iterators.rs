@@ -341,7 +341,7 @@ impl IteratorStage {
                                     HashMap::from_iter([("c".into(), value.clone())]),
                                 ),
                             )
-                            .and_then(|value| value.downcast::<Boolean>(context.stack_trace));
+                            .and_then(|value| value.downcast::<Boolean>(context));
 
                         match result {
                             Ok(keep) => {
@@ -399,7 +399,7 @@ impl IteratorStage {
                 ) -> ExecutionResult<R> {
                     if let Some(result) = iterators.next() {
                         let value = result?;
-                        let sub_iterator: ValueIterator = value.downcast(context.stack_trace)?;
+                        let sub_iterator: ValueIterator = value.downcast(context)?;
 
                         sub_iterator.iterate(
                             context,
@@ -474,7 +474,7 @@ impl IteratorStage {
                                 HashMap::from_iter([("c".into(), value.clone())]),
                             ),
                         )
-                        .and_then(|value| value.downcast::<Boolean>(context.stack_trace))?
+                        .and_then(|value| value.downcast::<Boolean>(context))?
                         .0;
 
                     if !should_skip {
@@ -505,7 +505,7 @@ impl IteratorStage {
                                     HashMap::from_iter([("c".into(), value.clone())]),
                                 ),
                             )
-                            .and_then(|value| value.downcast::<Boolean>(context.stack_trace));
+                            .and_then(|value| value.downcast::<Boolean>(context));
 
                         match result {
                             Ok(should_continue) => {
@@ -802,7 +802,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                                 HashMap::from_iter([("c".into(), value.clone())]),
                             ),
                         )
-                        .and_then(|value| value.downcast::<Boolean>(context.stack_trace))?;
+                        .and_then(|value| value.downcast::<Boolean>(context))?;
 
                     if !passes.0 {
                         return Ok(Boolean(false));
@@ -834,7 +834,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                                 HashMap::from_iter([("c".into(), value.clone())]),
                             ),
                         )
-                        .and_then(|value| value.downcast::<Boolean>(context.stack_trace))?;
+                        .and_then(|value| value.downcast::<Boolean>(context))?;
 
                     if passes.0 {
                         return Ok(Boolean(true));
@@ -868,7 +868,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
                 for value in iterator {
                     let value = value?;
-                    let string: IString = value.downcast(context.stack_trace)?;
+                    let string: IString = value.downcast(context)?;
 
                     collected += string.0.as_str();
                 }

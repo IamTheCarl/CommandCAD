@@ -118,24 +118,24 @@ where
     }
 
     fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0 & rhs.0).into())
     }
     fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0 | rhs.0).into())
     }
     fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0 ^ rhs.0).into())
     }
 
     fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Ordering> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(self.0.cmp(&rhs.0))
     }
     fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0.checked_add(&rhs.0).ok_or_else(|| {
             StrError("Integer overflow: The computed value is too large to store in the integer")
                 .to_error(context)
@@ -143,7 +143,7 @@ where
         .into())
     }
     fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0.checked_sub(&rhs.0).ok_or_else(|| {
             StrError("Integer underflow: The computed value is too small to store in the integer")
                 .to_error(context)
@@ -151,7 +151,7 @@ where
         .into())
     }
     fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0.checked_mul(&rhs.0).ok_or_else(|| {
             StrError("Integer overflow: The computed value is too large to store in the integer")
                 .to_error(context)
@@ -159,7 +159,7 @@ where
         .into())
     }
     fn divide(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(
             self.0
                 .checked_div(&rhs.0)
@@ -168,7 +168,7 @@ where
         .into())
     }
     fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
 
         // This failure can only happen on 32bit (or less) systems.
         let rhs = rhs.0.to_usize().ok_or_else(|| {
@@ -183,11 +183,11 @@ where
         .into())
     }
     fn left_shift(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0 << rhs.0).into())
     }
     fn right_shift(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0 >> rhs.0).into())
     }
     fn unary_plus(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
