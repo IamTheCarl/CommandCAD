@@ -5,7 +5,7 @@ use std::{
 };
 
 mod arguments;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use arguments::Arguments;
 use ariadne::{Cache, Label, Report, ReportKind, Source};
 use clap::Parser as _;
@@ -17,14 +17,13 @@ use type_sitter::Node as _;
 use crate::arguments::Commands;
 
 use interpreter::{
-    build_prelude,
+    ExecutionContext, ExecutionFileCache, ImString, LogMessage, Parser, RuntimeLog,
+    SourceReference, StackScope, StackTrace, Store, build_prelude,
     compile::{compile, iter_raw_nodes},
     execute_expression,
     execution::values::BuiltinCallableDatabase,
     new_parser, run_file,
     values::{Object, Style, Value},
-    ExecutionContext, ExecutionFileCache, ImString, LogMessage, Parser, RuntimeLog,
-    SourceReference, StackScope, StackTrace, Store,
 };
 
 fn main() {
