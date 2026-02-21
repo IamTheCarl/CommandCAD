@@ -31,7 +31,7 @@ use crate::{
     values::iterators::{IterableObject, ValueIterator},
 };
 
-use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
+use super::{value_type::ValueType, ExecutionResult, Object, StaticTypeName, Value};
 
 use std::{borrow::Cow, cmp::Ordering, collections::HashMap, sync::Arc};
 
@@ -51,8 +51,8 @@ impl List {
     pub fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Vec<AstNode<Expression>>>,
-    ) -> ExpressionResult<Self> {
-        let values: ExpressionResult<Vec<Value>> = ast_node
+    ) -> ExecutionResult<Self> {
+        let values: ExecutionResult<Vec<Value>> = ast_node
             .node
             .par_iter()
             .map(|expression| execute_expression(context, expression))
@@ -87,8 +87,8 @@ impl List {
         &self,
         context: &ExecutionContext,
         operation_name: &'static str,
-        mut operation: impl FnMut(&Value) -> ExpressionResult<Value>,
-    ) -> ExpressionResult<Self> {
+        mut operation: impl FnMut(&Value) -> ExecutionResult<Value>,
+    ) -> ExecutionResult<Self> {
         let values: Vec<Value> = self
             .values
             .iter()
@@ -110,8 +110,8 @@ impl List {
         &self,
         context: &ExecutionContext,
         operation_name: &'static str,
-        operation: impl FnMut(&Value) -> ExpressionResult<Value>,
-    ) -> ExpressionResult<Value> {
+        operation: impl FnMut(&Value) -> ExecutionResult<Value>,
+    ) -> ExecutionResult<Value> {
         self.map_raw(context, operation_name, operation)
             .map(|value| value.into())
     }
@@ -145,16 +145,12 @@ impl Object for List {
         Ok(())
     }
 
-    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<bool> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(self.values == rhs.values)
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "append" => Ok(BuiltinFunction::new::<methods::Append>().into()),
             "slice" => Ok(BuiltinFunction::new::<methods::Slice>().into()),
@@ -184,82 +180,82 @@ impl Object for List {
         }
     }
 
-    fn and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "and", move |value| {
             value.clone().and(context, rhs.clone())
         })
     }
-    fn or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "or", move |value| {
             value.clone().or(context, rhs.clone())
         })
     }
-    fn xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "xor", move |value| {
             value.clone().xor(context, rhs.clone())
         })
     }
-    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "bit and", move |value| {
             value.clone().bit_and(context, rhs.clone())
         })
     }
-    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "bit or", move |value| {
             value.clone().bit_or(context, rhs.clone())
         })
     }
-    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "bit xor", move |value| {
             value.clone().bit_xor(context, rhs.clone())
         })
     }
-    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "addition", move |value| {
             value.clone().addition(context, rhs.clone())
         })
     }
-    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "subtraction", move |value| {
             value.clone().subtraction(context, rhs.clone())
         })
     }
-    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "multiply", move |value| {
             value.clone().multiply(context, rhs.clone())
         })
     }
-    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "divide", move |value| {
             value.clone().divide(context, rhs.clone())
         })
     }
-    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "exponent", move |value| {
             value.clone().exponent(context, rhs.clone())
         })
     }
-    fn left_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn left_shift(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "left shift", move |value| {
             value.clone().left_shift(context, rhs.clone())
         })
     }
-    fn right_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn right_shift(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         self.map_operation(context, "right shift", move |value| {
             value.clone().right_shift(context, rhs.clone())
         })
     }
-    fn unary_plus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_plus(self, context: &ExecutionContext) -> ExecutionResult<Value> {
         self.map_operation(context, "unary plus", move |value| {
             value.clone().unary_plus(context)
         })
     }
-    fn unary_minus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_minus(self, context: &ExecutionContext) -> ExecutionResult<Value> {
         self.map_operation(context, "unary minus", move |value| {
             value.clone().unary_minus(context)
         })
     }
-    fn unary_not(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_not(self, context: &ExecutionContext) -> ExecutionResult<Value> {
         self.map_operation(context, "unary not", move |value| {
             value.clone().unary_not(context)
         })
@@ -286,8 +282,8 @@ pub struct ListIterator {
 impl IterableObject for ListIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
-    ) -> ExpressionResult<R> {
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+    ) -> ExecutionResult<R> {
         let mut iter = self.list.values.iter().cloned();
         callback(&mut iter)
     }
@@ -301,8 +297,8 @@ pub struct ListReverseIterator {
 impl IterableObject for ListReverseIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
-    ) -> ExpressionResult<R> {
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+    ) -> ExecutionResult<R> {
         let mut iter = self.list.values.iter().rev().cloned();
         callback(&mut iter)
     }

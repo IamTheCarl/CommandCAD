@@ -30,7 +30,7 @@ use crate::{
         AstNode,
     },
     execution::{
-        errors::{ErrorType, ExpressionResult, GenericFailure, Raise},
+        errors::{ErrorType, ExecutionResult, GenericFailure, Raise},
         logging::LocatedStr,
     },
     values::{
@@ -50,15 +50,15 @@ use std::{
 
 pub fn find_all_captured_variables_in_constraint_set(
     constraint_set: &AstConstraintSet,
-    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-) -> ExpressionResult<()> {
+    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExecutionResult<()>,
+) -> ExecutionResult<()> {
     use crate::compile::constraint_set;
 
     fn search_expression(
         variables: &Vec<AstNode<ImString>>,
         expression: &constraint_set::ConstraintSetExpression,
-        access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-    ) -> ExpressionResult<()> {
+        access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExecutionResult<()>,
+    ) -> ExecutionResult<()> {
         match expression {
             ConstraintSetExpression::Parenthesis(expression) => {
                 search_expression(variables, &expression.node, access_collector)
@@ -220,7 +220,7 @@ impl ConstraintSet {
     pub fn from_ast(
         context: &ExecutionContext,
         source: &AstNode<Arc<AstConstraintSet>>,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         let mut variables = HashSet::new();
         let mut duplicate_variables = Vec::new();
         for variable in source.node.variables.iter().map(|field| &field.node) {
@@ -323,11 +323,7 @@ impl Object for ConstraintSet {
         Ok(())
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "solve" => Ok(BuiltinFunction::new::<methods::Solve>().into()),
             _ => Err(MissingAttributeError {
@@ -356,7 +352,7 @@ impl ConstraintSet {
         &self,
         context: &ExecutionContext,
         provided: Dictionary,
-    ) -> ExpressionResult<Dictionary> {
+    ) -> ExecutionResult<Dictionary> {
         let value_provider = ValueProvider {
             provided: &provided,
             captured: &self.captured_values,
@@ -440,7 +436,7 @@ impl ConstraintSet {
         variables: &mut HashMap<ImString, VarId>,
         dimension: &mut Option<Dimension>,
         expression: &ConstraintSetExpression,
-    ) -> ExpressionResult<ExprBuilder> {
+    ) -> ExecutionResult<ExprBuilder> {
         match expression {
             ConstraintSetExpression::Parenthesis(ast_node) => Self::model_expression(
                 context,
@@ -543,7 +539,7 @@ impl ConstraintSet {
         context: &ExecutionContext,
         dimension: &mut Option<Dimension>,
         value: Scalar,
-    ) -> ExpressionResult<ExprBuilder> {
+    ) -> ExecutionResult<ExprBuilder> {
         if let Some(dimension) = dimension {
             if value.dimension != Dimension::zero() && *dimension != value.dimension {
                 return Err(GenericFailure(
@@ -614,11 +610,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     }
 
     impl BuiltinCallable for BuiltFunction {
-        fn call(
-            &self,
-            context: &ExecutionContext,
-            argument: Dictionary,
-        ) -> ExpressionResult<Value> {
+        fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
             let this = context
                 .get_variable(LocatedStr {
                     location: context.stack_trace.bottom().clone(),

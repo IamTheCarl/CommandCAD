@@ -19,7 +19,7 @@
 use crate::execution::logging::StackTrace;
 
 use super::{
-    errors::{ErrorType, ExpressionResult, Raise},
+    errors::{ErrorType, ExecutionResult, Raise},
     logging::LocatedStr,
     values::Value,
 };
@@ -57,7 +57,7 @@ impl<'p> StackScope<'p> {
         mode: ScopeType,
         variables: HashMap<ImString, Value>,
         block: B,
-    ) -> ExpressionResult<R>
+    ) -> ExecutionResult<R>
     where
         B: FnOnce(&Self, &StackTrace) -> R,
     {
@@ -79,7 +79,7 @@ impl<'p> StackScope<'p> {
         mode: ScopeType,
         variables: HashMap<ImString, Value>,
         block: B,
-    ) -> ExpressionResult<R>
+    ) -> ExecutionResult<R>
     where
         B: FnOnce(&mut Self, &StackTrace) -> R,
     {
@@ -145,7 +145,7 @@ impl<'p> StackScope<'p> {
         stack_trace: &StackTrace,
         local_variables: impl IntoIterator<Item = ImString>,
         name: S,
-    ) -> ExpressionResult<&Value> {
+    ) -> ExecutionResult<&Value> {
         let name = name.into();
 
         let mut scope_iterator = self.iter_visible_scopes();

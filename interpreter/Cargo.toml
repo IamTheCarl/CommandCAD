@@ -32,6 +32,7 @@ hex = "0.4.3"
 boolmesh = { git = "https://github.com/IamTheCarl/boolmesh.git", branch = "serde", features = ["rayon", "serde"] }
 stl_io = "0.10.0"
 itertools = "0.14.0"
+thiserror = "2.0.18"
 
 [build-dependencies]
 type-sitter-gen = "0.8"

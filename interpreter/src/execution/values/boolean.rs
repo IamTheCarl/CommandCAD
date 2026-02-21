@@ -22,7 +22,7 @@ use crate::execution::{
     ExecutionContext,
 };
 
-use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
+use super::{value_type::ValueType, ExecutionResult, Object, StaticTypeName, Value};
 
 use std::borrow::Cow;
 
@@ -60,26 +60,26 @@ impl Object for Boolean {
         write!(f, "{}", self.0)
     }
 
-    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<bool> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(self.0 == rhs.0)
     }
-    fn and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 && rhs.0).into())
     }
 
-    fn or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 || rhs.0).into())
     }
 
-    fn xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self((self.0 && rhs.0) || (!self.0 && !rhs.0)).into())
     }
 
-    fn unary_not(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_not(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(Self(!self.0).into())
     }
 }

@@ -31,7 +31,7 @@ use nom::{
 };
 
 use crate::execution::{
-    errors::{ExpressionResult, GenericFailure, Raise},
+    errors::{ExecutionResult, GenericFailure, Raise},
     logging::{LocatedStr, StackTrace},
     values::{Dictionary, Object, UnsignedInteger},
     ExecutionContext,
@@ -184,12 +184,12 @@ impl Format {
         context: &ExecutionContext,
         f: &mut dyn Write,
         arguments: Dictionary,
-    ) -> ExpressionResult<()> {
+    ) -> ExecutionResult<()> {
         fn get_precision(
             context: &ExecutionContext,
             precision: &Precision,
             arguments: &Dictionary,
-        ) -> ExpressionResult<Option<u8>> {
+        ) -> ExecutionResult<Option<u8>> {
             match precision {
                 Precision::Default => Ok(None),
                 Precision::Inline(precision) => Ok(Some(*precision)),
@@ -276,11 +276,11 @@ fn number(input: &str) -> VResult<&str, u8> {
 }
 
 pub trait UnwrapFormattingResult<R> {
-    fn unwrap_formatting_result(self, stack_trace: &StackTrace) -> ExpressionResult<R>;
+    fn unwrap_formatting_result(self, stack_trace: &StackTrace) -> ExecutionResult<R>;
 }
 
 impl<R> UnwrapFormattingResult<R> for std::result::Result<R, std::fmt::Error> {
-    fn unwrap_formatting_result(self, stack_trace: &StackTrace) -> ExpressionResult<R> {
+    fn unwrap_formatting_result(self, stack_trace: &StackTrace) -> ExecutionResult<R> {
         match self {
             Ok(result) => Ok(result),
             Err(error) => {

@@ -31,7 +31,7 @@ use crate::{
     compile::{self, AstNode},
     execute_expression,
     execution::{
-        errors::{ErrorType, ExpressionResult, Raise},
+        errors::{ErrorType, ExecutionResult, Raise},
         logging::{LogLevel, LogMessage},
         values::{
             self, closure::BuiltinCallableDatabase, dictionary::DictionaryData,
@@ -239,17 +239,13 @@ impl Object for ValueType {
         write!(f, "{}", self)
     }
 
-    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: Self = rhs.downcast_for_binary_op(context.stack_trace)?;
 
         Ok(self.merge(rhs).into())
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "qualify" => Ok(BuiltinFunction::new::<methods::Qualify>().into()),
             "try_qualify" => Ok(BuiltinFunction::new::<methods::TryQualify>().into()),
@@ -307,7 +303,7 @@ impl StructMember {
     fn new(
         context: &ExecutionContext,
         source: &AstNode<compile::StructMember>,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         let ty = execute_expression(context, &source.node.ty)?
             .downcast::<ValueType>(context.stack_trace)?;
         let default = if let Some(default) = source.node.default.as_ref() {
@@ -340,7 +336,7 @@ impl StructDefinition {
     pub fn new(
         context: &ExecutionContext,
         source: &AstNode<compile::StructDefinition>,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         let mut members = HashMap::new();
         for member in source.node.members.iter() {
             let name = member.node.name.node.clone();
