@@ -80,25 +80,25 @@ impl Object for Scalar {
         let unit_name = units::get_base_unit_name(&self.dimension);
 
         match (style, precision, unit_name) {
-            (Style::Default, Option::None, Option::None) => {
+            (Style::Default, None, None) => {
                 write!(f, "{}", self.value)
             }
-            (Style::Default, Option::None, Some(unit_name)) => {
+            (Style::Default, None, Some(unit_name)) => {
                 write!(f, "{}{unit_name}", self.value)
             }
-            (Style::Default, Some(precision), Option::None) => {
+            (Style::Default, Some(precision), None) => {
                 write!(f, "{:.1$}", self.value, precision as usize)
             }
             (Style::Default, Some(precision), Some(unit_name)) => {
                 write!(f, "{:.1$}{unit_name}", self.value, precision as usize)
             }
-            (Style::Debug, Option::None, Option::None) => {
+            (Style::Debug, None, None) => {
                 write!(f, "{}", self.value)
             }
-            (Style::Debug, Option::None, Some(unit_name)) => {
+            (Style::Debug, None, Some(unit_name)) => {
                 write!(f, "{}{unit_name}", self.value)
             }
-            (Style::Debug, Some(precision), Option::None) => {
+            (Style::Debug, Some(precision), None) => {
                 write!(f, "{:.1$}", self.value, precision as usize)
             }
             (Style::Debug, Some(precision), Some(unit_name)) => {
@@ -114,13 +114,13 @@ impl Object for Scalar {
                 // Don't stop execution. Just use default formatting.
                 self.format(context, f, Style::Default, precision)
             }
-            (Style::Exponent, Option::None, Option::None) => {
+            (Style::Exponent, None, None) => {
                 write!(f, "{:e}", self.value.into_inner() as usize)
             }
-            (Style::Exponent, Option::None, Some(unit_name)) => {
+            (Style::Exponent, None, Some(unit_name)) => {
                 write!(f, "{:e}{unit_name}", self.value.into_inner() as usize)
             }
-            (Style::Exponent, Some(precision), Option::None) => {
+            (Style::Exponent, Some(precision), None) => {
                 write!(f, "{:.1$e}", self.value.into_inner(), precision as usize)
             }
             (Style::Exponent, Some(precision), Some(unit_name)) => write!(
@@ -129,13 +129,13 @@ impl Object for Scalar {
                 self.value.into_inner(),
                 precision as usize
             ),
-            (Style::CapitalizedExponent, Option::None, Option::None) => {
+            (Style::CapitalizedExponent, None, None) => {
                 write!(f, "{:E}", self.value.into_inner())
             }
-            (Style::CapitalizedExponent, Option::None, Some(unit_name)) => {
+            (Style::CapitalizedExponent, None, Some(unit_name)) => {
                 write!(f, "{:E}{unit_name}", self.value.into_inner())
             }
-            (Style::CapitalizedExponent, Some(precision), Option::None) => {
+            (Style::CapitalizedExponent, Some(precision), None) => {
                 write!(f, "{:.1$E}", self.value.into_inner(), precision as usize)
             }
             (Style::CapitalizedExponent, Some(precision), Some(unit_name)) => write!(

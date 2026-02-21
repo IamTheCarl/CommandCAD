@@ -79,7 +79,7 @@ impl ValueType {
             Self::SignedInteger => SignedInteger::static_type_name(),
             Self::UnsignedInteger => UnsignedInteger::static_type_name(),
             Self::Scalar(Some(dimension)) => units::get_dimension_name(dimension),
-            Self::Scalar(Option::None) => "Scalar".into(),
+            Self::Scalar(None) => "Scalar".into(),
             Self::Vector2(Some(dimension)) => {
                 format!("Vector2<{}>", units::get_dimension_name(dimension)).into()
             }
@@ -89,9 +89,9 @@ impl ValueType {
             Self::Vector4(Some(dimension)) => {
                 format!("Vector4<{}>", units::get_dimension_name(dimension)).into()
             }
-            Self::Vector2(Option::None) => "Vector2".into(),
-            Self::Vector3(Option::None) => "Vector3".into(),
-            Self::Vector4(Option::None) => "Vector4".into(),
+            Self::Vector2(None) => "Vector2".into(),
+            Self::Vector3(None) => "Vector3".into(),
+            Self::Vector4(None) => "Vector4".into(),
             Self::String => IString::static_type_name(),
             Self::File => File::static_type_name(),
             Self::Any => "Any".into(),
@@ -128,11 +128,11 @@ impl ValueType {
                     })
                 }
             }
-            (Self::Scalar(Option::None), Self::Scalar(_)) => Ok(()),
-            (Self::Vector2(Option::None), Self::Vector2(_)) => Ok(()),
-            (Self::Vector3(Option::None), Self::Vector3(_)) => Ok(()),
-            (Self::Vector4(Option::None), Self::Vector4(_)) => Ok(()),
-            (Self::List(Option::None), Self::List(_)) => Ok(()),
+            (Self::Scalar(None), Self::Scalar(_)) => Ok(()),
+            (Self::Vector2(None), Self::Vector2(_)) => Ok(()),
+            (Self::Vector3(None), Self::Vector3(_)) => Ok(()),
+            (Self::Vector4(None), Self::Vector4(_)) => Ok(()),
+            (Self::List(None), Self::List(_)) => Ok(()),
             (Self::List(Some(our_type)), Self::List(Some(their_type))) => {
                 our_type.check_other_qualifies(their_type)
             }
@@ -184,7 +184,7 @@ impl Display for ValueType {
             Self::Dictionary(definition) => write!(f, "{}", definition),
             Self::MultiType(left, right) => write!(f, "{left} | {right}"),
             Self::List(Some(ty)) => write!(f, "[{ty}]"),
-            Self::List(Option::None) => write!(f, "[]"),
+            Self::List(None) => write!(f, "[]"),
             Self::ConstraintSet(variables) => {
                 write!(f, "<<<")?;
 

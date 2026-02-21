@@ -373,7 +373,7 @@ pub fn iter_raw_nodes<'t>(tree: &'t RootTree) -> impl Iterator<Item = UntypedNod
             loop {
                 if !cursor.goto_parent() {
                     // We have reached the root. We are done iterating.
-                    return Option::None;
+                    return None;
                 }
                 if cursor.goto_next_sibling() {
                     return Some(node);

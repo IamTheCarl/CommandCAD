@@ -884,7 +884,7 @@ where
                     index = index.decrement();
                     Some(Integer(value).into())
                 } else {
-                    Option::None
+                    None
                 }
             });
 
@@ -896,7 +896,7 @@ where
                     index = index.increment();
                     Some(Integer(value).into())
                 } else {
-                    Option::None
+                    None
                 }
             });
 

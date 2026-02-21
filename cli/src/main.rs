@@ -246,7 +246,7 @@ fn build_syntax_errors<'t>(
     if has_syntax_issues {
         Some(report_builder.finish())
     } else {
-        Option::None
+        None
     }
 }
 

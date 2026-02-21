@@ -6,7 +6,8 @@
     flake-utils.url  = "github:numtide/flake-utils";
     crane.url = "github:ipetkov/crane";
     fenix = {
-      url = "github:nix-community/fenix";
+      # url = "github:nix-community/fenix";
+      url = "github:nix-community/fenix?ref=eureka-cpu/rust-analyzer-wrapped";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -25,8 +26,15 @@
           inherit system;
         };
         fenix-pkgs = fenix.packages.${system};
-        fenix-channel = (fenix-pkgs.stable);
-	
+        fenix-channel = fenix-pkgs.stable;
+        fenix-toolchain = fenix-channel.withComponents [
+          "cargo"
+          "clippy"
+          "rust-src"
+          "rustc"
+          "rustfmt"
+          "rust-analyzer"
+        ];
         craneLib = (crane.mkLib pkgs).overrideScope (final: prev: {
           cargo = fenix-channel.cargo;
           rustc = fenix-channel.rustc;
@@ -53,11 +61,7 @@
 	    bashInteractive
 	    nodejs_24
             tree-sitter
-            fenix-pkgs.rust-analyzer
-            fenix-channel.rustfmt
-            fenix-channel.rustc
-            fenix-channel.cargo
-            fenix-channel.clippy
+            fenix-toolchain
             cargo-expand
             openssl
 	    pkg-config

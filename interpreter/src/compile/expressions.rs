@@ -1038,7 +1038,7 @@ impl<'t> Parse<'t, nodes::StructDefinition<'t>> for StructDefinition {
                     nodes::anon_unions::Comma_StructMember_VaradicDots::VaradicDots(_) => true,
                 }
             }
-            Option::None => false,
+            None => false,
         };
 
         Ok(AstNode::new(file, &value, Self { members, variadic }))
@@ -2053,6 +2053,7 @@ mod test {
                                         }
                                     }
                                 }],
+                                #[allow(clippy::single_range_in_vec_init)]
                                 compute_groups: vec![0..1]
                             }
                         }
@@ -2169,6 +2170,7 @@ mod test {
                                         }
                                     }
                                 }],
+                                #[allow(clippy::single_range_in_vec_init)]
                                 compute_groups: vec![0..1]
                             }
                         }
@@ -2243,6 +2245,7 @@ mod test {
                                     }
                                 }
                             ],
+                            #[allow(clippy::single_range_in_vec_init)]
                             compute_groups: vec![0..2],
                             expression: AstNode {
                                 reference: expression.reference.clone(),

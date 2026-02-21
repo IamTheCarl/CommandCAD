@@ -191,7 +191,7 @@ impl Format {
             arguments: &Dictionary,
         ) -> ExpressionResult<Option<u8>> {
             match precision {
-                Precision::Default => Ok(Option::None),
+                Precision::Default => Ok(None),
                 Precision::Inline(precision) => Ok(Some(*precision)),
                 Precision::Referenced(name) => {
                     if let Some(argument) = arguments.get(name.as_str()).or_else(|| {
@@ -456,7 +456,7 @@ mod test {
                     context,
                     &mut formatted,
                     Dictionary::new(
-                        &context,
+                        context,
                         HashMap::from_iter([
                             (
                                 "one".into(),

@@ -274,7 +274,7 @@ impl StaticTypeName for List {
 
 impl StaticType for List {
     fn static_type() -> ValueType {
-        ValueType::List(Option::None)
+        ValueType::List(None)
     }
 }
 
