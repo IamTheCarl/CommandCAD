@@ -30,7 +30,7 @@ use std::{
 use crate::{
     build_function,
     execution::{
-        errors::{ExecutionResult, GenericFailure, Raise},
+        errors::{ExecutionResult, Raise, StrError},
         logging::{LogLevel, LogMessage, StackTrace},
         values::{
             closure::BuiltinCallableDatabase, integer::methods::MethodSet,
@@ -137,30 +137,24 @@ where
     fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_add(&rhs.0).ok_or_else(|| {
-            GenericFailure(
-                "Integer overflow: The computed value is too large to store in the integer".into(),
-            )
-            .to_error(context.stack_trace)
+            StrError("Integer overflow: The computed value is too large to store in the integer")
+                .to_error(context.stack_trace)
         })?)
         .into())
     }
     fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_sub(&rhs.0).ok_or_else(|| {
-            GenericFailure(
-                "Integer underflow: The computed value is too small to store in the integer".into(),
-            )
-            .to_error(context.stack_trace)
+            StrError("Integer underflow: The computed value is too small to store in the integer")
+                .to_error(context.stack_trace)
         })?)
         .into())
     }
     fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_mul(&rhs.0).ok_or_else(|| {
-            GenericFailure(
-                "Integer overflow: The computed value is too large to store in the integer".into(),
-            )
-            .to_error(context.stack_trace)
+            StrError("Integer overflow: The computed value is too large to store in the integer")
+                .to_error(context.stack_trace)
         })?)
         .into())
     }
@@ -169,7 +163,7 @@ where
         Ok(Self(
             self.0
                 .checked_div(&rhs.0)
-                .ok_or_else(|| GenericFailure("The computed value is either too large to store in the integer or you attempted to divide by zero".into()).to_error(context.stack_trace))?,
+                .ok_or_else(|| StrError("The computed value is either too large to store in the integer or you attempted to divide by zero").to_error(context.stack_trace))?,
         )
         .into())
     }
@@ -178,17 +172,13 @@ where
 
         // This failure can only happen on 32bit (or less) systems.
         let rhs = rhs.0.to_usize().ok_or_else(|| {
-            GenericFailure(
-                "Integer overflow: The requested exponent is larger than the host machine word size".into(),
-            )
-            .to_error(context.stack_trace)
+            StrError("Integer overflow: The requested exponent is larger than the host machine word size")
+                .to_error(context.stack_trace)
         })?;
 
         Ok(Self(checked_pow(self.0, rhs).ok_or_else(|| {
-            GenericFailure(
-                "Integer overflow: The computed value is too large to store in the integer".into(),
-            )
-            .to_error(context.stack_trace)
+            StrError("Integer overflow: The computed value is too large to store in the integer")
+                .to_error(context.stack_trace)
         })?)
         .into())
     }
@@ -804,15 +794,15 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let end = end.0;
 
             if inclusive && reverse && end == 0 {
-                return Err(GenericFailure("Range ending will be less than zero, which is not possible for an unsigned integer".into()).to_error(context.stack_trace));
+                return Err(StrError("Range ending will be less than zero, which is not possible for an unsigned integer").to_error(context.stack_trace));
             }
 
             if reverse {
                 if start < end {
-                    return Err(GenericFailure("Start cannot be less than end when iterating a reversed range".into()).to_error(context.stack_trace));
+                    return Err(StrError("Start cannot be less than end when iterating a reversed range").to_error(context.stack_trace));
                 }
             } else if start > end {
-                return Err(GenericFailure("Start cannot be greater than end when iterating a range".into()).to_error(context.stack_trace));
+                return Err(StrError("Start cannot be greater than end when iterating a range").to_error(context.stack_trace));
             }
 
             Ok(ValueIterator::new(Range { start, end, inclusive, reverse }))
@@ -834,10 +824,10 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
             if reverse {
                 if start < end {
-                    return Err(GenericFailure("Start cannot be less than end when iterating a reversed range".into()).to_error(context.stack_trace));
+                    return Err(StrError("Start cannot be less than end when iterating a reversed range").to_error(context.stack_trace));
                 }
             } else if start > end {
-                return Err(GenericFailure("Start cannot be greater than end when iterating a range".into()).to_error(context.stack_trace));
+                return Err(StrError("Start cannot be greater than end when iterating a range").to_error(context.stack_trace));
             }
 
             Ok(ValueIterator::new(Range { start, end, inclusive, reverse }))

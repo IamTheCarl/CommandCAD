@@ -21,7 +21,7 @@ use crate::{
     compile::{AstNode, Expression},
     execute_expression,
     execution::{
-        errors::{Error, GenericFailure, Raise as _},
+        errors::{Error, Raise as _, StrError},
         values::{
             closure::BuiltinCallableDatabase, string::formatting::Style, Boolean, BuiltinFunction,
             Dictionary, MissingAttributeError, StaticType, UnsignedInteger, ValueNone,
@@ -420,7 +420,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if let Some(slice) = slice {
                 Ok(List::from_iter(context, slice.iter().cloned()))
             } else {
-                Err(GenericFailure("Slice out of range".into()).to_error(context.stack_trace))
+                Err(StrError("Slice out of range").to_error(context.stack_trace))
             }
         }
     );
@@ -436,7 +436,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if let Some(slice) = slice {
                 Ok(slice.clone())
             } else {
-                Err(GenericFailure("Index out of range".into()).to_error(context.stack_trace))
+                Err(StrError("Index out of range").to_error(context.stack_trace))
             }
         }
     );

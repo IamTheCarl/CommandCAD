@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::Any, borrow::Cow, fmt::Display};
+use std::{any::Any, fmt::Display};
 
 use ariadne::{Label, Report, ReportKind};
 
@@ -58,11 +58,23 @@ impl std::error::Error for Error {}
 
 /// A generic error that will just display a static message.
 #[derive(Debug, Eq, PartialEq)]
-pub struct GenericFailure(pub Cow<'static, str>);
+pub struct StrError(pub &'static str);
 
-impl std::error::Error for GenericFailure {}
+impl std::error::Error for StrError {}
 
-impl Display for GenericFailure {
+impl Display for StrError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// A generic error that will just display a formatted message.
+#[derive(Debug, Eq, PartialEq)]
+pub struct StringError(pub String);
+
+impl std::error::Error for StringError {}
+
+impl Display for StringError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }

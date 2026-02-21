@@ -22,7 +22,7 @@ use common_data_types::{Dimension, Float, FloatIsNan};
 use crate::{
     build_method,
     execution::{
-        errors::{ExecutionResult, GenericFailure, Raise},
+        errors::{ExecutionResult, Raise, StrError},
         logging::{LogLevel, LogMessage, StackTrace},
         values::{
             self, closure::BuiltinCallableDatabase, string::formatting::Style, Boolean,
@@ -44,10 +44,9 @@ impl UnwrapNotNan for std::result::Result<Float, FloatIsNan> {
     fn unwrap_not_nan(self, stack_trace: &StackTrace) -> ExecutionResult<Float> {
         match self {
             Ok(number) => Ok(number),
-            Err(_float_is_nan) => Err(GenericFailure(
-                "Result of arithmetic operation is NaN".into(),
-            )
-            .to_error(stack_trace)),
+            Err(_float_is_nan) => {
+                Err(StrError("Result of arithmetic operation is NaN").to_error(stack_trace))
+            }
         }
     }
 }
@@ -299,7 +298,7 @@ impl Scalar {
         if self.dimension.is_zero_dimension() {
             Ok(())
         } else {
-            Err(GenericFailure("Inverse trigonometric functions can only be used with zero dimensional types (Angles, Ratios)".into()).to_error(stack_trace))
+            Err(StrError("Inverse trigonometric functions can only be used with zero dimensional types (Angles, Ratios)").to_error(stack_trace))
         }
     }
 
@@ -308,7 +307,7 @@ impl Scalar {
             Ok(())
         } else {
             Err(
-                GenericFailure("Trigonometric functions can only be used with angles".into())
+                StrError("Trigonometric functions can only be used with angles")
                     .to_error(stack_trace),
             )
         }
@@ -384,7 +383,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if this.dimension.is_zero_dimension() {
                 Ok(values::SignedInteger::from(*this.value as i64))
             } else {
-                Err(GenericFailure("Only zero dimensional scalars can be converted into an integer".into())
+                Err(StrError("Only zero dimensional scalars can be converted into an integer")
                     .to_error(context.stack_trace))
             }
         }
@@ -399,11 +398,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 if *this.value >= 0.0 {
                     Ok(values::UnsignedInteger::from(*this.value as u64))
                 } else {
-                    Err(GenericFailure("Negative values cannot be converted to signed integers".into())
+                    Err(StrError("Negative values cannot be converted to signed integers")
                         .to_error(context.stack_trace))
                 }
             } else {
-                Err(GenericFailure("Only zero dimensional scalars can be converted into an integer".into())
+                Err(StrError("Only zero dimensional scalars can be converted into an integer")
                     .to_error(context.stack_trace))
             }
         }

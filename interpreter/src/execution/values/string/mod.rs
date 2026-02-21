@@ -23,7 +23,7 @@ use imstr::ImString;
 use crate::{
     build_closure_type, build_method,
     execution::{
-        errors::{GenericFailure, Raise},
+        errors::{Raise, StringError},
         logging::{LocatedStr, LogLevel, LogMessage},
         stack::ScopeType,
         values::{
@@ -221,7 +221,7 @@ fn register_format_method(database: &mut BuiltinCallableDatabase) {
                 .clone();
 
             let (excess, format) = Format::parse(&this.0).map_err(|error| {
-                GenericFailure(format!("Failed to parse formatting string: {error:?}").into())
+                StringError(format!("Failed to parse formatting string: {error:?}"))
                     .to_error(context.stack_trace)
             })?;
             assert!(excess.is_empty());
@@ -414,13 +414,15 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: IString
         ) -> Scalar {
             let value = this.0.parse::<Float>()
-                .map_err(|error| GenericFailure(format!("Failed to parse scalar value: {error:?}").into()).to_error(context.stack_trace))?;
+                .map_err(|error| StringError(format!("Failed to parse scalar value: {error:?}")).to_error(context.stack_trace))?;
             Ok(Scalar {
                 dimension: Dimension::zero(),
                 value,
             })
         }
     );
+    // TODO these don't need to be formated using format!, we can use context to add the context.
+    let remember_me = 0;
     build_method!(
         database,
         methods::ParseUnsignedInteger, "String::parse_unsigned_integer",(
@@ -428,7 +430,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: IString
         ) -> UnsignedInteger {
             let value = this.0.parse::<u64>()
-                .map_err(|error| GenericFailure(format!("Failed to parse unsigned integer: {error:?}").into()).to_error(context.stack_trace))?;
+                .map_err(|error| StringError(format!("Failed to parse unsigned integer: {error:?}")).to_error(context.stack_trace))?;
             Ok(UnsignedInteger::from(value))
         }
     );
@@ -439,7 +441,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: IString
         ) -> SignedInteger {
             let value = this.0.parse::<i64>()
-                .map_err(|error| GenericFailure(format!("Failed to parse signed integer: {error:?}").into()).to_error(context.stack_trace))?;
+                .map_err(|error| StringError(format!("Failed to parse signed integer: {error:?}")).to_error(context.stack_trace))?;
             Ok(SignedInteger::from(value))
         }
     );

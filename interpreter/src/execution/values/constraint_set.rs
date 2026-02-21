@@ -30,7 +30,7 @@ use crate::{
         AstNode,
     },
     execution::{
-        errors::{ExecutionResult, GenericFailure, Raise},
+        errors::{ExecutionResult, Raise, StrError, StringError},
         logging::LocatedStr,
     },
     values::{
@@ -386,7 +386,7 @@ impl ConstraintSet {
             .map_err(|error| SolverError(error).to_error(context.stack_trace))?;
 
         let dimension = dimension.ok_or_else(|| {
-            GenericFailure("Could not determine dimension of constraint set".into())
+            StrError("Could not determine dimension of constraint set")
                 .to_error(context.stack_trace)
         })?;
 
@@ -467,13 +467,10 @@ impl ConstraintSet {
                             Value::Scalar(scalar) => {
                                 Self::build_scalar(context, dimension, *scalar)
                             }
-                            value => Err(GenericFailure(
-                                format!(
-                                    "{} types are not supported in constraint sets",
-                                    value.type_name()
-                                )
-                                .into(),
-                            )
+                            value => Err(StringError(format!(
+                                "{} types are not supported in constraint sets",
+                                value.type_name()
+                            ))
                             .to_error(context.stack_trace)),
                         }
                     } else {
@@ -526,10 +523,8 @@ impl ConstraintSet {
             }
             ConstraintSetExpression::MethodCall(ast_node) => {
                 context.trace_scope(ast_node.reference.clone(), |context| {
-                    Err(
-                        GenericFailure("Methods are not yet supported in constraint sets".into())
-                            .to_error(context.stack_trace),
-                    )
+                    Err(StrError("Methods are not yet supported in constraint sets")
+                        .to_error(context.stack_trace))
                 })
             }
         }
@@ -542,8 +537,8 @@ impl ConstraintSet {
     ) -> ExecutionResult<ExprBuilder> {
         if let Some(dimension) = dimension {
             if value.dimension != Dimension::zero() && *dimension != value.dimension {
-                return Err(GenericFailure(
-                    "All measurements in constraint set must be of the same dimension".into(),
+                return Err(StrError(
+                    "All measurements in constraint set must be of the same dimension",
                 )
                 .to_error(context.stack_trace));
             }
