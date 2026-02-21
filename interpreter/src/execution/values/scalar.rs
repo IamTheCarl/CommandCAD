@@ -23,7 +23,7 @@ use crate::{
     build_method,
     execution::{
         errors::{ExecutionResult, Raise, StrError},
-        logging::{LogLevel, LogMessage, StackTrace},
+        logging::{LogLevel, LogMessage},
         values::{
             self, closure::BuiltinCallableDatabase, string::formatting::Style, Boolean,
             BuiltinFunction, MissingAttributeError, SignedInteger, StaticType, UnsignedInteger,
@@ -37,15 +37,15 @@ use crate::{
 use super::{value_type::ValueType, DowncastForBinaryOpError, Object, StaticTypeName, Value};
 
 pub trait UnwrapNotNan: Sized {
-    fn unwrap_not_nan(self, stack_trace: &StackTrace) -> ExecutionResult<Float>;
+    fn unwrap_not_nan(self, context: &ExecutionContext) -> ExecutionResult<Float>;
 }
 
 impl UnwrapNotNan for std::result::Result<Float, FloatIsNan> {
-    fn unwrap_not_nan(self, stack_trace: &StackTrace) -> ExecutionResult<Float> {
+    fn unwrap_not_nan(self, context: &ExecutionContext) -> ExecutionResult<Float> {
         match self {
             Ok(number) => Ok(number),
             Err(_float_is_nan) => {
-                Err(StrError("Result of arithmetic operation is NaN").to_error(stack_trace))
+                Err(StrError("Result of arithmetic operation is NaN").to_error(context))
             }
         }
     }
@@ -147,37 +147,35 @@ impl Object for Scalar {
     }
 
     fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
+        let rhs = self.unpack_same_dimension(context, rhs)?;
 
-        let value = Float::new(*self.value + *rhs.value).unwrap_not_nan(context.stack_trace)?;
+        let value = Float::new(*self.value + *rhs.value).unwrap_not_nan(context)?;
 
         Ok(Self { value, ..self }.into())
     }
     fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
+        let rhs = self.unpack_same_dimension(context, rhs)?;
 
-        let value = Float::new(*self.value - *rhs.value).unwrap_not_nan(context.stack_trace)?;
+        let value = Float::new(*self.value - *rhs.value).unwrap_not_nan(context)?;
 
         Ok(Self { value, ..self }.into())
     }
     fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
-        self.multiply_by_scalar(context.stack_trace, rhs)
-            .map(|rhs| rhs.into())
+        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context)?;
+        self.multiply_by_scalar(context, rhs).map(|rhs| rhs.into())
     }
     fn divide(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
-        self.divide_by_measurement(context.stack_trace, rhs)
+        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context)?;
+        self.divide_by_measurement(context, rhs)
             .map(|rhs| rhs.into())
     }
     fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs = rhs.downcast::<Zero>(context.stack_trace)?;
+        let rhs = rhs.downcast::<Zero>(context)?;
 
         if rhs.dimension == Dimension::zero() {
             Ok(Scalar {
                 dimension: self.dimension * *rhs.value as i8,
-                value: Float::new(self.value.powf(*rhs.value))
-                    .unwrap_not_nan(context.stack_trace)?,
+                value: Float::new(self.value.powf(*rhs.value)).unwrap_not_nan(context)?,
             }
             .into())
         } else {
@@ -199,7 +197,7 @@ impl Object for Scalar {
         .into())
     }
     fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Ordering> {
-        let rhs = rhs.downcast_for_binary_op_ref::<Self>(context.stack_trace)?;
+        let rhs = rhs.downcast_for_binary_op_ref::<Self>(context)?;
         if self.dimension == rhs.dimension {
             Ok(std::cmp::Ord::cmp(&self.value, &rhs.value))
         } else {
@@ -261,7 +259,7 @@ impl Object for Scalar {
     // fn export(
     //     &self,
     //     _log: &dyn RuntimeLog,
-    //     _stack_trace: &StackTrace,
+    //     _context: &ExecutionContext,
     // ) -> ExpressionResult<SerializableValue> {
     //     Ok(SerializableValue::Scalar(self.clone()))
     // }
@@ -280,40 +278,45 @@ impl StaticType for Scalar {
 }
 
 impl Scalar {
-    fn multiply_by_scalar(&self, stack_trace: &StackTrace, rhs: &Self) -> ExecutionResult<Self> {
-        let value = Float::new(*self.value * *rhs.value).unwrap_not_nan(stack_trace)?;
+    fn multiply_by_scalar(&self, context: &ExecutionContext, rhs: &Self) -> ExecutionResult<Self> {
+        let value = Float::new(*self.value * *rhs.value).unwrap_not_nan(context)?;
         let dimension = self.dimension + rhs.dimension;
 
         Ok(Self { dimension, value })
     }
 
-    fn divide_by_measurement(&self, stack_trace: &StackTrace, rhs: &Self) -> ExecutionResult<Self> {
-        let value = Float::new(*self.value / *rhs.value).unwrap_not_nan(stack_trace)?;
+    fn divide_by_measurement(
+        &self,
+        context: &ExecutionContext,
+        rhs: &Self,
+    ) -> ExecutionResult<Self> {
+        let value = Float::new(*self.value / *rhs.value).unwrap_not_nan(context)?;
         let dimension = self.dimension - rhs.dimension;
 
         Ok(Self { dimension, value })
     }
 
-    fn check_inverse_trig_compatible(&self, stack_trace: &StackTrace) -> ExecutionResult<()> {
+    fn check_inverse_trig_compatible(&self, context: &ExecutionContext) -> ExecutionResult<()> {
         if self.dimension.is_zero_dimension() {
             Ok(())
         } else {
-            Err(StrError("Inverse trigonometric functions can only be used with zero dimensional types (Angles, Ratios)").to_error(stack_trace))
+            Err(StrError("Inverse trigonometric functions can only be used with zero dimensional types (Angles, Ratios)").to_error(context))
         }
     }
 
-    fn check_trig_compatible(&self, stack_trace: &StackTrace) -> ExecutionResult<()> {
+    fn check_trig_compatible(&self, context: &ExecutionContext) -> ExecutionResult<()> {
         if self.dimension.is_zero_dimension() && self.dimension.ratio_type_hint.is_angle() {
             Ok(())
         } else {
-            Err(
-                StrError("Trigonometric functions can only be used with angles")
-                    .to_error(stack_trace),
-            )
+            Err(StrError("Trigonometric functions can only be used with angles").to_error(context))
         }
     }
 
-    fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExecutionResult<Self> {
+    fn unpack_same_dimension(
+        self,
+        context: &ExecutionContext,
+        rhs: Value,
+    ) -> ExecutionResult<Self> {
         if let Value::Scalar(rhs) = rhs {
             if self.dimension == rhs.dimension {
                 Ok(rhs)
@@ -322,14 +325,14 @@ impl Scalar {
                     expected: self.type_name(),
                     got: rhs.type_name(),
                 }
-                .to_error(stack_trace))
+                .to_error(context))
             }
         } else {
             Err(DowncastForBinaryOpError {
                 expected: self.type_name(),
                 got: rhs.type_name(),
             }
-            .to_error(stack_trace))
+            .to_error(context))
         }
     }
 }
@@ -415,7 +418,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(this.value.abs()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(this.value.abs()).unwrap_not_nan(context)?
             })
         }
     );
@@ -442,7 +445,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new(this.value.copysign(*sign.value)).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(this.value.copysign(*sign.value)).unwrap_not_nan(context)?
             })
         }
     );
@@ -455,7 +458,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new(this.value.hypot(*other.value)).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(this.value.hypot(*other.value)).unwrap_not_nan(context)?
             })
         }
     );
@@ -494,7 +497,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             Ok(Scalar {
                 dimension: this.dimension / 3,
-                value: Float::new(this.value.cbrt()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(this.value.cbrt()).unwrap_not_nan(context)?
             })
         }
     );
@@ -507,7 +510,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             Ok(Scalar {
                 dimension: this.dimension * *exp.value as i8,
-                value: Float::new(this.value.powf(*exp.value)).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(this.value.powf(*exp.value)).unwrap_not_nan(context)?
             })
         }
     );
@@ -519,7 +522,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             Ok(Scalar {
                 dimension: this.dimension / 2,
-                value: Float::new(this.value.sqrt()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(this.value.sqrt()).unwrap_not_nan(context)?
             })
         }
     );
@@ -549,7 +552,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             Ok(Scalar {
                 dimension: -this.dimension,
-                value: Float::new(this.value.recip()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(this.value.recip()).unwrap_not_nan(context)?
             })
         }
     );
@@ -560,13 +563,13 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: Scalar,
             unit: Scalar) -> Scalar
         {
-            let unit = this.unpack_same_dimension(context.stack_trace, unit.into())?;
+            let unit = this.unpack_same_dimension(context, unit.into())?;
 
             let value = this.value / unit.value;
 
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(value.round() * *unit.value).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(value.round() * *unit.value).unwrap_not_nan(context)?
             })
         }
     );
@@ -581,7 +584,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(value.trunc() * *unit.value).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(value.trunc() * *unit.value).unwrap_not_nan(context)?
             })
         }
     );
@@ -596,7 +599,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(value.fract() * *unit.value).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(value.fract() * *unit.value).unwrap_not_nan(context)?
             })
         }
     );
@@ -611,7 +614,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(value.floor() * *unit.value).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(value.floor() * *unit.value).unwrap_not_nan(context)?
             })
         }
     );
@@ -626,7 +629,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: this.dimension,
-                value: Float::new(value.ceil() * *unit.value).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(value.ceil() * *unit.value).unwrap_not_nan(context)?
             })
         }
     );
@@ -664,7 +667,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new(this.value.signum()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new(this.value.signum()).unwrap_not_nan(context)?
             })
         }
     );
@@ -674,11 +677,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(context.stack_trace)?;
+            this.check_inverse_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value * PI).acos()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value * PI).acos()).unwrap_not_nan(context)?
             })
         }
     );
@@ -688,11 +691,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(context.stack_trace)?;
+            this.check_inverse_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value).acosh() / PI).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value).acosh() / PI).unwrap_not_nan(context)?
             })
         }
     );
@@ -702,11 +705,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(context.stack_trace)?;
+            this.check_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).cos()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value * PI).cos()).unwrap_not_nan(context)?
             })
         }
     );
@@ -716,11 +719,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(context.stack_trace)?;
+            this.check_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).cosh()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value * PI).cosh()).unwrap_not_nan(context)?
             })
         }
     );
@@ -730,11 +733,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(context.stack_trace)?;
+            this.check_inverse_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value * PI).asin()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value * PI).asin()).unwrap_not_nan(context)?
             })
         }
     );
@@ -744,11 +747,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(context.stack_trace)?;
+            this.check_inverse_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value).asinh() / PI).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value).asinh() / PI).unwrap_not_nan(context)?
             })
         }
     );
@@ -758,11 +761,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(context.stack_trace)?;
+            this.check_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).sin()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value * PI).sin()).unwrap_not_nan(context)?
             })
         }
     );
@@ -772,11 +775,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(context.stack_trace)?;
+            this.check_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).sinh()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value * PI).sinh()).unwrap_not_nan(context)?
             })
         }
     );
@@ -786,7 +789,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Vector2
         {
-            this.check_trig_compatible(context.stack_trace)?;
+            this.check_trig_compatible(context)?;
 
             let (sin, cos) = (this.value * PI).sin_cos();
             Vector2::new(context, Dimension::zero(), [cos, sin])
@@ -798,11 +801,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(context.stack_trace)?;
+            this.check_inverse_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value * PI).atan()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value * PI).atan()).unwrap_not_nan(context)?
             })
         }
     );
@@ -812,11 +815,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_inverse_trig_compatible(context.stack_trace)?;
+            this.check_inverse_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value).atanh() / PI).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value).atanh() / PI).unwrap_not_nan(context)?
             })
         }
     );
@@ -826,11 +829,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(context.stack_trace)?;
+            this.check_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).tan()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value * PI).tan()).unwrap_not_nan(context)?
             })
         }
     );
@@ -840,11 +843,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: Scalar) -> Scalar
         {
-            this.check_trig_compatible(context.stack_trace)?;
+            this.check_trig_compatible(context)?;
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).tanh()).unwrap_not_nan(context.stack_trace)?
+                value: Float::new((this.value * PI).tanh()).unwrap_not_nan(context)?
             })
         }
     );

@@ -32,7 +32,7 @@ use nom::{
 
 use crate::execution::{
     errors::{ExecutionResult, Raise, StringError},
-    logging::{LocatedStr, StackTrace},
+    logging::LocatedStr,
     values::{Dictionary, Object, UnsignedInteger},
     ExecutionContext,
 };
@@ -202,9 +202,7 @@ impl Format {
                             })
                             .ok()
                     }) {
-                        let precision = argument
-                            .downcast_ref::<UnsignedInteger>(context.stack_trace)?
-                            .0;
+                        let precision = argument.downcast_ref::<UnsignedInteger>(context)?.0;
 
                         if precision <= u8::MAX as u64 {
                             Ok(Some(precision as u8))
@@ -226,7 +224,7 @@ impl Format {
         for component in self.components.iter() {
             match component {
                 Component::Litteral(text) => {
-                    write!(f, "{}", text).unwrap_formatting_result(context.stack_trace)?
+                    write!(f, "{}", text).unwrap_formatting_result(context)?
                 }
                 Component::Parameter(Parameter {
                     name,
@@ -269,16 +267,14 @@ fn number(input: &str) -> VResult<&str, u8> {
 }
 
 pub trait UnwrapFormattingResult<R> {
-    fn unwrap_formatting_result(self, stack_trace: &StackTrace) -> ExecutionResult<R>;
+    fn unwrap_formatting_result(self, context: &ExecutionContext) -> ExecutionResult<R>;
 }
 
 impl<R> UnwrapFormattingResult<R> for std::result::Result<R, std::fmt::Error> {
-    fn unwrap_formatting_result(self, stack_trace: &StackTrace) -> ExecutionResult<R> {
+    fn unwrap_formatting_result(self, context: &ExecutionContext) -> ExecutionResult<R> {
         match self {
             Ok(result) => Ok(result),
-            Err(error) => {
-                Err(StringError(format!("Failed to format: {error}")).to_error(stack_trace))
-            }
+            Err(error) => Err(StringError(format!("Failed to format: {error}")).to_error(context)),
         }
     }
 }

@@ -174,7 +174,7 @@ impl UserClosure {
         let return_type =
             context.trace_scope(source.node.return_type.reference.clone(), |context| {
                 execute_expression(context, &source.node.return_type)?
-                    .downcast::<ValueType>(context.stack_trace)
+                    .downcast::<ValueType>(context)
             })?;
 
         let signature = Arc::new(Signature {
@@ -439,14 +439,14 @@ macro_rules! build_function_callable {
                 signature
                     .argument_type
                     .check_other_qualifies(argument.struct_def())
-                    .map_err(|error| error.to_error($context.stack_trace.iter()))?;
+                    .map_err(|error| error.to_error($context))?;
 
                 // Argument is potentially unused if we take no arguments.
                 let mut _argument = signature.argument_type.fill_defaults(argument);
 
                 let _data = std::sync::Arc::make_mut(&mut _argument.data);
                 $($(let $arg: $ty = _data.members.remove(stringify!($arg))
-                        .expect("Argument was not present after argument check.").downcast::<$ty>($context.stack_trace)?;)*)?
+                        .expect("Argument was not present after argument check.").downcast::<$ty>($context)?;)*)?
 
                 let result: $return_type = {
                     $code?
@@ -518,19 +518,19 @@ macro_rules! build_method_callable {
                         location: $context.stack_trace.bottom().clone(),
                         string: "self",
                     },
-                )?.downcast_ref::<$this_type>($context.stack_trace)?.clone();
+                )?.downcast_ref::<$this_type>($context)?.clone();
 
                 signature
                     .argument_type
                     .check_other_qualifies(argument.struct_def())
-                    .map_err(|error| error.to_error($context.stack_trace.iter()))?;
+                    .map_err(|error| error.to_error($context))?;
 
                 // Argument is potentially unused if we take no arguments.
                 let mut _argument = signature.argument_type.fill_defaults(argument);
 
                 let _data = std::sync::Arc::make_mut(&mut _argument.data);
                 $($(let $arg: $ty = _data.members.remove(stringify!($arg))
-                        .expect("Argument was not present after argument check.").downcast::<$ty>($context.stack_trace)?;)*)?
+                        .expect("Argument was not present after argument check.").downcast::<$ty>($context)?;)*)?
 
                 let result: $return_type = {
                     $code?
@@ -936,7 +936,7 @@ mod test {
                 this: Dictionary,
                 to_add: UnsignedInteger
             ) -> UnsignedInteger {
-                let value: UnsignedInteger = this.get_attribute(context, "value")?.downcast(context.stack_trace)?;
+                let value: UnsignedInteger = this.get_attribute(context, "value")?.downcast(context)?;
 
                 Ok(values::UnsignedInteger::from(value.0 + to_add.0))
             }

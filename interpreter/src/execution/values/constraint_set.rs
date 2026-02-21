@@ -397,7 +397,7 @@ impl ConstraintSet {
                     variable_name,
                     Scalar {
                         dimension,
-                        value: Float::new(value).unwrap_not_nan(context.stack_trace)?,
+                        value: Float::new(value).unwrap_not_nan(context)?,
                     }
                     .into(),
                 );
@@ -610,7 +610,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                     location: context.stack_trace.bottom().clone(),
                     string: "self",
                 })?
-                .downcast_ref::<ConstraintSet>(context.stack_trace)?
+                .downcast_ref::<ConstraintSet>(context)?
                 .clone();
 
             let solution = this.solve(context, argument)?;

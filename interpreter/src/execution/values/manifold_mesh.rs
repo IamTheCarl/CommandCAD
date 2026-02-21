@@ -117,7 +117,7 @@ impl Object for ManifoldMesh3D {
     }
 
     fn multiply(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let input = rhs.downcast::<Zero3>(context.stack_trace)?;
+        let input = rhs.downcast::<Zero3>(context)?;
         let vector = input.raw_value();
         let manifold = Arc::make_mut(&mut self.0);
         manifold.scale(vector.x, vector.y, vector.z);
@@ -125,14 +125,14 @@ impl Object for ManifoldMesh3D {
     }
 
     fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         let manifold = compute_boolean(&self.0, &rhs.0, OpType::Add)
             .map_err(|error| error.to_error(context))?;
         Ok(Self(Arc::new(manifold)).into())
     }
 
     fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
 
         // To compute xor, get the intersectiona and then subtract it from the union of the two
         // shapes.
@@ -150,7 +150,7 @@ impl Object for ManifoldMesh3D {
     }
 
     fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         let manifold = compute_boolean(&self.0, &rhs.0, OpType::Intersect)
             .map_err(|error| error.to_error(context))?;
         Ok(Self(Arc::new(manifold)).into())
@@ -410,7 +410,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             } else {
                 let path = context.store.get_or_init_file(context, &(&this, &scale, "binary"), format!("{}.stl", name.0), |file| {
                     let mut file = BufWriter::new(file);
-                    let scale = *Float::new(1.0 / *scale.value).unwrap_not_nan(context.stack_trace)?;
+                    let scale = *Float::new(1.0 / *scale.value).unwrap_not_nan(context)?;
 
                     // file.write_all(&serialized).map_err(|error| IoError(error).to_error(context))?;
                     let mut trampoline = || -> std::io::Result<()> {

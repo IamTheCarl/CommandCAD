@@ -79,7 +79,7 @@ impl Object for IString {
     }
 
     fn eq(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<bool> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(self.0 == rhs.0)
     }
 
@@ -217,7 +217,7 @@ fn register_format_method(database: &mut BuiltinCallableDatabase) {
                     location: context.stack_trace.bottom().clone(),
                     string: "self",
                 })?
-                .downcast_ref::<IString>(context.stack_trace)?
+                .downcast_ref::<IString>(context)?
                 .clone();
 
             let (excess, format) = Format::parse(&this.0).map_err(|error| {
@@ -354,7 +354,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                         "c".into(),
                         IString(ImString::from(format!("{c}"))).into()
                     )
-                ])))?.downcast::<Boolean>(context.stack_trace)?;
+                ])))?.downcast::<Boolean>(context)?;
 
                 if retain.0 {
                     product.push(c);

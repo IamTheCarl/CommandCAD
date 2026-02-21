@@ -146,7 +146,7 @@ impl Object for List {
     }
 
     fn eq(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<bool> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(self.values == rhs.values)
     }
 
@@ -481,7 +481,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                         "c".into(),
                         value.clone()
                     )
-                ])))?.downcast::<Boolean>(context.stack_trace)?;
+                ])))?.downcast::<Boolean>(context)?;
 
                 if retain.0 {
                     values.push(value.clone());
