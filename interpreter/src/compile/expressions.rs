@@ -1038,7 +1038,7 @@ impl<'t> Parse<'t, nodes::StructDefinition<'t>> for StructDefinition {
                     nodes::anon_unions::Comma_StructMember_VaradicDots::VaradicDots(_) => true,
                 }
             }
-            Option::None => false,
+            None => false,
         };
 
         Ok(AstNode::new(file, &value, Self { members, variadic }))

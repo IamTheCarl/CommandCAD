@@ -67,7 +67,7 @@ pub fn get_base_unit_name(dimension: &Dimension) -> Option<&'static str> {
 
     match name {
         Some(name) => Some(name),
-        Option::None if *dimension != Dimension::zero() => Some("?"),
-        _ => Option::None,
+        None if *dimension != Dimension::zero() => Some("?"),
+        _ => None,
     }
 }

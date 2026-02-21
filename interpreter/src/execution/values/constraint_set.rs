@@ -363,7 +363,7 @@ impl ConstraintSet {
         };
 
         let mut m = Model::default();
-        let mut dimension = Option::None;
+        let mut dimension = None;
 
         let mut variables = HashMap::new();
 

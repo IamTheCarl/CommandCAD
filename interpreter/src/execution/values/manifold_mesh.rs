@@ -253,8 +253,8 @@ fn unpack_radius(
     diameter: Option<Length>,
 ) -> ExpressionResult<RawFloat> {
     match (radius, diameter) {
-        (Some(radius), Option::None) => Ok(radius.into()),
-        (Option::None, Some(diameter)) => {
+        (Some(radius), None) => Ok(radius.into()),
+        (None, Some(diameter)) => {
             let diameter: RawFloat = diameter.into();
             Ok(diameter / 2.0)
         }
@@ -262,7 +262,7 @@ fn unpack_radius(
             "You must provide the radius or the diameter, not both".into(),
         )
         .to_error(context.stack_trace)),
-        (Option::None, Option::None) => Err(GenericFailure(
+        (None, None) => Err(GenericFailure(
             "You must provide the radius or the diameter, neither were provided".into(),
         )
         .to_error(context.stack_trace)),

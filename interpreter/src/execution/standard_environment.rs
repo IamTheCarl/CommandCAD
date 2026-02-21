@@ -158,7 +158,7 @@ fn build_dimension_types(
     let types: HashMap<ImString, Value> = HashMap::from_iter(
         units::list_named_dimensions()
             .map(|(name, dimension)| (name, Some(dimension)))
-            .chain([("Any", Option::None)])
+            .chain([("Any", None)])
             .map(move |(name, dimension)| (name.into(), type_builder(dimension).into())),
     );
 

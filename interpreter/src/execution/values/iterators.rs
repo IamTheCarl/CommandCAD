@@ -277,7 +277,7 @@ impl IteratorStage {
                                 let list = List::from_iter(context, buffer);
                                 Some(Ok(list.into()))
                             } else {
-                                Option::None
+                                None
                             }
                         }
                         Err(error) => Some(Err(error)),
@@ -308,7 +308,7 @@ impl IteratorStage {
 
                         // This should never fail since we're writing to a string.
                         value
-                            .format(context, &mut message, Style::Default, Option::None)
+                            .format(context, &mut message, Style::Default, None)
                             .ok();
 
                         context.log.push_message(crate::LogMessage {
@@ -352,7 +352,7 @@ impl IteratorStage {
                                 if keep.0 {
                                     Some(Ok(value))
                                 } else {
-                                    Option::None
+                                    None
                                 }
                             }
 
@@ -380,7 +380,7 @@ impl IteratorStage {
                                 if mapped != ValueNone.into() {
                                     Some(Ok(mapped))
                                 } else {
-                                    Option::None
+                                    None
                                 }
                             }
 
@@ -451,7 +451,7 @@ impl IteratorStage {
                                 if mapped != ValueNone.into() {
                                     Some(Ok(mapped))
                                 } else {
-                                    Option::None
+                                    None
                                 }
                             }
 
@@ -516,7 +516,7 @@ impl IteratorStage {
                                 if should_continue.0 {
                                     Some(Ok(value))
                                 } else {
-                                    Option::None
+                                    None
                                 }
                             }
                             Err(error) => Some(Err(error)),

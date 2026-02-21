@@ -99,7 +99,7 @@ where
                 let value: Result<ValueNone, Self> = original.into_variant();
 
                 match value {
-                    Ok(_none) => Ok(Option::None),
+                    Ok(_none) => Ok(None),
                     Err(original) => Err(original),
                 }
             }
