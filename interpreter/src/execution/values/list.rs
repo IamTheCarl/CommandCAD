@@ -101,7 +101,7 @@ impl List {
                 })
             })
             .collect::<Result<_, OperationMappingError>>()
-            .map_err(|error| error.to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context))?;
 
         Ok(Self::from_iter(context, values))
     }
@@ -176,7 +176,7 @@ impl Object for List {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 
@@ -420,7 +420,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if let Some(slice) = slice {
                 Ok(List::from_iter(context, slice.iter().cloned()))
             } else {
-                Err(StrError("Slice out of range").to_error(context.stack_trace))
+                Err(StrError("Slice out of range").to_error(context))
             }
         }
     );
@@ -436,7 +436,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if let Some(slice) = slice {
                 Ok(slice.clone())
             } else {
-                Err(StrError("Index out of range").to_error(context.stack_trace))
+                Err(StrError("Index out of range").to_error(context))
             }
         }
     );
@@ -513,7 +513,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if errors.is_empty() {
                 Ok(List::from_iter(context, values.into_iter()))
             } else {
-                Err(SortingError { errors }.to_error(context.stack_trace))
+                Err(SortingError { errors }.to_error(context))
             }
         }
     );

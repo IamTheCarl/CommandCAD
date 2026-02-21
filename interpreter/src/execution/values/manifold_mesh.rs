@@ -93,7 +93,7 @@ impl Object for ManifoldMesh3D {
             }
             ArethmeticInput::Manifold(rhs) => {
                 let manifold = compute_boolean(&self.0, &rhs.0, OpType::Add)
-                    .map_err(|error| error.to_error(context.stack_trace))?;
+                    .map_err(|error| error.to_error(context))?;
                 Ok(Self(Arc::new(manifold)).into())
             }
         }
@@ -110,7 +110,7 @@ impl Object for ManifoldMesh3D {
             }
             ArethmeticInput::Manifold(rhs) => {
                 let manifold = compute_boolean(&self.0, &rhs.0, OpType::Subtract)
-                    .map_err(|error| error.to_error(context.stack_trace))?;
+                    .map_err(|error| error.to_error(context))?;
                 Ok(Self(Arc::new(manifold)).into())
             }
         }
@@ -127,7 +127,7 @@ impl Object for ManifoldMesh3D {
     fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         let manifold = compute_boolean(&self.0, &rhs.0, OpType::Add)
-            .map_err(|error| error.to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context))?;
         Ok(Self(Arc::new(manifold)).into())
     }
 
@@ -138,13 +138,13 @@ impl Object for ManifoldMesh3D {
         // shapes.
 
         let intersection = compute_boolean(&self.0, &rhs.0, OpType::Intersect)
-            .map_err(|error| error.to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context))?;
 
         let union = compute_boolean(&self.0, &rhs.0, OpType::Add)
-            .map_err(|error| error.to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context))?;
 
         let difference = compute_boolean(&union, &intersection, OpType::Subtract)
-            .map_err(|error| error.to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context))?;
 
         Ok(Self(Arc::new(difference)).into())
     }
@@ -152,7 +152,7 @@ impl Object for ManifoldMesh3D {
     fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         let manifold = compute_boolean(&self.0, &rhs.0, OpType::Intersect)
-            .map_err(|error| error.to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context))?;
         Ok(Self(Arc::new(manifold)).into())
     }
 
@@ -162,7 +162,7 @@ impl Object for ManifoldMesh3D {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 }
@@ -193,7 +193,7 @@ impl ManifoldMesh3D {
                 expected: "Vector2 or Vector3 of lengths, or another ManifoldMesh3D".into(),
                 got: value.get_type(context).name(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }?;
 
         match value {
@@ -205,7 +205,7 @@ impl ManifoldMesh3D {
                         expected: "Vector2 or Vector3 of lengths, or another ManifoldMesh3D".into(),
                         got: vector.get_type(context).name(),
                     }
-                    .to_error(context.stack_trace))
+                    .to_error(context))
                 } else {
                     Ok(ArethmeticInput::Vector(vector))
                 }
@@ -250,14 +250,13 @@ fn unpack_radius(
             let diameter: RawFloat = diameter.into();
             Ok(diameter / 2.0)
         }
-        (Some(_), Some(_)) => Err(StrError(
-            "You must provide the radius or the diameter, not both",
-        )
-        .to_error(context.stack_trace)),
+        (Some(_), Some(_)) => {
+            Err(StrError("You must provide the radius or the diameter, not both").to_error(context))
+        }
         (None, None) => Err(StrError(
             "You must provide the radius or the diameter, neither were provided",
         )
-        .to_error(context.stack_trace)),
+        .to_error(context)),
     }
 }
 
@@ -275,7 +274,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let radius = unpack_radius(context, radius, diameter)?;
 
             let manifold = generate_cone(apex.into(), center.into(), radius, divide.0 as usize)
-                .map_err(|error| error.to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context))?;
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
@@ -288,7 +287,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let size: Vector3 = size.into();
             let size = size.raw_value();
 
-            let mut manifold = generate_cube().map_err(|error| error.to_error(context.stack_trace))?;
+            let mut manifold = generate_cube().map_err(|error| error.to_error(context))?;
             manifold.scale(size.x, size.y, size.z);
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
@@ -307,7 +306,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let radius = unpack_radius(context, radius, diameter)?;
 
             let manifold = generate_cylinder(radius, height.into(), sectors.0 as usize, stacks.0 as usize)
-                .map_err(|error| error.to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context))?;
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
@@ -322,7 +321,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let scale = unpack_radius(context, radius, diameter)?;
 
             let mut manifold = generate_icosphere(subdivions.0 as u32)
-                .map_err(|error| error.to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context))?;
             manifold.scale(scale, scale, scale);
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
@@ -338,7 +337,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             sectors: UnsignedInteger
         ) -> ManifoldMesh3D {
             let manifold = generate_torus(major_radius.into(), minor_raidus.into(), rings.0 as usize, sectors.0 as usize)
-                .map_err(|error| error.to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context))?;
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
@@ -354,7 +353,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let scale = unpack_radius(context, radius, diameter)?;
 
             let mut manifold = generate_uv_sphere(sectors.0 as usize, stacks.0 as usize)
-                .map_err(|error| error.to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context))?;
             manifold.scale(scale, scale, scale);
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
@@ -399,10 +398,10 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                 // This thing doesn't kick back IO errors, so we'll collect to an infaulable
                 // structure and then write that ourselves.
                 let mut serialized = Vec::new();
-                write_stl(&mut serialized, mesh.iter()).map_err(|_| StrError("Failed to serialize STL file").to_error(context.stack_trace))?;
+                write_stl(&mut serialized, mesh.iter()).map_err(|_| StrError("Failed to serialize STL file").to_error(context))?;
 
                 let path = context.store.get_or_init_file(context, &(&this, &scale, "ascii"), format!("{}.stl", name.0), |file| {
-                    file.write_all(&serialized).map_err(|error| IoError(error).to_error(context.stack_trace))?;
+                    file.write_all(&serialized).map_err(|error| IoError(error).to_error(context))?;
 
                     Ok(())
                 })?;
@@ -413,7 +412,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                     let mut file = BufWriter::new(file);
                     let scale = *Float::new(1.0 / *scale.value).unwrap_not_nan(context.stack_trace)?;
 
-                    // file.write_all(&serialized).map_err(|error| IoError(error).to_error(context.stack_trace))?;
+                    // file.write_all(&serialized).map_err(|error| IoError(error).to_error(context))?;
                     let mut trampoline = || -> std::io::Result<()> {
                         writeln!(file, "solid {}", name.0)?;
 
@@ -444,7 +443,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                         Ok(())
                     };
 
-                    trampoline().map_err(|error| IoError(error).to_error(context.stack_trace))?;
+                    trampoline().map_err(|error| IoError(error).to_error(context))?;
 
                     Ok(())
                 })?;

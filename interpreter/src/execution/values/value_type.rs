@@ -252,7 +252,7 @@ impl Object for ValueType {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 }
@@ -276,7 +276,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: ValueType,
             to_qualify: Value) -> ValueNone
         {
-            this.check_other_qualifies(&to_qualify.get_type(context)).map_err(|error| error.to_error(context.stack_trace))?;
+            this.check_other_qualifies(&to_qualify.get_type(context)).map_err(|error| error.to_error(context))?;
             Ok(values::ValueNone)
         }
     );

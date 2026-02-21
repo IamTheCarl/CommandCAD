@@ -170,7 +170,7 @@ where
                 _ => Err(MissingAttributeError {
                     name: attribute.into(),
                 }
-                .to_error(context.stack_trace)),
+                .to_error(context)),
             }
         }
     }
@@ -207,7 +207,7 @@ where
         if !value.is_nan() {
             Ok(Self { dimension, value })
         } else {
-            Err(StrError("Result of arithmetic operation is NaN").to_error(context.stack_trace))
+            Err(StrError("Result of arithmetic operation is NaN").to_error(context))
         }
     }
 
@@ -350,7 +350,7 @@ mod methods {
                         expected: this.type_name(),
                         got: value.type_name(),
                     }
-                    .to_error(context.stack_trace))
+                    .to_error(context))
                 }
             }
         );
@@ -401,7 +401,7 @@ mod methods {
                         expected: this.type_name(),
                         got: rhs.type_name(),
                     }
-                    .to_error(context.stack_trace))
+                    .to_error(context))
                 }
             }
         );
@@ -469,7 +469,7 @@ mod methods {
                 for component in result.iter() {
                     if component.dimension != dimension {
                         return Err(StrError("All components of a vector must match")
-                            .to_error(context.stack_trace));
+                            .to_error(context));
                     }
                 }
 
@@ -528,7 +528,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                     expected: this.type_name(),
                     got: rhs.type_name(),
                 }
-                .to_error(context.stack_trace))
+                .to_error(context))
             }
         }
     );
@@ -630,7 +630,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
                 value: Self::new(*x.value, *y.value),
             })
         } else {
-            Err(StrError("All components of a vector must match").to_error(context.stack_trace))
+            Err(StrError("All components of a vector must match").to_error(context))
         }
     }
 
@@ -752,7 +752,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
                 value: Self::new(*x.value, *y.value, *z.value),
             })
         } else {
-            Err(StrError("All components of a vector must match").to_error(context.stack_trace))
+            Err(StrError("All components of a vector must match").to_error(context))
         }
     }
 
@@ -885,7 +885,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
                 value: Self::new(*x.value, *y.value, *z.value, *w.value),
             })
         } else {
-            Err(StrError("All components of a vector must match").to_error(context.stack_trace))
+            Err(StrError("All components of a vector must match").to_error(context))
         }
     }
 

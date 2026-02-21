@@ -234,7 +234,7 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         Err(MissingAttributeError {
             name: attribute.into(),
         }
-        .to_error(context.stack_trace))
+        .to_error(context))
     }
     fn call_scope_type(&self, _context: &ExecutionContext) -> ScopeType {
         ScopeType::Isolated
@@ -363,6 +363,7 @@ impl Value {
         T: StaticTypeName,
         Self: AsVariant<T>,
     {
+        let notice_me = 0; // TODO replace stack_trace with context.
         self.downcast_ref(stack_trace)
     }
 

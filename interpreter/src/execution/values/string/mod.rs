@@ -113,7 +113,7 @@ impl Object for IString {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 }
@@ -222,7 +222,7 @@ fn register_format_method(database: &mut BuiltinCallableDatabase) {
 
             let (excess, format) = Format::parse(&this.0).map_err(|error| {
                 StringError(format!("Failed to parse formatting string: {error:?}"))
-                    .to_error(context.stack_trace)
+                    .to_error(context)
             })?;
             assert!(excess.is_empty());
 
@@ -414,7 +414,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: IString
         ) -> Scalar {
             let value = this.0.parse::<Float>()
-                .map_err(|error| StringError(format!("Failed to parse scalar value: {error:?}")).to_error(context.stack_trace))?;
+                .map_err(|error| StringError(format!("Failed to parse scalar value: {error:?}")).to_error(context))?;
             Ok(Scalar {
                 dimension: Dimension::zero(),
                 value,
@@ -430,7 +430,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: IString
         ) -> UnsignedInteger {
             let value = this.0.parse::<u64>()
-                .map_err(|error| StringError(format!("Failed to parse unsigned integer: {error:?}")).to_error(context.stack_trace))?;
+                .map_err(|error| StringError(format!("Failed to parse unsigned integer: {error:?}")).to_error(context))?;
             Ok(UnsignedInteger::from(value))
         }
     );
@@ -441,7 +441,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: IString
         ) -> SignedInteger {
             let value = this.0.parse::<i64>()
-                .map_err(|error| StringError(format!("Failed to parse signed integer: {error:?}")).to_error(context.stack_trace))?;
+                .map_err(|error| StringError(format!("Failed to parse signed integer: {error:?}")).to_error(context))?;
             Ok(SignedInteger::from(value))
         }
     );

@@ -213,11 +213,11 @@ impl Format {
                                 "Precision of {precision} is not in the valid range of 0 to {}",
                                 u8::MAX
                             ))
-                            .to_error(context.stack_trace))
+                            .to_error(context))
                         }
                     } else {
                         Err(StringError(format!("Could not find argument `{name}`"))
-                            .to_error(context.stack_trace))
+                            .to_error(context))
                     }
                 }
             }
@@ -247,11 +247,11 @@ impl Format {
                             .format(context, f, *style, precision)
                             .map_err(|error| {
                                 StringError(format!("Error while formatting: {error:?}"))
-                                    .to_error(context.stack_trace)
+                                    .to_error(context)
                             })?;
                     } else {
                         return Err(StringError(format!("Could not find argument `{name}`"))
-                            .to_error(context.stack_trace));
+                            .to_error(context));
                     }
                 }
             }
