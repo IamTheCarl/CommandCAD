@@ -456,7 +456,7 @@ mod test {
                     context,
                     &mut formatted,
                     Dictionary::new(
-                        &context,
+                        context,
                         HashMap::from_iter([
                             (
                                 "one".into(),

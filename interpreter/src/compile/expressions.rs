@@ -2053,6 +2053,7 @@ mod test {
                                         }
                                     }
                                 }],
+                                #[allow(clippy::single_range_in_vec_init)]
                                 compute_groups: vec![0..1]
                             }
                         }
@@ -2169,6 +2170,7 @@ mod test {
                                         }
                                     }
                                 }],
+                                #[allow(clippy::single_range_in_vec_init)]
                                 compute_groups: vec![0..1]
                             }
                         }
@@ -2243,6 +2245,7 @@ mod test {
                                     }
                                 }
                             ],
+                            #[allow(clippy::single_range_in_vec_init)]
                             compute_groups: vec![0..2],
                             expression: AstNode {
                                 reference: expression.reference.clone(),
