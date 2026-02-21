@@ -30,7 +30,7 @@ use crate::{
         AstNode,
     },
     execution::{
-        errors::{ErrorType, ExecutionResult, GenericFailure, Raise},
+        errors::{ExecutionResult, GenericFailure, Raise},
         logging::LocatedStr,
     },
     values::{
@@ -566,7 +566,7 @@ struct DuplicateVariablesError {
     pub variables: Vec<ImString>,
 }
 
-impl ErrorType for DuplicateVariablesError {}
+impl std::error::Error for DuplicateVariablesError {}
 
 impl std::fmt::Display for DuplicateVariablesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -592,7 +592,7 @@ impl std::fmt::Display for DuplicateVariablesError {
 #[derive(Debug)]
 struct SolverError(selen::api::SolverError);
 
-impl ErrorType for SolverError {}
+impl std::error::Error for SolverError {}
 
 impl std::fmt::Display for SolverError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

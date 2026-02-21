@@ -21,7 +21,7 @@ use crate::{
     compile::{AstNode, Expression},
     execute_expression,
     execution::{
-        errors::{Error, ErrorType, GenericFailure, Raise as _},
+        errors::{Error, GenericFailure, Raise as _},
         values::{
             closure::BuiltinCallableDatabase, string::formatting::Style, Boolean, BuiltinFunction,
             Dictionary, MissingAttributeError, StaticType, UnsignedInteger, ValueNone,
@@ -311,7 +311,7 @@ struct OperationMappingError {
     pub error: Error,
 }
 
-impl ErrorType for OperationMappingError {}
+impl std::error::Error for OperationMappingError {}
 
 impl std::fmt::Display for OperationMappingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -328,7 +328,7 @@ struct SortingError {
     pub errors: Vec<Error>,
 }
 
-impl ErrorType for SortingError {}
+impl std::error::Error for SortingError {}
 
 impl std::fmt::Display for SortingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

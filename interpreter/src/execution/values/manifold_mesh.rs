@@ -92,10 +92,8 @@ impl Object for ManifoldMesh3D {
                 Ok(self.into())
             }
             ArethmeticInput::Manifold(rhs) => {
-                let manifold =
-                    compute_boolean(&self.0, &rhs.0, OpType::Add).map_err(|message| {
-                        GenericFailure(message.into()).to_error(context.stack_trace)
-                    })?;
+                let manifold = compute_boolean(&self.0, &rhs.0, OpType::Add)
+                    .map_err(|error| error.to_error(context.stack_trace))?;
                 Ok(Self(Arc::new(manifold)).into())
             }
         }
@@ -111,10 +109,8 @@ impl Object for ManifoldMesh3D {
                 Ok(self.into())
             }
             ArethmeticInput::Manifold(rhs) => {
-                let manifold =
-                    compute_boolean(&self.0, &rhs.0, OpType::Subtract).map_err(|message| {
-                        GenericFailure(message.into()).to_error(context.stack_trace)
-                    })?;
+                let manifold = compute_boolean(&self.0, &rhs.0, OpType::Subtract)
+                    .map_err(|error| error.to_error(context.stack_trace))?;
                 Ok(Self(Arc::new(manifold)).into())
             }
         }
@@ -131,7 +127,7 @@ impl Object for ManifoldMesh3D {
     fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         let manifold = compute_boolean(&self.0, &rhs.0, OpType::Add)
-            .map_err(|message| GenericFailure(message.into()).to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context.stack_trace))?;
         Ok(Self(Arc::new(manifold)).into())
     }
 
@@ -142,13 +138,13 @@ impl Object for ManifoldMesh3D {
         // shapes.
 
         let intersection = compute_boolean(&self.0, &rhs.0, OpType::Intersect)
-            .map_err(|message| GenericFailure(message.into()).to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context.stack_trace))?;
 
         let union = compute_boolean(&self.0, &rhs.0, OpType::Add)
-            .map_err(|message| GenericFailure(message.into()).to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context.stack_trace))?;
 
         let difference = compute_boolean(&union, &intersection, OpType::Subtract)
-            .map_err(|message| GenericFailure(message.into()).to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context.stack_trace))?;
 
         Ok(Self(Arc::new(difference)).into())
     }
@@ -156,7 +152,7 @@ impl Object for ManifoldMesh3D {
     fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         let manifold = compute_boolean(&self.0, &rhs.0, OpType::Intersect)
-            .map_err(|message| GenericFailure(message.into()).to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context.stack_trace))?;
         Ok(Self(Arc::new(manifold)).into())
     }
 
@@ -279,7 +275,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let radius = unpack_radius(context, radius, diameter)?;
 
             let manifold = generate_cone(apex.into(), center.into(), radius, divide.0 as usize)
-                .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context.stack_trace))?;
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
@@ -292,7 +288,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let size: Vector3 = size.into();
             let size = size.raw_value();
 
-            let mut manifold = generate_cube().map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
+            let mut manifold = generate_cube().map_err(|error| error.to_error(context.stack_trace))?;
             manifold.scale(size.x, size.y, size.z);
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
@@ -311,7 +307,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let radius = unpack_radius(context, radius, diameter)?;
 
             let manifold = generate_cylinder(radius, height.into(), sectors.0 as usize, stacks.0 as usize)
-                .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context.stack_trace))?;
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
@@ -326,7 +322,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let scale = unpack_radius(context, radius, diameter)?;
 
             let mut manifold = generate_icosphere(subdivions.0 as u32)
-                .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context.stack_trace))?;
             manifold.scale(scale, scale, scale);
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
@@ -342,7 +338,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             sectors: UnsignedInteger
         ) -> ManifoldMesh3D {
             let manifold = generate_torus(major_radius.into(), minor_raidus.into(), rings.0 as usize, sectors.0 as usize)
-                .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context.stack_trace))?;
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
@@ -358,7 +354,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let scale = unpack_radius(context, radius, diameter)?;
 
             let mut manifold = generate_uv_sphere(sectors.0 as usize, stacks.0 as usize)
-                .map_err(|error| GenericFailure(error.into()).to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context.stack_trace))?;
             manifold.scale(scale, scale, scale);
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))

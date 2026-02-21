@@ -26,7 +26,7 @@ use crate::{
     compile::{AstNode, DictionaryConstruction},
     execute_expression,
     execution::{
-        errors::{ErrorType, ExecutionResult, Raise as _},
+        errors::{ExecutionResult, Raise as _},
         find_all_variable_accesses_in_expression,
         stack::ScopeType,
         values::string::formatting::Style,
@@ -221,7 +221,7 @@ pub struct DuplicateMemberError {
     pub name: ImString,
 }
 
-impl ErrorType for DuplicateMemberError {}
+impl std::error::Error for DuplicateMemberError {}
 
 impl Display for DuplicateMemberError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

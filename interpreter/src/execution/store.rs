@@ -25,7 +25,7 @@ use sha2::{Digest, Sha256};
 use tempfile::{NamedTempFile, TempDir};
 
 use crate::{
-    execution::errors::{ErrorType, ExecutionResult, Raise},
+    execution::errors::{ExecutionResult, Raise},
     ExecutionContext,
 };
 
@@ -183,10 +183,12 @@ impl<A> std::ops::DerefMut for PendingAsset<A> {
     }
 }
 
+// We can probably remove that wrapper now.
+struct NoticeMe;
 #[derive(Debug)]
 pub struct IoError(pub std::io::Error);
 
-impl ErrorType for IoError {}
+impl std::error::Error for IoError {}
 
 impl std::fmt::Display for IoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
