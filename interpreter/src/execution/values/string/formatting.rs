@@ -31,7 +31,7 @@ use nom::{
 };
 
 use crate::execution::{
-    errors::{ExecutionResult, GenericFailure, Raise},
+    errors::{ExecutionResult, Raise, StringError},
     logging::{LocatedStr, StackTrace},
     values::{Dictionary, Object, UnsignedInteger},
     ExecutionContext,
@@ -209,20 +209,15 @@ impl Format {
                         if precision <= u8::MAX as u64 {
                             Ok(Some(precision as u8))
                         } else {
-                            Err(GenericFailure(
-                                format!(
-                                    "Precision of {precision} is not in the valid range of 0 to {}",
-                                    u8::MAX
-                                )
-                                .into(),
-                            )
+                            Err(StringError(format!(
+                                "Precision of {precision} is not in the valid range of 0 to {}",
+                                u8::MAX
+                            ))
                             .to_error(context.stack_trace))
                         }
                     } else {
-                        Err(
-                            GenericFailure(format!("Could not find argument `{name}`").into())
-                                .to_error(context.stack_trace),
-                        )
+                        Err(StringError(format!("Could not find argument `{name}`"))
+                            .to_error(context.stack_trace))
                     }
                 }
             }
@@ -251,14 +246,12 @@ impl Format {
                         argument
                             .format(context, f, *style, precision)
                             .map_err(|error| {
-                                GenericFailure(format!("Error while formatting: {error:?}").into())
+                                StringError(format!("Error while formatting: {error:?}"))
                                     .to_error(context.stack_trace)
                             })?;
                     } else {
-                        return Err(GenericFailure(
-                            format!("Could not find argument `{name}`").into(),
-                        )
-                        .to_error(context.stack_trace));
+                        return Err(StringError(format!("Could not find argument `{name}`"))
+                            .to_error(context.stack_trace));
                     }
                 }
             }
@@ -284,8 +277,7 @@ impl<R> UnwrapFormattingResult<R> for std::result::Result<R, std::fmt::Error> {
         match self {
             Ok(result) => Ok(result),
             Err(error) => {
-                Err(GenericFailure(format!("Failed to format: {error}",).into())
-                    .to_error(stack_trace))
+                Err(StringError(format!("Failed to format: {error}")).to_error(stack_trace))
             }
         }
     }

@@ -27,7 +27,7 @@ use std::{
 use crate::{
     build_function, build_method,
     execution::{
-        errors::{ExecutionResult, GenericFailure, Raise},
+        errors::{ExecutionResult, Raise, StrError},
         store::IoError,
     },
     values::{
@@ -250,12 +250,12 @@ fn unpack_radius(
             let diameter: RawFloat = diameter.into();
             Ok(diameter / 2.0)
         }
-        (Some(_), Some(_)) => Err(GenericFailure(
-            "You must provide the radius or the diameter, not both".into(),
+        (Some(_), Some(_)) => Err(StrError(
+            "You must provide the radius or the diameter, not both",
         )
         .to_error(context.stack_trace)),
-        (None, None) => Err(GenericFailure(
-            "You must provide the radius or the diameter, neither were provided".into(),
+        (None, None) => Err(StrError(
+            "You must provide the radius or the diameter, neither were provided",
         )
         .to_error(context.stack_trace)),
     }
@@ -399,7 +399,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                 // This thing doesn't kick back IO errors, so we'll collect to an infaulable
                 // structure and then write that ourselves.
                 let mut serialized = Vec::new();
-                write_stl(&mut serialized, mesh.iter()).map_err(|_| GenericFailure("Failed to serialize STL file".into()).to_error(context.stack_trace))?;
+                write_stl(&mut serialized, mesh.iter()).map_err(|_| StrError("Failed to serialize STL file").to_error(context.stack_trace))?;
 
                 let path = context.store.get_or_init_file(context, &(&this, &scale, "ascii"), format!("{}.stl", name.0), |file| {
                     file.write_all(&serialized).map_err(|error| IoError(error).to_error(context.stack_trace))?;

@@ -7,7 +7,7 @@ use crate::{
     compile::{self, AstNode},
     execute_expression,
     execution::{
-        errors::{ExecutionResult, GenericFailure, Raise as _},
+        errors::{ExecutionResult, Raise as _, StrError},
         logging::StackTrace,
         values::{
             closure::BuiltinCallableDatabase, scalar::UnwrapNotNan, string::formatting::Style,
@@ -207,10 +207,7 @@ where
         if !value.is_nan() {
             Ok(Self { dimension, value })
         } else {
-            Err(
-                GenericFailure("Result of arithmetic operation is NaN".into())
-                    .to_error(context.stack_trace),
-            )
+            Err(StrError("Result of arithmetic operation is NaN").to_error(context.stack_trace))
         }
     }
 
@@ -262,7 +259,10 @@ mod methods {
     use super::*;
     use crate::{
         build_method,
-        execution::values::{BuiltinCallableDatabase, Dictionary},
+        execution::{
+            errors::StrError,
+            values::{BuiltinCallableDatabase, Dictionary},
+        },
     };
 
     pub trait MethodSet {
@@ -468,7 +468,7 @@ mod methods {
 
                 for component in result.iter() {
                     if component.dimension != dimension {
-                        return Err(GenericFailure("All components of a vector must match".into())
+                        return Err(StrError("All components of a vector must match")
                             .to_error(context.stack_trace));
                     }
                 }
@@ -630,10 +630,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
                 value: Self::new(*x.value, *y.value),
             })
         } else {
-            Err(
-                GenericFailure("All components of a vector must match".into())
-                    .to_error(context.stack_trace),
-            )
+            Err(StrError("All components of a vector must match").to_error(context.stack_trace))
         }
     }
 
@@ -755,10 +752,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
                 value: Self::new(*x.value, *y.value, *z.value),
             })
         } else {
-            Err(
-                GenericFailure("All components of a vector must match".into())
-                    .to_error(context.stack_trace),
-            )
+            Err(StrError("All components of a vector must match").to_error(context.stack_trace))
         }
     }
 
@@ -891,10 +885,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
                 value: Self::new(*x.value, *y.value, *z.value, *w.value),
             })
         } else {
-            Err(
-                GenericFailure("All components of a vector must match".into())
-                    .to_error(context.stack_trace),
-            )
+            Err(StrError("All components of a vector must match").to_error(context.stack_trace))
         }
     }
 
