@@ -27,7 +27,7 @@ use crate::{
     values::{iterators::ValueIterator, manifold_mesh::ManifoldMesh3D},
 };
 
-use super::errors::{ErrorType, ExpressionResult, Raise as _};
+use super::errors::{ErrorType, ExecutionResult, Raise as _};
 
 mod void;
 pub use void::ValueNone;
@@ -147,7 +147,7 @@ impl UnsupportedOperationError {
         object: &O,
         stack_trace: &StackTrace,
         operation_name: &'static str,
-    ) -> ExpressionResult<R> {
+    ) -> ExecutionResult<R> {
         Err(Self {
             type_name: object.type_name(),
             operation_name,
@@ -185,56 +185,52 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
         Self::static_type_name()
     }
 
-    fn and(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn and(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "logical and")
     }
-    fn or(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn or(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "logical or")
     }
-    fn xor(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn xor(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "logical xor")
     }
-    fn bit_and(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn bit_and(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "binary and")
     }
-    fn bit_or(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn bit_or(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "binary or")
     }
-    fn bit_xor(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn bit_xor(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "binary xor")
     }
-    fn cmp(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Ordering> {
+    fn cmp(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Ordering> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "compare")
     }
-    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<bool> {
         Ok(matches!(self.cmp(context, rhs)?, Ordering::Equal))
     }
-    fn addition(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn addition(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "addition")
     }
-    fn subtraction(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn subtraction(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "subtraction")
     }
-    fn multiply(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn multiply(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "multiply")
     }
-    fn divide(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn divide(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "divide")
     }
-    fn exponent(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn exponent(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "exponent")
     }
-    fn left_shift(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn left_shift(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "left shift")
     }
-    fn right_shift(self, context: &ExecutionContext, _rhs: Value) -> ExpressionResult<Value> {
+    fn right_shift(self, context: &ExecutionContext, _rhs: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "right shift")
     }
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         Err(MissingAttributeError {
             name: attribute.into(),
         }
@@ -243,26 +239,26 @@ pub trait Object: StaticTypeName + Sized + Eq + PartialEq + Clone {
     fn call_scope_type(&self, _context: &ExecutionContext) -> ScopeType {
         ScopeType::Isolated
     }
-    fn call(&self, context: &ExecutionContext, _argument: Dictionary) -> ExpressionResult<Value> {
+    fn call(&self, context: &ExecutionContext, _argument: Dictionary) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(self, context.stack_trace, "call")
     }
-    fn formula_call(&self, context: &ExecutionContext, _value: Value) -> ExpressionResult<Value> {
+    fn formula_call(&self, context: &ExecutionContext, _value: Value) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(self, context.stack_trace, "inverse call")
     }
     fn formula_inverse_call(
         &self,
         context: &ExecutionContext,
         _value: Value,
-    ) -> ExpressionResult<Value> {
+    ) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(self, context.stack_trace, "inverse call")
     }
-    fn unary_plus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_plus(self, context: &ExecutionContext) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "unary plus")
     }
-    fn unary_minus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_minus(self, context: &ExecutionContext) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "unary minus")
     }
-    fn unary_not(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_not(self, context: &ExecutionContext) -> ExecutionResult<Value> {
         UnsupportedOperationError::raise(&self, context.stack_trace, "unary not")
     }
 
@@ -362,7 +358,7 @@ impl IntoVariant<Self> for Value {
 }
 
 impl Value {
-    pub fn downcast_for_binary_op_ref<T>(&self, stack_trace: &StackTrace) -> ExpressionResult<&T>
+    pub fn downcast_for_binary_op_ref<T>(&self, stack_trace: &StackTrace) -> ExecutionResult<&T>
     where
         T: StaticTypeName,
         Self: AsVariant<T>,
@@ -370,7 +366,7 @@ impl Value {
         self.downcast_ref(stack_trace)
     }
 
-    pub fn downcast_for_binary_op<T>(self, stack_trace: &StackTrace) -> ExpressionResult<T>
+    pub fn downcast_for_binary_op<T>(self, stack_trace: &StackTrace) -> ExecutionResult<T>
     where
         T: StaticTypeName,
         Self: IntoVariant<T>,
@@ -378,7 +374,7 @@ impl Value {
         self.downcast(stack_trace)
     }
 
-    pub fn downcast_ref<T>(&self, stack_trace: &StackTrace) -> ExpressionResult<&T>
+    pub fn downcast_ref<T>(&self, stack_trace: &StackTrace) -> ExecutionResult<&T>
     where
         T: StaticTypeName,
         Self: AsVariant<T>,
@@ -394,7 +390,7 @@ impl Value {
         }
     }
 
-    pub fn downcast<T>(self, stack_trace: &StackTrace) -> ExpressionResult<T>
+    pub fn downcast<T>(self, stack_trace: &StackTrace) -> ExecutionResult<T>
     where
         T: StaticTypeName,
         Self: IntoVariant<T>,
@@ -409,7 +405,7 @@ impl Value {
         }
     }
 
-    pub fn downcast_optional<T>(self, stack_trace: &StackTrace) -> ExpressionResult<Option<T>>
+    pub fn downcast_optional<T>(self, stack_trace: &StackTrace) -> ExecutionResult<Option<T>>
     where
         T: StaticTypeName,
         Self: IntoVariant<T>,

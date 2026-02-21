@@ -27,7 +27,7 @@ use std::{
 use crate::{
     build_function, build_method,
     execution::{
-        errors::{ExpressionResult, GenericFailure, Raise},
+        errors::{ExecutionResult, GenericFailure, Raise},
         store::IoError,
     },
     values::{
@@ -82,7 +82,7 @@ impl Object for ManifoldMesh3D {
         )
     }
 
-    fn addition(mut self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn addition(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let input = Self::unpack_arithmetic_input(context, 0.0, rhs)?;
         match input {
             ArethmeticInput::Vector(vector) => {
@@ -101,7 +101,7 @@ impl Object for ManifoldMesh3D {
         }
     }
 
-    fn subtraction(mut self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn subtraction(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let input = Self::unpack_arithmetic_input(context, 0.0, rhs)?;
         match input {
             ArethmeticInput::Vector(vector) => {
@@ -120,7 +120,7 @@ impl Object for ManifoldMesh3D {
         }
     }
 
-    fn multiply(mut self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn multiply(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let input = rhs.downcast::<Zero3>(context.stack_trace)?;
         let vector = input.raw_value();
         let manifold = Arc::make_mut(&mut self.0);
@@ -128,14 +128,14 @@ impl Object for ManifoldMesh3D {
         Ok(self.into())
     }
 
-    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         let manifold = compute_boolean(&self.0, &rhs.0, OpType::Add)
             .map_err(|message| GenericFailure(message.into()).to_error(context.stack_trace))?;
         Ok(Self(Arc::new(manifold)).into())
     }
 
-    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
 
         // To compute xor, get the intersectiona and then subtract it from the union of the two
@@ -153,18 +153,14 @@ impl Object for ManifoldMesh3D {
         Ok(Self(Arc::new(difference)).into())
     }
 
-    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         let manifold = compute_boolean(&self.0, &rhs.0, OpType::Intersect)
             .map_err(|message| GenericFailure(message.into()).to_error(context.stack_trace))?;
         Ok(Self(Arc::new(manifold)).into())
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "to_stl" => Ok(BuiltinFunction::new::<methods::ToStl>().into()),
             _ => Err(MissingAttributeError {
@@ -185,7 +181,7 @@ impl ManifoldMesh3D {
         context: &ExecutionContext,
         default: RawFloat,
         input: Value,
-    ) -> ExpressionResult<ArethmeticInput> {
+    ) -> ExecutionResult<ArethmeticInput> {
         let value = match input {
             Value::Vector2(v) => {
                 let raw = v.raw_value();
@@ -251,7 +247,7 @@ fn unpack_radius(
     context: &ExecutionContext,
     radius: Option<Length>,
     diameter: Option<Length>,
-) -> ExpressionResult<RawFloat> {
+) -> ExecutionResult<RawFloat> {
     match (radius, diameter) {
         (Some(radius), None) => Ok(radius.into()),
         (None, Some(diameter)) => {

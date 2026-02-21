@@ -25,7 +25,7 @@ use sha2::{Digest, Sha256};
 use tempfile::{NamedTempFile, TempDir};
 
 use crate::{
-    execution::errors::{ErrorType, ExpressionResult, Raise},
+    execution::errors::{ErrorType, ExecutionResult, Raise},
     ExecutionContext,
 };
 
@@ -44,8 +44,8 @@ impl Store {
         context: &ExecutionContext,
         hashable: &impl std::hash::Hash,
         name: impl AsRef<str>,
-        init: impl FnOnce(&mut NamedTempFile) -> ExpressionResult<()>,
-    ) -> ExpressionResult<PathBuf> {
+        init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
         let store_path = self.generate_store_path(hashable, &name);
 
         if std::fs::exists(&store_path)
@@ -83,8 +83,8 @@ impl Store {
         context: &ExecutionContext,
         hashable: &impl std::hash::Hash,
         name: impl AsRef<str>,
-        init: impl FnOnce(&mut TempDir) -> ExpressionResult<()>,
-    ) -> ExpressionResult<PathBuf> {
+        init: impl FnOnce(&mut TempDir) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
         let store_path = self.generate_store_path(hashable, &name);
 
         if std::fs::exists(&store_path)
@@ -129,7 +129,7 @@ impl Store {
         context: &ExecutionContext,
         temp_path: &Path,
         store_path: &Path,
-    ) -> ExpressionResult<()> {
+    ) -> ExecutionResult<()> {
         // Move the file into the store.
         match std::fs::rename(temp_path, store_path) {
             Ok(_) => Ok(store_path),

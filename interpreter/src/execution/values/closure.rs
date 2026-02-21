@@ -25,7 +25,7 @@ use crate::{
     compile::{AstNode, ClosureDefinition, Expression},
     execute_expression,
     execution::{
-        errors::{ExpressionResult, Raise},
+        errors::{ExecutionResult, Raise},
         find_all_variable_accesses_in_expression,
         logging::{LocatedStr, LogLevel, LogMessage},
         stack::ScopeType,
@@ -114,8 +114,8 @@ impl Display for Signature {
 
 pub fn find_all_variable_accesses_in_closure_capture(
     closure: &crate::compile::ClosureDefinition,
-    mut access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-) -> ExpressionResult<()> {
+    mut access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExecutionResult<()>,
+) -> ExecutionResult<()> {
     let argument_names: Vec<&ImString> = {
         let mut argument_names = Vec::with_capacity(closure.argument_type.node.members.len());
 
@@ -163,7 +163,7 @@ impl UserClosure {
     pub fn from_ast(
         context: &ExecutionContext,
         source: &AstNode<Box<ClosureDefinition>>,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         let argument_type =
             context.trace_scope(source.node.argument_type.reference.clone(), |context| {
                 let argument_type = StructDefinition::new(context, &source.node.argument_type)?;
@@ -244,7 +244,7 @@ impl Object for UserClosure {
         write!(f, "{}", self.get_type(context))
     }
 
-    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value> {
+    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
         self.data
             .signature
             .argument_type
@@ -280,7 +280,7 @@ impl StaticTypeName for UserClosure {
 }
 
 pub trait BuiltinCallable: Sync + Send {
-    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value>;
+    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value>;
 
     fn name(&self) -> &str;
 
@@ -400,7 +400,7 @@ macro_rules! build_function_callable {
     ($name:literal ($context:ident: &ExecutionContext $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block) => {{
         struct BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value>
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExecutionResult<$crate::execution::values::Value>
         {
             function: F,
             signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
@@ -409,13 +409,13 @@ macro_rules! build_function_callable {
 
         impl<F> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value> + Send + Sync,
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExecutionResult<$crate::execution::values::Value> + Send + Sync,
         {
             fn call(
                 &self,
                 context: &$crate::execution::ExecutionContext,
                 argument: $crate::execution::values::Dictionary,
-            ) -> $crate::execution::errors::ExpressionResult<$crate::execution::values::Value> {
+            ) -> $crate::execution::errors::ExecutionResult<$crate::execution::values::Value> {
                 (self.function)(context, &self.signature, argument)
             }
 
@@ -433,7 +433,7 @@ macro_rules! build_function_callable {
                 $context: &$crate::execution::ExecutionContext,
                 signature: &$crate::execution::values::closure::Signature,
                 argument: $crate::execution::values::Dictionary
-            | -> $crate::execution::ExpressionResult<$crate::execution::values::Value> {
+            | -> $crate::execution::ExecutionResult<$crate::execution::values::Value> {
                 use $crate::execution::errors::Raise as _;
 
                 signature
@@ -477,7 +477,7 @@ macro_rules! build_method_callable {
     ) => {{
         struct BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value>
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExecutionResult<$crate::execution::values::Value>
         {
             function: F,
             signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
@@ -486,13 +486,13 @@ macro_rules! build_method_callable {
 
         impl<F> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value> + Send + Sync,
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExecutionResult<$crate::execution::values::Value> + Send + Sync,
         {
             fn call(
                 &self,
                 context: &$crate::execution::ExecutionContext,
                 argument: $crate::execution::values::Dictionary,
-            ) -> $crate::execution::errors::ExpressionResult<$crate::execution::values::Value> {
+            ) -> $crate::execution::errors::ExecutionResult<$crate::execution::values::Value> {
                 (self.function)(context, &self.signature, argument)
             }
 
@@ -510,7 +510,7 @@ macro_rules! build_method_callable {
                 $context: &$crate::execution::ExecutionContext,
                 signature: &$crate::execution::values::closure::Signature,
                 argument: $crate::execution::values::Dictionary
-            | -> $crate::execution::ExpressionResult<$crate::execution::values::Value> {
+            | -> $crate::execution::ExecutionResult<$crate::execution::values::Value> {
                 use $crate::execution::errors::Raise as _;
 
                 let $this = $context.get_variable(
@@ -600,7 +600,7 @@ impl Object for BuiltinFunction {
         context.database.get_callable(self.0).callable.scope_type()
     }
 
-    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value> {
+    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
         context
             .database
             .get_callable(self.0)

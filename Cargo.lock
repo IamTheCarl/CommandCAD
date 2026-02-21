@@ -1082,6 +1082,7 @@ dependencies = [
  "stack",
  "stl_io",
  "tempfile",
+ "thiserror 2.0.18",
  "tree-sitter",
  "tree-sitter-command-cad-model",
  "type-sitter",

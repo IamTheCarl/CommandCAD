@@ -30,7 +30,7 @@ use std::{
 use crate::{
     build_function,
     execution::{
-        errors::{ExpressionResult, GenericFailure, Raise},
+        errors::{ExecutionResult, GenericFailure, Raise},
         logging::{LogLevel, LogMessage, StackTrace},
         values::{
             closure::BuiltinCallableDatabase, integer::methods::MethodSet,
@@ -117,24 +117,24 @@ where
         }
     }
 
-    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 & rhs.0).into())
     }
-    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 | rhs.0).into())
     }
-    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 ^ rhs.0).into())
     }
 
-    fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Ordering> {
+    fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Ordering> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(self.0.cmp(&rhs.0))
     }
-    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_add(&rhs.0).ok_or_else(|| {
             GenericFailure(
@@ -144,7 +144,7 @@ where
         })?)
         .into())
     }
-    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_sub(&rhs.0).ok_or_else(|| {
             GenericFailure(
@@ -154,7 +154,7 @@ where
         })?)
         .into())
     }
-    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0.checked_mul(&rhs.0).ok_or_else(|| {
             GenericFailure(
@@ -164,7 +164,7 @@ where
         })?)
         .into())
     }
-    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(
             self.0
@@ -173,7 +173,7 @@ where
         )
         .into())
     }
-    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
 
         // This failure can only happen on 32bit (or less) systems.
@@ -192,28 +192,24 @@ where
         })?)
         .into())
     }
-    fn left_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn left_shift(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 << rhs.0).into())
     }
-    fn right_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn right_shift(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(Self(self.0 >> rhs.0).into())
     }
-    fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_plus(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(self.into())
     }
-    fn unary_minus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_minus(self, context: &ExecutionContext) -> ExecutionResult<Value> {
         self.0.neg(context.stack_trace)
     }
-    fn unary_not(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_not(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(Self(!self.0).into())
     }
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "count_ones" => Ok(BuiltinFunction::new::<
                 <<I as IntOps>::MethodSet as methods::MethodSet>::CountOnes,
@@ -326,7 +322,7 @@ trait IntOps:
 {
     type MethodSet: MethodSet + 'static;
 
-    fn neg(&self, stack_trace: &StackTrace) -> ExpressionResult<Value>;
+    fn neg(&self, stack_trace: &StackTrace) -> ExecutionResult<Value>;
 
     fn count_ones(&self) -> u64;
     fn count_zeros(&self) -> u64;
@@ -360,7 +356,7 @@ trait IntOps:
 impl IntOps for i64 {
     type MethodSet = methods::SignedIntegerMethodSet;
 
-    fn neg(&self, _stack_trace: &StackTrace) -> ExpressionResult<Value> {
+    fn neg(&self, _stack_trace: &StackTrace) -> ExecutionResult<Value> {
         Ok(SignedInteger::from(-self).into())
     }
 
@@ -451,7 +447,7 @@ impl StaticType for i64 {
 impl IntOps for u64 {
     type MethodSet = methods::UnsignedIntegerMethodSet;
 
-    fn neg(&self, stack_trace: &StackTrace) -> ExpressionResult<Value> {
+    fn neg(&self, stack_trace: &StackTrace) -> ExecutionResult<Value> {
         Err(super::UnsupportedOperationError {
             type_name: UnsignedInteger::static_type_name(),
             operation_name: "negate",
@@ -867,8 +863,8 @@ where
 {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
-    ) -> ExpressionResult<R> {
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+    ) -> ExecutionResult<R> {
         // We had to implement a lot of this manually due to std::range::Step not being stable yet.
         let mut index = self.start;
         let end = match (self.inclusive, self.reverse) {

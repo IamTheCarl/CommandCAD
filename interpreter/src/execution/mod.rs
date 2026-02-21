@@ -47,7 +47,7 @@ mod logging;
 mod stack;
 mod standard_environment;
 pub mod values;
-pub use errors::ExpressionResult;
+pub use errors::ExecutionResult;
 use imstr::ImString;
 use logging::LocatedStr;
 pub use logging::{ExecutionFileCache, LogLevel, LogMessage, RuntimeLog, StackTrace};
@@ -64,8 +64,8 @@ pub use standard_environment::build_prelude;
 
 pub fn find_all_variable_accesses_in_expression(
     expression: &Expression,
-    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-) -> ExpressionResult<()> {
+    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExecutionResult<()>,
+) -> ExecutionResult<()> {
     match expression {
         Expression::BinaryExpression(ast_node) => {
             find_all_variable_accesses_in_expression(&ast_node.node.a.node, access_collector)?;
@@ -232,7 +232,7 @@ impl<'c> ExecutionContext<'c> {
         })
     }
 
-    pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(&self, name: S) -> ExpressionResult<&Value> {
+    pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(&self, name: S) -> ExecutionResult<&Value> {
         self.stack.get_variable(self.stack_trace, [], name)
     }
 
@@ -240,7 +240,7 @@ impl<'c> ExecutionContext<'c> {
         &self,
         local_variables: impl IntoIterator<Item = ImString>,
         name: S,
-    ) -> ExpressionResult<&Value> {
+    ) -> ExecutionResult<&Value> {
         self.stack
             .get_variable(self.stack_trace, local_variables, name)
     }
@@ -250,7 +250,7 @@ impl<'c> ExecutionContext<'c> {
         mode: ScopeType,
         variables: HashMap<ImString, Value>,
         block: B,
-    ) -> ExpressionResult<R>
+    ) -> ExecutionResult<R>
     where
         B: FnOnce(&ExecutionContext) -> R,
     {
@@ -270,7 +270,7 @@ impl<'c> ExecutionContext<'c> {
 pub fn execute_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<compile::Expression>,
-) -> ExpressionResult<Value> {
+) -> ExecutionResult<Value> {
     context.trace_scope(expression.reference.clone(), |context| {
         match &expression.node {
             compile::Expression::BinaryExpression(ast_node) => {
@@ -353,7 +353,7 @@ pub fn execute_expression(
 fn execute_unary_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::UnaryExpression>>,
-) -> ExpressionResult<Value> {
+) -> ExecutionResult<Value> {
     context.trace_scope(expression.reference.clone(), |context| {
         let node = &expression.node;
         let value = execute_expression(context, &node.expression)?;
@@ -368,7 +368,7 @@ fn execute_unary_expression(
 fn execute_function_call(
     context: &ExecutionContext,
     call: &compile::AstNode<Box<compile::FunctionCall>>,
-) -> ExpressionResult<Value> {
+) -> ExecutionResult<Value> {
     let to_call = execute_expression(context, &call.node.to_call)?;
     let argument = values::Dictionary::from_ast(context, &call.node.argument)?;
 
@@ -382,7 +382,7 @@ fn execute_function_call(
 fn execute_method_call(
     context: &ExecutionContext,
     call: &compile::AstNode<Box<compile::MethodCall>>,
-) -> ExpressionResult<Value> {
+) -> ExecutionResult<Value> {
     let self_dictionary = execute_expression(context, &call.node.self_dictionary)?;
     let to_call = self_dictionary
         .get_attribute(context, &call.node.to_call.node)?
@@ -399,7 +399,7 @@ fn execute_method_call(
 fn execute_let_in(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::LetIn>>,
-) -> ExpressionResult<Value> {
+) -> ExecutionResult<Value> {
     context.trace_scope(expression.reference.clone(), |context| {
         context.stack.scope_mut(
             context.stack_trace,
@@ -443,7 +443,7 @@ fn execute_let_in(
 fn execute_binary_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::BinaryExpression>>,
-) -> ExpressionResult<Value> {
+) -> ExecutionResult<Value> {
     context.trace_scope(expression.reference.clone(), |context| {
         let node = &expression.node;
 
@@ -512,7 +512,7 @@ fn execute_binary_expression(
 pub fn execute_if_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::IfExpression>>,
-) -> ExpressionResult<Value> {
+) -> ExecutionResult<Value> {
     let condition = execute_expression(context, &expression.node.condition)?
         .downcast::<values::Boolean>(context.stack_trace)?
         .0;
@@ -527,7 +527,7 @@ pub fn execute_if_expression(
 }
 
 #[cfg(test)]
-pub(crate) fn test_run(input: &str) -> ExpressionResult<Value> {
+pub(crate) fn test_run(input: &str) -> ExecutionResult<Value> {
     let root = compile::full_compile(input);
 
     test_context([], |context| execute_expression(context, &root))
@@ -578,7 +578,7 @@ pub(crate) fn test_context_custom_database<R>(
     f(&context)
 }
 
-pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> ExpressionResult<Value> {
+pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> ExecutionResult<Value> {
     // TODO can/should we make the parser part of the execution context rather than build a new one
     // every time we load a file?
     let mut parser = new_parser();

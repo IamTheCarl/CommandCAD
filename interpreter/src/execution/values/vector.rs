@@ -7,7 +7,7 @@ use crate::{
     compile::{self, AstNode},
     execute_expression,
     execution::{
-        errors::{ExpressionResult, GenericFailure, Raise as _},
+        errors::{ExecutionResult, GenericFailure, Raise as _},
         logging::StackTrace,
         values::{
             closure::BuiltinCallableDatabase, scalar::UnwrapNotNan, string::formatting::Style,
@@ -77,36 +77,36 @@ where
         Ok(())
     }
 
-    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
         let value = self.value + rhs.value;
 
         Ok(Self::new_raw(context, self.dimension, value)?.into())
     }
-    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
         let value = self.value - rhs.value;
 
         Ok(Self::new_raw(context, self.dimension, value)?.into())
     }
-    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
         let value = self.value * *rhs.value;
         let dimension = self.dimension + rhs.dimension;
 
         Ok(Self::new_raw(context, dimension, value)?.into())
     }
-    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
         let value = self.value / *rhs.value;
         let dimension = self.dimension - rhs.dimension;
 
         Ok(Self::new_raw(context, dimension, value)?.into())
     }
-    fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_plus(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(self.into())
     }
-    fn unary_minus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_minus(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(Self {
             value: -self.value,
             ..self
@@ -114,16 +114,12 @@ where
         .into())
     }
 
-    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<bool> {
         let rhs: Self = rhs.downcast_for_binary_op(context.stack_trace)?;
         Ok(self.dimension == rhs.dimension && self.value == rhs.value)
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         if let Some(value) = self
             .value
             .get_attribute(context, attribute, self.dimension)?
@@ -190,7 +186,7 @@ where
         context: &ExecutionContext,
         dimension: Dimension,
         value: I::BuildFrom,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         let value = I::build(value);
 
         Self::new_raw(context, dimension, value)
@@ -199,7 +195,7 @@ where
     pub fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Box<I::NodeType>>,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         I::from_ast(context, ast_node)
     }
 
@@ -207,7 +203,7 @@ where
         context: &ExecutionContext,
         dimension: Dimension,
         value: I,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         if !value.is_nan() {
             Ok(Self { dimension, value })
         } else {
@@ -226,7 +222,7 @@ where
         self.value
     }
 
-    fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExpressionResult<Self> {
+    fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExecutionResult<Self> {
         let rhs: Vector<I> = rhs.downcast_for_binary_op(stack_trace)?;
 
         if self.dimension == rhs.dimension {
@@ -463,9 +459,9 @@ mod methods {
                             value: common_data_types::Float::new(c).unwrap_not_nan(context.stack_trace)?
                         }.into()
                     )
-                ])))).collect::<ExpressionResult<_>>()?;
+                ])))).collect::<ExecutionResult<_>>()?;
 
-                let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(context.stack_trace)).collect::<ExpressionResult<_>>()?;
+                let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(context.stack_trace)).collect::<ExecutionResult<_>>()?;
 
                 // The smallest vector we support is 2, so this should never panic.
                 let dimension = result[0].dimension;
@@ -563,7 +559,7 @@ pub trait VectorInternalType:
     fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
-    ) -> ExpressionResult<Vector<Self>>;
+    ) -> ExecutionResult<Vector<Self>>;
     fn from_iterator<I>(iterator: I) -> Self
     where
         I: IntoIterator<Item = Float>;
@@ -573,7 +569,7 @@ pub trait VectorInternalType:
         context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
-    ) -> ExpressionResult<Option<Value>>;
+    ) -> ExecutionResult<Option<Value>>;
 
     fn abs(&self) -> Self;
     fn add_scalar(&self, value: Float) -> Self;
@@ -624,7 +620,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
     fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
-    ) -> ExpressionResult<Vector<Self>> {
+    ) -> ExecutionResult<Vector<Self>> {
         let x = get_component!(context, ast_node, x);
         let y = get_component!(context, ast_node, y);
 
@@ -653,7 +649,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
         context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
-    ) -> ExpressionResult<Option<Value>> {
+    ) -> ExecutionResult<Option<Value>> {
         match attribute {
             "x" => Ok(Some(
                 Scalar {
@@ -748,7 +744,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
     fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
-    ) -> ExpressionResult<Vector<Self>> {
+    ) -> ExecutionResult<Vector<Self>> {
         let x = get_component!(context, ast_node, x);
         let y = get_component!(context, ast_node, y);
         let z = get_component!(context, ast_node, z);
@@ -778,7 +774,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
         context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
-    ) -> ExpressionResult<Option<Value>> {
+    ) -> ExecutionResult<Option<Value>> {
         match attribute {
             "x" => Ok(Some(
                 Scalar {
@@ -883,7 +879,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
     fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
-    ) -> ExpressionResult<Vector<Self>> {
+    ) -> ExecutionResult<Vector<Self>> {
         let x = get_component!(context, ast_node, x);
         let y = get_component!(context, ast_node, y);
         let z = get_component!(context, ast_node, z);
@@ -914,7 +910,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
         context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
-    ) -> ExpressionResult<Option<Value>> {
+    ) -> ExecutionResult<Option<Value>> {
         match attribute {
             "x" => Ok(Some(
                 Scalar {

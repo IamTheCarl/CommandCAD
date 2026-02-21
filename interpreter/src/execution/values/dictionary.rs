@@ -26,7 +26,7 @@ use crate::{
     compile::{AstNode, DictionaryConstruction},
     execute_expression,
     execution::{
-        errors::{ErrorType, ExpressionResult, Raise as _},
+        errors::{ErrorType, ExecutionResult, Raise as _},
         find_all_variable_accesses_in_expression,
         stack::ScopeType,
         values::string::formatting::Style,
@@ -53,8 +53,8 @@ impl PartialEq for DictionaryData {
 
 pub fn find_all_variable_accesses_in_dictionary_construction(
     dictionary_construction: &crate::compile::DictionaryConstruction,
-    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-) -> ExpressionResult<()> {
+    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExecutionResult<()>,
+) -> ExecutionResult<()> {
     for assignment in dictionary_construction.assignments.iter() {
         find_all_variable_accesses_in_expression(
             &assignment.node.assignment.node,
@@ -99,11 +99,7 @@ impl Object for Dictionary {
         Ok(())
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         if let Some(member) = self.data.members.get(attribute) {
             Ok(member.clone())
         } else {
@@ -141,7 +137,7 @@ impl Dictionary {
     pub fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<DictionaryConstruction>,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         let mut members = HashMap::with_capacity(ast_node.node.assignments.len());
 
         context.stack.scope_mut(

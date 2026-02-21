@@ -38,7 +38,7 @@ use crate::{
     values::iterators::{IterableObject, ValueIterator},
 };
 
-use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
+use super::{value_type::ValueType, ExecutionResult, Object, StaticTypeName, Value};
 
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
@@ -78,16 +78,12 @@ impl Object for IString {
         write!(f, "{}", self.0)
     }
 
-    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<bool> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
         Ok(self.0 == rhs.0)
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "format" => Ok(BuiltinFunction::new::<methods::Format>().into()),
 
@@ -151,8 +147,8 @@ pub struct CharIterator {
 impl IterableObject for CharIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
-    ) -> ExpressionResult<R> {
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+    ) -> ExecutionResult<R> {
         let mut iter = self
             .string
             .0
@@ -171,8 +167,8 @@ pub struct LineIterator {
 impl IterableObject for LineIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
-    ) -> ExpressionResult<R> {
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+    ) -> ExecutionResult<R> {
         let mut iterator = self
             .string
             .0
@@ -215,11 +211,7 @@ fn register_format_method(database: &mut BuiltinCallableDatabase) {
     }
 
     impl BuiltinCallable for BuiltFunction {
-        fn call(
-            &self,
-            context: &ExecutionContext,
-            argument: Dictionary,
-        ) -> ExpressionResult<Value> {
+        fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
             let this = context
                 .get_variable(LocatedStr {
                     location: context.stack_trace.bottom().clone(),

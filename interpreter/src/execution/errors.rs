@@ -22,7 +22,7 @@ use ariadne::{Label, Report, ReportKind};
 
 use crate::compile::SourceReference;
 
-pub type ExpressionResult<R> = std::result::Result<R, Error>;
+pub type ExecutionResult<R> = std::result::Result<R, Error>;
 
 #[derive(Debug)]
 pub struct Error {

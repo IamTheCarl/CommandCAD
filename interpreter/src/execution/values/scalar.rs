@@ -22,7 +22,7 @@ use common_data_types::{Dimension, Float, FloatIsNan};
 use crate::{
     build_method,
     execution::{
-        errors::{ExpressionResult, GenericFailure, Raise},
+        errors::{ExecutionResult, GenericFailure, Raise},
         logging::{LogLevel, LogMessage, StackTrace},
         values::{
             self, closure::BuiltinCallableDatabase, string::formatting::Style, Boolean,
@@ -37,11 +37,11 @@ use crate::{
 use super::{value_type::ValueType, DowncastForBinaryOpError, Object, StaticTypeName, Value};
 
 pub trait UnwrapNotNan: Sized {
-    fn unwrap_not_nan(self, stack_trace: &StackTrace) -> ExpressionResult<Float>;
+    fn unwrap_not_nan(self, stack_trace: &StackTrace) -> ExecutionResult<Float>;
 }
 
 impl UnwrapNotNan for std::result::Result<Float, FloatIsNan> {
-    fn unwrap_not_nan(self, stack_trace: &StackTrace) -> ExpressionResult<Float> {
+    fn unwrap_not_nan(self, stack_trace: &StackTrace) -> ExecutionResult<Float> {
         match self {
             Ok(number) => Ok(number),
             Err(_float_is_nan) => Err(GenericFailure(
@@ -147,31 +147,31 @@ impl Object for Scalar {
         }
     }
 
-    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
 
         let value = Float::new(*self.value + *rhs.value).unwrap_not_nan(context.stack_trace)?;
 
         Ok(Self { value, ..self }.into())
     }
-    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
 
         let value = Float::new(*self.value - *rhs.value).unwrap_not_nan(context.stack_trace)?;
 
         Ok(Self { value, ..self }.into())
     }
-    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
         self.multiply_by_scalar(context.stack_trace, rhs)
             .map(|rhs| rhs.into())
     }
-    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
         self.divide_by_measurement(context.stack_trace, rhs)
             .map(|rhs| rhs.into())
     }
-    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
+    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs = rhs.downcast::<Zero>(context.stack_trace)?;
 
         if rhs.dimension == Dimension::zero() {
@@ -189,17 +189,17 @@ impl Object for Scalar {
             .to_error(context.stack_trace))
         }
     }
-    fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_plus(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(self.into())
     }
-    fn unary_minus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_minus(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(Self {
             value: -self.value,
             ..self
         }
         .into())
     }
-    fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Ordering> {
+    fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Ordering> {
         let rhs = rhs.downcast_for_binary_op_ref::<Self>(context.stack_trace)?;
         if self.dimension == rhs.dimension {
             Ok(std::cmp::Ord::cmp(&self.value, &rhs.value))
@@ -212,11 +212,7 @@ impl Object for Scalar {
         }
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "to_signed_integer" => Ok(BuiltinFunction::new::<methods::ToSignedInteger>().into()),
             "to_unsigned_integer" => {
@@ -285,25 +281,21 @@ impl StaticType for Scalar {
 }
 
 impl Scalar {
-    fn multiply_by_scalar(&self, stack_trace: &StackTrace, rhs: &Self) -> ExpressionResult<Self> {
+    fn multiply_by_scalar(&self, stack_trace: &StackTrace, rhs: &Self) -> ExecutionResult<Self> {
         let value = Float::new(*self.value * *rhs.value).unwrap_not_nan(stack_trace)?;
         let dimension = self.dimension + rhs.dimension;
 
         Ok(Self { dimension, value })
     }
 
-    fn divide_by_measurement(
-        &self,
-        stack_trace: &StackTrace,
-        rhs: &Self,
-    ) -> ExpressionResult<Self> {
+    fn divide_by_measurement(&self, stack_trace: &StackTrace, rhs: &Self) -> ExecutionResult<Self> {
         let value = Float::new(*self.value / *rhs.value).unwrap_not_nan(stack_trace)?;
         let dimension = self.dimension - rhs.dimension;
 
         Ok(Self { dimension, value })
     }
 
-    fn check_inverse_trig_compatible(&self, stack_trace: &StackTrace) -> ExpressionResult<()> {
+    fn check_inverse_trig_compatible(&self, stack_trace: &StackTrace) -> ExecutionResult<()> {
         if self.dimension.is_zero_dimension() {
             Ok(())
         } else {
@@ -311,7 +303,7 @@ impl Scalar {
         }
     }
 
-    fn check_trig_compatible(&self, stack_trace: &StackTrace) -> ExpressionResult<()> {
+    fn check_trig_compatible(&self, stack_trace: &StackTrace) -> ExecutionResult<()> {
         if self.dimension.is_zero_dimension() && self.dimension.ratio_type_hint.is_angle() {
             Ok(())
         } else {
@@ -322,7 +314,7 @@ impl Scalar {
         }
     }
 
-    fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExpressionResult<Self> {
+    fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExecutionResult<Self> {
         if let Value::Scalar(rhs) = rhs {
             if self.dimension == rhs.dimension {
                 Ok(rhs)
