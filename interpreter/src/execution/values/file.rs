@@ -103,7 +103,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: File
         ) -> IString {
             let content = std::fs::read_to_string(this.path.as_path())
-                .map_err(|error| StringError(format!("Failed to read file to string: {error:?}")).to_error(context.stack_trace))?;
+                .map_err(|error| StringError(format!("Failed to read file to string: {error:?}")).to_error(context))?;
 
             Ok(IString(ImString::from(content)))
         }

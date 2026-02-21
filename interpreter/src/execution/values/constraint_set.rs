@@ -233,7 +233,7 @@ impl ConstraintSet {
             return Err(DuplicateVariablesError {
                 variables: duplicate_variables,
             }
-            .to_error(context.stack_trace));
+            .to_error(context));
         }
 
         let mut captured_values = HashMap::new();
@@ -329,7 +329,7 @@ impl Object for ConstraintSet {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 }
@@ -383,11 +383,10 @@ impl ConstraintSet {
         Self::build_relation(&mut m, &self.source.relation, left, right);
         let solution = m
             .solve()
-            .map_err(|error| SolverError(error).to_error(context.stack_trace))?;
+            .map_err(|error| SolverError(error).to_error(context))?;
 
         let dimension = dimension.ok_or_else(|| {
-            StrError("Could not determine dimension of constraint set")
-                .to_error(context.stack_trace)
+            StrError("Could not determine dimension of constraint set").to_error(context)
         })?;
 
         let mut members = HashMap::new();
@@ -471,7 +470,7 @@ impl ConstraintSet {
                                 "{} types are not supported in constraint sets",
                                 value.type_name()
                             ))
-                            .to_error(context.stack_trace)),
+                            .to_error(context)),
                         }
                     } else {
                         let variable = variables
@@ -524,7 +523,7 @@ impl ConstraintSet {
             ConstraintSetExpression::MethodCall(ast_node) => {
                 context.trace_scope(ast_node.reference.clone(), |context| {
                     Err(StrError("Methods are not yet supported in constraint sets")
-                        .to_error(context.stack_trace))
+                        .to_error(context))
                 })
             }
         }
@@ -540,7 +539,7 @@ impl ConstraintSet {
                 return Err(StrError(
                     "All measurements in constraint set must be of the same dimension",
                 )
-                .to_error(context.stack_trace));
+                .to_error(context));
             }
         } else if value.dimension != Dimension::zero() {
             *dimension = Some(value.dimension);

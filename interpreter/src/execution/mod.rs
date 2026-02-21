@@ -28,6 +28,7 @@ use crate::{
     compile::{self, AstNode, BinaryExpressionOperation, Expression, UnaryExpressionOperation},
     execution::{
         errors::{Raise, StrError, StringError},
+        logging::StackTraceIter,
         stack::ScopeType,
         values::BuiltinCallableDatabase,
     },
@@ -267,6 +268,16 @@ impl<'c> ExecutionContext<'c> {
     }
 }
 
+impl<'s> IntoIterator for &'s ExecutionContext<'_> {
+    type Item = &'s SourceReference;
+
+    type IntoIter = StackTraceIter<'s>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.stack_trace.iter()
+    }
+}
+
 pub fn execute_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<compile::Expression>,
@@ -343,8 +354,7 @@ pub fn execute_expression(
                 ConstraintSet::from_ast(context, constraint_set).map(|set| set.into())
             }
             compile::Expression::Malformed(kind) => {
-                Err(StringError(format!("Malformed syntax, expected {kind}"))
-                    .to_error(context.stack_trace))
+                Err(StringError(format!("Malformed syntax, expected {kind}")).to_error(context))
             }
         }
     })
@@ -587,33 +597,31 @@ pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> Executi
 
     if file.is_absolute() {
         return Err(
-            StrError("Absolute paths cannot be used for importing files")
-                .to_error(context.stack_trace),
+            StrError("Absolute paths cannot be used for importing files").to_error(context),
         );
     }
 
     if context.import_limit == 0 {
-        return Err(
-            StrError("Import recursion depth has been exceeded").to_error(context.stack_trace)
-        );
+        return Err(StrError("Import recursion depth has been exceeded").to_error(context));
     }
 
     let file = context.working_directory.join(file);
-    let parent_dir = file.parent().ok_or_else(|| {
-        StrError("Failed to get parent directory of file").to_error(context.stack_trace)
-    })?;
+    let parent_dir = file
+        .parent()
+        .ok_or_else(|| StrError("Failed to get parent directory of file").to_error(context))?;
 
     let root = {
-        let mut files = context.file_cache.lock().map_err(|_error| {
-            StrError("Failed to lock file cache").to_error(context.stack_trace)
-        })?;
+        let mut files = context
+            .file_cache
+            .lock()
+            .map_err(|_error| StrError("Failed to lock file cache").to_error(context))?;
         let file = Arc::new(file.clone());
         let input = match files.entry(file.clone()) {
             std::collections::hash_map::Entry::Occupied(entry) => entry,
             std::collections::hash_map::Entry::Vacant(vacency) => {
                 let input = std::fs::read_to_string(file.as_path()).map_err(|error| {
                     StringError(format!("Failed to read file {:?} from disk: {error}", file))
-                        .to_error(context.stack_trace)
+                        .to_error(context)
                 })?;
                 let input = ImString::from(input);
 
@@ -623,11 +631,11 @@ pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> Executi
         let input = input.get().text();
 
         let tree = parser.parse(input, None).map_err(|error| {
-            StringError(format!("Failed to parse input: {error:?}")).to_error(context.stack_trace)
+            StringError(format!("Failed to parse input: {error:?}")).to_error(context)
         })?;
 
         let root = crate::compile(&file, input, &tree).map_err(|error| {
-            StringError(format!("Failed to compile: {error}")).to_error(context.stack_trace)
+            StringError(format!("Failed to compile: {error}")).to_error(context)
         })?;
 
         context

@@ -185,7 +185,7 @@ impl Object for Scalar {
                 expected: ValueType::Scalar(Some(Dimension::zero())).name(),
                 got: rhs.get_type(context).name(),
             }
-            .to_error(context.stack_trace))
+            .to_error(context))
         }
     }
     fn unary_plus(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
@@ -207,7 +207,7 @@ impl Object for Scalar {
                 expected: self.type_name(),
                 got: rhs.type_name(),
             }
-            .to_error(context.stack_trace))
+            .to_error(context))
         }
     }
 
@@ -254,7 +254,7 @@ impl Object for Scalar {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 
@@ -384,7 +384,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 Ok(values::SignedInteger::from(*this.value as i64))
             } else {
                 Err(StrError("Only zero dimensional scalars can be converted into an integer")
-                    .to_error(context.stack_trace))
+                    .to_error(context))
             }
         }
     );
@@ -399,11 +399,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                     Ok(values::UnsignedInteger::from(*this.value as u64))
                 } else {
                     Err(StrError("Negative values cannot be converted to signed integers")
-                        .to_error(context.stack_trace))
+                        .to_error(context))
                 }
             } else {
                 Err(StrError("Only zero dimensional scalars can be converted into an integer")
-                    .to_error(context.stack_trace))
+                    .to_error(context))
             }
         }
     );

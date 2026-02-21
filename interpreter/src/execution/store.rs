@@ -48,28 +48,25 @@ impl Store {
     ) -> ExecutionResult<PathBuf> {
         let store_path = self.generate_store_path(hashable, &name);
 
-        if std::fs::exists(&store_path)
-            .map_err(|error| IoError(error).to_error(context.stack_trace))?
-        {
+        if std::fs::exists(&store_path).map_err(|error| IoError(error).to_error(context))? {
             Ok(store_path)
         } else {
             // TODO should we be creating these in the project directory to increase the chances of
             // them being on the same filesystem as the store?
             let mut asset = PendingAsset {
                 store_path,
-                asset: NamedTempFile::new()
-                    .map_err(|error| IoError(error).to_error(context.stack_trace))?,
+                asset: NamedTempFile::new().map_err(|error| IoError(error).to_error(context))?,
             };
             init(&mut asset.asset)?;
 
             let (mut file, temp_path) = asset
                 .asset
                 .keep()
-                .map_err(|error| IoError(error.error).to_error(context.stack_trace))?;
+                .map_err(|error| IoError(error.error).to_error(context))?;
 
             // Make sure that file is flushed and closed.
             file.flush()
-                .map_err(|error| IoError(error).to_error(context.stack_trace))?;
+                .map_err(|error| IoError(error).to_error(context))?;
             drop(file);
 
             self.move_path_into_store(context, &temp_path, &asset.store_path)?;
@@ -87,17 +84,14 @@ impl Store {
     ) -> ExecutionResult<PathBuf> {
         let store_path = self.generate_store_path(hashable, &name);
 
-        if std::fs::exists(&store_path)
-            .map_err(|error| IoError(error).to_error(context.stack_trace))?
-        {
+        if std::fs::exists(&store_path).map_err(|error| IoError(error).to_error(context))? {
             Ok(store_path)
         } else {
             // TODO should we be creating these in the project directory to increase the chances of
             // them being on the same filesystem as the store?
             let mut asset = PendingAsset {
                 store_path,
-                asset: TempDir::new()
-                    .map_err(|error| IoError(error).to_error(context.stack_trace))?,
+                asset: TempDir::new().map_err(|error| IoError(error).to_error(context))?,
             };
             init(&mut asset.asset)?;
             let temp_path = asset.asset.keep();
@@ -157,7 +151,7 @@ impl Store {
                 result
             }
         }
-        .map_err(|error| IoError(error).to_error(context.stack_trace))?;
+        .map_err(|error| IoError(error).to_error(context))?;
 
         Ok(())
     }

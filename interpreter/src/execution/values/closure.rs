@@ -249,7 +249,7 @@ impl Object for UserClosure {
             .signature
             .argument_type
             .check_other_qualifies(argument.struct_def())
-            .map_err(|error| error.to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context))?;
 
         let argument = self.data.signature.argument_type.fill_defaults(argument);
 
@@ -266,7 +266,7 @@ impl Object for UserClosure {
                 .signature
                 .return_type
                 .check_other_qualifies(&result.get_type(context))
-                .map_err(|error| error.to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context))?;
 
             Ok(result)
         })?
