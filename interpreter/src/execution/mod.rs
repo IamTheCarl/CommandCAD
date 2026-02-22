@@ -17,6 +17,7 @@
  */
 
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     collections::HashMap,
     path::{Path, PathBuf},
@@ -219,18 +220,24 @@ pub struct ExecutionContext<'c> {
 }
 
 impl<'c> ExecutionContext<'c> {
-    pub fn trace_scope<F, R>(&'c self, reference: impl Into<SourceReference>, code: F) -> R
+    pub fn trace_scope<F, R>(
+        &'c self,
+        failure_message: Option<Cow<'static, str>>,
+        reference: impl Into<SourceReference>,
+        code: F,
+    ) -> R
     where
         F: FnOnce(&ExecutionContext<'_>) -> R,
     {
-        self.stack_trace.trace_scope(reference, move |stack_trace| {
-            let context = ExecutionContext {
-                stack_trace: &stack_trace,
-                ..*self
-            };
+        self.stack_trace
+            .trace_scope(failure_message, reference, move |stack_trace| {
+                let context = ExecutionContext {
+                    stack_trace: &stack_trace,
+                    ..*self
+                };
 
-            code(&context)
-        })
+                code(&context)
+            })
     }
 
     pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(&self, name: S) -> ExecutionResult<&Value> {
@@ -282,8 +289,10 @@ pub fn execute_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<compile::Expression>,
 ) -> ExecutionResult<Value> {
-    context.trace_scope(expression.reference.clone(), |context| {
-        match &expression.node {
+    context.trace_scope(
+        None,
+        expression.reference.clone(),
+        |context| match &expression.node {
             compile::Expression::BinaryExpression(ast_node) => {
                 execute_binary_expression(context, ast_node)
             }
@@ -302,7 +311,7 @@ pub fn execute_expression(
             compile::Expression::MemberAccess(ast_node) => {
                 let base = execute_expression(context, &ast_node.node.base)?;
 
-                context.trace_scope(ast_node.node.member.reference.clone(), |context| {
+                context.trace_scope(None, ast_node.node.member.reference.clone(), |context| {
                     base.get_attribute(context, &ast_node.node.member.node)
                 })
             }
@@ -356,15 +365,15 @@ pub fn execute_expression(
             compile::Expression::Malformed(kind) => {
                 Err(StringError(format!("Malformed syntax, expected {kind}")).to_error(context))
             }
-        }
-    })
+        },
+    )
 }
 
 fn execute_unary_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::UnaryExpression>>,
 ) -> ExecutionResult<Value> {
-    context.trace_scope(expression.reference.clone(), |context| {
+    context.trace_scope(None, expression.reference.clone(), |context| {
         let node = &expression.node;
         let value = execute_expression(context, &node.expression)?;
         match node.operation.node {
@@ -410,7 +419,7 @@ fn execute_let_in(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::LetIn>>,
 ) -> ExecutionResult<Value> {
-    context.trace_scope(expression.reference.clone(), |context| {
+    context.trace_scope(None, expression.reference.clone(), |context| {
         context.stack.scope_mut(
             context.stack_trace,
             ScopeType::Inherited,
@@ -454,7 +463,7 @@ fn execute_binary_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::BinaryExpression>>,
 ) -> ExecutionResult<Value> {
-    context.trace_scope(expression.reference.clone(), |context| {
+    context.trace_scope(None, expression.reference.clone(), |context| {
         let node = &expression.node;
 
         let (result_a, result_b) = join(

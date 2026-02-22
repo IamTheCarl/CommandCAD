@@ -451,12 +451,12 @@ impl ConstraintSet {
                     value: ast_node.node.value,
                 };
 
-                context.trace_scope(ast_node.reference.clone(), |context| {
+                context.trace_scope(None, ast_node.reference.clone(), |context| {
                     Self::build_scalar(context, dimension, value)
                 })
             }
             ConstraintSetExpression::Identifier(ast_node) => {
-                context.trace_scope(ast_node.reference.clone(), |context| {
+                context.trace_scope(None, ast_node.reference.clone(), |context| {
                     let name = &ast_node.node;
                     if let Some(value) = value_provider
                         .get(name)
@@ -521,7 +521,7 @@ impl ConstraintSet {
                 }
             }
             ConstraintSetExpression::MethodCall(ast_node) => {
-                context.trace_scope(ast_node.reference.clone(), |context| {
+                context.trace_scope(None, ast_node.reference.clone(), |context| {
                     Err(StrError("Methods are not yet supported in constraint sets")
                         .to_error(context))
                 })

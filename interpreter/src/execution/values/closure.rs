@@ -164,15 +164,18 @@ impl UserClosure {
         context: &ExecutionContext,
         source: &AstNode<Box<ClosureDefinition>>,
     ) -> ExecutionResult<Self> {
-        let argument_type =
-            context.trace_scope(source.node.argument_type.reference.clone(), |context| {
+        let argument_type = context.trace_scope(
+            None,
+            source.node.argument_type.reference.clone(),
+            |context| {
                 let argument_type = StructDefinition::new(context, &source.node.argument_type)?;
 
                 Ok(argument_type)
-            })?;
+            },
+        )?;
 
         let return_type =
-            context.trace_scope(source.node.return_type.reference.clone(), |context| {
+            context.trace_scope(None, source.node.return_type.reference.clone(), |context| {
                 execute_expression(context, &source.node.return_type)?
                     .downcast::<ValueType>(context)
             })?;

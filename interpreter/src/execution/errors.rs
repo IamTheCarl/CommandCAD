@@ -30,6 +30,12 @@ pub struct Error {
     pub trace: Vec<SourceReference>,
 }
 
+// Error: Doing thing with context
+//
+// Caused by:
+//     0: Doing thing with extra context
+//     1: Failed
+
 impl Error {
     pub fn report(&self) -> Report<'_, SourceReference> {
         let bottom = self.trace.first().expect("Error has no trace").clone();

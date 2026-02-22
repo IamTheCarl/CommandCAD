@@ -363,7 +363,6 @@ impl Value {
         T: StaticTypeName,
         Self: AsVariant<T>,
     {
-        let notice_me = 0; // TODO replace stack_trace with context.
         self.downcast_ref(context)
     }
 

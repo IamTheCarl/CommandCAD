@@ -59,6 +59,7 @@ impl RuntimeLog for Mutex<Vec<LogMessage>> {
 pub struct StackTrace<'p> {
     parent: Option<&'p StackTrace<'p>>,
     reference: SourceReference,
+    failure_message: Option<Cow<'static, str>>,
 }
 
 impl<'p> Display for StackTrace<'p> {
@@ -76,6 +77,7 @@ impl StackTrace<'static> {
         Self {
             parent: None,
             reference,
+            failure_message: None,
         }
     }
 
@@ -92,6 +94,7 @@ impl StackTrace<'static> {
                     end_point: Point { row: 0, column: 0 },
                 },
             },
+            failure_message: Some("Bootstrap failed".into()),
         }
     }
 
@@ -108,18 +111,25 @@ impl StackTrace<'static> {
                     end_point: Point { row: 0, column: 0 },
                 },
             },
+            failure_message: Some("Test failed".into()),
         }
     }
 }
 
 impl<'p> StackTrace<'p> {
-    pub fn trace_scope<F, R>(&'p self, reference: impl Into<SourceReference>, code: F) -> R
+    pub fn trace_scope<F, R>(
+        &'p self,
+        failure_message: Option<Cow<'static, str>>,
+        reference: impl Into<SourceReference>,
+        code: F,
+    ) -> R
     where
         F: FnOnce(StackTrace<'p>) -> R,
     {
         let scope = Self {
             parent: Some(self),
             reference: reference.into(),
+            failure_message,
         };
 
         code(scope)
