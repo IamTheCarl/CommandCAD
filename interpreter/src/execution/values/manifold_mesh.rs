@@ -26,10 +26,7 @@ use std::{
 
 use crate::{
     build_function, build_method,
-    execution::{
-        errors::{ExecutionResult, Raise, StrError},
-        store::IoError,
-    },
+    execution::errors::{ExecutionResult, Raise, StrError},
     values::{
         scalar::{Length, UnwrapNotNan},
         vector::{Length3, Zero3},
@@ -401,7 +398,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                 write_stl(&mut serialized, mesh.iter()).map_err(|_| StrError("Failed to serialize STL file").to_error(context))?;
 
                 let path = context.store.get_or_init_file(context, &(&this, &scale, "ascii"), format!("{}.stl", name.0), |file| {
-                    file.write_all(&serialized).map_err(|error| IoError(error).to_error(context))?;
+                    file.write_all(&serialized).map_err(|error| error.to_error(context))?;
 
                     Ok(())
                 })?;
@@ -412,7 +409,6 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                     let mut file = BufWriter::new(file);
                     let scale = *Float::new(1.0 / *scale.value).unwrap_not_nan(context)?;
 
-                    // file.write_all(&serialized).map_err(|error| IoError(error).to_error(context))?;
                     let mut trampoline = || -> std::io::Result<()> {
                         writeln!(file, "solid {}", name.0)?;
 
@@ -443,7 +439,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                         Ok(())
                     };
 
-                    trampoline().map_err(|error| IoError(error).to_error(context))?;
+                    trampoline().map_err(|error| error.to_error(context))?;
 
                     Ok(())
                 })?;
