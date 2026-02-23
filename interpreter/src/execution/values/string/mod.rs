@@ -220,10 +220,17 @@ fn register_format_method(database: &mut BuiltinCallableDatabase) {
                 .downcast_ref::<IString>(context)?
                 .clone();
 
-            let (excess, format) = Format::parse(&this.0).map_err(|error| {
-                StringError(format!("Failed to parse formatting string: {error:?}"))
-                    .to_error(context)
-            })?;
+            let (excess, format) = context.trace_scope(
+                Some("".into()),
+                context.stack_trace.bottom().clone(),
+                |_context| {
+                    // The error message of this type is dependent on the lifetime of `this`, so we
+                    // encode it to a string to make the lifetime static.
+                    Format::parse(&this.0)
+                        .map_err(|error| StringError(format!("{error:?}")).to_error(context))
+                },
+            )?;
+
             assert!(excess.is_empty());
 
             let mut output = String::new();
@@ -413,25 +420,27 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: IString
         ) -> Scalar {
-            let value = this.0.parse::<Float>()
-                .map_err(|error| StringError(format!("Failed to parse scalar value: {error:?}")).to_error(context))?;
-            Ok(Scalar {
-                dimension: Dimension::zero(),
-                value,
+            context.trace_scope(Some("Failed to parse scalar value".into()), context.stack_trace.bottom().clone(), |context| {
+                let value = this.0.parse::<Float>()
+                    .map_err(|error| error.to_error(context))?;
+                Ok(Scalar {
+                    dimension: Dimension::zero(),
+                    value,
+                })
             })
         }
     );
-    // TODO these don't need to be formated using format!, we can use context to add the context.
-    let remember_me = 0;
     build_method!(
         database,
         methods::ParseUnsignedInteger, "String::parse_unsigned_integer",(
             context: &ExecutionContext,
             this: IString
         ) -> UnsignedInteger {
-            let value = this.0.parse::<u64>()
-                .map_err(|error| StringError(format!("Failed to parse unsigned integer: {error:?}")).to_error(context))?;
-            Ok(UnsignedInteger::from(value))
+            context.trace_scope(Some("Failed to parse unsigned integer".into()), context.stack_trace.bottom().clone(), |context| {
+                let value = this.0.parse::<u64>()
+                    .map_err(|error| error.to_error(context))?;
+                Ok(UnsignedInteger::from(value))
+            })
         }
     );
     build_method!(
@@ -440,9 +449,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: IString
         ) -> SignedInteger {
-            let value = this.0.parse::<i64>()
-                .map_err(|error| StringError(format!("Failed to parse signed integer: {error:?}")).to_error(context))?;
-            Ok(SignedInteger::from(value))
+            context.trace_scope(Some("Failed to parse signed integer".into()), context.stack_trace.bottom().clone(), |context| {
+                let value = this.0.parse::<i64>()
+                    .map_err(|error| error.to_error(context))?;
+                Ok(SignedInteger::from(value))
+            })
         }
     );
     build_method!(

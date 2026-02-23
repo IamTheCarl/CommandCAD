@@ -221,41 +221,46 @@ impl Format {
             }
         }
 
-        for component in self.components.iter() {
-            match component {
-                Component::Litteral(text) => {
-                    write!(f, "{}", text).unwrap_formatting_result(context)?
-                }
-                Component::Parameter(Parameter {
-                    name,
-                    style,
-                    precision,
-                }) => {
-                    let precision = get_precision(context, precision, &arguments)?;
+        context.trace_scope(
+            Some("Failed to format string".into()),
+            context.stack_trace.bottom().clone(),
+            |context| {
+                for component in self.components.iter() {
+                    match component {
+                        Component::Litteral(text) => {
+                            write!(f, "{}", text).map_err(|error| error.to_error(context))?;
+                        }
+                        Component::Parameter(Parameter {
+                            name,
+                            style,
+                            precision,
+                        }) => {
+                            let precision = get_precision(context, precision, &arguments)?;
 
-                    if let Some(argument) = arguments.get(name.as_str()).or_else(|| {
-                        context
-                            .get_variable(LocatedStr {
-                                location: context.stack_trace.bottom().clone(),
-                                string: name.as_str(),
-                            })
-                            .ok()
-                    }) {
-                        argument
-                            .format(context, f, *style, precision)
-                            .map_err(|error| {
-                                StringError(format!("Error while formatting: {error:?}"))
-                                    .to_error(context)
-                            })?;
-                    } else {
-                        return Err(StringError(format!("Could not find argument `{name}`"))
-                            .to_error(context));
+                            if let Some(argument) = arguments.get(name.as_str()).or_else(|| {
+                                context
+                                    .get_variable(LocatedStr {
+                                        location: context.stack_trace.bottom().clone(),
+                                        string: name.as_str(),
+                                    })
+                                    .ok()
+                            }) {
+                                argument
+                                    .format(context, f, *style, precision)
+                                    .map_err(|error| error.to_error(context))?;
+                            } else {
+                                return Err(StringError(format!(
+                                    "Could not find argument `{name}`"
+                                ))
+                                .to_error(context));
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        Ok(())
+                Ok(())
+            },
+        )
     }
 }
 
@@ -264,19 +269,6 @@ fn number(input: &str) -> VResult<&str, u8> {
         digits.parse::<u8>().unwrap()
     })
     .parse(input)
-}
-
-pub trait UnwrapFormattingResult<R> {
-    fn unwrap_formatting_result(self, context: &ExecutionContext) -> ExecutionResult<R>;
-}
-
-impl<R> UnwrapFormattingResult<R> for std::result::Result<R, std::fmt::Error> {
-    fn unwrap_formatting_result(self, context: &ExecutionContext) -> ExecutionResult<R> {
-        match self {
-            Ok(result) => Ok(result),
-            Err(error) => Err(StringError(format!("Failed to format: {error}")).to_error(context)),
-        }
-    }
 }
 
 #[cfg(test)]

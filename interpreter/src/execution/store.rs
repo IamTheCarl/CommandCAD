@@ -177,19 +177,6 @@ impl<A> std::ops::DerefMut for PendingAsset<A> {
     }
 }
 
-// We can probably remove that wrapper now.
-struct NoticeMe;
-#[derive(Debug)]
-pub struct IoError(pub std::io::Error);
-
-impl std::error::Error for IoError {}
-
-impl std::fmt::Display for IoError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 struct StoreHasher(Sha256);
 
 impl std::hash::Hasher for StoreHasher {

@@ -232,7 +232,7 @@ impl<'c> ExecutionContext<'c> {
         self.stack_trace
             .trace_scope(failure_message, reference, move |stack_trace| {
                 let context = ExecutionContext {
-                    stack_trace: &stack_trace,
+                    stack_trace,
                     ..*self
                 };
 
@@ -595,66 +595,69 @@ pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> Executi
     // TODO can/should we make the parser part of the execution context rather than build a new one
     // every time we load a file?
     let mut parser = new_parser();
-
     let file = file.into();
 
-    if file.is_absolute() {
-        return Err(
-            StrError("Absolute paths cannot be used for importing files").to_error(context),
-        );
-    }
-
-    if context.import_limit == 0 {
-        return Err(StrError("Import recursion depth has been exceeded").to_error(context));
-    }
-
-    let file = context.working_directory.join(file);
-    let parent_dir = file
-        .parent()
-        .ok_or_else(|| StrError("Failed to get parent directory of file").to_error(context))?;
-
-    let root = {
-        let mut files = context
-            .file_cache
-            .lock()
-            .map_err(|_error| StrError("Failed to lock file cache").to_error(context))?;
-        let file = Arc::new(file.clone());
-        let input = match files.entry(file.clone()) {
-            std::collections::hash_map::Entry::Occupied(entry) => entry,
-            std::collections::hash_map::Entry::Vacant(vacency) => {
-                let input = std::fs::read_to_string(file.as_path()).map_err(|error| {
-                    StringError(format!("Failed to read file {:?} from disk: {error}", file))
-                        .to_error(context)
-                })?;
-                let input = ImString::from(input);
-
-                vacency.insert_entry(Source::from(input))
+    context.trace_scope(
+        Some("Failed to import {file:?}".into()),
+        context.stack_trace.bottom().clone(),
+        |context| {
+            if file.is_absolute() {
+                return Err(
+                    StrError("Absolute paths cannot be used for importing files").to_error(context),
+                );
             }
-        };
-        let input = input.get().text();
 
-        let tree = parser.parse(input, None).map_err(|error| {
-            StringError(format!("Failed to parse input: {error:?}")).to_error(context)
-        })?;
+            if context.import_limit == 0 {
+                return Err(StrError("Import recursion depth has been exceeded").to_error(context));
+            }
 
-        let root = crate::compile(&file, input, &tree).map_err(|error| {
-            StringError(format!("Failed to compile: {error}")).to_error(context)
-        })?;
+            let file = context.working_directory.join(file);
+            let parent_dir = file.parent().ok_or_else(|| {
+                StrError("Failed to get parent directory of file").to_error(context)
+            })?;
 
-        context
-            .log
-            .collect_syntax_errors(input, &tree, &file, root.reference.clone());
+            let root = {
+                let mut files = context
+                    .file_cache
+                    .lock()
+                    .map_err(|_error| StrError("Failed to lock file cache").to_error(context))?;
+                let file = Arc::new(file.clone());
+                let input = match files.entry(file.clone()) {
+                    std::collections::hash_map::Entry::Occupied(entry) => entry,
+                    std::collections::hash_map::Entry::Vacant(vacency) => {
+                        let input = std::fs::read_to_string(file.as_path())
+                            .map_err(|error| error.to_error(context))?;
+                        let input = ImString::from(input);
 
-        root
-    };
+                        vacency.insert_entry(Source::from(input))
+                    }
+                };
+                let input = input.get().text();
 
-    let context = ExecutionContext {
-        working_directory: parent_dir,
-        import_limit: context.import_limit - 1,
-        ..context.clone()
-    };
+                let tree = parser.parse(input, None).map_err(|error| {
+                    StringError(format!("Failed to parse input: {error:?}")).to_error(context)
+                })?;
 
-    execute_expression(&context, &root)
+                let root = crate::compile(&file, input, &tree).map_err(|error| {
+                    StringError(format!("Failed to compile: {error}")).to_error(context)
+                })?;
+
+                context
+                    .log
+                    .collect_syntax_errors(input, &tree, &file, root.reference.clone());
+
+                root
+            };
+
+            let context = ExecutionContext {
+                working_directory: parent_dir,
+                import_limit: context.import_limit - 1,
+                ..context.clone()
+            };
+
+            execute_expression(&context, &root)
+        },
+    )
 }
 
 pub mod functions {
