@@ -46,32 +46,40 @@ impl Store {
         name: impl AsRef<str>,
         init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
     ) -> ExecutionResult<PathBuf> {
-        let store_path = self.generate_store_path(hashable, &name);
+        let name = name.as_ref();
 
-        if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
-            Ok(store_path)
-        } else {
-            // TODO should we be creating these in the project directory to increase the chances of
-            // them being on the same filesystem as the store?
-            let mut asset = PendingAsset {
-                store_path,
-                asset: NamedTempFile::new().map_err(|error| error.to_error(context))?,
-            };
-            init(&mut asset.asset)?;
+        context.trace_scope(
+            Some(format!("Failed to fetch or create file {name} in store").into()),
+            context.stack_trace.bottom().clone(),
+            |context| {
+                let store_path = self.generate_store_path(hashable, name);
 
-            let (mut file, temp_path) = asset
-                .asset
-                .keep()
-                .map_err(|error| error.error.to_error(context))?;
+                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
+                    Ok(store_path)
+                } else {
+                    // TODO should we be creating these in the project directory to increase the chances of
+                    // them being on the same filesystem as the store?
+                    let mut asset = PendingAsset {
+                        store_path,
+                        asset: NamedTempFile::new().map_err(|error| error.to_error(context))?,
+                    };
+                    init(&mut asset.asset)?;
 
-            // Make sure that file is flushed and closed.
-            file.flush().map_err(|error| error.to_error(context))?;
-            drop(file);
+                    let (mut file, temp_path) = asset
+                        .asset
+                        .keep()
+                        .map_err(|error| error.error.to_error(context))?;
 
-            self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+                    // Make sure that file is flushed and closed.
+                    file.flush().map_err(|error| error.to_error(context))?;
+                    drop(file);
 
-            Ok(asset.store_path)
-        }
+                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+
+                    Ok(asset.store_path)
+                }
+            },
+        )
     }
 
     pub fn get_or_init_directory(
@@ -81,23 +89,31 @@ impl Store {
         name: impl AsRef<str>,
         init: impl FnOnce(&mut TempDir) -> ExecutionResult<()>,
     ) -> ExecutionResult<PathBuf> {
-        let store_path = self.generate_store_path(hashable, &name);
+        let name = name.as_ref();
 
-        if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
-            Ok(store_path)
-        } else {
-            // TODO should we be creating these in the project directory to increase the chances of
-            // them being on the same filesystem as the store?
-            let mut asset = PendingAsset {
-                store_path,
-                asset: TempDir::new().map_err(|error| error.to_error(context))?,
-            };
-            init(&mut asset.asset)?;
-            let temp_path = asset.asset.keep();
-            self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+        context.trace_scope(
+            Some(format!("Failed to fetch or create directory {name} in store").into()),
+            context.stack_trace.bottom().clone(),
+            |context| {
+                let store_path = self.generate_store_path(hashable, name);
 
-            Ok(asset.store_path)
-        }
+                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
+                    Ok(store_path)
+                } else {
+                    // TODO should we be creating these in the project directory to increase the chances of
+                    // them being on the same filesystem as the store?
+                    let mut asset = PendingAsset {
+                        store_path,
+                        asset: TempDir::new().map_err(|error| error.to_error(context))?,
+                    };
+                    init(&mut asset.asset)?;
+                    let temp_path = asset.asset.keep();
+                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+
+                    Ok(asset.store_path)
+                }
+            },
+        )
     }
 
     fn generate_store_path(
