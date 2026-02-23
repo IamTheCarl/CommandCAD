@@ -369,83 +369,85 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             }.into(),
             ascii: Boolean = Boolean(false).into()
         ) -> File {
-            if !ascii.0 {
-                // Produce a binary STL
-                let mut mesh = Vec::new();
+            context.trace_scope(Some("Failed to write stl file".into()), context.stack_trace.bottom().clone(), |context| {
+                if !ascii.0 {
+                    // Produce a binary STL
+                    let mut mesh = Vec::new();
 
-                use stl_io::{Triangle, Vertex, write_stl};
+                    use stl_io::{Triangle, Vertex, write_stl};
 
-                for (normal, halfedge) in this.0.face_normals.iter().zip(this.0.hs.chunks(3)) {
-                    let p0 = this.0.ps[halfedge[0].tail];
-                    let p1 = this.0.ps[halfedge[1].tail];
-                    let p2 = this.0.ps[halfedge[2].tail];
+                    for (normal, halfedge) in this.0.face_normals.iter().zip(this.0.hs.chunks(3)) {
+                        let p0 = this.0.ps[halfedge[0].tail];
+                        let p1 = this.0.ps[halfedge[1].tail];
+                        let p2 = this.0.ps[halfedge[2].tail];
 
-                    let scale = 1.0 / *scale.value;
+                        let scale = 1.0 / *scale.value;
 
-                    let triangle = Triangle {
-                        normal: Vertex::new([(normal.x * scale) as f32, (normal.y * scale) as f32, (normal.z * scale) as f32]),
-                        vertices: [Vertex::new([(p0.x * scale) as f32, (p0.y * scale) as f32, (p0.z * scale) as f32]),
-                                   Vertex::new([(p1.x * scale) as f32, (p1.y * scale) as f32, (p1.z * scale) as f32]),
-                                   Vertex::new([(p2.x * scale) as f32, (p2.y * scale) as f32, (p2.z * scale) as f32])]
-                    };
+                        let triangle = Triangle {
+                            normal: Vertex::new([(normal.x * scale) as f32, (normal.y * scale) as f32, (normal.z * scale) as f32]),
+                            vertices: [Vertex::new([(p0.x * scale) as f32, (p0.y * scale) as f32, (p0.z * scale) as f32]),
+                                       Vertex::new([(p1.x * scale) as f32, (p1.y * scale) as f32, (p1.z * scale) as f32]),
+                                       Vertex::new([(p2.x * scale) as f32, (p2.y * scale) as f32, (p2.z * scale) as f32])]
+                        };
 
-                    mesh.push(triangle);
-                }
+                        mesh.push(triangle);
+                    }
 
-                // This thing doesn't kick back IO errors, so we'll collect to an infaulable
-                // structure and then write that ourselves.
-                let mut serialized = Vec::new();
-                write_stl(&mut serialized, mesh.iter()).map_err(|_| StrError("Failed to serialize STL file").to_error(context))?;
+                    // This thing doesn't kick back IO errors, so we'll collect to an infaulable
+                    // structure and then write that ourselves.
+                    let mut serialized = Vec::new();
+                    write_stl(&mut serialized, mesh.iter()).map_err(|_| StrError("Failed to serialize STL file").to_error(context))?;
 
-                let path = context.store.get_or_init_file(context, &(&this, &scale, "ascii"), format!("{}.stl", name.0), |file| {
-                    file.write_all(&serialized).map_err(|error| error.to_error(context))?;
-
-                    Ok(())
-                })?;
-
-                Ok(File { path: Arc::new(path) })
-            } else {
-                let path = context.store.get_or_init_file(context, &(&this, &scale, "binary"), format!("{}.stl", name.0), |file| {
-                    let mut file = BufWriter::new(file);
-                    let scale = *Float::new(1.0 / *scale.value).unwrap_not_nan(context)?;
-
-                    let mut trampoline = || -> std::io::Result<()> {
-                        writeln!(file, "solid {}", name.0)?;
-
-                        for (normal, halfedge) in this.0.face_normals.iter().zip(this.0.hs.chunks(3)) {
-                            let p0 = this.0.ps[halfedge[0].tail];
-                            let p1 = this.0.ps[halfedge[1].tail];
-                            let p2 = this.0.ps[halfedge[2].tail];
-
-                            writeln!(file, "\tfacet normal {} {} {}", normal.x, normal.y, normal.z)?;
-
-                            {
-                                writeln!(file, "\t\touter loop")?;
-
-                                {
-                                    writeln!(file, "\t\t\tvertex {} {} {}", p0.x * scale, p0.y * scale, p0.z * scale)?;
-                                    writeln!(file, "\t\t\tvertex {} {} {}", p1.x * scale, p1.y * scale, p1.z * scale)?;
-                                    writeln!(file, "\t\t\tvertex {} {} {}", p2.x * scale, p2.y * scale, p2.z * scale)?;
-                                }
-
-                                writeln!(file, "\t\tendloop")?;
-                            }
-
-                            writeln!(file, "\tendfacet")?;
-                        }
-
-                        writeln!(file, "endsolid {}", name.0)?;
+                    let path = context.store.get_or_init_file(context, &(&this, &scale, "ascii"), format!("{}.stl", name.0), |file| {
+                        file.write_all(&serialized).map_err(|error| error.to_error(context))?;
 
                         Ok(())
-                    };
+                    })?;
 
-                    trampoline().map_err(|error| error.to_error(context))?;
+                    Ok(File { path: Arc::new(path) })
+                } else {
+                    let path = context.store.get_or_init_file(context, &(&this, &scale, "binary"), format!("{}.stl", name.0), |file| {
+                        let mut file = BufWriter::new(file);
+                        let scale = *Float::new(1.0 / *scale.value).unwrap_not_nan(context)?;
 
-                    Ok(())
-                })?;
+                        let mut trampoline = || -> std::io::Result<()> {
+                            writeln!(file, "solid {}", name.0)?;
 
-                Ok(File { path: Arc::new(path) })
-            }
+                            for (normal, halfedge) in this.0.face_normals.iter().zip(this.0.hs.chunks(3)) {
+                                let p0 = this.0.ps[halfedge[0].tail];
+                                let p1 = this.0.ps[halfedge[1].tail];
+                                let p2 = this.0.ps[halfedge[2].tail];
+
+                                writeln!(file, "\tfacet normal {} {} {}", normal.x, normal.y, normal.z)?;
+
+                                {
+                                    writeln!(file, "\t\touter loop")?;
+
+                                    {
+                                        writeln!(file, "\t\t\tvertex {} {} {}", p0.x * scale, p0.y * scale, p0.z * scale)?;
+                                        writeln!(file, "\t\t\tvertex {} {} {}", p1.x * scale, p1.y * scale, p1.z * scale)?;
+                                        writeln!(file, "\t\t\tvertex {} {} {}", p2.x * scale, p2.y * scale, p2.z * scale)?;
+                                    }
+
+                                    writeln!(file, "\t\tendloop")?;
+                                }
+
+                                writeln!(file, "\tendfacet")?;
+                            }
+
+                            writeln!(file, "endsolid {}", name.0)?;
+
+                            Ok(())
+                        };
+
+                        trampoline().map_err(|error| error.to_error(context))?;
+
+                        Ok(())
+                    })?;
+
+                    Ok(File { path: Arc::new(path) })
+                }
+            })
         }
     );
 }
