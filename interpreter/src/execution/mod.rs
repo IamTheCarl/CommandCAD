@@ -463,69 +463,63 @@ fn execute_binary_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::BinaryExpression>>,
 ) -> ExecutionResult<Value> {
-    context.trace_scope(None, expression.reference.clone(), |context| {
-        let node = &expression.node;
+    let node = &expression.node;
 
-        let (result_a, result_b) = join(
-            || execute_expression(context, &node.a),
-            || execute_expression(context, &node.b),
-        );
+    let (result_a, result_b) = join(
+        || execute_expression(context, &node.a),
+        || execute_expression(context, &node.b),
+    );
 
-        let value_a = result_a?;
-        let value_b = result_b?;
+    let value_a = result_a?;
+    let value_b = result_b?;
 
-        match node.operation.node {
-            BinaryExpressionOperation::NotEq => Ok(values::Boolean(
-                !value_a
-                    .clone()
-                    .cmp(context, value_b.clone())
-                    .map(|ord| matches!(ord, Ordering::Equal))
-                    .or_else(|_| value_a.eq(context, value_b))?,
-            )
-            .into()),
-            BinaryExpressionOperation::And => value_a.bit_and(context, value_b),
-            BinaryExpressionOperation::AndAnd => value_a.and(context, value_b),
-            BinaryExpressionOperation::Mul => value_a.multiply(context, value_b),
-            BinaryExpressionOperation::MulMul => value_a.exponent(context, value_b),
-            BinaryExpressionOperation::Add => value_a.addition(context, value_b),
-            BinaryExpressionOperation::Sub => value_a.subtraction(context, value_b),
-            BinaryExpressionOperation::Div => value_a.divide(context, value_b),
-            BinaryExpressionOperation::Lt => Ok(values::Boolean(matches!(
-                value_a.cmp(context, value_b)?,
-                Ordering::Less
-            ))
-            .into()),
-            BinaryExpressionOperation::LtLt => value_a.left_shift(context, value_b),
-            BinaryExpressionOperation::LtEq => Ok(values::Boolean(matches!(
-                value_a.cmp(context, value_b)?,
-                Ordering::Less | Ordering::Equal
-            ))
-            .into()),
-            BinaryExpressionOperation::EqEq => Ok(values::Boolean(
-                value_a
-                    .clone()
-                    .cmp(context, value_b.clone())
-                    .map(|ord| matches!(ord, Ordering::Equal))
-                    .or_else(|_| value_a.eq(context, value_b))?,
-            )
-            .into()),
-            BinaryExpressionOperation::Gt => Ok(values::Boolean(matches!(
-                value_a.cmp(context, value_b)?,
-                Ordering::Greater
-            ))
-            .into()),
-            BinaryExpressionOperation::GtEq => Ok(values::Boolean(matches!(
-                value_a.cmp(context, value_b)?,
-                Ordering::Equal | Ordering::Greater
-            ))
-            .into()),
-            BinaryExpressionOperation::GtGt => value_a.right_shift(context, value_b),
-            BinaryExpressionOperation::BitXor => value_a.bit_xor(context, value_b),
-            BinaryExpressionOperation::Xor => value_a.xor(context, value_b),
-            BinaryExpressionOperation::Or => value_a.bit_or(context, value_b),
-            BinaryExpressionOperation::OrOr => value_a.or(context, value_b),
+    match node.operation.node {
+        BinaryExpressionOperation::NotEq => Ok(values::Boolean(
+            !value_a
+                .clone()
+                .cmp(context, value_b.clone())
+                .map(|ord| matches!(ord, Ordering::Equal))
+                .or_else(|_| value_a.eq(context, value_b))?,
+        )
+        .into()),
+        BinaryExpressionOperation::And => value_a.bit_and(context, value_b),
+        BinaryExpressionOperation::AndAnd => value_a.and(context, value_b),
+        BinaryExpressionOperation::Mul => value_a.multiply(context, value_b),
+        BinaryExpressionOperation::MulMul => value_a.exponent(context, value_b),
+        BinaryExpressionOperation::Add => value_a.addition(context, value_b),
+        BinaryExpressionOperation::Sub => value_a.subtraction(context, value_b),
+        BinaryExpressionOperation::Div => value_a.divide(context, value_b),
+        BinaryExpressionOperation::Lt => {
+            Ok(values::Boolean(matches!(value_a.cmp(context, value_b)?, Ordering::Less)).into())
         }
-    })
+        BinaryExpressionOperation::LtLt => value_a.left_shift(context, value_b),
+        BinaryExpressionOperation::LtEq => Ok(values::Boolean(matches!(
+            value_a.cmp(context, value_b)?,
+            Ordering::Less | Ordering::Equal
+        ))
+        .into()),
+        BinaryExpressionOperation::EqEq => Ok(values::Boolean(
+            value_a
+                .clone()
+                .cmp(context, value_b.clone())
+                .map(|ord| matches!(ord, Ordering::Equal))
+                .or_else(|_| value_a.eq(context, value_b))?,
+        )
+        .into()),
+        BinaryExpressionOperation::Gt => {
+            Ok(values::Boolean(matches!(value_a.cmp(context, value_b)?, Ordering::Greater)).into())
+        }
+        BinaryExpressionOperation::GtEq => Ok(values::Boolean(matches!(
+            value_a.cmp(context, value_b)?,
+            Ordering::Equal | Ordering::Greater
+        ))
+        .into()),
+        BinaryExpressionOperation::GtGt => value_a.right_shift(context, value_b),
+        BinaryExpressionOperation::BitXor => value_a.bit_xor(context, value_b),
+        BinaryExpressionOperation::Xor => value_a.xor(context, value_b),
+        BinaryExpressionOperation::Or => value_a.bit_or(context, value_b),
+        BinaryExpressionOperation::OrOr => value_a.or(context, value_b),
+    }
 }
 
 pub fn execute_if_expression(

@@ -124,15 +124,22 @@ impl<'p> StackTrace<'p> {
         code: F,
     ) -> R
     where
-        F: FnOnce(StackTrace<'p>) -> R,
+        F: FnOnce(&StackTrace<'p>) -> R,
     {
-        let scope = Self {
-            parent: Some(self),
-            reference: reference.into(),
-            failure_message,
-        };
+        let reference = reference.into();
 
-        code(scope)
+        if self.reference != reference || self.failure_message != failure_message {
+            let scope = Self {
+                parent: Some(self),
+                reference,
+                failure_message,
+            };
+
+            code(&scope)
+        } else {
+            // This is not actually a new scope
+            code(self)
+        }
     }
 
     pub fn bottom(&self) -> &SourceReference {
