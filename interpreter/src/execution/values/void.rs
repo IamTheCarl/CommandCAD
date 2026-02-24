@@ -63,7 +63,7 @@ impl Object for ValueNone {
         write!(f, "None")
     }
 
-    fn eq(self, _context: &ExecutionContext, rhs: Value) -> crate::ExpressionResult<bool> {
+    fn eq(self, _context: &ExecutionContext, rhs: Value) -> crate::ExecutionResult<bool> {
         Ok(matches!(rhs, Value::ValueNone(_)))
     }
 }

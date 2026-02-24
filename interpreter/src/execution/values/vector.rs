@@ -7,8 +7,7 @@ use crate::{
     compile::{self, AstNode},
     execute_expression,
     execution::{
-        errors::{ExpressionResult, GenericFailure, Raise as _},
-        logging::StackTrace,
+        errors::{ExecutionResult, Raise as _},
         values::{
             closure::BuiltinCallableDatabase, scalar::UnwrapNotNan, string::formatting::Style,
             BuiltinFunction, DowncastForBinaryOpError, MissingAttributeError, Object, Scalar,
@@ -16,6 +15,7 @@ use crate::{
         },
         ExecutionContext,
     },
+    values::scalar::ResultIsNan,
 };
 
 use std::{
@@ -77,36 +77,36 @@ where
         Ok(())
     }
 
-    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs = self.unpack_same_dimension(context, rhs)?;
         let value = self.value + rhs.value;
 
         Ok(Self::new_raw(context, self.dimension, value)?.into())
     }
-    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs = self.unpack_same_dimension(context.stack_trace, rhs)?;
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs = self.unpack_same_dimension(context, rhs)?;
         let value = self.value - rhs.value;
 
         Ok(Self::new_raw(context, self.dimension, value)?.into())
     }
-    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context)?;
         let value = self.value * *rhs.value;
         let dimension = self.dimension + rhs.dimension;
 
         Ok(Self::new_raw(context, dimension, value)?.into())
     }
-    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context.stack_trace)?;
+    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs = rhs.downcast_for_binary_op_ref::<Scalar>(context)?;
         let value = self.value / *rhs.value;
         let dimension = self.dimension - rhs.dimension;
 
         Ok(Self::new_raw(context, dimension, value)?.into())
     }
-    fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_plus(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(self.into())
     }
-    fn unary_minus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_minus(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(Self {
             value: -self.value,
             ..self
@@ -114,16 +114,12 @@ where
         .into())
     }
 
-    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
-        let rhs: Self = rhs.downcast_for_binary_op(context.stack_trace)?;
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<bool> {
+        let rhs: Self = rhs.downcast_for_binary_op(context)?;
         Ok(self.dimension == rhs.dimension && self.value == rhs.value)
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         if let Some(value) = self
             .value
             .get_attribute(context, attribute, self.dimension)?
@@ -174,7 +170,7 @@ where
                 _ => Err(MissingAttributeError {
                     name: attribute.into(),
                 }
-                .to_error(context.stack_trace)),
+                .to_error(context)),
             }
         }
     }
@@ -190,7 +186,7 @@ where
         context: &ExecutionContext,
         dimension: Dimension,
         value: I::BuildFrom,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         let value = I::build(value);
 
         Self::new_raw(context, dimension, value)
@@ -199,7 +195,7 @@ where
     pub fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Box<I::NodeType>>,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         I::from_ast(context, ast_node)
     }
 
@@ -207,14 +203,11 @@ where
         context: &ExecutionContext,
         dimension: Dimension,
         value: I,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         if !value.is_nan() {
             Ok(Self { dimension, value })
         } else {
-            Err(
-                GenericFailure("Result of arithmetic operation is NaN".into())
-                    .to_error(context.stack_trace),
-            )
+            Err(ResultIsNan.to_error(context))
         }
     }
 
@@ -226,8 +219,12 @@ where
         self.value
     }
 
-    fn unpack_same_dimension(self, stack_trace: &StackTrace, rhs: Value) -> ExpressionResult<Self> {
-        let rhs: Vector<I> = rhs.downcast_for_binary_op(stack_trace)?;
+    fn unpack_same_dimension(
+        self,
+        context: &ExecutionContext,
+        rhs: Value,
+    ) -> ExecutionResult<Self> {
+        let rhs: Vector<I> = rhs.downcast_for_binary_op(context)?;
 
         if self.dimension == rhs.dimension {
             Ok(rhs)
@@ -236,7 +233,7 @@ where
                 expected: self.type_name(),
                 got: rhs.type_name(),
             }
-            .to_error(stack_trace))
+            .to_error(context))
         }
     }
 }
@@ -354,7 +351,7 @@ mod methods {
                         expected: this.type_name(),
                         got: value.type_name(),
                     }
-                    .to_error(context.stack_trace))
+                    .to_error(context))
                 }
             }
         );
@@ -364,7 +361,7 @@ mod methods {
                 context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.amax()).unwrap_not_nan(context.stack_trace)?;
+                let value = common_data_types::Float::new(this.value.amax()).unwrap_not_nan(context)?;
 
                 Ok(Scalar {
                     dimension: this.dimension,
@@ -378,7 +375,7 @@ mod methods {
                 context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.amin()).unwrap_not_nan(context.stack_trace)?;
+                let value = common_data_types::Float::new(this.value.amin()).unwrap_not_nan(context)?;
 
                 Ok(Scalar {
                     dimension: this.dimension,
@@ -394,7 +391,7 @@ mod methods {
                 rhs: Vector<I>) -> Scalar
             {
                 if this.dimension == rhs.dimension {
-                    let value = common_data_types::Float::new(this.value.dot(&rhs.value)).unwrap_not_nan(context.stack_trace)?;
+                    let value = common_data_types::Float::new(this.value.dot(&rhs.value)).unwrap_not_nan(context)?;
 
                     Ok(Scalar {
                         dimension: this.dimension,
@@ -405,7 +402,7 @@ mod methods {
                         expected: this.type_name(),
                         got: rhs.type_name(),
                     }
-                    .to_error(context.stack_trace))
+                    .to_error(context))
                 }
             }
         );
@@ -415,7 +412,7 @@ mod methods {
                 context: &ExecutionContext,
                 this: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.norm()).unwrap_not_nan(context.stack_trace)?;
+                let value = common_data_types::Float::new(this.value.norm()).unwrap_not_nan(context)?;
 
                 Ok(Scalar {
                     dimension: this.dimension,
@@ -440,7 +437,7 @@ mod methods {
                 this: Vector<I>,
                 other: Vector<I>) -> Scalar
             {
-                let value = common_data_types::Float::new(this.value.angle(&other.value)).unwrap_not_nan(context.stack_trace)?;
+                let value = common_data_types::Float::new(this.value.angle(&other.value)).unwrap_not_nan(context)?;
 
                 Ok(Scalar {
                     dimension: Dimension::angle(),
@@ -460,20 +457,20 @@ mod methods {
                         "c".into(),
                         Scalar {
                             dimension: this.dimension,
-                            value: common_data_types::Float::new(c).unwrap_not_nan(context.stack_trace)?
+                            value: common_data_types::Float::new(c).unwrap_not_nan(context)?
                         }.into()
                     )
-                ])))).collect::<ExpressionResult<_>>()?;
+                ])))).collect::<ExecutionResult<_>>()?;
 
-                let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(context.stack_trace)).collect::<ExpressionResult<_>>()?;
+                let result: ArrayVec<[Scalar; 4]> = operations.into_iter().map(|v| v.downcast::<Scalar>(context)).collect::<ExecutionResult<_>>()?;
 
                 // The smallest vector we support is 2, so this should never panic.
                 let dimension = result[0].dimension;
 
                 for component in result.iter() {
                     if component.dimension != dimension {
-                        return Err(GenericFailure("All components of a vector must match".into())
-                            .to_error(context.stack_trace));
+                        return Err(MissmatchedComponentDimensionsError
+                            .to_error(context));
                     }
                 }
 
@@ -496,7 +493,7 @@ mod methods {
                             "c".into(),
                             Scalar {
                                 dimension: this.dimension,
-                                value: common_data_types::Float::new(component).unwrap_not_nan(context.stack_trace)?
+                                value: common_data_types::Float::new(component).unwrap_not_nan(context)?
                             }.into()
                         ),
                         (
@@ -532,7 +529,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                     expected: this.type_name(),
                     got: rhs.type_name(),
                 }
-                .to_error(context.stack_trace))
+                .to_error(context))
             }
         }
     );
@@ -563,7 +560,7 @@ pub trait VectorInternalType:
     fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
-    ) -> ExpressionResult<Vector<Self>>;
+    ) -> ExecutionResult<Vector<Self>>;
     fn from_iterator<I>(iterator: I) -> Self
     where
         I: IntoIterator<Item = Float>;
@@ -573,7 +570,7 @@ pub trait VectorInternalType:
         context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
-    ) -> ExpressionResult<Option<Value>>;
+    ) -> ExecutionResult<Option<Value>>;
 
     fn abs(&self) -> Self;
     fn add_scalar(&self, value: Float) -> Self;
@@ -601,10 +598,20 @@ where
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct MissmatchedComponentDimensionsError;
+
+impl std::error::Error for MissmatchedComponentDimensionsError {}
+
+impl std::fmt::Display for MissmatchedComponentDimensionsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "All components of a vector must match")
+    }
+}
+
 macro_rules! get_component {
     ($context:ident, $ast_node:ident, $c:ident) => {
-        execute_expression($context, &$ast_node.node.$c)?
-            .downcast::<Scalar>($context.stack_trace)?
+        execute_expression($context, &$ast_node.node.$c)?.downcast::<Scalar>($context)?
     };
 }
 
@@ -624,7 +631,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
     fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
-    ) -> ExpressionResult<Vector<Self>> {
+    ) -> ExecutionResult<Vector<Self>> {
         let x = get_component!(context, ast_node, x);
         let y = get_component!(context, ast_node, y);
 
@@ -634,10 +641,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
                 value: Self::new(*x.value, *y.value),
             })
         } else {
-            Err(
-                GenericFailure("All components of a vector must match".into())
-                    .to_error(context.stack_trace),
-            )
+            Err(MissmatchedComponentDimensionsError.to_error(context))
         }
     }
 
@@ -653,21 +657,19 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
         context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
-    ) -> ExpressionResult<Option<Value>> {
+    ) -> ExecutionResult<Option<Value>> {
         match attribute {
             "x" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.x)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.x).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "y" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.y)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.y).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
@@ -748,7 +750,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
     fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
-    ) -> ExpressionResult<Vector<Self>> {
+    ) -> ExecutionResult<Vector<Self>> {
         let x = get_component!(context, ast_node, x);
         let y = get_component!(context, ast_node, y);
         let z = get_component!(context, ast_node, z);
@@ -759,10 +761,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
                 value: Self::new(*x.value, *y.value, *z.value),
             })
         } else {
-            Err(
-                GenericFailure("All components of a vector must match".into())
-                    .to_error(context.stack_trace),
-            )
+            Err(MissmatchedComponentDimensionsError.to_error(context))
         }
     }
 
@@ -778,29 +777,26 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
         context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
-    ) -> ExpressionResult<Option<Value>> {
+    ) -> ExecutionResult<Option<Value>> {
         match attribute {
             "x" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.x)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.x).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "y" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.y)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.y).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "z" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.z)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.z).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
@@ -883,7 +879,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
     fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<Box<Self::NodeType>>,
-    ) -> ExpressionResult<Vector<Self>> {
+    ) -> ExecutionResult<Vector<Self>> {
         let x = get_component!(context, ast_node, x);
         let y = get_component!(context, ast_node, y);
         let z = get_component!(context, ast_node, z);
@@ -895,10 +891,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
                 value: Self::new(*x.value, *y.value, *z.value, *w.value),
             })
         } else {
-            Err(
-                GenericFailure("All components of a vector must match".into())
-                    .to_error(context.stack_trace),
-            )
+            Err(MissmatchedComponentDimensionsError.to_error(context))
         }
     }
 
@@ -914,37 +907,33 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
         context: &ExecutionContext,
         attribute: &str,
         dimension: Dimension,
-    ) -> ExpressionResult<Option<Value>> {
+    ) -> ExecutionResult<Option<Value>> {
         match attribute {
             "x" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.x)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.x).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "y" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.y)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.y).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "z" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.z)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.z).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
             "w" => Ok(Some(
                 Scalar {
                     dimension,
-                    value: common_data_types::Float::new(self.w)
-                        .unwrap_not_nan(context.stack_trace)?,
+                    value: common_data_types::Float::new(self.w).unwrap_not_nan(context)?,
                 }
                 .into(),
             )),
@@ -1142,23 +1131,65 @@ mod test {
 
     #[test]
     fn missmatched_dimensions_vector2() {
-        test_run("<(1deg, 2m)>").unwrap_err();
-        test_run("<(1m, 2deg)>").unwrap_err();
+        let error = test_run("<(1deg, 2m)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+
+        let error = test_run("<(1m, 2deg)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]
     fn missmatched_dimensions_vector3() {
-        test_run("<(1deg, 2m, 3m)>").unwrap_err();
-        test_run("<(1m, 2deg, 3m)>").unwrap_err();
-        test_run("<(1m, 2m, 3deg)>").unwrap_err();
+        let error = test_run("<(1deg, 2m, 3m)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+
+        let error = test_run("<(1m, 2deg, 3m)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+
+        let error = test_run("<(1m, 2m, 3deg)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]
     fn missmatched_dimensions_vector4() {
-        test_run("<(1deg, 2m, 3m, 4m)>").unwrap_err();
-        test_run("<(1m, 2deg, 3m, 4m)>").unwrap_err();
-        test_run("<(1m, 2m, 3deg, 4m)>").unwrap_err();
-        test_run("<(1m, 2m, 3m, 4deg)>").unwrap_err();
+        let error = test_run("<(1deg, 2m, 3m, 4m)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+
+        let error = test_run("<(1m, 2deg, 3m, 4m)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+        let error = test_run("<(1m, 2m, 3deg, 4m)>").unwrap_err();
+
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+
+        let error = test_run("<(1m, 2m, 3m, 4deg)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]
@@ -1509,17 +1540,23 @@ mod test {
 
     #[test]
     fn normalize_zero_vector2() {
-        test_run("<(0m, 0m)>::normalize()").unwrap_err();
+        let error = test_run("<(0m, 0m)>::normalize()").unwrap_err();
+        let error = error.ty.as_any();
+        error.downcast_ref::<ResultIsNan>().unwrap();
     }
 
     #[test]
     fn normalize_zero_vector3() {
-        test_run("<(0m, 0m, 0m)>::normalize()").unwrap_err();
+        let error = test_run("<(0m, 0m, 0m)>::normalize()").unwrap_err();
+        let error = error.ty.as_any();
+        error.downcast_ref::<ResultIsNan>().unwrap();
     }
 
     #[test]
     fn normalize_zero_vector4() {
-        test_run("<(0m, 0m, 0m, 0m)>::normalize()").unwrap_err();
+        let error = test_run("<(0m, 0m, 0m, 0m)>::normalize()").unwrap_err();
+        let error = error.ty.as_any();
+        error.downcast_ref::<ResultIsNan>().unwrap();
     }
 
     #[test]
@@ -1558,7 +1595,11 @@ mod test {
         let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]
@@ -1569,7 +1610,11 @@ mod test {
         let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("<(0m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error =test_run("<(0m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]
@@ -1580,7 +1625,11 @@ mod test {
         let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("<(0m, 1m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = test_run("<(0m, 1m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]

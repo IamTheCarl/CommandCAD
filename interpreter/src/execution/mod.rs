@@ -17,6 +17,7 @@
  */
 
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     collections::HashMap,
     path::{Path, PathBuf},
@@ -27,7 +28,8 @@ use crate::{
     build_function,
     compile::{self, AstNode, BinaryExpressionOperation, Expression, UnaryExpressionOperation},
     execution::{
-        errors::{GenericFailure, Raise},
+        errors::{Raise, StrError, StringError},
+        logging::StackTraceIter,
         stack::ScopeType,
         values::BuiltinCallableDatabase,
     },
@@ -47,7 +49,7 @@ mod logging;
 mod stack;
 mod standard_environment;
 pub mod values;
-pub use errors::ExpressionResult;
+pub use errors::ExecutionResult;
 use imstr::ImString;
 use logging::LocatedStr;
 pub use logging::{ExecutionFileCache, LogLevel, LogMessage, RuntimeLog, StackTrace};
@@ -55,6 +57,7 @@ pub use stack::StackScope;
 mod store;
 pub use store::Store;
 
+use thiserror::Error;
 use values::{
     closure::find_all_variable_accesses_in_closure_capture,
     dictionary::find_all_variable_accesses_in_dictionary_construction, Object, Value, ValueType,
@@ -64,8 +67,8 @@ pub use standard_environment::build_prelude;
 
 pub fn find_all_variable_accesses_in_expression(
     expression: &Expression,
-    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-) -> ExpressionResult<()> {
+    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExecutionResult<()>,
+) -> ExecutionResult<()> {
     match expression {
         Expression::BinaryExpression(ast_node) => {
             find_all_variable_accesses_in_expression(&ast_node.node.a.node, access_collector)?;
@@ -218,21 +221,27 @@ pub struct ExecutionContext<'c> {
 }
 
 impl<'c> ExecutionContext<'c> {
-    pub fn trace_scope<F, R>(&'c self, reference: impl Into<SourceReference>, code: F) -> R
+    pub fn trace_scope<F, R>(
+        &'c self,
+        failure_message: Option<Cow<'static, str>>,
+        reference: impl Into<SourceReference>,
+        code: F,
+    ) -> R
     where
         F: FnOnce(&ExecutionContext<'_>) -> R,
     {
-        self.stack_trace.trace_scope(reference, move |stack_trace| {
-            let context = ExecutionContext {
-                stack_trace: &stack_trace,
-                ..*self
-            };
+        self.stack_trace
+            .trace_scope(failure_message, reference, move |stack_trace| {
+                let context = ExecutionContext {
+                    stack_trace,
+                    ..*self
+                };
 
-            code(&context)
-        })
+                code(&context)
+            })
     }
 
-    pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(&self, name: S) -> ExpressionResult<&Value> {
+    pub fn get_variable<'s, S: Into<LocatedStr<'s>>>(&self, name: S) -> ExecutionResult<&Value> {
         self.stack.get_variable(self.stack_trace, [], name)
     }
 
@@ -240,7 +249,7 @@ impl<'c> ExecutionContext<'c> {
         &self,
         local_variables: impl IntoIterator<Item = ImString>,
         name: S,
-    ) -> ExpressionResult<&Value> {
+    ) -> ExecutionResult<&Value> {
         self.stack
             .get_variable(self.stack_trace, local_variables, name)
     }
@@ -250,7 +259,7 @@ impl<'c> ExecutionContext<'c> {
         mode: ScopeType,
         variables: HashMap<ImString, Value>,
         block: B,
-    ) -> ExpressionResult<R>
+    ) -> ExecutionResult<R>
     where
         B: FnOnce(&ExecutionContext) -> R,
     {
@@ -267,12 +276,24 @@ impl<'c> ExecutionContext<'c> {
     }
 }
 
+impl<'s> IntoIterator for &'s ExecutionContext<'_> {
+    type Item = &'s StackTrace<'s>;
+
+    type IntoIter = StackTraceIter<'s>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.stack_trace.iter()
+    }
+}
+
 pub fn execute_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<compile::Expression>,
-) -> ExpressionResult<Value> {
-    context.trace_scope(expression.reference.clone(), |context| {
-        match &expression.node {
+) -> ExecutionResult<Value> {
+    context.trace_scope(
+        None,
+        expression.reference.clone(),
+        |context| match &expression.node {
             compile::Expression::BinaryExpression(ast_node) => {
                 execute_binary_expression(context, ast_node)
             }
@@ -291,7 +312,7 @@ pub fn execute_expression(
             compile::Expression::MemberAccess(ast_node) => {
                 let base = execute_expression(context, &ast_node.node.base)?;
 
-                context.trace_scope(ast_node.node.member.reference.clone(), |context| {
+                context.trace_scope(None, ast_node.node.member.reference.clone(), |context| {
                     base.get_attribute(context, &ast_node.node.member.node)
                 })
             }
@@ -342,19 +363,18 @@ pub fn execute_expression(
             compile::Expression::ConstraintSet(constraint_set) => {
                 ConstraintSet::from_ast(context, constraint_set).map(|set| set.into())
             }
-            compile::Expression::Malformed(kind) => Err(GenericFailure(
-                format!("Malformed syntax, expected {kind}").into(),
-            )
-            .to_error(context.stack_trace)),
-        }
-    })
+            compile::Expression::Malformed(kind) => {
+                Err(StringError(format!("Malformed syntax, expected {kind}")).to_error(context))
+            }
+        },
+    )
 }
 
 fn execute_unary_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::UnaryExpression>>,
-) -> ExpressionResult<Value> {
-    context.trace_scope(expression.reference.clone(), |context| {
+) -> ExecutionResult<Value> {
+    context.trace_scope(None, expression.reference.clone(), |context| {
         let node = &expression.node;
         let value = execute_expression(context, &node.expression)?;
         match node.operation.node {
@@ -368,7 +388,7 @@ fn execute_unary_expression(
 fn execute_function_call(
     context: &ExecutionContext,
     call: &compile::AstNode<Box<compile::FunctionCall>>,
-) -> ExpressionResult<Value> {
+) -> ExecutionResult<Value> {
     let to_call = execute_expression(context, &call.node.to_call)?;
     let argument = values::Dictionary::from_ast(context, &call.node.argument)?;
 
@@ -382,7 +402,7 @@ fn execute_function_call(
 fn execute_method_call(
     context: &ExecutionContext,
     call: &compile::AstNode<Box<compile::MethodCall>>,
-) -> ExpressionResult<Value> {
+) -> ExecutionResult<Value> {
     let self_dictionary = execute_expression(context, &call.node.self_dictionary)?;
     let to_call = self_dictionary
         .get_attribute(context, &call.node.to_call.node)?
@@ -399,8 +419,8 @@ fn execute_method_call(
 fn execute_let_in(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::LetIn>>,
-) -> ExpressionResult<Value> {
-    context.trace_scope(expression.reference.clone(), |context| {
+) -> ExecutionResult<Value> {
+    context.trace_scope(None, expression.reference.clone(), |context| {
         context.stack.scope_mut(
             context.stack_trace,
             ScopeType::Inherited,
@@ -443,78 +463,72 @@ fn execute_let_in(
 fn execute_binary_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::BinaryExpression>>,
-) -> ExpressionResult<Value> {
-    context.trace_scope(expression.reference.clone(), |context| {
-        let node = &expression.node;
+) -> ExecutionResult<Value> {
+    let node = &expression.node;
 
-        let (result_a, result_b) = join(
-            || execute_expression(context, &node.a),
-            || execute_expression(context, &node.b),
-        );
+    let (result_a, result_b) = join(
+        || execute_expression(context, &node.a),
+        || execute_expression(context, &node.b),
+    );
 
-        let value_a = result_a?;
-        let value_b = result_b?;
+    let value_a = result_a?;
+    let value_b = result_b?;
 
-        match node.operation.node {
-            BinaryExpressionOperation::NotEq => Ok(values::Boolean(
-                !value_a
-                    .clone()
-                    .cmp(context, value_b.clone())
-                    .map(|ord| matches!(ord, Ordering::Equal))
-                    .or_else(|_| value_a.eq(context, value_b))?,
-            )
-            .into()),
-            BinaryExpressionOperation::And => value_a.bit_and(context, value_b),
-            BinaryExpressionOperation::AndAnd => value_a.and(context, value_b),
-            BinaryExpressionOperation::Mul => value_a.multiply(context, value_b),
-            BinaryExpressionOperation::MulMul => value_a.exponent(context, value_b),
-            BinaryExpressionOperation::Add => value_a.addition(context, value_b),
-            BinaryExpressionOperation::Sub => value_a.subtraction(context, value_b),
-            BinaryExpressionOperation::Div => value_a.divide(context, value_b),
-            BinaryExpressionOperation::Lt => Ok(values::Boolean(matches!(
-                value_a.cmp(context, value_b)?,
-                Ordering::Less
-            ))
-            .into()),
-            BinaryExpressionOperation::LtLt => value_a.left_shift(context, value_b),
-            BinaryExpressionOperation::LtEq => Ok(values::Boolean(matches!(
-                value_a.cmp(context, value_b)?,
-                Ordering::Less | Ordering::Equal
-            ))
-            .into()),
-            BinaryExpressionOperation::EqEq => Ok(values::Boolean(
-                value_a
-                    .clone()
-                    .cmp(context, value_b.clone())
-                    .map(|ord| matches!(ord, Ordering::Equal))
-                    .or_else(|_| value_a.eq(context, value_b))?,
-            )
-            .into()),
-            BinaryExpressionOperation::Gt => Ok(values::Boolean(matches!(
-                value_a.cmp(context, value_b)?,
-                Ordering::Greater
-            ))
-            .into()),
-            BinaryExpressionOperation::GtEq => Ok(values::Boolean(matches!(
-                value_a.cmp(context, value_b)?,
-                Ordering::Equal | Ordering::Greater
-            ))
-            .into()),
-            BinaryExpressionOperation::GtGt => value_a.right_shift(context, value_b),
-            BinaryExpressionOperation::BitXor => value_a.bit_xor(context, value_b),
-            BinaryExpressionOperation::Xor => value_a.xor(context, value_b),
-            BinaryExpressionOperation::Or => value_a.bit_or(context, value_b),
-            BinaryExpressionOperation::OrOr => value_a.or(context, value_b),
+    match node.operation.node {
+        BinaryExpressionOperation::NotEq => Ok(values::Boolean(
+            !value_a
+                .clone()
+                .cmp(context, value_b.clone())
+                .map(|ord| matches!(ord, Ordering::Equal))
+                .or_else(|_| value_a.eq(context, value_b))?,
+        )
+        .into()),
+        BinaryExpressionOperation::And => value_a.bit_and(context, value_b),
+        BinaryExpressionOperation::AndAnd => value_a.and(context, value_b),
+        BinaryExpressionOperation::Mul => value_a.multiply(context, value_b),
+        BinaryExpressionOperation::MulMul => value_a.exponent(context, value_b),
+        BinaryExpressionOperation::Add => value_a.addition(context, value_b),
+        BinaryExpressionOperation::Sub => value_a.subtraction(context, value_b),
+        BinaryExpressionOperation::Div => value_a.divide(context, value_b),
+        BinaryExpressionOperation::Lt => {
+            Ok(values::Boolean(matches!(value_a.cmp(context, value_b)?, Ordering::Less)).into())
         }
-    })
+        BinaryExpressionOperation::LtLt => value_a.left_shift(context, value_b),
+        BinaryExpressionOperation::LtEq => Ok(values::Boolean(matches!(
+            value_a.cmp(context, value_b)?,
+            Ordering::Less | Ordering::Equal
+        ))
+        .into()),
+        BinaryExpressionOperation::EqEq => Ok(values::Boolean(
+            value_a
+                .clone()
+                .cmp(context, value_b.clone())
+                .map(|ord| matches!(ord, Ordering::Equal))
+                .or_else(|_| value_a.eq(context, value_b))?,
+        )
+        .into()),
+        BinaryExpressionOperation::Gt => {
+            Ok(values::Boolean(matches!(value_a.cmp(context, value_b)?, Ordering::Greater)).into())
+        }
+        BinaryExpressionOperation::GtEq => Ok(values::Boolean(matches!(
+            value_a.cmp(context, value_b)?,
+            Ordering::Equal | Ordering::Greater
+        ))
+        .into()),
+        BinaryExpressionOperation::GtGt => value_a.right_shift(context, value_b),
+        BinaryExpressionOperation::BitXor => value_a.bit_xor(context, value_b),
+        BinaryExpressionOperation::Xor => value_a.xor(context, value_b),
+        BinaryExpressionOperation::Or => value_a.bit_or(context, value_b),
+        BinaryExpressionOperation::OrOr => value_a.or(context, value_b),
+    }
 }
 
 pub fn execute_if_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<Box<compile::IfExpression>>,
-) -> ExpressionResult<Value> {
+) -> ExecutionResult<Value> {
     let condition = execute_expression(context, &expression.node.condition)?
-        .downcast::<values::Boolean>(context.stack_trace)?
+        .downcast::<values::Boolean>(context)?
         .0;
 
     let expression = if condition {
@@ -527,7 +541,7 @@ pub fn execute_if_expression(
 }
 
 #[cfg(test)]
-pub(crate) fn test_run(input: &str) -> ExpressionResult<Value> {
+pub(crate) fn test_run(input: &str) -> ExecutionResult<Value> {
     let root = compile::full_compile(input);
 
     test_context([], |context| execute_expression(context, &root))
@@ -578,78 +592,83 @@ pub(crate) fn test_context_custom_database<R>(
     f(&context)
 }
 
-pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> ExpressionResult<Value> {
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum FileRunError {
+    #[error("Absolute paths cannot be used for importing files")]
+    AbsolutePath,
+
+    #[error("Import recursion depth has been exceeded")]
+    ImportDepth,
+
+    #[error("Failed to get parent directory of file")]
+    NoParentDirectory,
+}
+
+pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> ExecutionResult<Value> {
     // TODO can/should we make the parser part of the execution context rather than build a new one
     // every time we load a file?
     let mut parser = new_parser();
-
     let file = file.into();
 
-    if file.is_absolute() {
-        return Err(
-            GenericFailure("Absolute paths cannot be used for importing files".into())
-                .to_error(context.stack_trace),
-        );
-    }
-
-    if context.import_limit == 0 {
-        return Err(
-            GenericFailure("Import recursion depth has been exceeded".into())
-                .to_error(context.stack_trace),
-        );
-    }
-
-    let file = context.working_directory.join(file);
-    let parent_dir = file.parent().ok_or_else(|| {
-        GenericFailure("Failed to get parent directory of file: {error}".into())
-            .to_error(context.stack_trace)
-    })?;
-
-    let root = {
-        let mut files = context.file_cache.lock().map_err(|_error| {
-            GenericFailure("Failed to lock file cache".into()).to_error(context.stack_trace)
-        })?;
-        let file = Arc::new(file.clone());
-        let input = match files.entry(file.clone()) {
-            std::collections::hash_map::Entry::Occupied(entry) => entry,
-            std::collections::hash_map::Entry::Vacant(vacency) => {
-                let input = std::fs::read_to_string(file.as_path()).map_err(|error| {
-                    GenericFailure(
-                        format!("Failed to read file {:?} from disk: {error}", file).into(),
-                    )
-                    .to_error(context.stack_trace)
-                })?;
-                let input = ImString::from(input);
-
-                vacency.insert_entry(Source::from(input))
+    context.trace_scope(
+        Some(format!("Failed to import {file:?}").into()),
+        context.stack_trace.bottom().clone(),
+        |context| {
+            if file.is_absolute() {
+                return Err(FileRunError::AbsolutePath.to_error(context));
             }
-        };
-        let input = input.get().text();
 
-        let tree = parser.parse(input, None).map_err(|error| {
-            GenericFailure(format!("Failed to parse input: {error:?}").into())
-                .to_error(context.stack_trace)
-        })?;
+            if context.import_limit == 0 {
+                return Err(FileRunError::ImportDepth.to_error(context));
+            }
 
-        let root = crate::compile(&file, input, &tree).map_err(|error| {
-            GenericFailure(format!("Failed to compile: {error}").into())
-                .to_error(context.stack_trace)
-        })?;
+            let file = context.working_directory.join(file);
+            let parent_dir = file
+                .parent()
+                .ok_or_else(|| FileRunError::NoParentDirectory.to_error(context))?;
 
-        context
-            .log
-            .collect_syntax_errors(input, &tree, &file, root.reference.clone());
+            let root = {
+                let mut files = context
+                    .file_cache
+                    .lock()
+                    .map_err(|_error| StrError("Failed to lock file cache").to_error(context))?;
+                let file = Arc::new(file.clone());
+                let input = match files.entry(file.clone()) {
+                    std::collections::hash_map::Entry::Occupied(entry) => entry,
+                    std::collections::hash_map::Entry::Vacant(vacency) => {
+                        let input = std::fs::read_to_string(file.as_path())
+                            .map_err(|error| error.to_error(context))?;
+                        let input = ImString::from(input);
 
-        root
-    };
+                        vacency.insert_entry(Source::from(input))
+                    }
+                };
+                let input = input.get().text();
 
-    let context = ExecutionContext {
-        working_directory: parent_dir,
-        import_limit: context.import_limit - 1,
-        ..context.clone()
-    };
+                let tree = parser.parse(input, None).map_err(|error| {
+                    StringError(format!("Failed to parse input: {error:?}")).to_error(context)
+                })?;
 
-    execute_expression(&context, &root)
+                let root = crate::compile(&file, input, &tree).map_err(|error| {
+                    StringError(format!("Failed to compile: {error}")).to_error(context)
+                })?;
+
+                context
+                    .log
+                    .collect_syntax_errors(input, &tree, &file, root.reference.clone());
+
+                root
+            };
+
+            let context = ExecutionContext {
+                working_directory: parent_dir,
+                import_limit: context.import_limit - 1,
+                ..context.clone()
+            };
+
+            execute_expression(&context, &root)
+        },
+    )
 }
 
 pub mod functions {
@@ -779,6 +798,10 @@ mod test {
 
     #[test]
     fn infinite_recursion_import() {
-        test_run("std.import(path = \"./test_assets/infinite_recursion_import.ccm\")").unwrap_err();
+        let error = test_run("std.import(path = \"./test_assets/infinite_recursion_import.ccm\")")
+            .unwrap_err();
+        let error = error.ty.as_any();
+        let error: &FileRunError = error.downcast_ref().unwrap();
+        assert_eq!(*error, FileRunError::ImportDepth);
     }
 }

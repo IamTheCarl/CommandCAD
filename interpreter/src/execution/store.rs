@@ -25,7 +25,7 @@ use sha2::{Digest, Sha256};
 use tempfile::{NamedTempFile, TempDir};
 
 use crate::{
-    execution::errors::{ErrorType, ExpressionResult, Raise},
+    execution::errors::{ExecutionResult, Raise},
     ExecutionContext,
 };
 
@@ -44,38 +44,42 @@ impl Store {
         context: &ExecutionContext,
         hashable: &impl std::hash::Hash,
         name: impl AsRef<str>,
-        init: impl FnOnce(&mut NamedTempFile) -> ExpressionResult<()>,
-    ) -> ExpressionResult<PathBuf> {
-        let store_path = self.generate_store_path(hashable, &name);
+        init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
+        let name = name.as_ref();
 
-        if std::fs::exists(&store_path)
-            .map_err(|error| IoError(error).to_error(context.stack_trace))?
-        {
-            Ok(store_path)
-        } else {
-            // TODO should we be creating these in the project directory to increase the chances of
-            // them being on the same filesystem as the store?
-            let mut asset = PendingAsset {
-                store_path,
-                asset: NamedTempFile::new()
-                    .map_err(|error| IoError(error).to_error(context.stack_trace))?,
-            };
-            init(&mut asset.asset)?;
+        context.trace_scope(
+            Some(format!("Failed to fetch or create file {name} in store").into()),
+            context.stack_trace.bottom().clone(),
+            |context| {
+                let store_path = self.generate_store_path(hashable, name);
 
-            let (mut file, temp_path) = asset
-                .asset
-                .keep()
-                .map_err(|error| IoError(error.error).to_error(context.stack_trace))?;
+                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
+                    Ok(store_path)
+                } else {
+                    // TODO should we be creating these in the project directory to increase the chances of
+                    // them being on the same filesystem as the store?
+                    let mut asset = PendingAsset {
+                        store_path,
+                        asset: NamedTempFile::new().map_err(|error| error.to_error(context))?,
+                    };
+                    init(&mut asset.asset)?;
 
-            // Make sure that file is flushed and closed.
-            file.flush()
-                .map_err(|error| IoError(error).to_error(context.stack_trace))?;
-            drop(file);
+                    let (mut file, temp_path) = asset
+                        .asset
+                        .keep()
+                        .map_err(|error| error.error.to_error(context))?;
 
-            self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+                    // Make sure that file is flushed and closed.
+                    file.flush().map_err(|error| error.to_error(context))?;
+                    drop(file);
 
-            Ok(asset.store_path)
-        }
+                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+
+                    Ok(asset.store_path)
+                }
+            },
+        )
     }
 
     pub fn get_or_init_directory(
@@ -83,28 +87,33 @@ impl Store {
         context: &ExecutionContext,
         hashable: &impl std::hash::Hash,
         name: impl AsRef<str>,
-        init: impl FnOnce(&mut TempDir) -> ExpressionResult<()>,
-    ) -> ExpressionResult<PathBuf> {
-        let store_path = self.generate_store_path(hashable, &name);
+        init: impl FnOnce(&mut TempDir) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
+        let name = name.as_ref();
 
-        if std::fs::exists(&store_path)
-            .map_err(|error| IoError(error).to_error(context.stack_trace))?
-        {
-            Ok(store_path)
-        } else {
-            // TODO should we be creating these in the project directory to increase the chances of
-            // them being on the same filesystem as the store?
-            let mut asset = PendingAsset {
-                store_path,
-                asset: TempDir::new()
-                    .map_err(|error| IoError(error).to_error(context.stack_trace))?,
-            };
-            init(&mut asset.asset)?;
-            let temp_path = asset.asset.keep();
-            self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+        context.trace_scope(
+            Some(format!("Failed to fetch or create directory {name} in store").into()),
+            context.stack_trace.bottom().clone(),
+            |context| {
+                let store_path = self.generate_store_path(hashable, name);
 
-            Ok(asset.store_path)
-        }
+                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
+                    Ok(store_path)
+                } else {
+                    // TODO should we be creating these in the project directory to increase the chances of
+                    // them being on the same filesystem as the store?
+                    let mut asset = PendingAsset {
+                        store_path,
+                        asset: TempDir::new().map_err(|error| error.to_error(context))?,
+                    };
+                    init(&mut asset.asset)?;
+                    let temp_path = asset.asset.keep();
+                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+
+                    Ok(asset.store_path)
+                }
+            },
+        )
     }
 
     fn generate_store_path(
@@ -129,7 +138,7 @@ impl Store {
         context: &ExecutionContext,
         temp_path: &Path,
         store_path: &Path,
-    ) -> ExpressionResult<()> {
+    ) -> ExecutionResult<()> {
         // Move the file into the store.
         match std::fs::rename(temp_path, store_path) {
             Ok(_) => Ok(store_path),
@@ -157,7 +166,7 @@ impl Store {
                 result
             }
         }
-        .map_err(|error| IoError(error).to_error(context.stack_trace))?;
+        .map_err(|error| error.to_error(context))?;
 
         Ok(())
     }
@@ -180,17 +189,6 @@ impl<A> std::ops::Deref for PendingAsset<A> {
 impl<A> std::ops::DerefMut for PendingAsset<A> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.asset
-    }
-}
-
-#[derive(Debug)]
-pub struct IoError(pub std::io::Error);
-
-impl ErrorType for IoError {}
-
-impl std::fmt::Display for IoError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
     }
 }
 

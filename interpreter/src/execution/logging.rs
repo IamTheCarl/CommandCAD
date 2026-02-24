@@ -57,8 +57,9 @@ impl RuntimeLog for Mutex<Vec<LogMessage>> {
 
 #[derive(Debug, Clone)]
 pub struct StackTrace<'p> {
-    parent: Option<&'p StackTrace<'p>>,
-    reference: SourceReference,
+    pub parent: Option<&'p StackTrace<'p>>,
+    pub reference: SourceReference,
+    pub failure_message: Option<Cow<'static, str>>,
 }
 
 impl<'p> Display for StackTrace<'p> {
@@ -76,6 +77,7 @@ impl StackTrace<'static> {
         Self {
             parent: None,
             reference,
+            failure_message: None,
         }
     }
 
@@ -92,6 +94,7 @@ impl StackTrace<'static> {
                     end_point: Point { row: 0, column: 0 },
                 },
             },
+            failure_message: Some("Bootstrap failed".into()),
         }
     }
 
@@ -108,21 +111,35 @@ impl StackTrace<'static> {
                     end_point: Point { row: 0, column: 0 },
                 },
             },
+            failure_message: Some("Test failed".into()),
         }
     }
 }
 
 impl<'p> StackTrace<'p> {
-    pub fn trace_scope<F, R>(&'p self, reference: impl Into<SourceReference>, code: F) -> R
+    pub fn trace_scope<F, R>(
+        &'p self,
+        failure_message: Option<Cow<'static, str>>,
+        reference: impl Into<SourceReference>,
+        code: F,
+    ) -> R
     where
-        F: FnOnce(StackTrace<'p>) -> R,
+        F: FnOnce(&StackTrace<'p>) -> R,
     {
-        let scope = Self {
-            parent: Some(self),
-            reference: reference.into(),
-        };
+        let reference = reference.into();
 
-        code(scope)
+        if self.reference != reference || self.failure_message != failure_message {
+            let scope = Self {
+                parent: Some(self),
+                reference,
+                failure_message,
+            };
+
+            code(&scope)
+        } else {
+            // This is not actually a new scope
+            code(self)
+        }
     }
 
     pub fn bottom(&self) -> &SourceReference {
@@ -137,7 +154,7 @@ impl<'p> StackTrace<'p> {
 }
 
 impl<'p> IntoIterator for &'p StackTrace<'p> {
-    type Item = &'p SourceReference;
+    type Item = &'p StackTrace<'p>;
     type IntoIter = StackTraceIter<'p>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -150,14 +167,14 @@ pub struct StackTraceIter<'p> {
 }
 
 impl<'p> Iterator for StackTraceIter<'p> {
-    type Item = &'p SourceReference;
+    type Item = &'p StackTrace<'p>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let next = self.current.take();
         if let Some(next) = next {
             self.current = next.parent;
         }
-        next.map(|next| &next.reference)
+        next
     }
 }
 

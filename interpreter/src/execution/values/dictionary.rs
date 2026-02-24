@@ -26,13 +26,14 @@ use crate::{
     compile::{AstNode, DictionaryConstruction},
     execute_expression,
     execution::{
-        errors::{ErrorType, ExpressionResult, Raise as _},
+        errors::{ExecutionResult, Raise as _},
         find_all_variable_accesses_in_expression,
         stack::ScopeType,
         values::string::formatting::Style,
         ExecutionContext,
     },
     values::StaticType,
+    StackTrace,
 };
 
 use super::{
@@ -53,8 +54,8 @@ impl PartialEq for DictionaryData {
 
 pub fn find_all_variable_accesses_in_dictionary_construction(
     dictionary_construction: &crate::compile::DictionaryConstruction,
-    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-) -> ExpressionResult<()> {
+    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExecutionResult<()>,
+) -> ExecutionResult<()> {
     for assignment in dictionary_construction.assignments.iter() {
         find_all_variable_accesses_in_expression(
             &assignment.node.assignment.node,
@@ -99,18 +100,14 @@ impl Object for Dictionary {
         Ok(())
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         if let Some(member) = self.data.members.get(attribute) {
             Ok(member.clone())
         } else {
             Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace))
+            .to_error(context))
         }
     }
 }
@@ -141,7 +138,7 @@ impl Dictionary {
     pub fn from_ast(
         context: &ExecutionContext,
         ast_node: &AstNode<DictionaryConstruction>,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         let mut members = HashMap::with_capacity(ast_node.node.assignments.len());
 
         context.stack.scope_mut(
@@ -172,7 +169,11 @@ impl Dictionary {
                         if members.insert(name.clone(), value.clone()).is_some() {
                             // That's a duplicate member.
                             return Err(DuplicateMemberError { name }.to_error(
-                                context.stack_trace.iter().chain([&ast_node.reference]),
+                                context.stack_trace.iter().chain([&StackTrace {
+                                    parent: None,
+                                    reference: ast_node.reference.clone(),
+                                    failure_message: None,
+                                }]),
                             ));
                         }
 
@@ -225,7 +226,7 @@ pub struct DuplicateMemberError {
     pub name: ImString,
 }
 
-impl ErrorType for DuplicateMemberError {}
+impl std::error::Error for DuplicateMemberError {}
 
 impl Display for DuplicateMemberError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -268,12 +269,18 @@ mod test {
     #[test]
     fn duplicate_entries() {
         // Two values of the same name is not allowed.
-        test_run("(void = (), void = ())").unwrap_err();
+        let error = test_run("(void = (), void = ())").unwrap_err();
+        let error = error.ty.as_any();
+        let error: &DuplicateMemberError = error.downcast_ref().unwrap();
+        assert_eq!(error.name, "void");
     }
 
     #[test]
     fn non_existant_member() {
-        test_run("(void = ()).does_not_exist").unwrap_err();
+        let error = test_run("(void = ()).does_not_exist").unwrap_err();
+        let error = error.ty.as_any();
+        let error: &MissingAttributeError = error.downcast_ref().unwrap();
+        assert_eq!(error.name, "does_not_exist");
     }
 
     #[test]

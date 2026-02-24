@@ -31,7 +31,7 @@ use crate::{
     compile::{self, AstNode},
     execute_expression,
     execution::{
-        errors::{ErrorType, ExpressionResult, Raise},
+        errors::{ExecutionResult, Raise},
         logging::{LogLevel, LogMessage},
         values::{
             self, closure::BuiltinCallableDatabase, dictionary::DictionaryData,
@@ -239,24 +239,20 @@ impl Object for ValueType {
         write!(f, "{}", self)
     }
 
-    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: Self = rhs.downcast_for_binary_op(context.stack_trace)?;
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: Self = rhs.downcast_for_binary_op(context)?;
 
         Ok(self.merge(rhs).into())
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "qualify" => Ok(BuiltinFunction::new::<methods::Qualify>().into()),
             "try_qualify" => Ok(BuiltinFunction::new::<methods::TryQualify>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 }
@@ -280,7 +276,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: ValueType,
             to_qualify: Value) -> ValueNone
         {
-            this.check_other_qualifies(&to_qualify.get_type(context)).map_err(|error| error.to_error(context.stack_trace))?;
+            this.check_other_qualifies(&to_qualify.get_type(context)).map_err(|error| error.to_error(context))?;
             Ok(values::ValueNone)
         }
     );
@@ -307,9 +303,8 @@ impl StructMember {
     fn new(
         context: &ExecutionContext,
         source: &AstNode<compile::StructMember>,
-    ) -> ExpressionResult<Self> {
-        let ty = execute_expression(context, &source.node.ty)?
-            .downcast::<ValueType>(context.stack_trace)?;
+    ) -> ExecutionResult<Self> {
+        let ty = execute_expression(context, &source.node.ty)?.downcast::<ValueType>(context)?;
         let default = if let Some(default) = source.node.default.as_ref() {
             Some(execute_expression(context, default)?)
         } else {
@@ -340,7 +335,7 @@ impl StructDefinition {
     pub fn new(
         context: &ExecutionContext,
         source: &AstNode<compile::StructDefinition>,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         let mut members = HashMap::new();
         for member in source.node.members.iter() {
             let name = member.node.name.node.clone();
@@ -518,7 +513,7 @@ impl TypeQualificationError {
     }
 }
 
-impl ErrorType for TypeQualificationError {}
+impl std::error::Error for TypeQualificationError {}
 
 impl Display for TypeQualificationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -540,9 +535,16 @@ mod test {
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap();
 
-        ValueType::TypeNone
+        let error = ValueType::TypeNone
             .check_other_qualifies(&ValueType::UnsignedInteger)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::TypeNone,
+                got: ValueType::UnsignedInteger
+            }
+        )
     }
 
     #[test]
@@ -551,9 +553,16 @@ mod test {
             .check_other_qualifies(&ValueType::Boolean)
             .unwrap();
 
-        ValueType::Boolean
+        let error = ValueType::Boolean
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Boolean,
+                got: ValueType::TypeNone
+            }
+        )
     }
 
     #[test]
@@ -562,9 +571,16 @@ mod test {
             .check_other_qualifies(&ValueType::SignedInteger)
             .unwrap();
 
-        ValueType::SignedInteger
+        let error = ValueType::SignedInteger
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::SignedInteger,
+                got: ValueType::TypeNone
+            }
+        )
     }
 
     #[test]
@@ -573,9 +589,16 @@ mod test {
             .check_other_qualifies(&ValueType::UnsignedInteger)
             .unwrap();
 
-        ValueType::UnsignedInteger
+        let error = ValueType::UnsignedInteger
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::UnsignedInteger,
+                got: ValueType::TypeNone
+            }
+        )
     }
 
     #[test]
@@ -588,13 +611,27 @@ mod test {
             .check_other_qualifies(&ValueType::Scalar(Some(Dimension::length())))
             .unwrap();
 
-        ValueType::Scalar(Some(Dimension::length()))
+        let error = ValueType::Scalar(Some(Dimension::length()))
             .check_other_qualifies(&ValueType::Scalar(Some(Dimension::area())))
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Scalar(Some(Dimension::length())),
+                got: ValueType::Scalar(Some(Dimension::area())),
+            }
+        );
 
-        ValueType::Scalar(Some(Dimension::length()))
+        let error = ValueType::Scalar(Some(Dimension::length()))
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Scalar(Some(Dimension::length())),
+                got: ValueType::TypeNone
+            }
+        );
     }
 
     #[test]
@@ -607,13 +644,27 @@ mod test {
             .check_other_qualifies(&ValueType::Vector2(Some(Dimension::length())))
             .unwrap();
 
-        ValueType::Vector2(Some(Dimension::length()))
+        let error = ValueType::Vector2(Some(Dimension::length()))
             .check_other_qualifies(&ValueType::Vector2(Some(Dimension::area())))
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Vector2(Some(Dimension::length())),
+                got: ValueType::Vector2(Some(Dimension::area())),
+            }
+        );
 
-        ValueType::Vector2(Some(Dimension::length()))
+        let error = ValueType::Vector2(Some(Dimension::length()))
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Vector2(Some(Dimension::length())),
+                got: ValueType::TypeNone
+            }
+        );
     }
 
     #[test]
@@ -626,13 +677,27 @@ mod test {
             .check_other_qualifies(&ValueType::Vector3(Some(Dimension::length())))
             .unwrap();
 
-        ValueType::Vector3(Some(Dimension::length()))
+        let error = ValueType::Vector3(Some(Dimension::length()))
             .check_other_qualifies(&ValueType::Vector3(Some(Dimension::area())))
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Vector3(Some(Dimension::length())),
+                got: ValueType::Vector3(Some(Dimension::area())),
+            }
+        );
 
-        ValueType::Vector3(Some(Dimension::length()))
+        let error = ValueType::Vector3(Some(Dimension::length()))
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Vector3(Some(Dimension::length())),
+                got: ValueType::TypeNone
+            }
+        );
     }
 
     #[test]
@@ -645,13 +710,27 @@ mod test {
             .check_other_qualifies(&ValueType::Vector4(Some(Dimension::length())))
             .unwrap();
 
-        ValueType::Vector4(Some(Dimension::length()))
+        let error = ValueType::Vector4(Some(Dimension::length()))
             .check_other_qualifies(&ValueType::Vector4(Some(Dimension::area())))
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Vector4(Some(Dimension::length())),
+                got: ValueType::Vector4(Some(Dimension::area())),
+            }
+        );
 
-        ValueType::Vector4(Some(Dimension::length()))
+        let error = ValueType::Vector4(Some(Dimension::length()))
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Vector4(Some(Dimension::length())),
+                got: ValueType::TypeNone
+            }
+        );
     }
 
     #[test]
@@ -722,9 +801,22 @@ mod test {
             let dictionary = test_run("(a = std.consts.None, b = std.consts.None)").unwrap();
             let dictionary = dictionary.as_dictionary().unwrap();
 
-            structure
+            let error = structure
                 .check_other_qualifies(&dictionary.get_type(context))
                 .unwrap_err();
+            dbg!(&error);
+            assert_eq!(
+                error,
+                TypeQualificationError::Fields {
+                    failed_feilds: vec![MissmatchedField {
+                        name: "b".into(),
+                        error: TypeQualificationError::This {
+                            expected: ValueType::TypeNone,
+                            got: ValueType::TypeNone
+                        }
+                    }]
+                }
+            );
         })
     }
 
@@ -764,9 +856,16 @@ mod test {
             .check_other_qualifies(&ValueType::ValueType)
             .unwrap();
 
-        ValueType::UnsignedInteger
+        let error = ValueType::ValueType
             .check_other_qualifies(&ValueType::TypeNone)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::ValueType,
+                got: ValueType::TypeNone
+            }
+        );
     }
 
     #[test]
@@ -782,9 +881,16 @@ mod test {
             .check_other_qualifies(&ValueType::UnsignedInteger)
             .unwrap();
 
-        value_type
+        let error = value_type
             .check_other_qualifies(&ValueType::SignedInteger)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: value_type.clone(),
+                got: ValueType::SignedInteger
+            }
+        );
     }
 
     #[test]
@@ -804,9 +910,16 @@ mod test {
             .check_other_qualifies(&ValueType::SignedInteger)
             .unwrap();
 
-        value_type
+        let error = value_type
             .check_other_qualifies(&ValueType::Boolean)
             .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: value_type.clone(),
+                got: ValueType::Boolean
+            }
+        );
     }
 
     #[test]
@@ -866,6 +979,15 @@ mod test {
         let result = test_run("std.types.Bool::qualify(to_qualify = true)").unwrap();
         assert_eq!(result, values::ValueNone.into());
 
-        test_run("std.types.Bool::qualify(to_qualify = 5u)").unwrap_err();
+        let error = test_run("std.types.Bool::qualify(to_qualify = 5u)").unwrap_err();
+        let error = error.ty.as_any();
+        let error: &TypeQualificationError = error.downcast_ref().unwrap();
+        assert_eq!(
+            *error,
+            TypeQualificationError::This {
+                expected: ValueType::Boolean,
+                got: ValueType::UnsignedInteger
+            }
+        );
     }
 }

@@ -30,7 +30,7 @@ use crate::{
         AstNode,
     },
     execution::{
-        errors::{ErrorType, ExpressionResult, GenericFailure, Raise},
+        errors::{ExecutionResult, Raise, StrError, StringError},
         logging::LocatedStr,
     },
     values::{
@@ -50,15 +50,15 @@ use std::{
 
 pub fn find_all_captured_variables_in_constraint_set(
     constraint_set: &AstConstraintSet,
-    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-) -> ExpressionResult<()> {
+    access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExecutionResult<()>,
+) -> ExecutionResult<()> {
     use crate::compile::constraint_set;
 
     fn search_expression(
         variables: &Vec<AstNode<ImString>>,
         expression: &constraint_set::ConstraintSetExpression,
-        access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-    ) -> ExpressionResult<()> {
+        access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExecutionResult<()>,
+    ) -> ExecutionResult<()> {
         match expression {
             ConstraintSetExpression::Parenthesis(expression) => {
                 search_expression(variables, &expression.node, access_collector)
@@ -220,7 +220,7 @@ impl ConstraintSet {
     pub fn from_ast(
         context: &ExecutionContext,
         source: &AstNode<Arc<AstConstraintSet>>,
-    ) -> ExpressionResult<Self> {
+    ) -> ExecutionResult<Self> {
         let mut variables = HashSet::new();
         let mut duplicate_variables = Vec::new();
         for variable in source.node.variables.iter().map(|field| &field.node) {
@@ -233,7 +233,7 @@ impl ConstraintSet {
             return Err(DuplicateVariablesError {
                 variables: duplicate_variables,
             }
-            .to_error(context.stack_trace));
+            .to_error(context));
         }
 
         let mut captured_values = HashMap::new();
@@ -323,17 +323,13 @@ impl Object for ConstraintSet {
         Ok(())
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "solve" => Ok(BuiltinFunction::new::<methods::Solve>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 }
@@ -356,7 +352,7 @@ impl ConstraintSet {
         &self,
         context: &ExecutionContext,
         provided: Dictionary,
-    ) -> ExpressionResult<Dictionary> {
+    ) -> ExecutionResult<Dictionary> {
         let value_provider = ValueProvider {
             provided: &provided,
             captured: &self.captured_values,
@@ -387,11 +383,10 @@ impl ConstraintSet {
         Self::build_relation(&mut m, &self.source.relation, left, right);
         let solution = m
             .solve()
-            .map_err(|error| SolverError(error).to_error(context.stack_trace))?;
+            .map_err(|error| SolverError(error).to_error(context))?;
 
         let dimension = dimension.ok_or_else(|| {
-            GenericFailure("Could not determine dimension of constraint set".into())
-                .to_error(context.stack_trace)
+            StrError("Could not determine dimension of constraint set").to_error(context)
         })?;
 
         let mut members = HashMap::new();
@@ -402,7 +397,7 @@ impl ConstraintSet {
                     variable_name,
                     Scalar {
                         dimension,
-                        value: Float::new(value).unwrap_not_nan(context.stack_trace)?,
+                        value: Float::new(value).unwrap_not_nan(context)?,
                     }
                     .into(),
                 );
@@ -440,7 +435,7 @@ impl ConstraintSet {
         variables: &mut HashMap<ImString, VarId>,
         dimension: &mut Option<Dimension>,
         expression: &ConstraintSetExpression,
-    ) -> ExpressionResult<ExprBuilder> {
+    ) -> ExecutionResult<ExprBuilder> {
         match expression {
             ConstraintSetExpression::Parenthesis(ast_node) => Self::model_expression(
                 context,
@@ -456,12 +451,12 @@ impl ConstraintSet {
                     value: ast_node.node.value,
                 };
 
-                context.trace_scope(ast_node.reference.clone(), |context| {
+                context.trace_scope(None, ast_node.reference.clone(), |context| {
                     Self::build_scalar(context, dimension, value)
                 })
             }
             ConstraintSetExpression::Identifier(ast_node) => {
-                context.trace_scope(ast_node.reference.clone(), |context| {
+                context.trace_scope(None, ast_node.reference.clone(), |context| {
                     let name = &ast_node.node;
                     if let Some(value) = value_provider
                         .get(name)
@@ -471,14 +466,11 @@ impl ConstraintSet {
                             Value::Scalar(scalar) => {
                                 Self::build_scalar(context, dimension, *scalar)
                             }
-                            value => Err(GenericFailure(
-                                format!(
-                                    "{} types are not supported in constraint sets",
-                                    value.type_name()
-                                )
-                                .into(),
-                            )
-                            .to_error(context.stack_trace)),
+                            value => Err(StringError(format!(
+                                "{} types are not supported in constraint sets",
+                                value.type_name()
+                            ))
+                            .to_error(context)),
                         }
                     } else {
                         let variable = variables
@@ -529,11 +521,9 @@ impl ConstraintSet {
                 }
             }
             ConstraintSetExpression::MethodCall(ast_node) => {
-                context.trace_scope(ast_node.reference.clone(), |context| {
-                    Err(
-                        GenericFailure("Methods are not yet supported in constraint sets".into())
-                            .to_error(context.stack_trace),
-                    )
+                context.trace_scope(None, ast_node.reference.clone(), |context| {
+                    Err(StrError("Methods are not yet supported in constraint sets")
+                        .to_error(context))
                 })
             }
         }
@@ -543,13 +533,13 @@ impl ConstraintSet {
         context: &ExecutionContext,
         dimension: &mut Option<Dimension>,
         value: Scalar,
-    ) -> ExpressionResult<ExprBuilder> {
+    ) -> ExecutionResult<ExprBuilder> {
         if let Some(dimension) = dimension {
             if value.dimension != Dimension::zero() && *dimension != value.dimension {
-                return Err(GenericFailure(
-                    "All measurements in constraint set must be of the same dimension".into(),
+                return Err(StrError(
+                    "All measurements in constraint set must be of the same dimension",
                 )
-                .to_error(context.stack_trace));
+                .to_error(context));
             }
         } else if value.dimension != Dimension::zero() {
             *dimension = Some(value.dimension);
@@ -570,7 +560,7 @@ struct DuplicateVariablesError {
     pub variables: Vec<ImString>,
 }
 
-impl ErrorType for DuplicateVariablesError {}
+impl std::error::Error for DuplicateVariablesError {}
 
 impl std::fmt::Display for DuplicateVariablesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -596,7 +586,7 @@ impl std::fmt::Display for DuplicateVariablesError {
 #[derive(Debug)]
 struct SolverError(selen::api::SolverError);
 
-impl ErrorType for SolverError {}
+impl std::error::Error for SolverError {}
 
 impl std::fmt::Display for SolverError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -614,17 +604,13 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     }
 
     impl BuiltinCallable for BuiltFunction {
-        fn call(
-            &self,
-            context: &ExecutionContext,
-            argument: Dictionary,
-        ) -> ExpressionResult<Value> {
+        fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
             let this = context
                 .get_variable(LocatedStr {
                     location: context.stack_trace.bottom().clone(),
                     string: "self",
                 })?
-                .downcast_ref::<ConstraintSet>(context.stack_trace)?
+                .downcast_ref::<ConstraintSet>(context)?
                 .clone();
 
             let solution = this.solve(context, argument)?;

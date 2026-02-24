@@ -19,7 +19,7 @@
 use crate::execution::logging::StackTrace;
 
 use super::{
-    errors::{ErrorType, ExpressionResult, Raise},
+    errors::{ExecutionResult, Raise},
     logging::LocatedStr,
     values::Value,
 };
@@ -57,7 +57,7 @@ impl<'p> StackScope<'p> {
         mode: ScopeType,
         variables: HashMap<ImString, Value>,
         block: B,
-    ) -> ExpressionResult<R>
+    ) -> ExecutionResult<R>
     where
         B: FnOnce(&Self, &StackTrace) -> R,
     {
@@ -79,7 +79,7 @@ impl<'p> StackScope<'p> {
         mode: ScopeType,
         variables: HashMap<ImString, Value>,
         block: B,
-    ) -> ExpressionResult<R>
+    ) -> ExecutionResult<R>
     where
         B: FnOnce(&mut Self, &StackTrace) -> R,
     {
@@ -145,7 +145,7 @@ impl<'p> StackScope<'p> {
         stack_trace: &StackTrace,
         local_variables: impl IntoIterator<Item = ImString>,
         name: S,
-    ) -> ExpressionResult<&Value> {
+    ) -> ExecutionResult<&Value> {
         let name = name.into();
 
         let mut scope_iterator = self.iter_visible_scopes();
@@ -172,7 +172,11 @@ impl<'p> StackScope<'p> {
                 variable_name: ImString::from(name.string),
                 suggestions: self.suggest_similar_names(local_variables, name.string),
             }
-            .to_error(stack_trace.iter().chain([&name.location])))
+            .to_error(stack_trace.iter().chain([&StackTrace {
+                parent: None,
+                reference: name.location.clone(),
+                failure_message: None,
+            }])))
         }
     }
 }
@@ -204,7 +208,7 @@ struct NotInScopeError {
     suggestions: Vec<ImString>,
 }
 
-impl ErrorType for NotInScopeError {}
+impl std::error::Error for NotInScopeError {}
 
 impl Display for NotInScopeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

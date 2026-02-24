@@ -31,7 +31,7 @@ use crate::{
         MissingAttributeError, Object, StaticType, StaticTypeName, Style, UnsignedInteger, Value,
         ValueNone, ValueType,
     },
-    ExecutionContext, ExpressionResult,
+    ExecutionContext, ExecutionResult,
 };
 
 use itertools::Itertools;
@@ -40,8 +40,8 @@ use itertools::Itertools;
 pub trait IterableObject {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
-    ) -> ExpressionResult<R>;
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+    ) -> ExecutionResult<R>;
 }
 
 #[allow(clippy::enum_variant_names)] // They're struct names, not just enum varients.
@@ -111,11 +111,7 @@ impl Object for ValueIterator {
         write!(f, ")")
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "chunks" => Ok(BuiltinFunction::new::<methods::Chunks>().into()),
             "chunks_exact" => Ok(BuiltinFunction::new::<methods::ChunksExact>().into()),
@@ -151,7 +147,7 @@ impl Object for ValueIterator {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 }
@@ -173,8 +169,8 @@ impl StaticType for ValueIterator {
 type IterateCallback<'s, R> = Box<
     dyn FnOnce(
             &ExecutionContext,
-            &mut dyn Iterator<Item = ExpressionResult<Value>>,
-        ) -> ExpressionResult<R>
+            &mut dyn Iterator<Item = ExecutionResult<Value>>,
+        ) -> ExecutionResult<R>
         + 's,
 >;
 
@@ -190,7 +186,7 @@ impl ValueIterator {
         &'s self,
         context: &ExecutionContext,
         callback: IterateCallback<'s, R>,
-    ) -> ExpressionResult<R> {
+    ) -> ExecutionResult<R> {
         self.source.iterate(move |iterator| {
             let mut stages = self.stages.iter();
             let iterator = &mut iterator.map(Ok);
@@ -237,16 +233,16 @@ impl IteratorStage {
         &self,
         context: &ExecutionContext,
         stage_iter: &mut dyn Iterator<Item = &IteratorStage>,
-        iterator: &mut dyn Iterator<Item = ExpressionResult<Value>>,
+        iterator: &mut dyn Iterator<Item = ExecutionResult<Value>>,
         callback: impl FnOnce(
             &ExecutionContext,
-            &mut dyn Iterator<Item = ExpressionResult<Value>>,
-        ) -> ExpressionResult<R>,
-    ) -> ExpressionResult<R> {
+            &mut dyn Iterator<Item = ExecutionResult<Value>>,
+        ) -> ExecutionResult<R>,
+    ) -> ExecutionResult<R> {
         let start_next_stage = move |iterator: &mut dyn Iterator<
-            Item = ExpressionResult<Value>,
+            Item = ExecutionResult<Value>,
         >|
-              -> ExpressionResult<R> {
+              -> ExecutionResult<R> {
             if let Some(next_stage) = stage_iter.next() {
                 next_stage.process::<R>(context, stage_iter, iterator, callback)
             } else {
@@ -259,7 +255,7 @@ impl IteratorStage {
             IteratorStage::Chunks { size } => {
                 let chunks = iterator.chunks(*size);
                 let mut iterator = chunks.into_iter().map(|chunk| {
-                    let buffer: Vec<_> = chunk.collect::<ExpressionResult<_>>()?;
+                    let buffer: Vec<_> = chunk.collect::<ExecutionResult<_>>()?;
                     let list = List::from_iter(context, buffer);
                     Ok(list.into())
                 });
@@ -269,7 +265,7 @@ impl IteratorStage {
             IteratorStage::ChunksExact { size } => {
                 let chunks = iterator.chunks(*size);
                 let mut iterator = chunks.into_iter().filter_map(|chunk| {
-                    let collection: ExpressionResult<Vec<_>> = chunk.collect();
+                    let collection: ExecutionResult<Vec<_>> = chunk.collect();
 
                     match collection {
                         Ok(buffer) => {
@@ -294,7 +290,7 @@ impl IteratorStage {
                 }),
             ),
             IteratorStage::Cycle { count } => {
-                let data: Vec<_> = iterator.collect::<ExpressionResult<_>>()?;
+                let data: Vec<_> = iterator.collect::<ExecutionResult<_>>()?;
                 let mut iterator = &mut std::iter::repeat_n(data.iter(), *count)
                     .flatten()
                     .cloned()
@@ -345,7 +341,7 @@ impl IteratorStage {
                                     HashMap::from_iter([("c".into(), value.clone())]),
                                 ),
                             )
-                            .and_then(|value| value.downcast::<Boolean>(context.stack_trace));
+                            .and_then(|value| value.downcast::<Boolean>(context));
 
                         match result {
                             Ok(keep) => {
@@ -396,14 +392,14 @@ impl IteratorStage {
                 fn chain_iterator<R>(
                     context: &ExecutionContext,
                     start_next_stage: impl FnOnce(
-                        &mut dyn Iterator<Item = ExpressionResult<Value>>,
-                    ) -> ExpressionResult<R>,
-                    previous_iterator: &mut dyn Iterator<Item = ExpressionResult<Value>>,
-                    iterators: &mut dyn Iterator<Item = ExpressionResult<Value>>,
-                ) -> ExpressionResult<R> {
+                        &mut dyn Iterator<Item = ExecutionResult<Value>>,
+                    ) -> ExecutionResult<R>,
+                    previous_iterator: &mut dyn Iterator<Item = ExecutionResult<Value>>,
+                    iterators: &mut dyn Iterator<Item = ExecutionResult<Value>>,
+                ) -> ExecutionResult<R> {
                     if let Some(result) = iterators.next() {
                         let value = result?;
-                        let sub_iterator: ValueIterator = value.downcast(context.stack_trace)?;
+                        let sub_iterator: ValueIterator = value.downcast(context)?;
 
                         sub_iterator.iterate(
                             context,
@@ -425,7 +421,7 @@ impl IteratorStage {
                 chain_iterator(context, start_next_stage, &mut [].into_iter(), iterator)
             }
             IteratorStage::Map { map } => {
-                let iterator = &mut iterator.map(|result| -> ExpressionResult<Value> {
+                let iterator = &mut iterator.map(|result| -> ExecutionResult<Value> {
                     let value = result?;
                     map.call(
                         context,
@@ -478,7 +474,7 @@ impl IteratorStage {
                                 HashMap::from_iter([("c".into(), value.clone())]),
                             ),
                         )
-                        .and_then(|value| value.downcast::<Boolean>(context.stack_trace))?
+                        .and_then(|value| value.downcast::<Boolean>(context))?
                         .0;
 
                     if !should_skip {
@@ -509,7 +505,7 @@ impl IteratorStage {
                                     HashMap::from_iter([("c".into(), value.clone())]),
                                 ),
                             )
-                            .and_then(|value| value.downcast::<Boolean>(context.stack_trace));
+                            .and_then(|value| value.downcast::<Boolean>(context));
 
                         match result {
                             Ok(should_continue) => {
@@ -806,7 +802,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                                 HashMap::from_iter([("c".into(), value.clone())]),
                             ),
                         )
-                        .and_then(|value| value.downcast::<Boolean>(context.stack_trace))?;
+                        .and_then(|value| value.downcast::<Boolean>(context))?;
 
                     if !passes.0 {
                         return Ok(Boolean(false));
@@ -838,7 +834,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                                 HashMap::from_iter([("c".into(), value.clone())]),
                             ),
                         )
-                        .and_then(|value| value.downcast::<Boolean>(context.stack_trace))?;
+                        .and_then(|value| value.downcast::<Boolean>(context))?;
 
                     if passes.0 {
                         return Ok(Boolean(true));
@@ -856,7 +852,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             this: ValueIterator
         ) -> List {
             this.iterate(context, Box::new(|_context, iterator| {
-                let values = iterator.collect::<ExpressionResult<Vec<Value>>>()?;
+                let values = iterator.collect::<ExecutionResult<Vec<Value>>>()?;
                 Ok(List::from_iter(context, values.into_iter()))
             }))
         }
@@ -872,7 +868,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
                 for value in iterator {
                     let value = value?;
-                    let string: IString = value.downcast(context.stack_trace)?;
+                    let string: IString = value.downcast(context)?;
 
                     collected += string.0.as_str();
                 }

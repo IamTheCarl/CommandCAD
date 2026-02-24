@@ -31,8 +31,8 @@ use nom::{
 };
 
 use crate::execution::{
-    errors::{ExpressionResult, GenericFailure, Raise},
-    logging::{LocatedStr, StackTrace},
+    errors::{ExecutionResult, Raise, StringError},
+    logging::LocatedStr,
     values::{Dictionary, Object, UnsignedInteger},
     ExecutionContext,
 };
@@ -184,12 +184,12 @@ impl Format {
         context: &ExecutionContext,
         f: &mut dyn Write,
         arguments: Dictionary,
-    ) -> ExpressionResult<()> {
+    ) -> ExecutionResult<()> {
         fn get_precision(
             context: &ExecutionContext,
             precision: &Precision,
             arguments: &Dictionary,
-        ) -> ExpressionResult<Option<u8>> {
+        ) -> ExecutionResult<Option<u8>> {
             match precision {
                 Precision::Default => Ok(None),
                 Precision::Inline(precision) => Ok(Some(*precision)),
@@ -202,69 +202,65 @@ impl Format {
                             })
                             .ok()
                     }) {
-                        let precision = argument
-                            .downcast_ref::<UnsignedInteger>(context.stack_trace)?
-                            .0;
+                        let precision = argument.downcast_ref::<UnsignedInteger>(context)?.0;
 
                         if precision <= u8::MAX as u64 {
                             Ok(Some(precision as u8))
                         } else {
-                            Err(GenericFailure(
-                                format!(
-                                    "Precision of {precision} is not in the valid range of 0 to {}",
-                                    u8::MAX
-                                )
-                                .into(),
-                            )
-                            .to_error(context.stack_trace))
+                            Err(StringError(format!(
+                                "Precision of {precision} is not in the valid range of 0 to {}",
+                                u8::MAX
+                            ))
+                            .to_error(context))
                         }
                     } else {
-                        Err(
-                            GenericFailure(format!("Could not find argument `{name}`").into())
-                                .to_error(context.stack_trace),
-                        )
+                        Err(StringError(format!("Could not find argument `{name}`"))
+                            .to_error(context))
                     }
                 }
             }
         }
 
-        for component in self.components.iter() {
-            match component {
-                Component::Litteral(text) => {
-                    write!(f, "{}", text).unwrap_formatting_result(context.stack_trace)?
-                }
-                Component::Parameter(Parameter {
-                    name,
-                    style,
-                    precision,
-                }) => {
-                    let precision = get_precision(context, precision, &arguments)?;
+        context.trace_scope(
+            Some("Failed to format string".into()),
+            context.stack_trace.bottom().clone(),
+            |context| {
+                for component in self.components.iter() {
+                    match component {
+                        Component::Litteral(text) => {
+                            write!(f, "{}", text).map_err(|error| error.to_error(context))?;
+                        }
+                        Component::Parameter(Parameter {
+                            name,
+                            style,
+                            precision,
+                        }) => {
+                            let precision = get_precision(context, precision, &arguments)?;
 
-                    if let Some(argument) = arguments.get(name.as_str()).or_else(|| {
-                        context
-                            .get_variable(LocatedStr {
-                                location: context.stack_trace.bottom().clone(),
-                                string: name.as_str(),
-                            })
-                            .ok()
-                    }) {
-                        argument
-                            .format(context, f, *style, precision)
-                            .map_err(|error| {
-                                GenericFailure(format!("Error while formatting: {error:?}").into())
-                                    .to_error(context.stack_trace)
-                            })?;
-                    } else {
-                        return Err(GenericFailure(
-                            format!("Could not find argument `{name}`").into(),
-                        )
-                        .to_error(context.stack_trace));
+                            if let Some(argument) = arguments.get(name.as_str()).or_else(|| {
+                                context
+                                    .get_variable(LocatedStr {
+                                        location: context.stack_trace.bottom().clone(),
+                                        string: name.as_str(),
+                                    })
+                                    .ok()
+                            }) {
+                                argument
+                                    .format(context, f, *style, precision)
+                                    .map_err(|error| error.to_error(context))?;
+                            } else {
+                                return Err(StringError(format!(
+                                    "Could not find argument `{name}`"
+                                ))
+                                .to_error(context));
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        Ok(())
+                Ok(())
+            },
+        )
     }
 }
 
@@ -273,22 +269,6 @@ fn number(input: &str) -> VResult<&str, u8> {
         digits.parse::<u8>().unwrap()
     })
     .parse(input)
-}
-
-pub trait UnwrapFormattingResult<R> {
-    fn unwrap_formatting_result(self, stack_trace: &StackTrace) -> ExpressionResult<R>;
-}
-
-impl<R> UnwrapFormattingResult<R> for std::result::Result<R, std::fmt::Error> {
-    fn unwrap_formatting_result(self, stack_trace: &StackTrace) -> ExpressionResult<R> {
-        match self {
-            Ok(result) => Ok(result),
-            Err(error) => {
-                Err(GenericFailure(format!("Failed to format: {error}",).into())
-                    .to_error(stack_trace))
-            }
-        }
-    }
 }
 
 #[cfg(test)]

@@ -25,7 +25,7 @@ use crate::{
     compile::{AstNode, ClosureDefinition, Expression},
     execute_expression,
     execution::{
-        errors::{ExpressionResult, Raise},
+        errors::{ExecutionResult, Raise},
         find_all_variable_accesses_in_expression,
         logging::{LocatedStr, LogLevel, LogMessage},
         stack::ScopeType,
@@ -114,8 +114,8 @@ impl Display for Signature {
 
 pub fn find_all_variable_accesses_in_closure_capture(
     closure: &crate::compile::ClosureDefinition,
-    mut access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExpressionResult<()>,
-) -> ExpressionResult<()> {
+    mut access_collector: &mut dyn FnMut(&AstNode<ImString>) -> ExecutionResult<()>,
+) -> ExecutionResult<()> {
     let argument_names: Vec<&ImString> = {
         let mut argument_names = Vec::with_capacity(closure.argument_type.node.members.len());
 
@@ -163,18 +163,21 @@ impl UserClosure {
     pub fn from_ast(
         context: &ExecutionContext,
         source: &AstNode<Box<ClosureDefinition>>,
-    ) -> ExpressionResult<Self> {
-        let argument_type =
-            context.trace_scope(source.node.argument_type.reference.clone(), |context| {
+    ) -> ExecutionResult<Self> {
+        let argument_type = context.trace_scope(
+            None,
+            source.node.argument_type.reference.clone(),
+            |context| {
                 let argument_type = StructDefinition::new(context, &source.node.argument_type)?;
 
                 Ok(argument_type)
-            })?;
+            },
+        )?;
 
         let return_type =
-            context.trace_scope(source.node.return_type.reference.clone(), |context| {
+            context.trace_scope(None, source.node.return_type.reference.clone(), |context| {
                 execute_expression(context, &source.node.return_type)?
-                    .downcast::<ValueType>(context.stack_trace)
+                    .downcast::<ValueType>(context)
             })?;
 
         let signature = Arc::new(Signature {
@@ -244,12 +247,12 @@ impl Object for UserClosure {
         write!(f, "{}", self.get_type(context))
     }
 
-    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value> {
+    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
         self.data
             .signature
             .argument_type
             .check_other_qualifies(argument.struct_def())
-            .map_err(|error| error.to_error(context.stack_trace))?;
+            .map_err(|error| error.to_error(context))?;
 
         let argument = self.data.signature.argument_type.fill_defaults(argument);
 
@@ -266,7 +269,7 @@ impl Object for UserClosure {
                 .signature
                 .return_type
                 .check_other_qualifies(&result.get_type(context))
-                .map_err(|error| error.to_error(context.stack_trace))?;
+                .map_err(|error| error.to_error(context))?;
 
             Ok(result)
         })?
@@ -280,7 +283,7 @@ impl StaticTypeName for UserClosure {
 }
 
 pub trait BuiltinCallable: Sync + Send {
-    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value>;
+    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value>;
 
     fn name(&self) -> &str;
 
@@ -400,7 +403,7 @@ macro_rules! build_function_callable {
     ($name:literal ($context:ident: &ExecutionContext $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:ty $code:block) => {{
         struct BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value>
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExecutionResult<$crate::execution::values::Value>
         {
             function: F,
             signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
@@ -409,13 +412,13 @@ macro_rules! build_function_callable {
 
         impl<F> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value> + Send + Sync,
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExecutionResult<$crate::execution::values::Value> + Send + Sync,
         {
             fn call(
                 &self,
                 context: &$crate::execution::ExecutionContext,
                 argument: $crate::execution::values::Dictionary,
-            ) -> $crate::execution::errors::ExpressionResult<$crate::execution::values::Value> {
+            ) -> $crate::execution::errors::ExecutionResult<$crate::execution::values::Value> {
                 (self.function)(context, &self.signature, argument)
             }
 
@@ -433,20 +436,20 @@ macro_rules! build_function_callable {
                 $context: &$crate::execution::ExecutionContext,
                 signature: &$crate::execution::values::closure::Signature,
                 argument: $crate::execution::values::Dictionary
-            | -> $crate::execution::ExpressionResult<$crate::execution::values::Value> {
+            | -> $crate::execution::ExecutionResult<$crate::execution::values::Value> {
                 use $crate::execution::errors::Raise as _;
 
                 signature
                     .argument_type
                     .check_other_qualifies(argument.struct_def())
-                    .map_err(|error| error.to_error($context.stack_trace.iter()))?;
+                    .map_err(|error| error.to_error($context))?;
 
                 // Argument is potentially unused if we take no arguments.
                 let mut _argument = signature.argument_type.fill_defaults(argument);
 
                 let _data = std::sync::Arc::make_mut(&mut _argument.data);
                 $($(let $arg: $ty = _data.members.remove(stringify!($arg))
-                        .expect("Argument was not present after argument check.").downcast::<$ty>($context.stack_trace)?;)*)?
+                        .expect("Argument was not present after argument check.").downcast::<$ty>($context)?;)*)?
 
                 let result: $return_type = {
                     $code?
@@ -477,7 +480,7 @@ macro_rules! build_method_callable {
     ) => {{
         struct BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value>
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExecutionResult<$crate::execution::values::Value>
         {
             function: F,
             signature: std::sync::Arc<$crate::execution::values::closure::Signature>,
@@ -486,13 +489,13 @@ macro_rules! build_method_callable {
 
         impl<F> $crate::execution::values::closure::BuiltinCallable for BuiltFunction<F>
         where
-            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExpressionResult<$crate::execution::values::Value> + Send + Sync,
+            F: Fn(&$crate::execution::ExecutionContext, &$crate::execution::values::closure::Signature, $crate::values::Dictionary) -> $crate::execution::ExecutionResult<$crate::execution::values::Value> + Send + Sync,
         {
             fn call(
                 &self,
                 context: &$crate::execution::ExecutionContext,
                 argument: $crate::execution::values::Dictionary,
-            ) -> $crate::execution::errors::ExpressionResult<$crate::execution::values::Value> {
+            ) -> $crate::execution::errors::ExecutionResult<$crate::execution::values::Value> {
                 (self.function)(context, &self.signature, argument)
             }
 
@@ -510,7 +513,7 @@ macro_rules! build_method_callable {
                 $context: &$crate::execution::ExecutionContext,
                 signature: &$crate::execution::values::closure::Signature,
                 argument: $crate::execution::values::Dictionary
-            | -> $crate::execution::ExpressionResult<$crate::execution::values::Value> {
+            | -> $crate::execution::ExecutionResult<$crate::execution::values::Value> {
                 use $crate::execution::errors::Raise as _;
 
                 let $this = $context.get_variable(
@@ -518,19 +521,19 @@ macro_rules! build_method_callable {
                         location: $context.stack_trace.bottom().clone(),
                         string: "self",
                     },
-                )?.downcast_ref::<$this_type>($context.stack_trace)?.clone();
+                )?.downcast_ref::<$this_type>($context)?.clone();
 
                 signature
                     .argument_type
                     .check_other_qualifies(argument.struct_def())
-                    .map_err(|error| error.to_error($context.stack_trace.iter()))?;
+                    .map_err(|error| error.to_error($context))?;
 
                 // Argument is potentially unused if we take no arguments.
                 let mut _argument = signature.argument_type.fill_defaults(argument);
 
                 let _data = std::sync::Arc::make_mut(&mut _argument.data);
                 $($(let $arg: $ty = _data.members.remove(stringify!($arg))
-                        .expect("Argument was not present after argument check.").downcast::<$ty>($context.stack_trace)?;)*)?
+                        .expect("Argument was not present after argument check.").downcast::<$ty>($context)?;)*)?
 
                 let result: $return_type = {
                     $code?
@@ -600,7 +603,7 @@ impl Object for BuiltinFunction {
         context.database.get_callable(self.0).callable.scope_type()
     }
 
-    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExpressionResult<Value> {
+    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
         context
             .database
             .get_callable(self.0)
@@ -617,9 +620,12 @@ impl StaticTypeName for BuiltinFunction {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::execution::{
-        test_context_custom_database, test_run,
-        values::{self, SignedInteger, StructMember, UnsignedInteger},
+    use crate::{
+        execution::{
+            test_context_custom_database, test_run,
+            values::{self, SignedInteger, StructMember, UnsignedInteger},
+        },
+        values::value_type::{MissmatchedField, TypeQualificationError},
     };
     use hashable_map::HashableMap;
     use pretty_assertions::assert_eq;
@@ -660,18 +666,41 @@ mod test {
 
     #[test]
     fn call_closure_bad_args() {
-        test_run(
+        let error = test_run(
             "let my_function = (a: std.types.UInt) -> std.types.UInt: a + 2u; in my_function(a = 3i)",
         )
         .unwrap_err();
+        let error = error.ty.as_any();
+        let error: &TypeQualificationError = error.downcast_ref().unwrap();
+        assert_eq!(
+            *error,
+            TypeQualificationError::Fields {
+                failed_feilds: vec![MissmatchedField {
+                    name: "a".into(),
+                    error: TypeQualificationError::This {
+                        expected: ValueType::UnsignedInteger,
+                        got: ValueType::SignedInteger,
+                    },
+                },],
+            }
+        );
     }
 
     #[test]
     fn call_closure_bad_result() {
-        test_run(
+        let error = test_run(
             "let my_function = (a: std.types.UInt) -> std.types.UInt: \"test\"; in my_function(a = 3u)",
         )
         .unwrap_err();
+        let error = error.ty.as_any();
+        let error: &TypeQualificationError = error.downcast_ref().unwrap();
+        assert_eq!(
+            *error,
+            TypeQualificationError::This {
+                expected: ValueType::UnsignedInteger,
+                got: ValueType::String
+            }
+        );
     }
 
     #[test]
@@ -936,7 +965,7 @@ mod test {
                 this: Dictionary,
                 to_add: UnsignedInteger
             ) -> UnsignedInteger {
-                let value: UnsignedInteger = this.get_attribute(context, "value")?.downcast(context.stack_trace)?;
+                let value: UnsignedInteger = this.get_attribute(context, "value")?.downcast(context)?;
 
                 Ok(values::UnsignedInteger::from(value.0 + to_add.0))
             }

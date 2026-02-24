@@ -23,7 +23,6 @@ use imstr::ImString;
 use crate::{
     build_method,
     execution::{
-        errors::GenericFailure,
         logging::{LogLevel, LogMessage},
         values::{
             string::formatting::Style, BuiltinCallableDatabase, IString, Object, StaticTypeName,
@@ -102,10 +101,12 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: File
         ) -> IString {
-            let content = std::fs::read_to_string(this.path.as_path())
-                .map_err(|error| GenericFailure(format!("Failed to read file to string: {error:?}").into()).to_error(context.stack_trace))?;
+            context.trace_scope(Some("Failed to read file to string".into()), context.stack_trace.bottom().clone(), |context| {
+                let content = std::fs::read_to_string(this.path.as_path())
+                    .map_err(|error| error.to_error(context))?;
 
-            Ok(IString(ImString::from(content)))
+                Ok(IString(ImString::from(content)))
+            })
         }
     );
 }

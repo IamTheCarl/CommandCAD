@@ -30,7 +30,7 @@ use std::{
 use crate::{
     build_function,
     execution::{
-        errors::{ExpressionResult, GenericFailure, Raise},
+        errors::{ExecutionResult, Raise, StrError},
         logging::{LogLevel, LogMessage, StackTrace},
         values::{
             closure::BuiltinCallableDatabase, integer::methods::MethodSet,
@@ -117,103 +117,89 @@ where
         }
     }
 
-    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0 & rhs.0).into())
     }
-    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0 | rhs.0).into())
     }
-    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0 ^ rhs.0).into())
     }
 
-    fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Ordering> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn cmp(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Ordering> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(self.0.cmp(&rhs.0))
     }
-    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0.checked_add(&rhs.0).ok_or_else(|| {
-            GenericFailure(
-                "Integer overflow: The computed value is too large to store in the integer".into(),
-            )
-            .to_error(context.stack_trace)
+            StrError("Integer overflow: The computed value is too large to store in the integer")
+                .to_error(context)
         })?)
         .into())
     }
-    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0.checked_sub(&rhs.0).ok_or_else(|| {
-            GenericFailure(
-                "Integer underflow: The computed value is too small to store in the integer".into(),
-            )
-            .to_error(context.stack_trace)
+            StrError("Integer underflow: The computed value is too small to store in the integer")
+                .to_error(context)
         })?)
         .into())
     }
-    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0.checked_mul(&rhs.0).ok_or_else(|| {
-            GenericFailure(
-                "Integer overflow: The computed value is too large to store in the integer".into(),
-            )
-            .to_error(context.stack_trace)
+            StrError("Integer overflow: The computed value is too large to store in the integer")
+                .to_error(context)
         })?)
         .into())
     }
-    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn divide(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(
             self.0
                 .checked_div(&rhs.0)
-                .ok_or_else(|| GenericFailure("The computed value is either too large to store in the integer or you attempted to divide by zero".into()).to_error(context.stack_trace))?,
+                .ok_or_else(|| StrError("The computed value is either too large to store in the integer or you attempted to divide by zero").to_error(context))?,
         )
         .into())
     }
-    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn exponent(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
 
         // This failure can only happen on 32bit (or less) systems.
         let rhs = rhs.0.to_usize().ok_or_else(|| {
-            GenericFailure(
-                "Integer overflow: The requested exponent is larger than the host machine word size".into(),
-            )
-            .to_error(context.stack_trace)
+            StrError("Integer overflow: The requested exponent is larger than the host machine word size")
+                .to_error(context)
         })?;
 
         Ok(Self(checked_pow(self.0, rhs).ok_or_else(|| {
-            GenericFailure(
-                "Integer overflow: The computed value is too large to store in the integer".into(),
-            )
-            .to_error(context.stack_trace)
+            StrError("Integer overflow: The computed value is too large to store in the integer")
+                .to_error(context)
         })?)
         .into())
     }
-    fn left_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn left_shift(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0 << rhs.0).into())
     }
-    fn right_shift(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<Value> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn right_shift(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(Self(self.0 >> rhs.0).into())
     }
-    fn unary_plus(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_plus(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(self.into())
     }
-    fn unary_minus(self, context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_minus(self, context: &ExecutionContext) -> ExecutionResult<Value> {
         self.0.neg(context.stack_trace)
     }
-    fn unary_not(self, _context: &ExecutionContext) -> ExpressionResult<Value> {
+    fn unary_not(self, _context: &ExecutionContext) -> ExecutionResult<Value> {
         Ok(Self(!self.0).into())
     }
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "count_ones" => Ok(BuiltinFunction::new::<
                 <<I as IntOps>::MethodSet as methods::MethodSet>::CountOnes,
@@ -282,7 +268,7 @@ where
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 }
@@ -326,7 +312,7 @@ trait IntOps:
 {
     type MethodSet: MethodSet + 'static;
 
-    fn neg(&self, stack_trace: &StackTrace) -> ExpressionResult<Value>;
+    fn neg(&self, stack_trace: &StackTrace) -> ExecutionResult<Value>;
 
     fn count_ones(&self) -> u64;
     fn count_zeros(&self) -> u64;
@@ -360,7 +346,7 @@ trait IntOps:
 impl IntOps for i64 {
     type MethodSet = methods::SignedIntegerMethodSet;
 
-    fn neg(&self, _stack_trace: &StackTrace) -> ExpressionResult<Value> {
+    fn neg(&self, _stack_trace: &StackTrace) -> ExecutionResult<Value> {
         Ok(SignedInteger::from(-self).into())
     }
 
@@ -451,7 +437,7 @@ impl StaticType for i64 {
 impl IntOps for u64 {
     type MethodSet = methods::UnsignedIntegerMethodSet;
 
-    fn neg(&self, stack_trace: &StackTrace) -> ExpressionResult<Value> {
+    fn neg(&self, stack_trace: &StackTrace) -> ExecutionResult<Value> {
         Err(super::UnsupportedOperationError {
             type_name: UnsignedInteger::static_type_name(),
             operation_name: "negate",
@@ -808,15 +794,15 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let end = end.0;
 
             if inclusive && reverse && end == 0 {
-                return Err(GenericFailure("Range ending will be less than zero, which is not possible for an unsigned integer".into()).to_error(context.stack_trace));
+                return Err(StrError("Range ending will be less than zero, which is not possible for an unsigned integer").to_error(context));
             }
 
             if reverse {
                 if start < end {
-                    return Err(GenericFailure("Start cannot be less than end when iterating a reversed range".into()).to_error(context.stack_trace));
+                    return Err(StrError("Start cannot be less than end when iterating a reversed range").to_error(context));
                 }
             } else if start > end {
-                return Err(GenericFailure("Start cannot be greater than end when iterating a range".into()).to_error(context.stack_trace));
+                return Err(StrError("Start cannot be greater than end when iterating a range").to_error(context));
             }
 
             Ok(ValueIterator::new(Range { start, end, inclusive, reverse }))
@@ -838,10 +824,10 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
             if reverse {
                 if start < end {
-                    return Err(GenericFailure("Start cannot be less than end when iterating a reversed range".into()).to_error(context.stack_trace));
+                    return Err(StrError("Start cannot be less than end when iterating a reversed range").to_error(context));
                 }
             } else if start > end {
-                return Err(GenericFailure("Start cannot be greater than end when iterating a range".into()).to_error(context.stack_trace));
+                return Err(StrError("Start cannot be greater than end when iterating a range").to_error(context));
             }
 
             Ok(ValueIterator::new(Range { start, end, inclusive, reverse }))
@@ -867,8 +853,8 @@ where
 {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
-    ) -> ExpressionResult<R> {
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+    ) -> ExecutionResult<R> {
         // We had to implement a lot of this manually due to std::range::Step not being stable yet.
         let mut index = self.start;
         let end = match (self.inclusive, self.reverse) {
@@ -907,7 +893,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::execution::{test_run, values::Boolean};
+    use crate::{
+        execution::{test_run, values::Boolean},
+        values::UnsupportedOperationError,
+    };
 
     use super::*;
 
@@ -1155,7 +1144,10 @@ mod test {
 
     #[test]
     fn unsigned_unary_minus() {
-        test_run("-3u").unwrap_err();
+        let error = test_run("-3u").unwrap_err();
+        let error = error.ty.as_any();
+        let error: &UnsupportedOperationError = error.downcast_ref().unwrap();
+        assert_eq!(error.operation_name, "negate");
     }
 
     #[test]

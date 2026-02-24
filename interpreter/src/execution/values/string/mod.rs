@@ -23,7 +23,7 @@ use imstr::ImString;
 use crate::{
     build_closure_type, build_method,
     execution::{
-        errors::{GenericFailure, Raise},
+        errors::{Raise, StringError},
         logging::{LocatedStr, LogLevel, LogMessage},
         stack::ScopeType,
         values::{
@@ -38,7 +38,7 @@ use crate::{
     values::iterators::{IterableObject, ValueIterator},
 };
 
-use super::{value_type::ValueType, ExpressionResult, Object, StaticTypeName, Value};
+use super::{value_type::ValueType, ExecutionResult, Object, StaticTypeName, Value};
 
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
@@ -78,16 +78,12 @@ impl Object for IString {
         write!(f, "{}", self.0)
     }
 
-    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExpressionResult<bool> {
-        let rhs: &Self = rhs.downcast_for_binary_op_ref(context.stack_trace)?;
+    fn eq(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<bool> {
+        let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
         Ok(self.0 == rhs.0)
     }
 
-    fn get_attribute(
-        &self,
-        context: &ExecutionContext,
-        attribute: &str,
-    ) -> ExpressionResult<Value> {
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "format" => Ok(BuiltinFunction::new::<methods::Format>().into()),
 
@@ -117,7 +113,7 @@ impl Object for IString {
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(context.stack_trace)),
+            .to_error(context)),
         }
     }
 }
@@ -151,8 +147,8 @@ pub struct CharIterator {
 impl IterableObject for CharIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
-    ) -> ExpressionResult<R> {
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+    ) -> ExecutionResult<R> {
         let mut iter = self
             .string
             .0
@@ -171,8 +167,8 @@ pub struct LineIterator {
 impl IterableObject for LineIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExpressionResult<R>,
-    ) -> ExpressionResult<R> {
+        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+    ) -> ExecutionResult<R> {
         let mut iterator = self
             .string
             .0
@@ -215,23 +211,26 @@ fn register_format_method(database: &mut BuiltinCallableDatabase) {
     }
 
     impl BuiltinCallable for BuiltFunction {
-        fn call(
-            &self,
-            context: &ExecutionContext,
-            argument: Dictionary,
-        ) -> ExpressionResult<Value> {
+        fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
             let this = context
                 .get_variable(LocatedStr {
                     location: context.stack_trace.bottom().clone(),
                     string: "self",
                 })?
-                .downcast_ref::<IString>(context.stack_trace)?
+                .downcast_ref::<IString>(context)?
                 .clone();
 
-            let (excess, format) = Format::parse(&this.0).map_err(|error| {
-                GenericFailure(format!("Failed to parse formatting string: {error:?}").into())
-                    .to_error(context.stack_trace)
-            })?;
+            let (excess, format) = context.trace_scope(
+                Some("".into()),
+                context.stack_trace.bottom().clone(),
+                |_context| {
+                    // The error message of this type is dependent on the lifetime of `this`, so we
+                    // encode it to a string to make the lifetime static.
+                    Format::parse(&this.0)
+                        .map_err(|error| StringError(format!("{error:?}")).to_error(context))
+                },
+            )?;
+
             assert!(excess.is_empty());
 
             let mut output = String::new();
@@ -362,7 +361,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                         "c".into(),
                         IString(ImString::from(format!("{c}"))).into()
                     )
-                ])))?.downcast::<Boolean>(context.stack_trace)?;
+                ])))?.downcast::<Boolean>(context)?;
 
                 if retain.0 {
                     product.push(c);
@@ -421,11 +420,13 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: IString
         ) -> Scalar {
-            let value = this.0.parse::<Float>()
-                .map_err(|error| GenericFailure(format!("Failed to parse scalar value: {error:?}").into()).to_error(context.stack_trace))?;
-            Ok(Scalar {
-                dimension: Dimension::zero(),
-                value,
+            context.trace_scope(Some("Failed to parse scalar value".into()), context.stack_trace.bottom().clone(), |context| {
+                let value = this.0.parse::<Float>()
+                    .map_err(|error| error.to_error(context))?;
+                Ok(Scalar {
+                    dimension: Dimension::zero(),
+                    value,
+                })
             })
         }
     );
@@ -435,9 +436,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: IString
         ) -> UnsignedInteger {
-            let value = this.0.parse::<u64>()
-                .map_err(|error| GenericFailure(format!("Failed to parse unsigned integer: {error:?}").into()).to_error(context.stack_trace))?;
-            Ok(UnsignedInteger::from(value))
+            context.trace_scope(Some("Failed to parse unsigned integer".into()), context.stack_trace.bottom().clone(), |context| {
+                let value = this.0.parse::<u64>()
+                    .map_err(|error| error.to_error(context))?;
+                Ok(UnsignedInteger::from(value))
+            })
         }
     );
     build_method!(
@@ -446,9 +449,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: IString
         ) -> SignedInteger {
-            let value = this.0.parse::<i64>()
-                .map_err(|error| GenericFailure(format!("Failed to parse signed integer: {error:?}").into()).to_error(context.stack_trace))?;
-            Ok(SignedInteger::from(value))
+            context.trace_scope(Some("Failed to parse signed integer".into()), context.stack_trace.bottom().clone(), |context| {
+                let value = this.0.parse::<i64>()
+                    .map_err(|error| error.to_error(context))?;
+                Ok(SignedInteger::from(value))
+            })
         }
     );
     build_method!(

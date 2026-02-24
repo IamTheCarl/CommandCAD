@@ -20,14 +20,15 @@ use std::{any::Any, borrow::Cow, fmt::Display};
 
 use ariadne::{Label, Report, ReportKind};
 
-use crate::compile::SourceReference;
+use crate::{compile::SourceReference, StackTrace};
 
-pub type ExpressionResult<R> = std::result::Result<R, Error>;
+pub type ExecutionResult<R> = std::result::Result<R, Error>;
 
 #[derive(Debug)]
 pub struct Error {
     pub ty: Box<dyn ErrorType>,
     pub trace: Vec<SourceReference>,
+    pub failure_chain: Vec<Cow<'static, str>>,
 }
 
 impl Error {
@@ -37,6 +38,8 @@ impl Error {
         let mut builder = Report::build(ReportKind::Error, bottom.clone());
         builder.set_message("Failed to evaluate");
         builder.add_label(Label::new(bottom).with_message(format!("{}", self.ty)));
+
+        builder.with_helps(self.failure_chain.iter());
 
         builder.finish()
     }
@@ -58,27 +61,61 @@ impl std::error::Error for Error {}
 
 /// A generic error that will just display a static message.
 #[derive(Debug, Eq, PartialEq)]
-pub struct GenericFailure(pub Cow<'static, str>);
+pub struct StrError(pub &'static str);
 
-impl ErrorType for GenericFailure {}
+impl std::error::Error for StrError {}
 
-impl Display for GenericFailure {
+impl Display for StrError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-pub trait ErrorType: std::fmt::Debug + std::fmt::Display + Any + Send + Sync {}
+/// A generic error that will just display a formatted message.
+#[derive(Debug, Eq, PartialEq)]
+pub struct StringError(pub String);
+
+impl std::error::Error for StringError {}
+
+impl Display for StringError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+pub trait ErrorType: std::error::Error + Send + Sync + Any {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<E> ErrorType for E
+where
+    E: std::error::Error + Send + Sync + Any,
+{
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
+    }
+}
 
 pub trait Raise {
-    fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error;
+    fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s StackTrace<'s>>) -> Error;
 }
 
 impl<E: ErrorType> Raise for E {
-    fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error {
+    fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s StackTrace<'s>>) -> Error {
+        let mut trace = Vec::new();
+        let mut failure_chain = Vec::new();
+
+        for layer in stack_trace {
+            trace.push(layer.reference.clone());
+            if let Some(message) = layer.failure_message.clone() {
+                failure_chain.push(message);
+            }
+        }
+
         Error {
             ty: Box::new(self),
-            trace: stack_trace.into_iter().cloned().collect(),
+            trace,
+            failure_chain,
         }
     }
 }
