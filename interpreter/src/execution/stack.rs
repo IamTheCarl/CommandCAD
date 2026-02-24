@@ -172,7 +172,11 @@ impl<'p> StackScope<'p> {
                 variable_name: ImString::from(name.string),
                 suggestions: self.suggest_similar_names(local_variables, name.string),
             }
-            .to_error(stack_trace.iter().chain([&name.location])))
+            .to_error(stack_trace.iter().chain([&StackTrace {
+                parent: None,
+                reference: name.location.clone(),
+                failure_message: None,
+            }])))
         }
     }
 }

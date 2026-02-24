@@ -33,6 +33,7 @@ use crate::{
         ExecutionContext,
     },
     values::StaticType,
+    StackTrace,
 };
 
 use super::{
@@ -168,7 +169,11 @@ impl Dictionary {
                         if members.insert(name.clone(), value.clone()).is_some() {
                             // That's a duplicate member.
                             return Err(DuplicateMemberError { name }.to_error(
-                                context.stack_trace.iter().chain([&ast_node.reference]),
+                                context.stack_trace.iter().chain([&StackTrace {
+                                    parent: None,
+                                    reference: ast_node.reference.clone(),
+                                    failure_message: None,
+                                }]),
                             ));
                         }
 

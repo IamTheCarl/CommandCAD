@@ -16,11 +16,11 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::Any, fmt::Display};
+use std::{any::Any, borrow::Cow, fmt::Display};
 
 use ariadne::{Label, Report, ReportKind};
 
-use crate::compile::SourceReference;
+use crate::{compile::SourceReference, StackTrace};
 
 pub type ExecutionResult<R> = std::result::Result<R, Error>;
 
@@ -28,13 +28,8 @@ pub type ExecutionResult<R> = std::result::Result<R, Error>;
 pub struct Error {
     pub ty: Box<dyn ErrorType>,
     pub trace: Vec<SourceReference>,
+    pub failure_chain: Vec<Cow<'static, str>>,
 }
-
-// Error: Doing thing with context
-//
-// Caused by:
-//     0: Doing thing with extra context
-//     1: Failed
 
 impl Error {
     pub fn report(&self) -> Report<'_, SourceReference> {
@@ -43,6 +38,8 @@ impl Error {
         let mut builder = Report::build(ReportKind::Error, bottom.clone());
         builder.set_message("Failed to evaluate");
         builder.add_label(Label::new(bottom).with_message(format!("{}", self.ty)));
+
+        builder.with_helps(self.failure_chain.iter());
 
         builder.finish()
     }
@@ -100,14 +97,25 @@ where
 }
 
 pub trait Raise {
-    fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error;
+    fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s StackTrace<'s>>) -> Error;
 }
 
 impl<E: ErrorType> Raise for E {
-    fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error {
+    fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s StackTrace<'s>>) -> Error {
+        let mut trace = Vec::new();
+        let mut failure_chain = Vec::new();
+
+        for layer in stack_trace {
+            trace.push(layer.reference.clone());
+            if let Some(message) = layer.failure_message.clone() {
+                failure_chain.push(message);
+            }
+        }
+
         Error {
             ty: Box::new(self),
-            trace: stack_trace.into_iter().cloned().collect(),
+            trace,
+            failure_chain,
         }
     }
 }

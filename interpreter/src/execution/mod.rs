@@ -277,7 +277,7 @@ impl<'c> ExecutionContext<'c> {
 }
 
 impl<'s> IntoIterator for &'s ExecutionContext<'_> {
-    type Item = &'s SourceReference;
+    type Item = &'s StackTrace<'s>;
 
     type IntoIter = StackTraceIter<'s>;
 
