@@ -893,7 +893,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::execution::{test_run, values::Boolean};
+    use crate::{
+        execution::{test_run, values::Boolean},
+        values::UnsupportedOperationError,
+    };
 
     use super::*;
 
@@ -1141,7 +1144,10 @@ mod test {
 
     #[test]
     fn unsigned_unary_minus() {
-        test_run("-3u").unwrap_err();
+        let error = test_run("-3u").unwrap_err();
+        let error = error.ty.as_any();
+        let error: &UnsupportedOperationError = error.downcast_ref().unwrap();
+        assert_eq!(error.operation_name, "negate");
     }
 
     #[test]

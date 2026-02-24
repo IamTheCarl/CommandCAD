@@ -620,9 +620,12 @@ impl StaticTypeName for BuiltinFunction {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::execution::{
-        test_context_custom_database, test_run,
-        values::{self, SignedInteger, StructMember, UnsignedInteger},
+    use crate::{
+        execution::{
+            test_context_custom_database, test_run,
+            values::{self, SignedInteger, StructMember, UnsignedInteger},
+        },
+        values::value_type::{MissmatchedField, TypeQualificationError},
     };
     use hashable_map::HashableMap;
     use pretty_assertions::assert_eq;
@@ -663,18 +666,41 @@ mod test {
 
     #[test]
     fn call_closure_bad_args() {
-        test_run(
+        let error = test_run(
             "let my_function = (a: std.types.UInt) -> std.types.UInt: a + 2u; in my_function(a = 3i)",
         )
         .unwrap_err();
+        let error = error.ty.as_any();
+        let error: &TypeQualificationError = error.downcast_ref().unwrap();
+        assert_eq!(
+            *error,
+            TypeQualificationError::Fields {
+                failed_feilds: vec![MissmatchedField {
+                    name: "a".into(),
+                    error: TypeQualificationError::This {
+                        expected: ValueType::UnsignedInteger,
+                        got: ValueType::SignedInteger,
+                    },
+                },],
+            }
+        );
     }
 
     #[test]
     fn call_closure_bad_result() {
-        test_run(
+        let error = test_run(
             "let my_function = (a: std.types.UInt) -> std.types.UInt: \"test\"; in my_function(a = 3u)",
         )
         .unwrap_err();
+        let error = error.ty.as_any();
+        let error: &TypeQualificationError = error.downcast_ref().unwrap();
+        assert_eq!(
+            *error,
+            TypeQualificationError::This {
+                expected: ValueType::UnsignedInteger,
+                got: ValueType::String
+            }
+        );
     }
 
     #[test]

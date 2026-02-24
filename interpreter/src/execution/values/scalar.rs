@@ -18,6 +18,7 @@
 use std::{borrow::Cow, cmp::Ordering, f64::consts::PI};
 
 use common_data_types::{Dimension, Float, FloatIsNan};
+use thiserror::Error;
 
 use crate::{
     build_method,
@@ -44,10 +45,19 @@ impl UnwrapNotNan for std::result::Result<Float, FloatIsNan> {
     fn unwrap_not_nan(self, context: &ExecutionContext) -> ExecutionResult<Float> {
         match self {
             Ok(number) => Ok(number),
-            Err(_float_is_nan) => {
-                Err(StrError("Result of arithmetic operation is NaN").to_error(context))
-            }
+            Err(_float_is_nan) => Err(ResultIsNan.to_error(context)),
         }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct ResultIsNan;
+
+impl std::error::Error for ResultIsNan {}
+
+impl std::fmt::Display for ResultIsNan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Result of operation is NaN")
     }
 }
 
@@ -376,6 +386,15 @@ mod methods {
     pub struct Tanh;
 }
 
+#[derive(Debug, Error)]
+pub enum ScalarToInteger {
+    #[error("Only zero dimensional scalars can be converted into an integer")]
+    NonZeroDimensionToInteger,
+
+    #[error("Negative values cannot be converted to unsigned integers")]
+    NegativeToUnsignedInteger,
+}
+
 pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
@@ -386,7 +405,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             if this.dimension.is_zero_dimension() {
                 Ok(values::SignedInteger::from(*this.value as i64))
             } else {
-                Err(StrError("Only zero dimensional scalars can be converted into an integer")
+                Err(ScalarToInteger::NonZeroDimensionToInteger
                     .to_error(context))
             }
         }
@@ -401,11 +420,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 if *this.value >= 0.0 {
                     Ok(values::UnsignedInteger::from(*this.value as u64))
                 } else {
-                    Err(StrError("Negative values cannot be converted to signed integers")
+                    Err(ScalarToInteger::NegativeToUnsignedInteger
                         .to_error(context))
                 }
             } else {
-                Err(StrError("Only zero dimensional scalars can be converted into an integer")
+                Err(ScalarToInteger::NonZeroDimensionToInteger
                     .to_error(context))
             }
         }
@@ -1026,7 +1045,10 @@ mod test {
         let product = test_run("(100m / 1m)::to_signed_integer() == 100i").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("100m::to_signed_integer()").unwrap_err();
+        let error = test_run("100m::to_signed_integer()").unwrap_err();
+        let error = error.ty.as_any();
+        let error: &ScalarToInteger = error.downcast_ref().unwrap();
+        assert!(matches!(error, ScalarToInteger::NonZeroDimensionToInteger));
     }
 
     #[test]
@@ -1037,8 +1059,15 @@ mod test {
         let product = test_run("(100m / 1m)::to_unsigned_integer() == 100u").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("(-100)::to_unsigned_integer()").unwrap_err();
-        test_run("100m::to_unsigned_integer()").unwrap_err();
+        let error = test_run("(-100)::to_unsigned_integer()").unwrap_err();
+        let error = error.ty.as_any();
+        let error: &ScalarToInteger = error.downcast_ref().unwrap();
+        assert!(matches!(error, ScalarToInteger::NegativeToUnsignedInteger));
+
+        let error = test_run("100m::to_unsigned_integer()").unwrap_err();
+        let error = error.ty.as_any();
+        let error: &ScalarToInteger = error.downcast_ref().unwrap();
+        assert!(matches!(error, ScalarToInteger::NonZeroDimensionToInteger));
     }
 
     #[test]

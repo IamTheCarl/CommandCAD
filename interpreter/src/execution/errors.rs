@@ -86,9 +86,18 @@ impl Display for StringError {
     }
 }
 
-pub trait ErrorType: std::error::Error + Send + Sync + Any {}
+pub trait ErrorType: std::error::Error + Send + Sync + Any {
+    fn as_any(&self) -> &dyn Any;
+}
 
-impl<E> ErrorType for E where E: std::error::Error + Send + Sync + 'static {}
+impl<E> ErrorType for E
+where
+    E: std::error::Error + Send + Sync + Any,
+{
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
+    }
+}
 
 pub trait Raise {
     fn to_error<'s>(self, stack_trace: impl IntoIterator<Item = &'s SourceReference>) -> Error;

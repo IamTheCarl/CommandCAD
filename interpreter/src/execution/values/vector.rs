@@ -7,7 +7,7 @@ use crate::{
     compile::{self, AstNode},
     execute_expression,
     execution::{
-        errors::{ExecutionResult, Raise as _, StrError},
+        errors::{ExecutionResult, Raise as _},
         values::{
             closure::BuiltinCallableDatabase, scalar::UnwrapNotNan, string::formatting::Style,
             BuiltinFunction, DowncastForBinaryOpError, MissingAttributeError, Object, Scalar,
@@ -15,6 +15,7 @@ use crate::{
         },
         ExecutionContext,
     },
+    values::scalar::ResultIsNan,
 };
 
 use std::{
@@ -206,7 +207,7 @@ where
         if !value.is_nan() {
             Ok(Self { dimension, value })
         } else {
-            Err(StrError("Result of arithmetic operation is NaN").to_error(context))
+            Err(ResultIsNan.to_error(context))
         }
     }
 
@@ -262,10 +263,7 @@ mod methods {
     use super::*;
     use crate::{
         build_method,
-        execution::{
-            errors::StrError,
-            values::{BuiltinCallableDatabase, Dictionary},
-        },
+        execution::values::{BuiltinCallableDatabase, Dictionary},
     };
 
     pub trait MethodSet {
@@ -471,7 +469,7 @@ mod methods {
 
                 for component in result.iter() {
                     if component.dimension != dimension {
-                        return Err(StrError("All components of a vector must match")
+                        return Err(MissmatchedComponentDimensionsError
                             .to_error(context));
                     }
                 }
@@ -600,6 +598,17 @@ where
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct MissmatchedComponentDimensionsError;
+
+impl std::error::Error for MissmatchedComponentDimensionsError {}
+
+impl std::fmt::Display for MissmatchedComponentDimensionsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "All components of a vector must match")
+    }
+}
+
 macro_rules! get_component {
     ($context:ident, $ast_node:ident, $c:ident) => {
         execute_expression($context, &$ast_node.node.$c)?.downcast::<Scalar>($context)?
@@ -632,7 +641,7 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
                 value: Self::new(*x.value, *y.value),
             })
         } else {
-            Err(StrError("All components of a vector must match").to_error(context))
+            Err(MissmatchedComponentDimensionsError.to_error(context))
         }
     }
 
@@ -752,7 +761,7 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
                 value: Self::new(*x.value, *y.value, *z.value),
             })
         } else {
-            Err(StrError("All components of a vector must match").to_error(context))
+            Err(MissmatchedComponentDimensionsError.to_error(context))
         }
     }
 
@@ -882,7 +891,7 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
                 value: Self::new(*x.value, *y.value, *z.value, *w.value),
             })
         } else {
-            Err(StrError("All components of a vector must match").to_error(context))
+            Err(MissmatchedComponentDimensionsError.to_error(context))
         }
     }
 
@@ -1122,23 +1131,65 @@ mod test {
 
     #[test]
     fn missmatched_dimensions_vector2() {
-        test_run("<(1deg, 2m)>").unwrap_err();
-        test_run("<(1m, 2deg)>").unwrap_err();
+        let error = test_run("<(1deg, 2m)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+
+        let error = test_run("<(1m, 2deg)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]
     fn missmatched_dimensions_vector3() {
-        test_run("<(1deg, 2m, 3m)>").unwrap_err();
-        test_run("<(1m, 2deg, 3m)>").unwrap_err();
-        test_run("<(1m, 2m, 3deg)>").unwrap_err();
+        let error = test_run("<(1deg, 2m, 3m)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+
+        let error = test_run("<(1m, 2deg, 3m)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+
+        let error = test_run("<(1m, 2m, 3deg)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]
     fn missmatched_dimensions_vector4() {
-        test_run("<(1deg, 2m, 3m, 4m)>").unwrap_err();
-        test_run("<(1m, 2deg, 3m, 4m)>").unwrap_err();
-        test_run("<(1m, 2m, 3deg, 4m)>").unwrap_err();
-        test_run("<(1m, 2m, 3m, 4deg)>").unwrap_err();
+        let error = test_run("<(1deg, 2m, 3m, 4m)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+
+        let error = test_run("<(1m, 2deg, 3m, 4m)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+        let error = test_run("<(1m, 2m, 3deg, 4m)>").unwrap_err();
+
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
+
+        let error = test_run("<(1m, 2m, 3m, 4deg)>").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]
@@ -1489,17 +1540,23 @@ mod test {
 
     #[test]
     fn normalize_zero_vector2() {
-        test_run("<(0m, 0m)>::normalize()").unwrap_err();
+        let error = test_run("<(0m, 0m)>::normalize()").unwrap_err();
+        let error = error.ty.as_any();
+        error.downcast_ref::<ResultIsNan>().unwrap();
     }
 
     #[test]
     fn normalize_zero_vector3() {
-        test_run("<(0m, 0m, 0m)>::normalize()").unwrap_err();
+        let error = test_run("<(0m, 0m, 0m)>::normalize()").unwrap_err();
+        let error = error.ty.as_any();
+        error.downcast_ref::<ResultIsNan>().unwrap();
     }
 
     #[test]
     fn normalize_zero_vector4() {
-        test_run("<(0m, 0m, 0m, 0m)>::normalize()").unwrap_err();
+        let error = test_run("<(0m, 0m, 0m, 0m)>::normalize()").unwrap_err();
+        let error = error.ty.as_any();
+        error.downcast_ref::<ResultIsNan>().unwrap();
     }
 
     #[test]
@@ -1538,7 +1595,11 @@ mod test {
         let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]
@@ -1549,7 +1610,11 @@ mod test {
         let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("<(0m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error =test_run("<(0m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]
@@ -1560,7 +1625,11 @@ mod test {
         let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2')>").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        test_run("<(0m, 1m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = test_run("<(0m, 1m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = error.ty.as_any();
+        error
+            .downcast_ref::<MissmatchedComponentDimensionsError>()
+            .unwrap();
     }
 
     #[test]

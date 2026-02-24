@@ -264,12 +264,18 @@ mod test {
     #[test]
     fn duplicate_entries() {
         // Two values of the same name is not allowed.
-        test_run("(void = (), void = ())").unwrap_err();
+        let error = test_run("(void = (), void = ())").unwrap_err();
+        let error = error.ty.as_any();
+        let error: &DuplicateMemberError = error.downcast_ref().unwrap();
+        assert_eq!(error.name, "void");
     }
 
     #[test]
     fn non_existant_member() {
-        test_run("(void = ()).does_not_exist").unwrap_err();
+        let error = test_run("(void = ()).does_not_exist").unwrap_err();
+        let error = error.ty.as_any();
+        let error: &MissingAttributeError = error.downcast_ref().unwrap();
+        assert_eq!(error.name, "does_not_exist");
     }
 
     #[test]

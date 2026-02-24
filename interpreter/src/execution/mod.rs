@@ -57,6 +57,7 @@ pub use stack::StackScope;
 mod store;
 pub use store::Store;
 
+use thiserror::Error;
 use values::{
     closure::find_all_variable_accesses_in_closure_capture,
     dictionary::find_all_variable_accesses_in_dictionary_construction, Object, Value, ValueType,
@@ -591,6 +592,18 @@ pub(crate) fn test_context_custom_database<R>(
     f(&context)
 }
 
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum FileRunError {
+    #[error("Absolute paths cannot be used for importing files")]
+    AbsolutePath,
+
+    #[error("Import recursion depth has been exceeded")]
+    ImportDepth,
+
+    #[error("Failed to get parent directory of file")]
+    NoParentDirectory,
+}
+
 pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> ExecutionResult<Value> {
     // TODO can/should we make the parser part of the execution context rather than build a new one
     // every time we load a file?
@@ -598,23 +611,21 @@ pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> Executi
     let file = file.into();
 
     context.trace_scope(
-        Some("Failed to import {file:?}".into()),
+        Some(format!("Failed to import {file:?}").into()),
         context.stack_trace.bottom().clone(),
         |context| {
             if file.is_absolute() {
-                return Err(
-                    StrError("Absolute paths cannot be used for importing files").to_error(context),
-                );
+                return Err(FileRunError::AbsolutePath.to_error(context));
             }
 
             if context.import_limit == 0 {
-                return Err(StrError("Import recursion depth has been exceeded").to_error(context));
+                return Err(FileRunError::ImportDepth.to_error(context));
             }
 
             let file = context.working_directory.join(file);
-            let parent_dir = file.parent().ok_or_else(|| {
-                StrError("Failed to get parent directory of file").to_error(context)
-            })?;
+            let parent_dir = file
+                .parent()
+                .ok_or_else(|| FileRunError::NoParentDirectory.to_error(context))?;
 
             let root = {
                 let mut files = context
@@ -787,6 +798,10 @@ mod test {
 
     #[test]
     fn infinite_recursion_import() {
-        test_run("std.import(path = \"./test_assets/infinite_recursion_import.ccm\")").unwrap_err();
+        let error = test_run("std.import(path = \"./test_assets/infinite_recursion_import.ccm\")")
+            .unwrap_err();
+        let error = error.ty.as_any();
+        let error: &FileRunError = error.downcast_ref().unwrap();
+        assert_eq!(*error, FileRunError::ImportDepth);
     }
 }
