@@ -6,8 +6,7 @@
     flake-utils.url  = "github:numtide/flake-utils";
     crane.url = "github:ipetkov/crane";
     fenix = {
-      # url = "github:nix-community/fenix";
-      url = "github:nix-community/fenix?ref=eureka-cpu/rust-analyzer-wrapped";
+      url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -56,7 +55,6 @@
         };
 
         devShells.default = with pkgs; pkgs.mkShell {
-          inputsFrom = [ packages.default ];
           buildInputs = [
 	    bashInteractive
 	    nodejs_24
