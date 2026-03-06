@@ -87,7 +87,7 @@ fn build_std(context: &ExecutionContext) -> Dictionary {
             build_dimension_types(context, ValueType::Vector4).into(),
         ),
         ("consts".into(), build_consts(context).into()),
-        ("mesh3d".into(), build_mesh_3d(context).into()),
+        ("mesh".into(), build_mesh_3d(context).into()),
         ("import".into(), BuiltinFunction::new::<Import>().into()),
         ("range".into(), build_range(context).into()),
     ]);
