@@ -63,6 +63,8 @@ pub enum ValueType {
     ConstraintSet(Arc<HashableSet<ImString>>),
     ManifoldMesh3D,
     Iterator,
+    Transform2d,
+    Transform3d,
 }
 
 impl From<StructDefinition> for ValueType {
@@ -97,6 +99,8 @@ impl ValueType {
             Self::Any => "Any".into(),
             Self::ManifoldMesh3D => "ManifoldMesh3D".into(),
             Self::Iterator => "Iterator".into(),
+            Self::Transform2d => "Transform2d".into(),
+            Self::Transform3d => "Transform3d".into(),
             _ => format!("{}", self).into(),
         }
     }
@@ -863,6 +867,42 @@ mod test {
             error,
             TypeQualificationError::This {
                 expected: ValueType::ValueType,
+                got: ValueType::TypeNone
+            }
+        );
+    }
+
+    #[test]
+    fn type_transform2d() {
+        ValueType::Transform2d
+            .check_other_qualifies(&ValueType::Transform2d)
+            .unwrap();
+
+        let error = ValueType::Transform2d
+            .check_other_qualifies(&ValueType::TypeNone)
+            .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Transform2d,
+                got: ValueType::TypeNone
+            }
+        );
+    }
+
+    #[test]
+    fn type_transform3d() {
+        ValueType::Transform3d
+            .check_other_qualifies(&ValueType::Transform3d)
+            .unwrap();
+
+        let error = ValueType::Transform3d
+            .check_other_qualifies(&ValueType::TypeNone)
+            .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Transform3d,
                 got: ValueType::TypeNone
             }
         );

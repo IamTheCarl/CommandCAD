@@ -1,6 +1,6 @@
-use common_data_types::Dimension;
+use common_data_types::{Dimension, RawFloat};
 use enum_downcast::{AsVariant, IntoVariant};
-use nalgebra::{Dim, RawStorage};
+use nalgebra::{Dim, Matrix3, Matrix4, Point2, Point3, RawStorage};
 
 use crate::{
     build_closure_type, build_method,
@@ -15,7 +15,7 @@ use crate::{
         },
         ExecutionContext,
     },
-    values::scalar::ResultIsNan,
+    values::{scalar::ResultIsNan, transform::TransformInternalType},
 };
 
 use std::{
@@ -24,7 +24,7 @@ use std::{
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
-type Float = f64;
+type Float = RawFloat;
 
 pub type Vector2 = Vector<nalgebra::Vector2<Float>>;
 pub type Vector3 = Vector<nalgebra::Vector3<Float>>;
@@ -264,6 +264,7 @@ mod methods {
     use crate::{
         build_method,
         execution::values::{BuiltinCallableDatabase, Dictionary},
+        values::{transform::Transform, DowncastError},
     };
 
     pub trait MethodSet {
@@ -277,6 +278,7 @@ mod methods {
         type Angle;
         type Map;
         type Fold;
+        type Transform;
     }
 
     macro_rules! build_method_set {
@@ -292,6 +294,7 @@ mod methods {
                 pub struct [<$name Angle>];
                 pub struct [<$name Map>];
                 pub struct [<$name Fold>];
+                pub struct [<$name Transform>];
 
                 pub struct [<$name MethodSet>];
                 impl MethodSet for [<$name MethodSet>] {
@@ -305,6 +308,7 @@ mod methods {
                     type Angle = [<$name Angle>];
                     type Map = [<$name Map>];
                     type Fold = [<$name Fold>];
+                    type Transform = [<$name Transform>];
                 }
             }
         };
@@ -507,11 +511,49 @@ mod methods {
             }
         );
     }
+    pub fn register_transform_methods<I, M>(
+        database: &mut BuiltinCallableDatabase,
+        dimension: usize,
+    ) where
+        I: VectorInternalType + TransformableVector,
+        Vector<I>: StaticTypeName + Into<Value>,
+        Value: IntoVariant<Vector<I>>
+            + AsVariant<Vector<I>>
+            + IntoVariant<Transform<I::TransformInternalType>>
+            + AsVariant<Transform<I::TransformInternalType>>,
+        M: MethodSet + 'static,
+    {
+        build_method!(
+            database,
+            M::Transform, format!("Vector{dimension}::transform"), (
+                context: &ExecutionContext,
+                this: Vector<I>,
+                t: Transform<I::TransformInternalType>) -> Vector<I>
+            {
+                if this.dimension != Dimension::length() {
+                    return Err(DowncastError{ expected: "Length vector".into(), got: this.type_name() }.to_error(context));
+                }
+
+
+                let value = this.raw_value().transform(&t.0);
+                Ok(Vector {
+                    dimension: Dimension::length(),
+                    value,
+                })
+            }
+        );
+    }
 }
 
 pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     methods::register_methods::<nalgebra::Vector2<Float>, methods::Vector2MethodSet>(database, 2);
+    methods::register_transform_methods::<nalgebra::Vector2<Float>, methods::Vector2MethodSet>(
+        database, 2,
+    );
     methods::register_methods::<nalgebra::Vector3<Float>, methods::Vector3MethodSet>(database, 3);
+    methods::register_transform_methods::<nalgebra::Vector3<Float>, methods::Vector3MethodSet>(
+        database, 3,
+    );
     methods::register_methods::<nalgebra::Vector4<Float>, methods::Vector4MethodSet>(database, 4);
 
     build_method!(
@@ -598,6 +640,12 @@ where
     }
 }
 
+trait TransformableVector: VectorInternalType {
+    type TransformInternalType: TransformInternalType;
+
+    fn transform(&self, transform: &Self::TransformInternalType) -> Self;
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct MissmatchedComponentDimensionsError;
 
@@ -673,6 +721,9 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
                 }
                 .into(),
             )),
+            "transform" => Ok(Some(
+                BuiltinFunction::new::<methods::Vector2Transform>().into(),
+            )),
             _ => Ok(None),
         }
     }
@@ -713,6 +764,15 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
         self.iter().copied()
     }
 }
+
+impl TransformableVector for nalgebra::Vector2<Float> {
+    type TransformInternalType = Matrix3<Float>;
+
+    fn transform(&self, transform: &Self::TransformInternalType) -> Self {
+        transform.transform_point(&Point2 { coords: *self }).coords
+    }
+}
+
 impl StaticTypeName for nalgebra::Vector2<Float> {
     fn static_type_name() -> Cow<'static, str> {
         "Vector2".into()
@@ -801,6 +861,9 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
                 .into(),
             )),
             "cross" => Ok(Some(BuiltinFunction::new::<methods::Vector3Cross>().into())),
+            "transform" => Ok(Some(
+                BuiltinFunction::new::<methods::Vector3Transform>().into(),
+            )),
             _ => Ok(None),
         }
     }
@@ -841,6 +904,15 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
         self.iter().copied()
     }
 }
+
+impl TransformableVector for nalgebra::Vector3<Float> {
+    type TransformInternalType = Matrix4<Float>;
+
+    fn transform(&self, transform: &Self::TransformInternalType) -> Self {
+        transform.transform_point(&Point3 { coords: *self }).coords
+    }
+}
+
 impl StaticTypeName for nalgebra::Vector3<Float> {
     fn static_type_name() -> Cow<'static, str> {
         "Vector3".into()
@@ -1055,7 +1127,8 @@ macro_rules! build_vector_type {
     };
 }
 
-build_vector_type!(Zero3: Vector3 = Dimension::length());
+build_vector_type!(Zero2: Vector2 = Dimension::zero());
+build_vector_type!(Zero3: Vector3 = Dimension::zero());
 build_vector_type!(Length2: Vector2 = Dimension::length());
 build_vector_type!(Length3: Vector3 = Dimension::length());
 

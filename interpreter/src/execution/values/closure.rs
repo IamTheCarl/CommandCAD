@@ -57,6 +57,7 @@ impl BuiltinCallableDatabase {
         super::manifold_mesh::register_methods_and_functions(&mut database);
         crate::execution::register_methods_and_functions(&mut database);
         super::iterators::register_methods(&mut database);
+        super::transform::register_methods(&mut database);
 
         database
     }

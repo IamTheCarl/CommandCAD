@@ -20,6 +20,7 @@ use std::{collections::HashMap, path::Path, sync::Mutex};
 
 use common_data_types::{Dimension, Float};
 use imstr::ImString;
+use nalgebra::{Matrix3, Matrix4};
 use tempfile::TempDir;
 
 use crate::{
@@ -34,7 +35,7 @@ use crate::{
         },
         ExecutionContext,
     },
-    values::BuiltinFunction,
+    values::{BuiltinFunction, Transform2d, Transform3d},
 };
 
 use super::values::{Dictionary, Value, ValueType};
@@ -127,6 +128,14 @@ fn build_consts(context: &ExecutionContext) -> Dictionary {
             "SIntBits".into(),
             UnsignedInteger::from(i64::BITS as u64).into(),
         ),
+        (
+            "Transform2d".into(),
+            Transform2d::new(Matrix3::identity()).into(),
+        ),
+        (
+            "Transform3d".into(),
+            Transform3d::new(Matrix4::identity()).into(),
+        ),
     ]);
     Dictionary::new(context, types)
 }
@@ -142,6 +151,8 @@ fn build_types(context: &ExecutionContext) -> Dictionary {
         ("String".into(), ValueType::String.into()),
         ("ValueType".into(), ValueType::ValueType.into()),
         ("ManifoldMesh".into(), ValueType::ManifoldMesh3D.into()),
+        ("Transform2d".into(), ValueType::Transform2d.into()),
+        ("Transform3d".into(), ValueType::Transform3d.into()),
         // TODO we need File types.
         // TODO we'll need a function to build custom function signature types.
         // ("Function".into(), ValueType::Closure(Arc<ClosureSignature>)),

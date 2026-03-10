@@ -65,6 +65,9 @@ pub use constraint_set::ConstraintSet;
 mod iterators;
 pub mod manifold_mesh;
 
+mod transform;
+pub use transform::{Transform2d, Transform3d};
+
 mod value_type;
 pub use value_type::{StructDefinition, StructMember, ValueType};
 
@@ -292,7 +295,8 @@ pub enum Value {
     ConstraintSet,
     ManifoldMesh3D,
     ValueIterator,
-    // Quaternion,
+    Transform2d,
+    Transform3d,
 }
 
 impl StaticTypeName for Value {
