@@ -85,7 +85,9 @@ impl Object for ManifoldMesh3D {
             ArethmeticInput::Vector(vector) => {
                 let vector = vector.raw_value();
                 let manifold = Arc::make_mut(&mut self.0);
-                manifold.translate(vector.x, vector.y, vector.z);
+                *manifold = manifold
+                    .translate(vector.x, vector.y, vector.z)
+                    .map_err(|error| error.to_error(context))?;
                 Ok(self.into())
             }
             ArethmeticInput::Manifold(rhs) => {
@@ -102,7 +104,9 @@ impl Object for ManifoldMesh3D {
             ArethmeticInput::Vector(vector) => {
                 let vector = vector.raw_value();
                 let manifold = Arc::make_mut(&mut self.0);
-                manifold.translate(-vector.x, -vector.y, -vector.z);
+                *manifold = manifold
+                    .translate(-vector.x, -vector.y, -vector.z)
+                    .map_err(|error| error.to_error(context))?;
                 Ok(self.into())
             }
             ArethmeticInput::Manifold(rhs) => {
@@ -117,7 +121,9 @@ impl Object for ManifoldMesh3D {
         let input = rhs.downcast::<Zero3>(context)?;
         let vector = input.raw_value();
         let manifold = Arc::make_mut(&mut self.0);
-        manifold.scale(vector.x, vector.y, vector.z);
+        *manifold = manifold
+            .scale(vector.x, vector.y, vector.z)
+            .map_err(|error| error.to_error(context))?;
         Ok(self.into())
     }
 
@@ -285,7 +291,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             let size = size.raw_value();
 
             let mut manifold = generate_cube().map_err(|error| error.to_error(context))?;
-            manifold.scale(size.x, size.y, size.z);
+            manifold = manifold.scale(size.x, size.y, size.z).map_err(|error| error.to_error(context))?;
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
@@ -319,7 +325,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
             let mut manifold = generate_icosphere(subdivions.0 as u32)
                 .map_err(|error| error.to_error(context))?;
-            manifold.scale(scale, scale, scale);
+            manifold = manifold.scale(scale, scale, scale).map_err(|error| error.to_error(context))?;
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
@@ -351,7 +357,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
             let mut manifold = generate_uv_sphere(sectors.0 as usize, stacks.0 as usize)
                 .map_err(|error| error.to_error(context))?;
-            manifold.scale(scale, scale, scale);
+            manifold = manifold.scale(scale, scale, scale).map_err(|error| error.to_error(context))?;
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }

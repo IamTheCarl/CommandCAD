@@ -785,15 +785,6 @@ impl StaticType for nalgebra::Vector2<Float> {
     }
 }
 
-impl From<Vector2> for boolmesh::Vec2 {
-    fn from(value: Vector2) -> Self {
-        Self {
-            x: value.value.x,
-            y: value.value.y,
-        }
-    }
-}
-
 impl VectorInternalType for nalgebra::Vector3<Float> {
     type BuildFrom = [Float; 3];
     type NodeType = compile::Vector3;
@@ -925,16 +916,6 @@ impl StaticType for nalgebra::Vector3<Float> {
     }
 }
 
-impl From<Vector3> for boolmesh::Vec3 {
-    fn from(value: Vector3) -> Self {
-        Self {
-            x: value.value.x,
-            y: value.value.y,
-            z: value.value.z,
-        }
-    }
-}
-
 impl VectorInternalType for nalgebra::Vector4<Float> {
     type BuildFrom = [Float; 4];
     type NodeType = compile::Vector4;
@@ -1060,26 +1041,15 @@ impl StaticType for nalgebra::Vector4<Float> {
     }
 }
 
-impl From<Vector4> for boolmesh::Vec4 {
-    fn from(value: Vector4) -> Self {
-        Self {
-            x: value.value.x,
-            y: value.value.y,
-            z: value.value.z,
-            w: value.value.w,
-        }
-    }
-}
-
 macro_rules! equivalent_boolmesh_vector {
     (Vector2) => {
-        boolmesh::Vec2
+        nalgebra::Vector2<common_data_types::RawFloat>
     };
     (Vector3) => {
-        boolmesh::Vec3
+        nalgebra::Vector3<common_data_types::RawFloat>
     };
     (Vector4) => {
-        boolmesh::Vec4
+        nalgebra::Vector4<common_data_types::RawFloat>
     };
 }
 
@@ -1113,7 +1083,7 @@ macro_rules! build_vector_type {
 
         impl From<$name> for equivalent_boolmesh_vector!($type) {
             fn from(value: $name) -> Self {
-                value.0.into()
+                value.raw_value()
             }
         }
 

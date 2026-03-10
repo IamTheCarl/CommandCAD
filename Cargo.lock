@@ -173,10 +173,12 @@ dependencies = [
 [[package]]
 name = "boolmesh"
 version = "0.1.9"
-source = "git+https://github.com/IamTheCarl/boolmesh.git?branch=command-cad#5cf00cd83345f979948b0cc3fbaea3bff0fdc361"
+source = "git+https://github.com/IamTheCarl/boolmesh.git?branch=command-cad#40f230bfa4a08618579f5fb22e0dd1fbaf4aa87f"
 dependencies = [
+ "fxhash",
  "geo",
- "glam 0.30.10",
+ "nalgebra",
+ "num-traits",
  "rayon",
  "serde",
  "thiserror 2.0.18",
@@ -761,6 +763,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fxhash"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -991,9 +1002,6 @@ name = "glam"
 version = "0.30.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19fc433e8437a212d1b6f1e68c7824af3aed907da60afa994e7f542d18d12aa9"
-dependencies = [
- "serde_core",
-]
 
 [[package]]
 name = "hash32"
@@ -1634,6 +1642,7 @@ dependencies = [
  "num-complex",
  "num-rational",
  "num-traits",
+ "serde",
  "simba",
  "typenum",
 ]
@@ -1684,6 +1693,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
  "num-traits",
+ "serde",
 ]
 
 [[package]]
