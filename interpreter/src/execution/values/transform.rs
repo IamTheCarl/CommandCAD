@@ -299,14 +299,14 @@ mod test {
     #[test]
     fn identity_transform2d() {
         let product =
-            test_run("<(1m, 2m)>::transform(t = std.consts.Transform2d) == <(1m, 2m)>").unwrap();
+            test_run("{1m, 2m}::transform(t = std.consts.Transform2d) == {1m, 2m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn identity_transform3d() {
         let product =
-            test_run("<(1m, 2m, 3m)>::transform(t = std.consts.Transform3d) == <(1m, 2m, 3m)>")
+            test_run("{1m, 2m, 3m}::transform(t = std.consts.Transform3d) == {1m, 2m, 3m}")
                 .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
@@ -314,14 +314,14 @@ mod test {
     #[test]
     fn translate2d() {
         let product =
-            test_run("<(1m, 2m)>::transform(t = std.consts.Transform2d::translate(offset = <(2m, 4m)>)) == <(3m, 6m)>").unwrap();
+            test_run("{1m, 2m}::transform(t = std.consts.Transform2d::translate(offset = {2m, 4m})) == {3m, 6m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn translate3d() {
         let product =
-            test_run("<(1m, 2m, 3m)>::transform(t = std.consts.Transform3d::translate(offset = <(2m, 4m, 6m)>)) == <(3m, 6m, 9m)>")
+            test_run("{1m, 2m, 3m}::transform(t = std.consts.Transform3d::translate(offset = {2m, 4m, 6m})) == {3m, 6m, 9m}")
                 .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
@@ -329,29 +329,31 @@ mod test {
     #[test]
     fn rotate2d() {
         let product =
-            test_run("let rotated = <(0m, 1m)>::transform(t = std.consts.Transform2d::rotate(angle = 90deg)); x = (rotated.x + 1m)::abs() < 0.0001m; y = rotated.y::abs() < 0.0001m; in x && y").unwrap();
+            test_run("let rotated = {0m, 1m}::transform(t = std.consts.Transform2d::rotate(angle = 90deg)); x = (rotated.x + 1m)::abs() < 0.0001m; y = rotated.y::abs() < 0.0001m; in x && y").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn rotate3d() {
         let product =
-            test_run("let rotated = <(0m, 1m, 0m)>::transform(t = std.consts.Transform3d::rotate(axis = <(0, 0, 1)>, angle = 90deg)); x = (rotated.x + 1m)::abs() < 0.0001m; y = rotated.y::abs() < 0.0001m; z = rotated.z::abs() < 0.0001m; in x && y && z")
+            test_run("let rotated = {0m, 1m, 0m}::transform(t = std.consts.Transform3d::rotate(axis = {0, 0, 1}, angle = 90deg)); x = (rotated.x + 1m)::abs() < 0.0001m; y = rotated.y::abs() < 0.0001m; z = rotated.z::abs() < 0.0001m; in x && y && z")
                 .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn scale2d() {
-        let product =
-            test_run("<(1m, 2m)>::transform(t = std.consts.Transform2d::scale(scale = <(3, 4)>)) == <(3m, 8m)>").unwrap();
+        let product = test_run(
+            "{1m, 2m}::transform(t = std.consts.Transform2d::scale(scale = {3, 4})) == {3m, 8m}",
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn scale3d() {
         let product =
-            test_run("<(1m, 2m, 3m)>::transform(t = std.consts.Transform3d::scale(scale = <(3, 4, 5)>)) == <(3m, 8m, 15m)>")
+            test_run("{1m, 2m, 3m}::transform(t = std.consts.Transform3d::scale(scale = {3, 4, 5})) == {3m, 8m, 15m}")
                 .unwrap();
         assert_eq!(product, Boolean(true).into());
     }

@@ -220,7 +220,7 @@ Scalar with quoted unit that would not work as an identifier
 Vector2
 ==================
 
-<(1m, 2m)>
+{1m, 2m}
 
 ---
 
@@ -240,7 +240,7 @@ Vector2
 Vector3
 ==================
 
-<(1m, 2m, 3m)>
+{1m, 2m, 3m}
 
 ---
 
@@ -264,7 +264,7 @@ Vector3
 Vector4
 ==================
 
-<(1m, 2m, 3m, 4m)>
+{1m, 2m, 3m, 4m}
 
 ---
 

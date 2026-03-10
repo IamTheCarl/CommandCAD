@@ -116,9 +116,9 @@ module.exports = grammar({
     _unit: $ => choice($.identifier, $.unit_quote),
 
     scalar: $ => prec.left(PREC.unit, seq($._float, field('unit', optional($._unit)))),
-    vector2: $ => seq('<(', field('x', $.expression), ',', field('y', $.expression), ')>'),
-    vector3: $ => seq('<(', field('x', $.expression), ',', field('y', $.expression), ',', field('z', $.expression), ')>'),
-    vector4: $ => seq('<(', field('x', $.expression), ',', field('y', $.expression), ',', field('z', $.expression), ',', field('w', $.expression), ')>'),
+    vector2: $ => seq('{', field('x', $.expression), ',', field('y', $.expression), '}'),
+    vector3: $ => seq('{', field('x', $.expression), ',', field('y', $.expression), ',', field('z', $.expression), '}'),
+    vector4: $ => seq('{', field('x', $.expression), ',', field('y', $.expression), ',', field('z', $.expression), ',', field('w', $.expression), '}'),
 
     true: $ => 'true',
     false: $ => 'false',

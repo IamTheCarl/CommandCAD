@@ -57,7 +57,7 @@ where
     ) -> std::fmt::Result {
         let mut components = self.value.iter().peekable();
 
-        write!(f, "<(")?;
+        write!(f, "{{")?;
 
         while let Some(value) = components.next() {
             let c = Scalar {
@@ -72,7 +72,7 @@ where
             }
         }
 
-        write!(f, ")>")?;
+        write!(f, "}}")?;
 
         Ok(())
     }
@@ -1142,7 +1142,7 @@ mod test {
     #[test]
     fn construct_vector2() {
         test_context([], |context| {
-            let product = test_run("<(1m, 2m)>").unwrap();
+            let product = test_run("{1m, 2m}").unwrap();
             assert_eq!(
                 product,
                 Vector2::new(context, Dimension::length(), [1.0, 2.0])
@@ -1150,7 +1150,7 @@ mod test {
                     .into()
             );
 
-            let product = test_run("<(-1m, -2m)>").unwrap();
+            let product = test_run("{-1m, -2m}").unwrap();
             assert_eq!(
                 product,
                 Vector2::new(context, Dimension::length(), [-1.0, -2.0])
@@ -1163,7 +1163,7 @@ mod test {
     #[test]
     fn construct_vector3() {
         test_context([], |context| {
-            let product = test_run("<(1m, 2m, 3m)>").unwrap();
+            let product = test_run("{1m, 2m, 3m}").unwrap();
             assert_eq!(
                 product,
                 Vector3::new(context, Dimension::length(), [1.0, 2.0, 3.0])
@@ -1171,7 +1171,7 @@ mod test {
                     .into()
             );
 
-            let product = test_run("<(-1m, -2m, -3m)>").unwrap();
+            let product = test_run("{-1m, -2m, -3m}").unwrap();
             assert_eq!(
                 product,
                 Vector3::new(context, Dimension::length(), [-1.0, -2.0, -3.0])
@@ -1184,7 +1184,7 @@ mod test {
     #[test]
     fn construct_vector4() {
         test_context([], |context| {
-            let product = test_run("<(1m, 2m, 3m, 4m)>").unwrap();
+            let product = test_run("{1m, 2m, 3m, 4m}").unwrap();
             assert_eq!(
                 product,
                 Vector4::new(context, Dimension::length(), [1.0, 2.0, 3.0, 4.0])
@@ -1192,7 +1192,7 @@ mod test {
                     .into()
             );
 
-            let product = test_run("<(-1m, -2m, -3m, -4m)>").unwrap();
+            let product = test_run("{-1m, -2m, -3m, -4m}").unwrap();
             assert_eq!(
                 product,
                 Vector4::new(context, Dimension::length(), [-1.0, -2.0, -3.0, -4.0])
@@ -1204,13 +1204,13 @@ mod test {
 
     #[test]
     fn missmatched_dimensions_vector2() {
-        let error = test_run("<(1deg, 2m)>").unwrap_err();
+        let error = test_run("{1deg, 2m}").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
             .unwrap();
 
-        let error = test_run("<(1m, 2deg)>").unwrap_err();
+        let error = test_run("{1m, 2deg}").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
@@ -1219,19 +1219,19 @@ mod test {
 
     #[test]
     fn missmatched_dimensions_vector3() {
-        let error = test_run("<(1deg, 2m, 3m)>").unwrap_err();
+        let error = test_run("{1deg, 2m, 3m}").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
             .unwrap();
 
-        let error = test_run("<(1m, 2deg, 3m)>").unwrap_err();
+        let error = test_run("{1m, 2deg, 3m}").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
             .unwrap();
 
-        let error = test_run("<(1m, 2m, 3deg)>").unwrap_err();
+        let error = test_run("{1m, 2m, 3deg}").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
@@ -1240,25 +1240,25 @@ mod test {
 
     #[test]
     fn missmatched_dimensions_vector4() {
-        let error = test_run("<(1deg, 2m, 3m, 4m)>").unwrap_err();
+        let error = test_run("{1deg, 2m, 3m, 4m}").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
             .unwrap();
 
-        let error = test_run("<(1m, 2deg, 3m, 4m)>").unwrap_err();
+        let error = test_run("{1m, 2deg, 3m, 4m}").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
             .unwrap();
-        let error = test_run("<(1m, 2m, 3deg, 4m)>").unwrap_err();
+        let error = test_run("{1m, 2m, 3deg, 4m}").unwrap_err();
 
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
             .unwrap();
 
-        let error = test_run("<(1m, 2m, 3m, 4deg)>").unwrap_err();
+        let error = test_run("{1m, 2m, 3m, 4deg}").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
@@ -1267,7 +1267,7 @@ mod test {
 
     #[test]
     fn construccomponent_access_vector2() {
-        let product = test_run("let vec = <(1m, 2m)>; in vec.x").unwrap();
+        let product = test_run("let vec = {1m, 2m}; in vec.x").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1277,7 +1277,7 @@ mod test {
             .into()
         );
 
-        let product = test_run("let vec = <(1m, 2m)>; in vec.y").unwrap();
+        let product = test_run("let vec = {1m, 2m}; in vec.y").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1290,7 +1290,7 @@ mod test {
 
     #[test]
     fn construccomponent_access_vector3() {
-        let product = test_run("let vec = <(1m, 2m, 3m)>; in vec.x").unwrap();
+        let product = test_run("let vec = {1m, 2m, 3m}; in vec.x").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1300,7 +1300,7 @@ mod test {
             .into()
         );
 
-        let product = test_run("let vec = <(1m, 2m, 3m)>; in vec.y").unwrap();
+        let product = test_run("let vec = {1m, 2m, 3m}; in vec.y").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1310,7 +1310,7 @@ mod test {
             .into()
         );
 
-        let product = test_run("let vec = <(1m, 2m, 3m)>; in vec.z").unwrap();
+        let product = test_run("let vec = {1m, 2m, 3m}; in vec.z").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1323,7 +1323,7 @@ mod test {
 
     #[test]
     fn construccomponent_access_vector4() {
-        let product = test_run("let vec = <(1m, 2m, 3m, 4m)>; in vec.x").unwrap();
+        let product = test_run("let vec = {1m, 2m, 3m, 4m}; in vec.x").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1333,7 +1333,7 @@ mod test {
             .into()
         );
 
-        let product = test_run("let vec = <(1m, 2m, 3m, 4m)>; in vec.y").unwrap();
+        let product = test_run("let vec = {1m, 2m, 3m, 4m}; in vec.y").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1343,7 +1343,7 @@ mod test {
             .into()
         );
 
-        let product = test_run("let vec = <(1m, 2m, 3m, 4m)>; in vec.z").unwrap();
+        let product = test_run("let vec = {1m, 2m, 3m, 4m}; in vec.z").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1353,7 +1353,7 @@ mod test {
             .into()
         );
 
-        let product = test_run("let vec = <(1m, 2m, 3m, 4m)>; in vec.w").unwrap();
+        let product = test_run("let vec = {1m, 2m, 3m, 4m}; in vec.w").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1366,309 +1366,310 @@ mod test {
 
     #[test]
     fn compare_vector2() {
-        let product = test_run("<(1m, 2m)> == <(1m, 2m)>").unwrap();
+        let product = test_run("{1m, 2m} == {1m, 2m}").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("<(1m, 2m)> != <(1m, 2m)>").unwrap();
+        let product = test_run("{1m, 2m} != {1m, 2m}").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("<(2m, 2m)> == <(1m, 2m)>").unwrap();
+        let product = test_run("{2m, 2m} == {1m, 2m}").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("<(2m, 2m)> != <(1m, 2m)>").unwrap();
+        let product = test_run("{2m, 2m} != {1m, 2m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn compare_vector3() {
-        let product = test_run("<(1m, 2m, 3m)> == <(1m, 2m, 3m)>").unwrap();
+        let product = test_run("{1m, 2m, 3m} == {1m, 2m, 3m}").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("<(1m, 2m, 3m)> != <(1m, 2m, 3m)>").unwrap();
+        let product = test_run("{1m, 2m, 3m} != {1m, 2m, 3m}").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("<(2m, 2m, 3m)> == <(1m, 2m, 3m)>").unwrap();
+        let product = test_run("{2m, 2m, 3m} == {1m, 2m, 3m}").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("<(2m, 2m, 3m)> != <(1m, 2m, 3m)>").unwrap();
+        let product = test_run("{2m, 2m, 3m} != {1m, 2m, 3m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn compare_vector4() {
-        let product = test_run("<(1m, 2m, 3m, 4m)> == <(1m, 2m, 3m, 4m)>").unwrap();
+        let product = test_run("{1m, 2m, 3m, 4m} == {1m, 2m, 3m, 4m}").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("<(1m, 2m, 3m, 4m)> != <(1m, 2m, 3m, 4m)>").unwrap();
+        let product = test_run("{1m, 2m, 3m, 4m} != {1m, 2m, 3m, 4m}").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("<(2m, 2m, 3m, 4m)> == <(1m, 2m, 3m, 4m)>").unwrap();
+        let product = test_run("{2m, 2m, 3m, 4m} == {1m, 2m, 3m, 4m}").unwrap();
         assert_eq!(product, Boolean(false).into());
 
-        let product = test_run("<(2m, 2m, 3m, 4m)> != <(1m, 2m, 3m, 4m)>").unwrap();
+        let product = test_run("{2m, 2m, 3m, 4m} != {1m, 2m, 3m, 4m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn add_vector2() {
-        let product = test_run("<(1m, 2m)> + <(2m, 3m)> == <(3m, 5m)>").unwrap();
+        let product = test_run("{1m, 2m} + {2m, 3m} == {3m, 5m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn add_vector3() {
-        let product = test_run("<(1m, 2m, 3m)> + <(2m, 3m, 4m)> == <(3m, 5m, 7m)>").unwrap();
+        let product = test_run("{1m, 2m, 3m} + {2m, 3m, 4m} == {3m, 5m, 7m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn add_vector4() {
-        let product =
-            test_run("<(1m, 2m, 3m, 4m)> + <(2m, 3m, 4m, 5m)> == <(3m, 5m, 7m, 9m)>").unwrap();
+        let product = test_run("{1m, 2m, 3m, 4m} + {2m, 3m, 4m, 5m} == {3m, 5m, 7m, 9m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn sub_vector2() {
-        let product = test_run("<(1m, 2m)> - <(2m, 3m)> == <(-1m, -1m)>").unwrap();
+        let product = test_run("{1m, 2m} - {2m, 3m} == {-1m, -1m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn sub_vector3() {
-        let product = test_run("<(1m, 2m, 3m)> - <(2m, 3m, 4m)> == <(-1m, -1m, -1m)>").unwrap();
+        let product = test_run("{1m, 2m, 3m} - {2m, 3m, 4m} == {-1m, -1m, -1m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn sub_vector4() {
         let product =
-            test_run("<(1m, 2m, 3m, 4m)> - <(2m, 3m, 4m, 5m)> == <(-1m, -1m, -1m, -1m)>").unwrap();
+            test_run("{1m, 2m, 3m, 4m} - {2m, 3m, 4m, 5m} == {-1m, -1m, -1m, -1m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn multiply_vector2() {
-        let product = test_run("<(1m, 2m)> * 2.0 == <(2m, 4m)>").unwrap();
+        let product = test_run("{1m, 2m} * 2.0 == {2m, 4m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn multiply_vector3() {
-        let product = test_run("<(1m, 2m, 3m)> * 2.0 == <(2m, 4m, 6m)>").unwrap();
+        let product = test_run("{1m, 2m, 3m} * 2.0 == {2m, 4m, 6m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn multiply_vector4() {
-        let product = test_run("<(1m, 2m, 3m, 4m)> * 2.0 == <(2m, 4m, 6m, 8m)>").unwrap();
+        let product = test_run("{1m, 2m, 3m, 4m} * 2.0 == {2m, 4m, 6m, 8m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn divide_vector2() {
-        let product = test_run("<(2m, 4m)> / 2.0 == <(1m, 2m)>").unwrap();
+        let product = test_run("{2m, 4m} / 2.0 == {1m, 2m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn divide_vector3() {
-        let product = test_run("<(2m, 4m, 6m)> / 2.0 == <(1m, 2m, 3m)>").unwrap();
+        let product = test_run("{2m, 4m, 6m} / 2.0 == {1m, 2m, 3m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn divide_vector4() {
-        let product = test_run("<(2m, 4m, 6m, 8m)> / 2.0 == <(1m, 2m, 3m, 4m)>").unwrap();
+        let product = test_run("{2m, 4m, 6m, 8m} / 2.0 == {1m, 2m, 3m, 4m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn abs_vector2() {
-        let product = test_run("<(-1m, -2m)>::abs() == <(1m, 2m)>").unwrap();
+        let product = test_run("{-1m, -2m}::abs() == {1m, 2m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn abs_vector3() {
-        let product = test_run("<(-1m, -2m, -3m)>::abs() == <(1m, 2m, 3m)>").unwrap();
+        let product = test_run("{-1m, -2m, -3m}::abs() == {1m, 2m, 3m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn abs_vector4() {
-        let product = test_run("<(-1m, -2m, -3m, -4m)>::abs() == <(1m, 2m, 3m, 4m)>").unwrap();
+        let product = test_run("{-1m, -2m, -3m, -4m}::abs() == {1m, 2m, 3m, 4m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn add_scalar_vector2() {
-        let product = test_run("<(1m, 2m)>::add_scalar(value = 1m) == <(2m, 3m)>").unwrap();
+        let product = test_run("{1m, 2m}::add_scalar(value = 1m) == {2m, 3m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn add_scalar_vector3() {
-        let product = test_run("<(1m, 2m, 3m)>::add_scalar(value = 1m) == <(2m, 3m, 4m)>").unwrap();
+        let product = test_run("{1m, 2m, 3m}::add_scalar(value = 1m) == {2m, 3m, 4m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn add_scalar_vector4() {
         let product =
-            test_run("<(1m, 2m, 3m, 4m)>::add_scalar(value = 1m) == <(2m, 3m, 4m, 5m)>").unwrap();
+            test_run("{1m, 2m, 3m, 4m}::add_scalar(value = 1m) == {2m, 3m, 4m, 5m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn amax_vector2() {
-        let product = test_run("<(1m, 2m)>::amax() == 2m").unwrap();
+        let product = test_run("{1m, 2m}::amax() == 2m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn amax_vector3() {
-        let product = test_run("<(1m, 2m, 3m)>::amax() == 3m").unwrap();
+        let product = test_run("{1m, 2m, 3m}::amax() == 3m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn amax_vector4() {
-        let product = test_run("<(1m, 2m, 3m, 4m)>::amax() == 4m").unwrap();
+        let product = test_run("{1m, 2m, 3m, 4m}::amax() == 4m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn dot_vector2() {
-        let product = test_run("<(1m, 0m)>::dot(rhs = <(0.5m, 10m)>) == 0.5m").unwrap();
+        let product = test_run("{1m, 0m}::dot(rhs = {0.5m, 10m}) == 0.5m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn dot_vector3() {
-        let product = test_run("<(1m, 0m, 0m)>::dot(rhs = <(0.5m, 10m, 10m)>) == 0.5m").unwrap();
+        let product = test_run("{1m, 0m, 0m}::dot(rhs = {0.5m, 10m, 10m}) == 0.5m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn dot_vector4() {
         let product =
-            test_run("<(1m, 0m, 0m, 0m)>::dot(rhs = <(0.5m, 10m, 10m, 10m)>) == 0.5m").unwrap();
+            test_run("{1m, 0m, 0m, 0m}::dot(rhs = {0.5m, 10m, 10m, 10m}) == 0.5m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn norm_vector2() {
-        let product = test_run("<(1m, 0m)>::norm() == 1m").unwrap();
+        let product = test_run("{1m, 0m}::norm() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn norm_vector3() {
-        let product = test_run("<(1m, 0m, 0m)>::norm() == 1m").unwrap();
+        let product = test_run("{1m, 0m, 0m}::norm() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn norm_vector4() {
-        let product = test_run("<(1m, 0m, 0m, 0m)>::norm() == 1m").unwrap();
+        let product = test_run("{1m, 0m, 0m, 0m}::norm() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn length_vector2() {
-        let product = test_run("<(1m, 0m)>::length() == 1m").unwrap();
+        let product = test_run("{1m, 0m}::length() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn length_vector3() {
-        let product = test_run("<(1m, 0m, 0m)>::length() == 1m").unwrap();
+        let product = test_run("{1m, 0m, 0m}::length() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn length_vector4() {
-        let product = test_run("<(1m, 0m, 0m, 0m)>::length() == 1m").unwrap();
+        let product = test_run("{1m, 0m, 0m, 0m}::length() == 1m").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn normalize_vector2() {
-        let product = test_run("<(5m, 0m)>::normalize() == <(1, 0)>").unwrap();
+        let product = test_run("{5m, 0m}::normalize() == {1, 0}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn normalize_vector3() {
-        let product = test_run("<(5m, 0m, 0m)>::normalize() == <(1, 0, 0)>").unwrap();
+        let product = test_run("{5m, 0m, 0m}::normalize() == {1, 0, 0}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn normalize_vector4() {
-        let product = test_run("<(5m, 0m, 0m, 0m)>::normalize() == <(1, 0, 0, 0)>").unwrap();
+        let product = test_run("{5m, 0m, 0m, 0m}::normalize() == {1, 0, 0, 0}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn normalize_zero_vector2() {
-        let error = test_run("<(0m, 0m)>::normalize()").unwrap_err();
+        let error = test_run("{0m, 0m}::normalize()").unwrap_err();
         let error = error.ty.as_any();
         error.downcast_ref::<ResultIsNan>().unwrap();
     }
 
     #[test]
     fn normalize_zero_vector3() {
-        let error = test_run("<(0m, 0m, 0m)>::normalize()").unwrap_err();
+        let error = test_run("{0m, 0m, 0m}::normalize()").unwrap_err();
         let error = error.ty.as_any();
         error.downcast_ref::<ResultIsNan>().unwrap();
     }
 
     #[test]
     fn normalize_zero_vector4() {
-        let error = test_run("<(0m, 0m, 0m, 0m)>::normalize()").unwrap_err();
+        let error = test_run("{0m, 0m, 0m, 0m}::normalize()").unwrap_err();
         let error = error.ty.as_any();
         error.downcast_ref::<ResultIsNan>().unwrap();
     }
 
     #[test]
     fn cross_vector3() {
-        let product =
-            test_run("<(1m, 0m, 0m)>::cross(rhs = <(0m, 1m, 0m)>) == <(0m, 0m, 1m)>").unwrap();
+        let product = test_run("{1m, 0m, 0m}::cross(rhs = {0m, 1m, 0m}) == {0m, 0m, 1m}").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn angle_vector2() {
-        let product = test_run("<(1m, 0m)>::angle(other = <(0m, 1m)>) - 90deg < 0.001deg").unwrap();
+        let product = test_run("{1m, 0m}::angle(other = {0m, 1m}) - 90deg < 0.001deg").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn angle_vector3() {
         let product =
-            test_run("<(1m, 0m, 0m)>::angle(other = <(0m, 1m, 0m)>) - 90deg < 0.001deg").unwrap();
+            test_run("{1m, 0m, 0m}::angle(other = {0m, 1m, 0m}) - 90deg < 0.001deg").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn angle_vector4() {
         let product =
-            test_run("<(1m, 0m, 0m, 0m)>::angle(other = <(0m, 1m, 0m, 0m)>) - 90deg < 0.001deg")
+            test_run("{1m, 0m, 0m, 0m}::angle(other = {0m, 1m, 0m, 0m}) - 90deg < 0.001deg")
                 .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn apply_vector2() {
-        let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length: c + 1m) == <(1m, 2m)>").unwrap();
+        let product = test_run(
+            "{0m, 1m}::apply(f = (c: std.scalar.Length) -> std.scalar.Length: c + 1m) == {1m, 2m}",
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2')>").unwrap();
+        let product = test_run("{0m, 1m}::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == {0 'm^2', 1 'm^2'}").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let error = test_run("<(0m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = test_run("{0m, 1m}::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
@@ -1677,13 +1678,13 @@ mod test {
 
     #[test]
     fn apply_vector3() {
-        let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length: c + 1m) == <(1m, 2m, 3m)>").unwrap();
+        let product = test_run("{0m, 1m, 2m}::apply(f = (c: std.scalar.Length) -> std.scalar.Length: c + 1m) == {1m, 2m, 3m}").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("<(0m, 1m, 2m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2')>").unwrap();
+        let product = test_run("{0m, 1m, 2m}::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == {0 'm^2', 1 'm^2', 2 'm^2'}").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let error =test_run("<(0m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error =test_run("{0m, 1m, 1m}::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
@@ -1692,13 +1693,13 @@ mod test {
 
     #[test]
     fn apply_vector4() {
-        let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Length: c + 1m) == <(1m, 2m, 3m, 4m)>").unwrap();
+        let product = test_run("{0m, 1m, 2m, 3m}::apply(f = (c: std.scalar.Length) -> std.scalar.Length: c + 1m) == {1m, 2m, 3m, 4m}").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product = test_run("<(0m, 1m, 2m, 3m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == <(0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2')>").unwrap();
+        let product = test_run("{0m, 1m, 2m, 3m}::apply(f = (c: std.scalar.Length) -> std.scalar.Area: c * 1m) == {0 'm^2', 1 'm^2', 2 'm^2', 3 'm^2'}").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let error = test_run("<(0m, 1m, 1m, 1m)>::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
+        let error = test_run("{0m, 1m, 1m, 1m}::apply(f = (c: std.scalar.Length) -> std.scalar.Any: if c == 0m then 1m else 1 'm^2')").unwrap_err();
         let error = error.ty.as_any();
         error
             .downcast_ref::<MissmatchedComponentDimensionsError>()
@@ -1707,7 +1708,7 @@ mod test {
 
     #[test]
     fn fold_vector2() {
-        let product = test_run("<(1m, 2m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length: previous + c)").unwrap();
+        let product = test_run("{1m, 2m}::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length: previous + c)").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1720,7 +1721,7 @@ mod test {
 
     #[test]
     fn fold_vector3() {
-        let product = test_run("<(1m, 2m, 3m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length: previous + c)").unwrap();
+        let product = test_run("{1m, 2m, 3m}::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length: previous + c)").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1733,7 +1734,7 @@ mod test {
 
     #[test]
     fn fold_vector4() {
-        let product = test_run("<(1m, 2m, 3m, 4m)>::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length: previous + c)").unwrap();
+        let product = test_run("{1m, 2m, 3m, 4m}::fold(init = 0m, f = (previous: std.scalar.Length, c: std.scalar.Length) -> std.scalar.Length: previous + c)").unwrap();
         assert_eq!(
             product,
             Scalar {
@@ -1747,19 +1748,19 @@ mod test {
     #[test]
     fn format() {
         let product = test_run(
-            "\"{a} {b} {c:.2}\"::format(a = <(1, 2)>, b = <(1m, 2m)>, c = <(1.234, 2.345)>) == \"<(1, 2)> <(1m, 2m)> <(1.23, 2.34)>\"",
+            "\"{a} {b} {c:.2}\"::format(a = {1, 2}, b = {1m, 2m}, c = {1.234, 2.345}) == \"{1, 2} {1m, 2m} {1.23, 2.34}\"",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let product = test_run(
-            "\"{a} {b} {c:.2}\"::format(a = <(1, 2, 3)>, b = <(1m, 2m, 3m)>, c = <(1.234, 2.345, 3.456)>) == \"<(1, 2, 3)> <(1m, 2m, 3m)> <(1.23, 2.34, 3.46)>\"",
+            "\"{a} {b} {c:.2}\"::format(a = {1, 2, 3}, b = {1m, 2m, 3m}, c = {1.234, 2.345, 3.456}) == \"{1, 2, 3} {1m, 2m, 3m} {1.23, 2.34, 3.46}\"",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let product = test_run(
-            "\"{a} {b} {c:.2}\"::format(a = <(1, 2, 3, 4)>, b = <(1m, 2m, 3m, 4m)>, c = <(1.234, 2.345, 3.456, 4.567)>) == \"<(1, 2, 3, 4)> <(1m, 2m, 3m, 4m)> <(1.23, 2.34, 3.46, 4.57)>\"",
+            "\"{a} {b} {c:.2}\"::format(a = {1, 2, 3, 4}, b = {1m, 2m, 3m, 4m}, c = {1.234, 2.345, 3.456, 4.567}) == \"{1, 2, 3, 4} {1m, 2m, 3m, 4m} {1.23, 2.34, 3.46, 4.57}\"",
         )
         .unwrap();
         assert_eq!(product, Boolean(true).into());

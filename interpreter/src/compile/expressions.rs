@@ -2371,7 +2371,7 @@ mod test {
 
     #[test]
     fn vector2() {
-        let root = full_compile("<(1.0, 2.0)>");
+        let root = full_compile("{1.0, 2.0}");
         let vector = root.node.as_vector2().unwrap();
         let x = &vector.node.x;
         let x_scalar = x.node.as_scalar().unwrap();
@@ -2413,7 +2413,7 @@ mod test {
 
     #[test]
     fn vector3() {
-        let root = full_compile("<(1.0, 2.0, 3.0)>");
+        let root = full_compile("{1.0, 2.0, 3.0}");
         let vector = root.node.as_vector3().unwrap();
         let x = &vector.node.x;
         let x_scalar = x.node.as_scalar().unwrap();
@@ -2467,7 +2467,7 @@ mod test {
 
     #[test]
     fn vector4() {
-        let root = full_compile("<(1.0, 2.0, 3.0, 4.0)>");
+        let root = full_compile("{1.0, 2.0, 3.0, 4.0}");
         let vector = root.node.as_vector4().unwrap();
         let x = &vector.node.x;
         let x_scalar = x.node.as_scalar().unwrap();
