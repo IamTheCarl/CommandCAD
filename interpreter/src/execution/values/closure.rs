@@ -58,6 +58,7 @@ impl BuiltinCallableDatabase {
         crate::execution::register_methods_and_functions(&mut database);
         super::iterators::register_methods(&mut database);
         super::transform::register_methods(&mut database);
+        super::polygon::register_methods_and_functions(&mut database);
 
         database
     }
@@ -71,12 +72,15 @@ impl BuiltinCallableDatabase {
             panic!("Duplicate bultin function name: {}", callable.name());
         }
 
-        if self
+        if let Some(old_callable) = self
             .callables
             .insert(TypeId::of::<T>(), CallableStorage { callable })
-            .is_some()
         {
-            panic!("Duplicate bultin function tag: {:?}", TypeId::of::<T>());
+            panic!(
+                "Duplicate bultin function tag: {:?}, originally registered with function `{}`",
+                TypeId::of::<T>(),
+                old_callable.name()
+            );
         }
     }
 

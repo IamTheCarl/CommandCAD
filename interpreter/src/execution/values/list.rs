@@ -37,7 +37,7 @@ use std::{borrow::Cow, cmp::Ordering, collections::HashMap, sync::Arc};
 
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct List {
     // In theory, we could use a lot less memory by dynamically sizing everything to fit
     // our smallest type, but we aren't going to implement that today.
@@ -114,6 +114,29 @@ impl List {
     ) -> ExecutionResult<Value> {
         self.map_raw(context, operation_name, operation)
             .map(|value| value.into())
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Value> {
+        self.values.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+}
+
+impl IntoIterator for List {
+    type Item = Value;
+
+    type IntoIter = std::vec::IntoIter<Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let list = Arc::try_unwrap(self.values).unwrap_or_else(|arc| (*arc).clone());
+        list.into_iter()
     }
 }
 
@@ -282,9 +305,10 @@ pub struct ListIterator {
 impl IterableObject for ListIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+        _context: &ExecutionContext,
+        callback: impl FnOnce(&mut dyn Iterator<Item = ExecutionResult<Value>>) -> ExecutionResult<R>,
     ) -> ExecutionResult<R> {
-        let mut iter = self.list.values.iter().cloned();
+        let mut iter = self.list.values.iter().cloned().map(Ok);
         callback(&mut iter)
     }
 }
@@ -297,9 +321,10 @@ pub struct ListReverseIterator {
 impl IterableObject for ListReverseIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+        _context: &ExecutionContext,
+        callback: impl FnOnce(&mut dyn Iterator<Item = ExecutionResult<Value>>) -> ExecutionResult<R>,
     ) -> ExecutionResult<R> {
-        let mut iter = self.list.values.iter().rev().cloned();
+        let mut iter = self.list.values.iter().rev().cloned().map(Ok);
         callback(&mut iter)
     }
 }

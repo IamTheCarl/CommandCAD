@@ -89,6 +89,8 @@ fn build_std(context: &ExecutionContext) -> Dictionary {
         ),
         ("consts".into(), build_consts(context).into()),
         ("mesh".into(), build_mesh_3d(context).into()),
+        ("line_string".into(), build_line_string(context).into()),
+        ("polygon".into(), build_polygon(context).into()),
         ("import".into(), BuiltinFunction::new::<Import>().into()),
         ("range".into(), build_range(context).into()),
     ]);
@@ -173,6 +175,39 @@ fn build_dimension_types(
             .map(move |(name, dimension)| (name.into(), type_builder(dimension).into())),
     );
 
+    Dictionary::new(context, types)
+}
+
+fn build_line_string(context: &ExecutionContext) -> Dictionary {
+    use crate::values::polygon::methods_and_functions::line_string::*;
+
+    let types: HashMap<ImString, Value> = HashMap::from_iter([(
+        "from_points".into(),
+        BuiltinFunction::new::<FromPoints>().into(),
+    )]);
+    Dictionary::new(context, types)
+}
+
+fn build_polygon(context: &ExecutionContext) -> Dictionary {
+    use crate::values::polygon::methods_and_functions::polygon::*;
+
+    let types: HashMap<ImString, Value> = HashMap::from_iter([
+        (
+            "from_points".into(),
+            BuiltinFunction::new::<FromPoints>().into(),
+        ),
+        (
+            "from_line_strings".into(),
+            BuiltinFunction::new::<FromLineStrings>().into(),
+        ),
+        ("circle".into(), BuiltinFunction::new::<Circle>().into()),
+        ("arc".into(), BuiltinFunction::new::<BuildArc>().into()),
+        ("box".into(), BuiltinFunction::new::<BuildBox>().into()),
+        (
+            "box_from_points".into(),
+            BuiltinFunction::new::<BuildBoxFromPoints>().into(),
+        ),
+    ]);
     Dictionary::new(context, types)
 }
 

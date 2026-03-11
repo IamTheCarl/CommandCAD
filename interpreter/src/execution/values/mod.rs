@@ -68,6 +68,9 @@ pub mod manifold_mesh;
 mod transform;
 pub use transform::{Transform2d, Transform3d};
 
+pub mod polygon;
+pub use polygon::{LineString, Polygon, PolygonSet};
+
 mod value_type;
 pub use value_type::{StructDefinition, StructMember, ValueType};
 
@@ -297,6 +300,9 @@ pub enum Value {
     ValueIterator,
     Transform2d,
     Transform3d,
+    LineString,
+    Polygon,
+    PolygonSet,
 }
 
 impl StaticTypeName for Value {
@@ -308,6 +314,19 @@ impl StaticTypeName for Value {
 impl StaticType for Value {
     fn static_type() -> ValueType {
         ValueType::Any
+    }
+}
+
+impl<T> From<Option<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(value: Option<T>) -> Self {
+        if let Some(value) = value {
+            value.into()
+        } else {
+            ValueNone.into()
+        }
     }
 }
 

@@ -147,13 +147,15 @@ pub struct CharIterator {
 impl IterableObject for CharIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+        _context: &ExecutionContext,
+        callback: impl FnOnce(&mut dyn Iterator<Item = ExecutionResult<Value>>) -> ExecutionResult<R>,
     ) -> ExecutionResult<R> {
         let mut iter = self
             .string
             .0
             .chars()
-            .map(|c| IString(format!("{c}").into()).into());
+            .map(|c| IString(format!("{c}").into()).into())
+            .map(Ok);
         callback(&mut iter)
     }
 }
@@ -167,14 +169,16 @@ pub struct LineIterator {
 impl IterableObject for LineIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+        _context: &ExecutionContext,
+        callback: impl FnOnce(&mut dyn Iterator<Item = ExecutionResult<Value>>) -> ExecutionResult<R>,
     ) -> ExecutionResult<R> {
         let mut iterator = self
             .string
             .0
             .lines()
             .filter(|line| self.include_empty || !line.is_empty())
-            .map(|line| IString(line).into());
+            .map(|line| IString(line).into())
+            .map(Ok);
 
         callback(&mut iterator)
     }
