@@ -853,7 +853,8 @@ where
 {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+        _context: &ExecutionContext,
+        callback: impl FnOnce(&mut dyn Iterator<Item = ExecutionResult<Value>>) -> ExecutionResult<R>,
     ) -> ExecutionResult<R> {
         // We had to implement a lot of this manually due to std::range::Step not being stable yet.
         let mut index = self.start;
@@ -868,7 +869,7 @@ where
                 if index != end {
                     let value = index;
                     index = index.decrement();
-                    Some(Integer(value).into())
+                    Some(Ok(Integer(value).into()))
                 } else {
                     None
                 }
@@ -880,7 +881,7 @@ where
                 if index != end {
                     let value = index;
                     index = index.increment();
-                    Some(Integer(value).into())
+                    Some(Ok(Integer(value).into()))
                 } else {
                     None
                 }

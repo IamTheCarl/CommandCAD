@@ -65,6 +65,9 @@ pub enum ValueType {
     Iterator,
     Transform2d,
     Transform3d,
+    LineString,
+    Polygon,
+    PolygonSet,
 }
 
 impl From<StructDefinition> for ValueType {
@@ -101,6 +104,9 @@ impl ValueType {
             Self::Iterator => "Iterator".into(),
             Self::Transform2d => "Transform2d".into(),
             Self::Transform3d => "Transform3d".into(),
+            Self::LineString => "LineString".into(),
+            Self::Polygon => "Polygon".into(),
+            Self::PolygonSet => "PolygonSet".into(),
             _ => format!("{}", self).into(),
         }
     }
@@ -808,7 +814,6 @@ mod test {
             let error = structure
                 .check_other_qualifies(&dictionary.get_type(context))
                 .unwrap_err();
-            dbg!(&error);
             assert_eq!(
                 error,
                 TypeQualificationError::Fields {
@@ -903,6 +908,60 @@ mod test {
             error,
             TypeQualificationError::This {
                 expected: ValueType::Transform3d,
+                got: ValueType::TypeNone
+            }
+        );
+    }
+
+    #[test]
+    fn type_linestring() {
+        ValueType::LineString
+            .check_other_qualifies(&ValueType::LineString)
+            .unwrap();
+
+        let error = ValueType::LineString
+            .check_other_qualifies(&ValueType::TypeNone)
+            .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::LineString,
+                got: ValueType::TypeNone
+            }
+        );
+    }
+
+    #[test]
+    fn type_polygon() {
+        ValueType::Polygon
+            .check_other_qualifies(&ValueType::Polygon)
+            .unwrap();
+
+        let error = ValueType::Polygon
+            .check_other_qualifies(&ValueType::TypeNone)
+            .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::Polygon,
+                got: ValueType::TypeNone
+            }
+        );
+    }
+
+    #[test]
+    fn type_polygon_set() {
+        ValueType::PolygonSet
+            .check_other_qualifies(&ValueType::PolygonSet)
+            .unwrap();
+
+        let error = ValueType::PolygonSet
+            .check_other_qualifies(&ValueType::TypeNone)
+            .unwrap_err();
+        assert_eq!(
+            error,
+            TypeQualificationError::This {
+                expected: ValueType::PolygonSet,
                 got: ValueType::TypeNone
             }
         );

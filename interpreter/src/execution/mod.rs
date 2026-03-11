@@ -548,6 +548,19 @@ pub(crate) fn test_run(input: &str) -> ExecutionResult<Value> {
 }
 
 #[cfg(test)]
+pub(crate) fn run_assert_eq(left: &str, right: &str) {
+    let left = compile::full_compile(left);
+    let right = compile::full_compile(right);
+
+    test_context([], |context| {
+        let left = execute_expression(context, &left).expect("Left expression failed");
+        let right = execute_expression(context, &right).expect("Right expression failed");
+
+        pretty_assertions::assert_eq!(left, right)
+    })
+}
+
+#[cfg(test)]
 pub(crate) fn test_context<R>(
     extra_prelude: impl IntoIterator<Item = (ImString, Value)>,
     f: impl FnOnce(&ExecutionContext) -> R,

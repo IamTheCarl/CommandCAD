@@ -26,6 +26,9 @@ use crate::{
     values::{
         integer::{RangeSInt, RangeUInt},
         list::{ListIterator, ListReverseIterator},
+        polygon::{
+            InteriorIterator, LineStringIterator, PolygonSetIterator, RevLineStringIterator,
+        },
         string::{CharIterator, LineIterator},
         Boolean, BuiltinCallableDatabase, BuiltinFunction, Dictionary, IString, List,
         MissingAttributeError, Object, StaticType, StaticTypeName, Style, UnsignedInteger, Value,
@@ -40,7 +43,8 @@ use itertools::Itertools;
 pub trait IterableObject {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+        context: &ExecutionContext,
+        callback: impl FnOnce(&mut dyn Iterator<Item = ExecutionResult<Value>>) -> ExecutionResult<R>,
     ) -> ExecutionResult<R>;
 }
 
@@ -54,6 +58,10 @@ pub enum IterableSource {
     LineIterator,
     RangeUInt,
     RangeSInt,
+    LineStringIterator,
+    RevLineStringIterator,
+    InteriorIterator,
+    PolygonSetIterator,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -187,9 +195,8 @@ impl ValueIterator {
         context: &ExecutionContext,
         callback: IterateCallback<'s, R>,
     ) -> ExecutionResult<R> {
-        self.source.iterate(move |iterator| {
+        self.source.iterate(context, move |iterator| {
             let mut stages = self.stages.iter();
-            let iterator = &mut iterator.map(Ok);
 
             if let Some(first_stage) = stages.next() {
                 first_stage.process(context, &mut stages, iterator, callback)
