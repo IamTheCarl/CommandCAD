@@ -121,37 +121,43 @@ impl Object for ValueIterator {
 
     fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
-            "chunks" => Ok(BuiltinFunction::new::<methods::Chunks>().into()),
-            "chunks_exact" => Ok(BuiltinFunction::new::<methods::ChunksExact>().into()),
-            "chain" => Ok(BuiltinFunction::new::<methods::Chain>().into()),
-            "cycle" => Ok(BuiltinFunction::new::<methods::Cycle>().into()),
-            "debug" => Ok(BuiltinFunction::new::<methods::Debug>().into()),
-            "enumerate" => Ok(BuiltinFunction::new::<methods::Enumerate>().into()),
-            "filter" => Ok(BuiltinFunction::new::<methods::Filter>().into()),
-            "filter_map" => Ok(BuiltinFunction::new::<methods::FilterMap>().into()),
-            "flatten" => Ok(BuiltinFunction::new::<methods::Flatten>().into()),
-            "map" => Ok(BuiltinFunction::new::<methods::Map>().into()),
-            "map_while" => Ok(BuiltinFunction::new::<methods::MapWhile>().into()),
-            "skip" => Ok(BuiltinFunction::new::<methods::Skip>().into()),
-            "skip_while" => Ok(BuiltinFunction::new::<methods::SkipWhile>().into()),
-            "step_by" => Ok(BuiltinFunction::new::<methods::StepBy>().into()),
-            "take" => Ok(BuiltinFunction::new::<methods::Take>().into()),
-            "take_while" => Ok(BuiltinFunction::new::<methods::TakeWhile>().into()),
-            "zip" => Ok(BuiltinFunction::new::<methods::Zip>().into()),
+            "chunks" => Ok(BuiltinFunction::new::<methods_and_functions::Chunks>().into()),
+            "chunks_exact" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::ChunksExact>().into())
+            }
+            "chain" => Ok(BuiltinFunction::new::<methods_and_functions::Chain>().into()),
+            "cycle" => Ok(BuiltinFunction::new::<methods_and_functions::Cycle>().into()),
+            "debug" => Ok(BuiltinFunction::new::<methods_and_functions::Debug>().into()),
+            "enumerate" => Ok(BuiltinFunction::new::<methods_and_functions::Enumerate>().into()),
+            "filter" => Ok(BuiltinFunction::new::<methods_and_functions::Filter>().into()),
+            "filter_map" => Ok(BuiltinFunction::new::<methods_and_functions::FilterMap>().into()),
+            "flatten" => Ok(BuiltinFunction::new::<methods_and_functions::Flatten>().into()),
+            "map" => Ok(BuiltinFunction::new::<methods_and_functions::Map>().into()),
+            "map_while" => Ok(BuiltinFunction::new::<methods_and_functions::MapWhile>().into()),
+            "skip" => Ok(BuiltinFunction::new::<methods_and_functions::Skip>().into()),
+            "skip_while" => Ok(BuiltinFunction::new::<methods_and_functions::SkipWhile>().into()),
+            "step_by" => Ok(BuiltinFunction::new::<methods_and_functions::StepBy>().into()),
+            "take" => Ok(BuiltinFunction::new::<methods_and_functions::Take>().into()),
+            "take_while" => Ok(BuiltinFunction::new::<methods_and_functions::TakeWhile>().into()),
+            "zip" => Ok(BuiltinFunction::new::<methods_and_functions::Zip>().into()),
 
-            "all" => Ok(BuiltinFunction::new::<methods::All>().into()),
-            "any" => Ok(BuiltinFunction::new::<methods::Any>().into()),
-            "collect_list" => Ok(BuiltinFunction::new::<methods::CollectList>().into()),
-            "collect_string" => Ok(BuiltinFunction::new::<methods::CollectString>().into()),
-            "count" => Ok(BuiltinFunction::new::<methods::Count>().into()),
-            "first" => Ok(BuiltinFunction::new::<methods::First>().into()),
-            "fold" => Ok(BuiltinFunction::new::<methods::Fold>().into()),
-            "last" => Ok(BuiltinFunction::new::<methods::Last>().into()),
-            "max" => Ok(BuiltinFunction::new::<methods::Max>().into()),
-            "min" => Ok(BuiltinFunction::new::<methods::Min>().into()),
-            "nth" => Ok(BuiltinFunction::new::<methods::Nth>().into()),
-            "product" => Ok(BuiltinFunction::new::<methods::Product>().into()),
-            "sum" => Ok(BuiltinFunction::new::<methods::Sum>().into()),
+            "all" => Ok(BuiltinFunction::new::<methods_and_functions::All>().into()),
+            "any" => Ok(BuiltinFunction::new::<methods_and_functions::Any>().into()),
+            "collect_list" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::CollectList>().into())
+            }
+            "collect_string" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::CollectString>().into())
+            }
+            "count" => Ok(BuiltinFunction::new::<methods_and_functions::Count>().into()),
+            "first" => Ok(BuiltinFunction::new::<methods_and_functions::First>().into()),
+            "fold" => Ok(BuiltinFunction::new::<methods_and_functions::Fold>().into()),
+            "last" => Ok(BuiltinFunction::new::<methods_and_functions::Last>().into()),
+            "max" => Ok(BuiltinFunction::new::<methods_and_functions::Max>().into()),
+            "min" => Ok(BuiltinFunction::new::<methods_and_functions::Min>().into()),
+            "nth" => Ok(BuiltinFunction::new::<methods_and_functions::Nth>().into()),
+            "product" => Ok(BuiltinFunction::new::<methods_and_functions::Product>().into()),
+            "sum" => Ok(BuiltinFunction::new::<methods_and_functions::Sum>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -550,7 +556,7 @@ impl IteratorStage {
     }
 }
 
-pub mod methods {
+pub mod methods_and_functions {
     // Methods to add stages to the iterator:
     pub struct Chunks;
     pub struct ChunksExact;
@@ -589,7 +595,7 @@ pub mod methods {
 pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_method!(
         database,
-        methods::Chunks, "Iterator::chunks", (
+        methods_and_functions::Chunks, "Iterator::chunks", (
             context: &ExecutionContext,
             this: ValueIterator,
             size: UnsignedInteger
@@ -601,8 +607,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::ChunksExact, "Iterator::chunks_exact", (
-            context: &ExecutionContext,
+        methods_and_functions::ChunksExact, "Iterator::chunks_exact", (
+            methods: &ExecutionContext,
             this: ValueIterator,
             size: UnsignedInteger
         ) -> ValueIterator {
@@ -613,7 +619,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Chain, "Iterator::chain", (
+        methods_and_functions::Chain, "Iterator::chain", (
             context: &ExecutionContext,
             this: ValueIterator,
             next: ValueIterator
@@ -625,7 +631,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Cycle, "Iterator::cycle", (
+        methods_and_functions::Cycle, "Iterator::cycle", (
             context: &ExecutionContext,
             this: ValueIterator,
             count: UnsignedInteger
@@ -637,7 +643,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Debug, "Iterator::debug", (
+        methods_and_functions::Debug, "Iterator::debug", (
             context: &ExecutionContext,
             this: ValueIterator
         ) -> ValueIterator {
@@ -648,7 +654,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Enumerate, "Iterator::enumerate", (
+        methods_and_functions::Enumerate, "Iterator::enumerate", (
             context: &ExecutionContext,
             this: ValueIterator
         ) -> ValueIterator {
@@ -659,7 +665,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Filter, "Iterator::filter", (
+        methods_and_functions::Filter, "Iterator::filter", (
             context: &ExecutionContext,
             this: ValueIterator,
             f: FilterClosure
@@ -671,7 +677,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::FilterMap, "Iterator::filter_map", (
+        methods_and_functions::FilterMap, "Iterator::filter_map", (
             context: &ExecutionContext,
             this: ValueIterator,
             f: FilterMapClosure
@@ -683,7 +689,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Flatten, "Iterator::flatten", (
+        methods_and_functions::Flatten, "Iterator::flatten", (
             context: &ExecutionContext,
             this: ValueIterator
         ) -> ValueIterator {
@@ -694,7 +700,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Map, "Iterator::map", (
+        methods_and_functions::Map, "Iterator::map", (
             context: &ExecutionContext,
             this: ValueIterator,
             f: MapClosure
@@ -706,7 +712,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::MapWhile, "Iterator::map_while", (
+        methods_and_functions::MapWhile, "Iterator::map_while", (
             context: &ExecutionContext,
             this: ValueIterator,
             f: MapWhileClosure
@@ -718,7 +724,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Skip, "Iterator::skip", (
+        methods_and_functions::Skip, "Iterator::skip", (
             context: &ExecutionContext,
             this: ValueIterator,
             count: UnsignedInteger
@@ -730,7 +736,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::SkipWhile, "Iterator::skip_while", (
+        methods_and_functions::SkipWhile, "Iterator::skip_while", (
             context: &ExecutionContext,
             this: ValueIterator,
             f: SkipWhileClosure
@@ -742,7 +748,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::StepBy, "Iterator::step_by", (
+        methods_and_functions::StepBy, "Iterator::step_by", (
             context: &ExecutionContext,
             this: ValueIterator,
             count: UnsignedInteger
@@ -754,7 +760,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Take, "Iterator::take", (
+        methods_and_functions::Take, "Iterator::take", (
             context: &ExecutionContext,
             this: ValueIterator,
             count: UnsignedInteger
@@ -766,7 +772,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::TakeWhile, "Iterator::take_while", (
+        methods_and_functions::TakeWhile, "Iterator::take_while", (
             context: &ExecutionContext,
             this: ValueIterator,
             f: TakeWhileClosure
@@ -778,7 +784,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Zip, "Iterator::zip", (
+        methods_and_functions::Zip, "Iterator::zip", (
             context: &ExecutionContext,
             this: ValueIterator,
             other: ValueIterator
@@ -792,7 +798,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_closure_type!(AllClosure(c: Value) -> Boolean);
     build_method!(
         database,
-        methods::All, "Iterator::all", (
+        methods_and_functions::All, "Iterator::all", (
             context: &ExecutionContext,
             this: ValueIterator,
             f: AllClosure
@@ -824,7 +830,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_closure_type!(AnyClosure(c: Value) -> Boolean);
     build_method!(
         database,
-        methods::Any, "Iterator::any", (
+        methods_and_functions::Any, "Iterator::any", (
             context: &ExecutionContext,
             this: ValueIterator,
             f: AnyClosure
@@ -854,7 +860,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::CollectList, "Iterator::collect_list", (
+        methods_and_functions::CollectList, "Iterator::collect_list", (
             context: &ExecutionContext,
             this: ValueIterator
         ) -> List {
@@ -866,7 +872,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::CollectString, "Iterator::collect_string", (
+        methods_and_functions::CollectString, "Iterator::collect_string", (
             context: &ExecutionContext,
             this: ValueIterator
         ) -> IString {
@@ -886,7 +892,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Count, "Iterator::count", (
+        methods_and_functions::Count, "Iterator::count", (
             context: &ExecutionContext,
             this: ValueIterator
         ) -> UnsignedInteger {
@@ -897,7 +903,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::First, "Iterator::first", (
+        methods_and_functions::First, "Iterator::first", (
             context: &ExecutionContext,
             this: ValueIterator
         ) -> Value {
@@ -914,7 +920,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_closure_type!(FoldClosure(previous: Value, c: Value) -> Value);
     build_method!(
         database,
-        methods::Fold, "Iterator::fold",(
+        methods_and_functions::Fold, "Iterator::fold",(
             context: &ExecutionContext,
             this: ValueIterator,
             init: Value,
@@ -945,7 +951,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Last, "Iterator::last", (
+        methods_and_functions::Last, "Iterator::last", (
             context: &ExecutionContext,
             this: ValueIterator
         ) -> Value {
@@ -960,7 +966,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Max, "Iterator::max", (
+        methods_and_functions::Max, "Iterator::max", (
             context: &ExecutionContext,
             this: ValueIterator
         ) -> Value {
@@ -984,7 +990,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Min, "Iterator::min", (
+        methods_and_functions::Min, "Iterator::min", (
             context: &ExecutionContext,
             this: ValueIterator
         ) -> Value {
@@ -1008,7 +1014,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Nth, "Iterator::nth", (
+        methods_and_functions::Nth, "Iterator::nth", (
             context: &ExecutionContext,
             this: ValueIterator,
             n: UnsignedInteger
@@ -1024,7 +1030,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Product, "Iterator::product",(
+        methods_and_functions::Product, "Iterator::product",(
             context: &ExecutionContext,
             this: ValueIterator
         ) -> Value {
@@ -1047,7 +1053,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Sum, "Iterator::sum",(
+        methods_and_functions::Sum, "Iterator::sum",(
             context: &ExecutionContext,
             this: ValueIterator
         ) -> Value {

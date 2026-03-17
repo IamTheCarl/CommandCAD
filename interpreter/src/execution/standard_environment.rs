@@ -16,19 +16,22 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, path::Path, sync::Mutex};
+use std::{
+    collections::HashMap,
+    path::Path,
+    sync::{atomic::AtomicBool, Mutex},
+};
 
 use common_data_types::{Dimension, Float};
 use imstr::ImString;
 use nalgebra::{Matrix3, Matrix4};
-use tempfile::TempDir;
 
 use crate::{
     execution::{
         functions::Import,
         logging::StackTrace,
         stack::StackScope,
-        store::Store,
+        store::{DummyStore, Store},
         values::{
             integer::functions::{RangeSInt, RangeUInt},
             BuiltinCallableDatabase, Scalar, SignedInteger, UnsignedInteger, ValueNone,
@@ -41,18 +44,20 @@ use crate::{
 use super::values::{Dictionary, Value, ValueType};
 
 /// Builds standard library.
-pub fn build_prelude(
-    database: &BuiltinCallableDatabase,
-) -> std::io::Result<HashMap<ImString, Value>> {
+pub fn build_prelude(database: &BuiltinCallableDatabase) -> HashMap<ImString, Value> {
     // Build an incomplete context for bootstrapping.
     let prelude = HashMap::new();
-    let store_directory = TempDir::new()?;
-    let store = Store::new(store_directory.path());
+
+    // We don't actually use the store for anything during prelude bringup. Use a dummy store for
+    // this.
+    let store = Store::DummyStore(DummyStore);
     let file_cache = Mutex::new(HashMap::new());
 
     let working_directory = Path::new(".");
+    let shutdown_signal = AtomicBool::new(false);
 
     let context = ExecutionContext {
+        shutdown_singal: &shutdown_signal,
         log: &Mutex::new(Vec::new()),
         stack_trace: &StackTrace::bootstrap(),
         stack: &StackScope::top(&prelude),
@@ -63,9 +68,7 @@ pub fn build_prelude(
         import_limit: 100,
     };
 
-    let global = HashMap::from([("std".into(), build_std(&context).into())]);
-
-    Ok(global)
+    HashMap::from([("std".into(), build_std(&context).into())])
 }
 
 fn build_std(context: &ExecutionContext) -> Dictionary {
@@ -156,11 +159,17 @@ fn build_types(context: &ExecutionContext) -> Dictionary {
         ("ManifoldMesh".into(), ValueType::ManifoldMesh3D.into()),
         ("Transform2d".into(), ValueType::Transform2d.into()),
         ("Transform3d".into(), ValueType::Transform3d.into()),
-        // TODO we need File types.
+        ("Transform3d".into(), ValueType::Transform3d.into()),
+        ("Iterator".into(), ValueType::Iterator.into()),
+        (
+            "List".into(),
+            BuiltinFunction::new::<crate::values::list::methods_and_functions::BuildType>().into(),
+        ),
+        ("File".into(), ValueType::File.into()),
         // TODO we'll need a function to build custom function signature types.
         // ("Function".into(), ValueType::Closure(Arc<ClosureSignature>)),
 
-        // TODO add a function to build custom unit types.
+        // TODO add a function to build custom scalar and vector unit types.
     ]);
     Dictionary::new(context, types)
 }

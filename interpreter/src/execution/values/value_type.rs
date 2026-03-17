@@ -40,6 +40,7 @@ use crate::{
         },
         ExecutionContext,
     },
+    values::StaticType,
 };
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -271,6 +272,12 @@ impl Object for ValueType {
 impl StaticTypeName for ValueType {
     fn static_type_name() -> Cow<'static, str> {
         "ValueType".into()
+    }
+}
+
+impl StaticType for ValueType {
+    fn static_type() -> ValueType {
+        ValueType::ValueType
     }
 }
 

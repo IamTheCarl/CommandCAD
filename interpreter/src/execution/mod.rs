@@ -21,7 +21,7 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
 use crate::{
@@ -55,7 +55,7 @@ use logging::LocatedStr;
 pub use logging::{ExecutionFileCache, LogLevel, LogMessage, RuntimeLog, StackTrace};
 pub use stack::StackScope;
 mod store;
-pub use store::Store;
+pub use store::{FsStore, Store, StoreTrait};
 
 use thiserror::Error;
 use values::{
@@ -210,6 +210,7 @@ pub fn find_all_variable_accesses_in_expression(
 
 #[derive(Debug, Clone)]
 pub struct ExecutionContext<'c> {
+    pub shutdown_singal: &'c AtomicBool,
     pub log: &'c dyn RuntimeLog,
     pub stack_trace: &'c StackTrace<'c>,
     pub stack: &'c StackScope<'c>,
@@ -286,10 +287,24 @@ impl<'s> IntoIterator for &'s ExecutionContext<'_> {
     }
 }
 
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum AbortError {
+    #[error("Execution Aborted")]
+    Aborted,
+}
+
 pub fn execute_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<compile::Expression>,
 ) -> ExecutionResult<Value> {
+    if context
+        .shutdown_singal
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        // We've been told to shutdown.
+        return Err(AbortError::Aborted.to_error(context));
+    }
+
     context.trace_scope(
         None,
         expression.reference.clone(),
@@ -579,19 +594,24 @@ pub(crate) fn test_context_custom_database<R>(
     use std::sync::Mutex;
     use tempfile::TempDir;
 
-    let mut prelude = build_prelude(&database).unwrap();
+    use crate::execution::store::FsStore;
+
+    let mut prelude = build_prelude(&database);
 
     for (name, value) in extra_prelude.into_iter() {
         prelude.insert(name, value);
     }
 
     let store_directory = TempDir::new().unwrap();
-    let store = Store::new(store_directory.path());
+    let store = Store::FsStore(FsStore::new(store_directory.path()));
 
     let file_cache = Mutex::new(HashMap::new());
     let working_directory = Path::new(".");
 
+    let shutdown_signal = AtomicBool::new(false);
+
     let context = ExecutionContext {
+        shutdown_singal: &shutdown_signal,
         log: &Mutex::new(Vec::new()),
         stack_trace: &StackTrace::test(),
         stack: &StackScope::top(&prelude),

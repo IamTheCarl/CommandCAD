@@ -50,7 +50,7 @@ pub use closure::{BuiltinCallableDatabase, BuiltinFunction, UserClosure};
 pub mod dictionary;
 pub use dictionary::Dictionary;
 
-mod list;
+pub mod list;
 pub use list::List;
 
 mod string;

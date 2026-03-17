@@ -1,0 +1,6 @@
+# These are the same meshes from mesh.ccm, we're just exporting them as stls.
+std.import(path = "mesh.ccm")
+  ::iter()
+  ::zip(other = ["my_sphere", "my_cube_sphere_or", "my_cube_sphere_and", "my_cube_sphere_xor"]::iter())
+  ::map(f = (c: std.types.List()) -> std.types.File: c::get(i = 0u)::to_stl(name = c::get(i = 1u)))
+  ::collect_list()

@@ -21,16 +21,76 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use enum_dispatch::enum_dispatch;
 use sha2::{Digest, Sha256};
 use tempfile::{NamedTempFile, TempDir};
 
 use crate::{
-    execution::errors::{ExecutionResult, Raise},
+    execution::errors::{ExecutionResult, Raise, StringError},
     ExecutionContext,
 };
 
+#[enum_dispatch]
+pub trait StoreTrait {
+    fn get_or_init_file(
+        &self,
+        context: &ExecutionContext,
+        hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf>;
+
+    fn get_or_init_directory(
+        &self,
+        context: &ExecutionContext,
+        hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        init: impl FnOnce(&mut TempDir) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf>;
+}
+
+#[enum_dispatch(StoreTrait)]
 #[derive(Debug)]
-pub struct Store {
+pub enum Store {
+    FsStore,
+    DummyStore,
+}
+
+#[derive(Debug)]
+pub struct DummyStore;
+
+impl StoreTrait for DummyStore {
+    fn get_or_init_file(
+        &self,
+        context: &ExecutionContext,
+        _hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        _init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
+        Err(StringError(format!(
+            "Cannot store a file with a dummy store: {}",
+            name.as_ref()
+        ))
+        .to_error(context))
+    }
+
+    fn get_or_init_directory(
+        &self,
+        context: &ExecutionContext,
+        _hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        _init: impl FnOnce(&mut TempDir) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
+        Err(StringError(format!(
+            "Cannot store a directory with a dummy store: {}",
+            name.as_ref()
+        ))
+        .to_error(context))
+    }
+}
+
+#[derive(Debug)]
+pub struct FsStore {
     /// Path to the store itself.
     path: PathBuf,
 
@@ -40,90 +100,11 @@ pub struct Store {
     temp_dir: PathBuf,
 }
 
-impl Store {
+impl FsStore {
     pub fn new(path: impl Into<PathBuf>) -> Self {
         let path = path.into();
         let temp_dir = path.join("../temp");
         Self { path, temp_dir }
-    }
-
-    pub fn get_or_init_file(
-        &self,
-        context: &ExecutionContext,
-        hashable: &impl std::hash::Hash,
-        name: impl AsRef<str>,
-        init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
-    ) -> ExecutionResult<PathBuf> {
-        let name = name.as_ref();
-
-        context.trace_scope(
-            Some(format!("Failed to fetch or create file {name} in store").into()),
-            context.stack_trace.bottom().clone(),
-            |context| {
-                let store_path = self.generate_store_path(hashable, name);
-
-                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
-                    Ok(store_path)
-                } else {
-                    std::fs::create_dir_all(&self.temp_dir)
-                        .map_err(|error| error.to_error(context))?;
-                    let mut asset = PendingAsset {
-                        store_path,
-                        asset: NamedTempFile::new_in(&self.temp_dir)
-                            .map_err(|error| error.to_error(context))?,
-                    };
-                    init(&mut asset.asset)?;
-
-                    let (mut file, temp_path) = asset
-                        .asset
-                        .keep()
-                        .map_err(|error| error.error.to_error(context))?;
-
-                    // Make sure that file is flushed and closed.
-                    file.flush().map_err(|error| error.to_error(context))?;
-                    drop(file);
-
-                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
-
-                    Ok(asset.store_path)
-                }
-            },
-        )
-    }
-
-    pub fn get_or_init_directory(
-        &self,
-        context: &ExecutionContext,
-        hashable: &impl std::hash::Hash,
-        name: impl AsRef<str>,
-        init: impl FnOnce(&mut TempDir) -> ExecutionResult<()>,
-    ) -> ExecutionResult<PathBuf> {
-        let name = name.as_ref();
-
-        context.trace_scope(
-            Some(format!("Failed to fetch or create directory {name} in store").into()),
-            context.stack_trace.bottom().clone(),
-            |context| {
-                let store_path = self.generate_store_path(hashable, name);
-
-                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
-                    Ok(store_path)
-                } else {
-                    std::fs::create_dir_all(&self.temp_dir)
-                        .map_err(|error| error.to_error(context))?;
-                    let mut asset = PendingAsset {
-                        store_path,
-                        asset: TempDir::new_in(&self.temp_dir)
-                            .map_err(|error| error.to_error(context))?,
-                    };
-                    init(&mut asset.asset)?;
-                    let temp_path = asset.asset.keep();
-                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
-
-                    Ok(asset.store_path)
-                }
-            },
-        )
     }
 
     fn generate_store_path(
@@ -179,6 +160,87 @@ impl Store {
         .map_err(|error| error.to_error(context))?;
 
         Ok(())
+    }
+}
+
+impl StoreTrait for FsStore {
+    fn get_or_init_file(
+        &self,
+        context: &ExecutionContext,
+        hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
+        let name = name.as_ref();
+
+        context.trace_scope(
+            Some(format!("Failed to fetch or create file {name} in store").into()),
+            context.stack_trace.bottom().clone(),
+            |context| {
+                let store_path = self.generate_store_path(hashable, name);
+
+                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
+                    Ok(store_path)
+                } else {
+                    std::fs::create_dir_all(&self.temp_dir)
+                        .map_err(|error| error.to_error(context))?;
+                    let mut asset = PendingAsset {
+                        store_path,
+                        asset: NamedTempFile::new_in(&self.temp_dir)
+                            .map_err(|error| error.to_error(context))?,
+                    };
+                    init(&mut asset.asset)?;
+
+                    let (mut file, temp_path) = asset
+                        .asset
+                        .keep()
+                        .map_err(|error| error.error.to_error(context))?;
+
+                    // Make sure that file is flushed and closed.
+                    file.flush().map_err(|error| error.to_error(context))?;
+                    drop(file);
+
+                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+
+                    Ok(asset.store_path)
+                }
+            },
+        )
+    }
+
+    fn get_or_init_directory(
+        &self,
+        context: &ExecutionContext,
+        hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        init: impl FnOnce(&mut TempDir) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
+        let name = name.as_ref();
+
+        context.trace_scope(
+            Some(format!("Failed to fetch or create directory {name} in store").into()),
+            context.stack_trace.bottom().clone(),
+            |context| {
+                let store_path = self.generate_store_path(hashable, name);
+
+                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
+                    Ok(store_path)
+                } else {
+                    std::fs::create_dir_all(&self.temp_dir)
+                        .map_err(|error| error.to_error(context))?;
+                    let mut asset = PendingAsset {
+                        store_path,
+                        asset: TempDir::new_in(&self.temp_dir)
+                            .map_err(|error| error.to_error(context))?,
+                    };
+                    init(&mut asset.asset)?;
+                    let temp_path = asset.asset.keep();
+                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+
+                    Ok(asset.store_path)
+                }
+            },
+        )
     }
 }
 

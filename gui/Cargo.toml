@@ -1,0 +1,13 @@
+[package]
+name = "gui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = { version = "0.33.3", features = ["wgpu"] }
+egui = { version = "0.33.3", features = ["mint"] }
+interpreter = { path = "../interpreter" }
+anyhow = { workspace = true }
+oneshot = "0.2.1"
+tempfile = { workspace = true }
+notify = "8.2.0"

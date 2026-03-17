@@ -17,7 +17,7 @@
  */
 
 use crate::{
-    build_closure_type, build_method,
+    build_closure_type, build_function, build_method,
     compile::{AstNode, Expression},
     execute_expression,
     execution::{
@@ -175,27 +175,35 @@ impl Object for List {
 
     fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
-            "append" => Ok(BuiltinFunction::new::<methods::Append>().into()),
-            "slice" => Ok(BuiltinFunction::new::<methods::Slice>().into()),
-            "get" => Ok(BuiltinFunction::new::<methods::Get>().into()),
-            "chunks" => Ok(BuiltinFunction::new::<methods::Chunks>().into()),
+            "append" => Ok(BuiltinFunction::new::<methods_and_functions::Append>().into()),
+            "slice" => Ok(BuiltinFunction::new::<methods_and_functions::Slice>().into()),
+            "get" => Ok(BuiltinFunction::new::<methods_and_functions::Get>().into()),
+            "chunks" => Ok(BuiltinFunction::new::<methods_and_functions::Chunks>().into()),
 
-            "retain" => Ok(BuiltinFunction::new::<methods::Retain>().into()),
+            "retain" => Ok(BuiltinFunction::new::<methods_and_functions::Retain>().into()),
 
-            "sort" => Ok(BuiltinFunction::new::<methods::Sort>().into()),
-            "reverse" => Ok(BuiltinFunction::new::<methods::Reverse>().into()),
-            "truncate" => Ok(BuiltinFunction::new::<methods::Truncate>().into()),
+            "sort" => Ok(BuiltinFunction::new::<methods_and_functions::Sort>().into()),
+            "reverse" => Ok(BuiltinFunction::new::<methods_and_functions::Reverse>().into()),
+            "truncate" => Ok(BuiltinFunction::new::<methods_and_functions::Truncate>().into()),
 
-            "deduplicate" => Ok(BuiltinFunction::new::<methods::Deduplicate>().into()),
-            "union" => Ok(BuiltinFunction::new::<methods::Union>().into()),
-            "intersection" => Ok(BuiltinFunction::new::<methods::Intersection>().into()),
-            "difference" => Ok(BuiltinFunction::new::<methods::Difference>().into()),
-            "symmetric_difference" => {
-                Ok(BuiltinFunction::new::<methods::SymmetricDifference>().into())
+            "deduplicate" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::Deduplicate>().into())
             }
-            "cartesian_product" => Ok(BuiltinFunction::new::<methods::CartesianProduct>().into()),
-            "iter" => Ok(BuiltinFunction::new::<methods::Iterate>().into()),
-            "iter_reverse" => Ok(BuiltinFunction::new::<methods::IterateReverse>().into()),
+            "union" => Ok(BuiltinFunction::new::<methods_and_functions::Union>().into()),
+            "intersection" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::Intersection>().into())
+            }
+            "difference" => Ok(BuiltinFunction::new::<methods_and_functions::Difference>().into()),
+            "symmetric_difference" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::SymmetricDifference>().into())
+            }
+            "cartesian_product" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::CartesianProduct>().into())
+            }
+            "iter" => Ok(BuiltinFunction::new::<methods_and_functions::Iterate>().into()),
+            "iter_reverse" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::IterateReverse>().into())
+            }
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -378,7 +386,9 @@ impl std::fmt::Display for SortingError {
     }
 }
 
-mod methods {
+pub mod methods_and_functions {
+    pub struct BuildType;
+
     pub struct Append;
     pub struct Slice;
     pub struct Get;
@@ -406,9 +416,24 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     build_closure_type!(FoldClosure(previous: Value, c: Value) -> Value);
     build_closure_type!(RetainClosure(c: Value) -> Boolean);
 
+    build_function!(
+        database,
+        methods_and_functions::BuildType, "List::build_type", (
+            context: &ExecutionContext,
+            r#type: ValueType = ValueType::Any.into()
+        ) -> ValueType {
+            if matches!(r#type, ValueType::Any) {
+                Ok(ValueType::List(None))
+            } else {
+                Ok(ValueType::List(Some(Box::new(r#type))))
+            }
+
+        }
+    );
+
     build_method!(
         database,
-        methods::Append, "List::append", (
+        methods_and_functions::Append, "List::append", (
             context: &ExecutionContext,
             this: List,
             rhs: List
@@ -421,7 +446,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Slice, "List::slice", (
+        methods_and_functions::Slice, "List::slice", (
             context: &ExecutionContext,
             this: List,
             start: Option<UnsignedInteger> = ValueNone.into(),
@@ -451,7 +476,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Get, "List::get", (
+        methods_and_functions::Get, "List::get", (
             context: &ExecutionContext,
             this: List,
             i: UnsignedInteger
@@ -467,7 +492,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Chunks, "List::chunks", (
+        methods_and_functions::Chunks, "List::chunks", (
             context: &ExecutionContext,
             this: List,
             size: UnsignedInteger,
@@ -493,7 +518,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Retain, "List::retain",(
+        methods_and_functions::Retain, "List::retain",(
             context: &ExecutionContext,
             this: List,
             f: RetainClosure
@@ -518,7 +543,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Sort, "List::sort",(
+        methods_and_functions::Sort, "List::sort",(
             context: &ExecutionContext,
             this: List
         ) -> List {
@@ -544,7 +569,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Reverse, "List::reverse",(
+        methods_and_functions::Reverse, "List::reverse",(
             context: &ExecutionContext,
             this: List
         ) -> List {
@@ -556,7 +581,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Truncate, "List::truncate",(
+        methods_and_functions::Truncate, "List::truncate",(
             context: &ExecutionContext,
             this: List,
             length: UnsignedInteger
@@ -569,7 +594,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Deduplicate, "List::deduplicate",(
+        methods_and_functions::Deduplicate, "List::deduplicate",(
             context: &ExecutionContext,
             this: List
         ) -> List {
@@ -581,7 +606,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Union, "List::union",(
+        methods_and_functions::Union, "List::union",(
             context: &ExecutionContext,
             this: List,
             other: List
@@ -599,7 +624,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Intersection, "List::intersection",(
+        methods_and_functions::Intersection, "List::intersection",(
             context: &ExecutionContext,
             this: List,
             other: List
@@ -617,7 +642,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::Difference, "List::difference",(
+        methods_and_functions::Difference, "List::difference",(
             context: &ExecutionContext,
             this: List,
             other: List
@@ -636,7 +661,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::SymmetricDifference, "List::symmetric_difference",(
+        methods_and_functions::SymmetricDifference, "List::symmetric_difference",(
             context: &ExecutionContext,
             this: List,
             other: List
@@ -662,7 +687,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::CartesianProduct, "List::cartesian_product",(
+        methods_and_functions::CartesianProduct, "List::cartesian_product",(
             context: &ExecutionContext,
             this: List,
             other: List
@@ -682,7 +707,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
     build_method!(
         database,
-        methods::Iterate, "List::iter",(
+        methods_and_functions::Iterate, "List::iter",(
             context: &ExecutionContext,
             this: List
         ) -> ValueIterator {
@@ -691,7 +716,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
-        methods::IterateReverse, "List::iter_reverse",(
+        methods_and_functions::IterateReverse, "List::iter_reverse",(
             context: &ExecutionContext,
             this: List
         ) -> ValueIterator {

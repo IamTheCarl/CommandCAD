@@ -26,7 +26,10 @@ use std::{
 
 use crate::{
     build_function, build_method,
-    execution::errors::{ExecutionResult, Raise, StrError},
+    execution::{
+        errors::{ExecutionResult, Raise, StrError},
+        StoreTrait,
+    },
     values::{
         scalar::{Length, UnwrapNotNan},
         vector::{Length3, Zero3},

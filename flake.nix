@@ -38,6 +38,16 @@
           cargo = fenix-channel.cargo;
           rustc = fenix-channel.rustc;
         });
+
+        gui-dependencies = with pkgs; [
+          wayland
+          libxkbcommon
+          libX11
+          libXcursor
+          libXi
+          vulkan-loader
+          libGL
+        ];
       in rec
       {
 	packages.default = with pkgs; craneLib.buildPackage {
@@ -65,9 +75,9 @@
 	    pkg-config
           ];
 
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath ([
             openssl
-          ];
+          ] ++ gui-dependencies);
 
 	  shellHook = ''
             export SHELL=${pkgs.bashInteractive}/bin/bash
