@@ -31,12 +31,20 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Store {
+    /// Path to the store itself.
     path: PathBuf,
+
+    /// Temporary directory within the store.
+    /// Is put into the parent directory of the store because it MUST live on the same filesystem
+    /// as the store itself, otherwise transferring files into the store may fail.
+    temp_dir: PathBuf,
 }
 
 impl Store {
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
+        let path = path.into();
+        let temp_dir = path.join("../temp");
+        Self { path, temp_dir }
     }
 
     pub fn get_or_init_file(
@@ -57,11 +65,12 @@ impl Store {
                 if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
                     Ok(store_path)
                 } else {
-                    // TODO should we be creating these in the project directory to increase the chances of
-                    // them being on the same filesystem as the store?
+                    std::fs::create_dir_all(&self.temp_dir)
+                        .map_err(|error| error.to_error(context))?;
                     let mut asset = PendingAsset {
                         store_path,
-                        asset: NamedTempFile::new().map_err(|error| error.to_error(context))?,
+                        asset: NamedTempFile::new_in(&self.temp_dir)
+                            .map_err(|error| error.to_error(context))?,
                     };
                     init(&mut asset.asset)?;
 
@@ -100,11 +109,12 @@ impl Store {
                 if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
                     Ok(store_path)
                 } else {
-                    // TODO should we be creating these in the project directory to increase the chances of
-                    // them being on the same filesystem as the store?
+                    std::fs::create_dir_all(&self.temp_dir)
+                        .map_err(|error| error.to_error(context))?;
                     let mut asset = PendingAsset {
                         store_path,
-                        asset: TempDir::new().map_err(|error| error.to_error(context))?,
+                        asset: TempDir::new_in(&self.temp_dir)
+                            .map_err(|error| error.to_error(context))?,
                     };
                     init(&mut asset.asset)?;
                     let temp_path = asset.asset.keep();
