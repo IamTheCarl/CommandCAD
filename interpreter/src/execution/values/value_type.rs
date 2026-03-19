@@ -107,6 +107,7 @@ impl ValueType {
             Self::LineString => "LineString".into(),
             Self::Polygon => "Polygon".into(),
             Self::PolygonSet => "PolygonSet".into(),
+            Self::ValueType => "ValueType".into(),
             _ => format!("{}", self).into(),
         }
     }
