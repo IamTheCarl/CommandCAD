@@ -326,7 +326,9 @@ impl eframe::App for CommandCAD {
             match &self.last_result {
                 None => {}
                 Some(Ok(RuntimeValue::TextValue(text))) => {
-                    ui.label(text);
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        ui.label(text);
+                    });
                 }
                 Some(Ok(RuntimeValue::LineString(line_string))) => {
                     // TODO this needs a way to scale.
