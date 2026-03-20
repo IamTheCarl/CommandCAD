@@ -34,6 +34,7 @@ stl_io = "0.10.0"
 itertools = "0.14.0"
 thiserror = "2.0.18"
 geo = { version = "0.32.0", features = ["serde"] }
+ciborium = "0.2.2"
 
 [build-dependencies]
 type-sitter-gen = "0.8"

@@ -17,11 +17,12 @@
  */
 
 use std::{
-    io::{ErrorKind, Write},
+    io::{BufReader, BufWriter, ErrorKind, Write},
     path::{Path, PathBuf},
 };
 
 use enum_dispatch::enum_dispatch;
+use serde::{de::DeserializeOwned, Serialize};
 use sha2::{Digest, Sha256};
 use tempfile::{NamedTempFile, TempDir};
 
@@ -39,6 +40,41 @@ pub trait StoreTrait {
         name: impl AsRef<str>,
         init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
     ) -> ExecutionResult<PathBuf>;
+
+    fn get_or_init_object<S>(
+        &self,
+        context: &ExecutionContext,
+        hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        init: impl FnOnce() -> ExecutionResult<S>,
+    ) -> ExecutionResult<S>
+    where
+        S: Serialize + DeserializeOwned,
+    {
+        let mut object = None;
+        let file_path = self.get_or_init_file(context, hashable, name, |file| {
+            let new_object = init()?;
+            let mut buf_writer = BufWriter::new(file);
+            ciborium::into_writer(&new_object, &mut buf_writer)
+                .map_err(|error| error.to_error(context))?;
+            buf_writer
+                .flush()
+                .map_err(|error| error.to_error(context))?;
+
+            object = Some(new_object);
+
+            Ok(())
+        })?;
+
+        if let Some(object) = object {
+            Ok(object)
+        } else {
+            let file = std::fs::File::open(file_path).map_err(|error| error.to_error(context))?;
+            let reader = BufReader::new(file);
+            let object = ciborium::from_reader(reader).map_err(|error| error.to_error(context))?;
+            Ok(object)
+        }
+    }
 
     fn get_or_init_directory(
         &self,

@@ -20,7 +20,6 @@ use crate::{
 
 use std::{
     borrow::Cow,
-    hash::Hash,
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
@@ -30,13 +29,23 @@ pub type Vector2 = Vector<nalgebra::Vector2<Float>>;
 pub type Vector3 = Vector<nalgebra::Vector3<Float>>;
 pub type Vector4 = Vector<nalgebra::Vector4<Float>>;
 
-#[derive(Debug, Hash, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vector<I> {
     dimension: Dimension,
     value: I,
 }
 
 impl<I> Eq for Vector<I> where I: PartialEq {}
+
+impl<I> std::hash::Hash for Vector<I>
+where
+    I: VectorInternalType,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.dimension.hash(state);
+        self.value.hash(state);
+    }
+}
 
 impl<I> Object for Vector<I>
 where
@@ -199,7 +208,7 @@ where
         I::from_ast(context, ast_node)
     }
 
-    fn new_raw(
+    pub fn new_raw(
         context: &ExecutionContext,
         dimension: Dimension,
         value: I,
@@ -623,6 +632,8 @@ pub trait VectorInternalType:
     fn normalize(&self) -> Self;
     fn angle(&self, other: &Self) -> Float;
     fn iter(&self) -> impl Iterator<Item = Float>;
+
+    fn hash(&self, hasher: &mut impl std::hash::Hasher);
 }
 
 pub trait IsNan {
@@ -763,6 +774,10 @@ impl VectorInternalType for nalgebra::Vector2<Float> {
     fn iter(&self) -> impl Iterator<Item = Float> {
         self.iter().copied()
     }
+
+    fn hash(&self, hasher: &mut impl std::hash::Hasher) {
+        std::hash::Hash::hash(&(&self.x.to_le_bytes(), &self.y.to_le_bytes()), hasher)
+    }
 }
 
 impl TransformableVector for nalgebra::Vector2<Float> {
@@ -893,6 +908,17 @@ impl VectorInternalType for nalgebra::Vector3<Float> {
 
     fn iter(&self) -> impl Iterator<Item = Float> {
         self.iter().copied()
+    }
+
+    fn hash(&self, hasher: &mut impl std::hash::Hasher) {
+        std::hash::Hash::hash(
+            &(
+                &self.x.to_le_bytes(),
+                &self.y.to_le_bytes(),
+                &self.z.to_le_bytes(),
+            ),
+            hasher,
+        )
     }
 }
 
@@ -1028,6 +1054,18 @@ impl VectorInternalType for nalgebra::Vector4<Float> {
     fn iter(&self) -> impl Iterator<Item = Float> {
         self.iter().copied()
     }
+
+    fn hash(&self, hasher: &mut impl std::hash::Hasher) {
+        std::hash::Hash::hash(
+            &(
+                &self.x.to_le_bytes(),
+                &self.y.to_le_bytes(),
+                &self.z.to_le_bytes(),
+                &self.w.to_le_bytes(),
+            ),
+            hasher,
+        )
+    }
 }
 impl StaticTypeName for nalgebra::Vector4<Float> {
     fn static_type_name() -> Cow<'static, str> {
@@ -1055,7 +1093,7 @@ macro_rules! equivalent_boolmesh_vector {
 
 macro_rules! build_vector_type {
     ($name:ident: $type:tt = $dimension:expr) => {
-        pub struct $name($type);
+        pub struct $name(pub $type);
 
         impl StaticTypeName for $name {
             fn static_type_name() -> Cow<'static, str> {
