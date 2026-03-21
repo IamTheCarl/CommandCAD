@@ -7,7 +7,7 @@ use std::{
 
 use eframe::egui;
 use egui::{
-    Color32, Mesh, Painter, Pos2, Rect, RichText, Shape, StrokeKind, epaint::{ColorMode, PathShape, PathStroke}
+    Align, Color32, Layout, Mesh, Painter, Pos2, Rect, RichText, Shape, StrokeKind, TextEdit, epaint::{ColorMode, PathShape, PathStroke}
 };
 use interpreter::{
     ExecutionContext, FsStore, LogMessage, Parser, RuntimeLog, SourceReference, StackScope, StackTrace, Store, build_prelude, compile, execute_expression, geo::TriangulateEarcut, new_parser, values::{BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Value}
@@ -299,20 +299,21 @@ impl CommandCAD {
 impl eframe::App for CommandCAD {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Expression: ");
-                if ui.text_edit_singleline(&mut self.expression).changed()
-                    || self.check_if_watched_files_changed()
-                {
-                    self.spawn_job(ctx);
-                }
+            let expression_editor = TextEdit::multiline(&mut self.expression)
+                .code_editor()
+                .desired_width(f32::INFINITY)
+                .hint_text("expression");
+            if ui.add(expression_editor).changed()
+                || self.check_if_watched_files_changed()
+            {
+                self.spawn_job(ctx);
+            }
 
-                if self.active_job.is_some() {
-                    ui.label(RichText::new("Working...").color(Color32::YELLOW));
-                } else {
-                    ui.label(RichText::new("Ready").color(Color32::GREEN));
-                }
-            });
+            if self.active_job.is_some() {
+                ui.label(RichText::new("Working...").color(Color32::YELLOW));
+            } else {
+                ui.label(RichText::new("Ready").color(Color32::GREEN));
+            }
 
             if let Err(error) = &self.file_watcher {
                 ui.label(
