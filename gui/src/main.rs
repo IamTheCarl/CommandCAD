@@ -477,7 +477,7 @@ fn paint_linestring(
         points: line_string
             .coords()
             .map(|coord| {
-                Pos2::new(coord.x as f32, coord.y as f32) * view_state_2d.pixels_per_meter
+                Pos2::new(coord.x as f32, -coord.y as f32) * view_state_2d.pixels_per_meter
                     + center_offset
                     + view_state_2d.offset
             })
@@ -509,7 +509,7 @@ fn paint_polygon(
         let y = vert[1];
 
         mesh.colored_vertex(
-            Pos2::new(x as f32, y as f32) * view_state_2d.pixels_per_meter
+            Pos2::new(x as f32, -y as f32) * view_state_2d.pixels_per_meter
                 + center_offset
                 + view_state_2d.offset,
             Color32::GRAY,
