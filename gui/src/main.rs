@@ -8,13 +8,12 @@ use std::{
 
 use eframe::egui;
 use egui::{
-    Color32, Mesh, Painter, Pos2, Rect, RichText, Sense, Shape, StrokeKind, TextEdit, Ui, Vec2,
-    epaint::{ColorMode, PathShape, PathStroke},
+    Color32, Mesh, Painter, Pos2, Rect, RichText, Sense, Shape, StrokeKind, TextEdit, Ui, Vec2, emath::TSTransform, epaint::{ColorMode, PathShape, PathStroke}
 };
 use interpreter::{
     ExecutionContext, FsStore, LogMessage, RuntimeLog, SourceReference, StackScope, StackTrace,
     Store, build_prelude, compile, execute_expression,
-    geo::{BoundingRect, Centroid, TriangulateEarcut},
+    geo::{BoundingRect, TriangulateEarcut},
     new_parser,
     values::{BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Value},
 };
@@ -66,8 +65,14 @@ struct PendingJob {
 enum RuntimeValue {
     TextValue(String),
     LineString(LineString),
-    Polygon(Polygon),
-    PolygonSet(PolygonSet),
+    Polygon {
+        polygon: Polygon,
+        mesh: Arc<Mesh>
+    },
+    PolygonSet {
+        polygon_set: PolygonSet,
+        meshes: Vec<Arc<Mesh>>
+    },
     // ManifoldMesh(ManifoldMesh3D),
 }
 
@@ -149,8 +154,22 @@ fn runtime(expression_rx: mpsc::Receiver<RuntimeJob>) {
 
         let result = match expression_result {
             Ok(Value::LineString(line_string)) => Ok(RuntimeValue::LineString(line_string)),
-            Ok(Value::Polygon(polygon)) => Ok(RuntimeValue::Polygon(polygon)),
-            Ok(Value::PolygonSet(polygon_set)) => Ok(RuntimeValue::PolygonSet(polygon_set)),
+            Ok(Value::Polygon(polygon)) => {
+                let mesh = build_fill_mesh_from_polygon(&polygon.0);
+
+                Ok(RuntimeValue::Polygon { 
+                    polygon,
+                    mesh
+                })
+            },
+            Ok(Value::PolygonSet(polygon_set)) => {
+                let meshes = polygon_set.0.iter().map(build_fill_mesh_from_polygon).collect();
+
+                Ok(RuntimeValue::PolygonSet {
+                    polygon_set,
+                    meshes,
+                })
+            },
             Ok(value) => {
                 let mut text = String::new();
                 value.format(&context, &mut text, Style::Default, None).ok();
@@ -364,7 +383,7 @@ impl eframe::App for CommandCAD {
 
                     painter.add(paint_linestring(draw_area, &self.view_state_2d, StrokeKind::Middle, &line_string.0));
                 }
-                Some(Ok(RuntimeValue::Polygon(polygon))) => {
+                Some(Ok(RuntimeValue::Polygon { polygon, mesh})) => {
                     self.view_state_2d.update(ui, draw_area);
                     let painter = Painter::new(
                         ui.ctx().clone(),
@@ -372,9 +391,9 @@ impl eframe::App for CommandCAD {
                         draw_area,
                     );
 
-                    paint_polygon(&painter, draw_area, &self.view_state_2d, &polygon.0);
+                    paint_polygon(&painter, draw_area, &self.view_state_2d, &polygon.0, mesh.clone());
                 }
-                Some(Ok(RuntimeValue::PolygonSet(polygon_set))) => {
+                Some(Ok(RuntimeValue::PolygonSet { polygon_set, meshes })) => {
                     self.view_state_2d.update(ui, draw_area);
                     let painter = Painter::new(
                         ui.ctx().clone(),
@@ -382,8 +401,8 @@ impl eframe::App for CommandCAD {
                         draw_area,
                     );
 
-                    for polygon in polygon_set.0.iter() {
-                        paint_polygon(&painter, draw_area, &self.view_state_2d, polygon);
+                    for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
+                        paint_polygon(&painter, draw_area, &self.view_state_2d, polygon, mesh.clone());
                     }
                 }
                 Some(Err(error)) => {
@@ -413,8 +432,8 @@ impl ViewState2D {
     fn fit_to_screen(&mut self, value: &RuntimeValue, draw_area: Rect) {
         let bounds = match value {
             RuntimeValue::LineString(line_string) => line_string.0.bounding_rect(),
-            RuntimeValue::Polygon(polygon) => polygon.0.bounding_rect(),
-            RuntimeValue::PolygonSet(polygon_set) => polygon_set.0.bounding_rect(),
+            RuntimeValue::Polygon { polygon, .. } => polygon.0.bounding_rect(),
+            RuntimeValue::PolygonSet { polygon_set, .. } => polygon_set.0.bounding_rect(),
             _ => None,
         };
 
@@ -443,8 +462,8 @@ impl ViewState2D {
             && matches!(
                 value,
                 RuntimeValue::LineString(_)
-                    | RuntimeValue::Polygon(_)
-                    | RuntimeValue::PolygonSet(_)
+                    | RuntimeValue::Polygon { .. }
+                    | RuntimeValue::PolygonSet { .. }
             )
             && ui.button("Fit to screen").clicked()
         {
@@ -489,15 +508,7 @@ fn paint_linestring(
     Shape::Path(path)
 }
 
-fn paint_polygon(
-    painter: &Painter,
-    draw_area: Rect,
-    view_state_2d: &ViewState2D,
-    polygon: &interpreter::geo::Polygon,
-) {
-    // Render fill
-    // FIXME building this on each frame is HORRIBLE
-    let center_offset = draw_area.center().to_vec2();
+fn build_fill_mesh_from_polygon(polygon: &interpreter::geo::Polygon) -> Arc<Mesh> {
     let mut mesh = Mesh::default();
     let triangulation = polygon.earcut_triangles_raw();
     for vert in triangulation.vertices.chunks(2) {
@@ -505,9 +516,7 @@ fn paint_polygon(
         let y = vert[1];
 
         mesh.colored_vertex(
-            Pos2::new(x as f32, -y as f32) * view_state_2d.pixels_per_meter
-                + center_offset
-                + view_state_2d.offset,
+            Pos2::new(x as f32, -y as f32),
             Color32::GRAY,
         );
     }
@@ -520,7 +529,24 @@ fn paint_polygon(
         mesh.add_triangle(a as u32, b as u32, c as u32);
     }
 
-    painter.add(Shape::Mesh(Arc::new(mesh)));
+    Arc::new(mesh)
+}
+
+fn paint_polygon(
+    painter: &Painter,
+    draw_area: Rect,
+    view_state_2d: &ViewState2D,
+    polygon: &interpreter::geo::Polygon,
+    mesh: Arc<Mesh>,
+) {
+    // Render fill
+    let center_offset = draw_area.center().to_vec2();
+    let mut shape = Shape::Mesh(mesh);
+    shape.transform(TSTransform {
+        scaling: view_state_2d.pixels_per_meter,
+        translation: center_offset + view_state_2d.offset
+    });
+    painter.add(shape);
 
     // Render exterior
     painter.add(paint_linestring(
