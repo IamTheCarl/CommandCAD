@@ -1,1 +1,1 @@
-std.import
+std.line_string.from_points(points = [{0m, 0m}, {1m, 0m}, {1m, 1m}, {-1m, 1m}, {-1m, -1m}])

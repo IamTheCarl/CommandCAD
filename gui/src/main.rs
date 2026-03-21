@@ -2,23 +2,17 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     path::{Path, PathBuf},
-    sync::{atomic::AtomicBool, mpsc, Arc, Mutex},
-    time::Duration,
+    sync::{Arc, Mutex, atomic::AtomicBool, mpsc}, time::Duration,
 };
 
 use eframe::egui;
 use egui::{
-    epaint::{ColorMode, PathShape, PathStroke},
-    Color32, Pos2, RichText, Shape, StrokeKind,
+    Color32, Mesh, Painter, Pos2, Rect, RichText, Shape, StrokeKind, epaint::{ColorMode, PathShape, PathStroke}
 };
 use interpreter::{
-    build_prelude, compile, execute_expression, new_parser,
-    values::{BuiltinCallableDatabase, LineString, Object, Style, Value},
-    ExecutionContext, FsStore, ImString, LogMessage, Parser, RuntimeLog, SourceReference,
-    StackScope, StackTrace, Store,
+    ExecutionContext, FsStore, LogMessage, Parser, RuntimeLog, SourceReference, StackScope, StackTrace, Store, build_prelude, compile, execute_expression, geo::TriangulateEarcut, new_parser, values::{BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Value}
 };
 use notify::{recommended_watcher, EventKind, RecommendedWatcher, Watcher};
-use notify_debouncer_full::{new_debouncer, Debouncer, RecommendedCache};
 use tempfile::TempDir;
 
 fn main() {
@@ -51,13 +45,6 @@ impl RuntimeLog for GuiLogger {
     }
 }
 
-struct Runtime {
-    parser: Parser,
-    database: BuiltinCallableDatabase,
-    prelude: HashMap<ImString, Value>,
-    repl_file: Arc<PathBuf>,
-}
-
 struct RuntimeJob {
     expression: String,
     egui_context: egui::Context,
@@ -73,8 +60,8 @@ struct PendingJob {
 enum RuntimeValue {
     TextValue(String),
     LineString(LineString),
-    // Polygon(Polygon),
-    // PolygonSet(PolygonSet),
+    Polygon(Polygon),
+    PolygonSet(PolygonSet),
     // ManifoldMesh(ManifoldMesh3D),
 }
 
@@ -156,6 +143,8 @@ fn runtime(expression_rx: mpsc::Receiver<RuntimeJob>) {
 
         let result = match expression_result {
             Ok(Value::LineString(line_string)) => Ok(RuntimeValue::LineString(line_string)),
+            Ok(Value::Polygon(polygon)) => Ok(RuntimeValue::Polygon(polygon)),
+            Ok(Value::PolygonSet(polygon_set)) => Ok(RuntimeValue::PolygonSet(polygon_set)),
             Ok(value) => {
                 let mut text = String::new();
                 value.format(&context, &mut text, Style::Default, None).ok();
@@ -189,8 +178,8 @@ struct CommandCAD {
     active_job: Option<PendingJob>,
     last_result: Option<Result<RuntimeValue, RuntimeError>>,
     watched_files: HashSet<Arc<PathBuf>>,
-    file_watcher: Result<Debouncer<RecommendedWatcher, RecommendedCache>, notify::Error>,
-    file_updates_rx: mpsc::Receiver<notify_debouncer_full::DebounceEventResult>,
+    file_watcher: Result<RecommendedWatcher, notify::Error>,
+    file_updates_rx: mpsc::Receiver<Result<notify::Event, notify::Error>>,
 }
 
 impl CommandCAD {
@@ -201,8 +190,20 @@ impl CommandCAD {
         let (file_updates_tx, file_updates_rx) = mpsc::channel();
 
         let gui_ctx = cc.egui_ctx.clone();
-        let file_watcher = new_debouncer(Duration::from_millis(10), None, move |event| {
+        let file_watcher = recommended_watcher(move |event: Result<notify::Event, _>| {
             // Notify and refresh the GUI whenever there's an update to one of the project files.
+
+            // This is a really horrible hack, but I have no idea how to better fix it and it seems
+            // to be what the "experts" are doing as well (I looked at a higher-level library for
+            // watching for file changes). Basically, sometimes we get this notification before the
+            // file is available on disk. We need to check and possibly wait to see if the file is
+            // actually ready.
+            if let Ok(event) = &event && matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
+                while !event.paths.iter().all(|path| path.exists()) {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+
             file_updates_tx.send(event).ok();
             gui_ctx.request_repaint();
         });
@@ -249,7 +250,7 @@ impl CommandCAD {
 
     fn check_if_watched_files_changed(&mut self) -> bool {
         match self.file_updates_rx.try_recv() {
-            Ok(Ok(event)) => matches!(event.kind, EventKind::Modify(_) | EventKind::Remove(_)),
+            Ok(Ok(event)) => matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)),
             // TODO log that or something.
             Ok(Err(error)) => {
                 // TODO this can be logged better.
@@ -323,6 +324,10 @@ impl eframe::App for CommandCAD {
             // Update the job status.
             self.check_job();
 
+            // TODO Add controls for scale and translation.
+            // TODO Add some kind of scale legend.
+            let pixels_per_meter = 100.0;
+
             match &self.last_result {
                 None => {}
                 Some(Ok(RuntimeValue::TextValue(text))) => {
@@ -331,16 +336,82 @@ impl eframe::App for CommandCAD {
                     });
                 }
                 Some(Ok(RuntimeValue::LineString(line_string))) => {
-                    // TODO this needs a way to scale.
-                    let painter = ui.painter();
-                    let line_string = &line_string.0;
-                    let path = PathShape { points: line_string.coords().map(|coord| Pos2::new(coord.x as f32, coord.y as f32)).collect(), closed: line_string.is_closed(), fill: Color32::TRANSPARENT, stroke: PathStroke { width: 2.0, color: ColorMode::TRANSPARENT, kind: StrokeKind::Middle } };
-                    painter.add(Shape::Path(path));
+                    
+                    let draw_area = ui.available_rect_before_wrap();
+                    let painter = Painter::new(
+                        ui.ctx().clone(),
+                        ui.layer_id(),
+                        draw_area,
+                    );
+
+                    painter.add(paint_linestring(draw_area, pixels_per_meter, StrokeKind::Middle, &line_string.0));
+                }
+                Some(Ok(RuntimeValue::Polygon(polygon))) => {
+                    
+                    let draw_area = ui.available_rect_before_wrap();
+                    let painter = Painter::new(
+                        ui.ctx().clone(),
+                        ui.layer_id(),
+                        draw_area,
+                    );
+
+                    paint_polygon(&painter, draw_area, pixels_per_meter, &polygon.0);
+                }
+                Some(Ok(RuntimeValue::PolygonSet(polygon_set))) => {
+                    let draw_area = ui.available_rect_before_wrap();
+                    let painter = Painter::new(
+                        ui.ctx().clone(),
+                        ui.layer_id(),
+                        draw_area,
+                    );
+
+                    for polygon in polygon_set.0.iter() {
+                        paint_polygon(&painter, draw_area, pixels_per_meter, polygon);
+                    }
                 }
                 Some(Err(error)) => {
                     ui.label(RichText::new(format!("{error}")).color(Color32::RED));
                 }
             }
         });
+    }
+}
+
+fn paint_linestring(draw_area: Rect, pixels_per_meter: f32, stroke_kind: StrokeKind, line_string: &interpreter::geo::LineString) -> Shape {
+    let center_offset = draw_area.center().to_vec2();
+    let path = PathShape { points: line_string.coords().map(|coord| Pos2::new(coord.x as f32, coord.y as f32) * pixels_per_meter + center_offset).collect(), closed: line_string.is_closed(), fill: Color32::TRANSPARENT, stroke: PathStroke { width: 2.0, color: ColorMode::Solid(Color32::WHITE), kind: stroke_kind } };
+    Shape::Path(path)
+}
+
+fn paint_polygon(painter: &Painter, draw_area: Rect, pixels_per_meter: f32, polygon: &interpreter::geo::Polygon) {
+   
+    // Render fill
+    // FIXME building this on each frame is HORRIBLE
+    let center_offset = draw_area.center().to_vec2();
+    let mut mesh = Mesh::default();
+    let triangulation = polygon.earcut_triangles_raw();
+    for vert in triangulation.vertices.chunks(2) {
+        let x = vert[0];
+        let y = vert[1];
+
+        mesh.colored_vertex(Pos2::new(x as f32, y as f32) * pixels_per_meter + center_offset, Color32::GRAY);
+    }
+
+    for triangle in triangulation.triangle_indices.chunks(3) {
+        let a = triangle[0];
+        let b = triangle[1];
+        let c = triangle[2];
+
+        mesh.add_triangle(a as u32, b as u32, c as u32);
+    }
+    
+    painter.add(Shape::Mesh(Arc::new(mesh)));
+
+    // Render exterior
+    painter.add(paint_linestring(draw_area, pixels_per_meter, StrokeKind::Inside, polygon.exterior()));
+   
+    // Render interior.
+    for interior in polygon.interiors() {
+        painter.add(paint_linestring(draw_area, pixels_per_meter, StrokeKind::Outside, interior));
     }
 }

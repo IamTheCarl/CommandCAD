@@ -11,4 +11,3 @@ anyhow = { workspace = true }
 oneshot = "0.2.1"
 tempfile = { workspace = true }
 notify = "8.2.0"
-notify-debouncer-full = "0.7"
