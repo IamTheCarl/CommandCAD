@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use common_data_types::{Dimension, RawFloat};
 use geo::{BooleanOps, OpType};
-use nalgebra::Matrix3;
+use nalgebra::{Matrix3, Translation2};
 
 use crate::{
     execution::errors::Raise,
@@ -32,12 +32,6 @@ use crate::{
     ExecutionContext, ExecutionResult,
 };
 
-// Add
-// Subtract
-// BitOr
-// BitXor
-// BitAnd
-// We need a way to collect a list of polygons into a multi-polygon
 // Ray-cast with linestrings and polygons
 // to_svg
 // from_svg?
@@ -51,13 +45,14 @@ fn boolean_op_with(
     context: &ExecutionContext,
     left: &impl BooleanOps<Scalar = RawFloat>,
     right: Value,
+    expected: Option<&'static str>,
     op: OpType,
 ) -> ExecutionResult<Value> {
     match right {
         Value::Polygon(right) => Ok(PolygonSet(Arc::new(left.boolean_op(&*right.0, op))).into()),
         Value::PolygonSet(right) => Ok(PolygonSet(Arc::new(left.boolean_op(&*right.0, op))).into()),
         value => Err(DowncastError {
-            expected: "Polygon or PolygonSet".into(),
+            expected: expected.unwrap_or("Polygon or PolygonSet").into(),
             got: value.get_type(context).name(),
         }
         .to_error(context)),
@@ -67,6 +62,12 @@ fn boolean_op_with(
 /// Applies a transformation to an object.
 trait ApplyTransform {
     fn apply_transform(&mut self, transform: &Matrix3<RawFloat>);
+
+    fn translate(&mut self, offset: nalgebra::Vector2<RawFloat>) {
+        let translation = Translation2::from(offset);
+        let matrix = translation.to_homogeneous();
+        self.apply_transform(&matrix);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -86,6 +87,22 @@ impl Object for LineString {
     ) -> std::fmt::Result {
         // TODO Lazy way to do this, should come back and make this more proper.
         write!(f, "{:?}", self.0)
+    }
+
+    fn addition(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let offset: Vector2 = rhs.downcast(context)?;
+
+        let polygon = Arc::make_mut(&mut self.0);
+        polygon.translate(offset.raw_value());
+        Ok(self.into())
+    }
+
+    fn subtraction(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let offset: Vector2 = rhs.downcast(context)?;
+
+        let polygon = Arc::make_mut(&mut self.0);
+        polygon.translate(-offset.raw_value());
+        Ok(self.into())
     }
 
     fn get_attribute(
@@ -230,24 +247,50 @@ impl Object for Polygon {
         write!(f, "{:?}", self.0)
     }
 
-    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        boolean_op_with(context, &*self.0, rhs, OpType::Union)
+    fn addition(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        match rhs {
+            Value::Vector2(offset) => {
+                let polygon = Arc::make_mut(&mut self.0);
+                polygon.translate(offset.raw_value());
+                Ok(self.into())
+            }
+            rhs => boolean_op_with(
+                context,
+                &*self.0,
+                rhs,
+                Some("Polygon, PolygonSet, or Vector2"),
+                OpType::Union,
+            ),
+        }
     }
 
-    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        boolean_op_with(context, &*self.0, rhs, OpType::Difference)
+    fn subtraction(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        match rhs {
+            Value::Vector2(offset) => {
+                let polygon = Arc::make_mut(&mut self.0);
+                polygon.translate(-offset.raw_value());
+                Ok(self.into())
+            }
+            rhs => boolean_op_with(
+                context,
+                &*self.0,
+                rhs,
+                Some("Polygon, PolygonSet, or Vector2"),
+                OpType::Difference,
+            ),
+        }
     }
 
     fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        boolean_op_with(context, &*self.0, rhs, OpType::Intersection)
+        boolean_op_with(context, &*self.0, rhs, None, OpType::Intersection)
     }
 
     fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        boolean_op_with(context, &*self.0, rhs, OpType::Union)
+        boolean_op_with(context, &*self.0, rhs, None, OpType::Union)
     }
 
     fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        boolean_op_with(context, &*self.0, rhs, OpType::Xor)
+        boolean_op_with(context, &*self.0, rhs, None, OpType::Xor)
     }
 
     fn get_attribute(
@@ -340,24 +383,50 @@ impl Object for PolygonSet {
         write!(f, "{:?}", self.0)
     }
 
-    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        boolean_op_with(context, &*self.0, rhs, OpType::Union)
+    fn addition(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        match rhs {
+            Value::Vector2(offset) => {
+                let polygon = Arc::make_mut(&mut self.0);
+                polygon.translate(offset.raw_value());
+                Ok(self.into())
+            }
+            rhs => boolean_op_with(
+                context,
+                &*self.0,
+                rhs,
+                Some("Polygon, PolygonSet, or Vector2"),
+                OpType::Union,
+            ),
+        }
     }
 
-    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        boolean_op_with(context, &*self.0, rhs, OpType::Difference)
+    fn subtraction(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        match rhs {
+            Value::Vector2(offset) => {
+                let polygon = Arc::make_mut(&mut self.0);
+                polygon.translate(-offset.raw_value());
+                Ok(self.into())
+            }
+            rhs => boolean_op_with(
+                context,
+                &*self.0,
+                rhs,
+                Some("Polygon, PolygonSet, or Vector2"),
+                OpType::Difference,
+            ),
+        }
     }
 
     fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        boolean_op_with(context, &*self.0, rhs, OpType::Intersection)
+        boolean_op_with(context, &*self.0, rhs, None, OpType::Intersection)
     }
 
     fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        boolean_op_with(context, &*self.0, rhs, OpType::Union)
+        boolean_op_with(context, &*self.0, rhs, None, OpType::Union)
     }
 
     fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        boolean_op_with(context, &*self.0, rhs, OpType::Xor)
+        boolean_op_with(context, &*self.0, rhs, None, OpType::Xor)
     }
 
     fn get_attribute(
