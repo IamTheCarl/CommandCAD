@@ -3,17 +3,22 @@ use std::{
     fmt::Display,
     path::{Path, PathBuf},
     sync::{atomic::AtomicBool, mpsc, Arc, Mutex},
+    time::Duration,
 };
 
 use eframe::egui;
-use egui::{Color32, RichText};
+use egui::{
+    epaint::{ColorMode, PathShape, PathStroke},
+    Color32, Pos2, RichText, Shape, StrokeKind,
+};
 use interpreter::{
     build_prelude, compile, execute_expression, new_parser,
-    values::{BuiltinCallableDatabase, Object, Style, Value},
+    values::{BuiltinCallableDatabase, LineString, Object, Style, Value},
     ExecutionContext, FsStore, ImString, LogMessage, Parser, RuntimeLog, SourceReference,
     StackScope, StackTrace, Store,
 };
 use notify::{recommended_watcher, EventKind, RecommendedWatcher, Watcher};
+use notify_debouncer_full::{new_debouncer, Debouncer, RecommendedCache};
 use tempfile::TempDir;
 
 fn main() {
@@ -67,6 +72,7 @@ struct PendingJob {
 
 enum RuntimeValue {
     TextValue(String),
+    LineString(LineString),
     // Polygon(Polygon),
     // PolygonSet(PolygonSet),
     // ManifoldMesh(ManifoldMesh3D),
@@ -149,6 +155,7 @@ fn runtime(expression_rx: mpsc::Receiver<RuntimeJob>) {
         let expression_result = execute_expression(&context, &root);
 
         let result = match expression_result {
+            Ok(Value::LineString(line_string)) => Ok(RuntimeValue::LineString(line_string)),
             Ok(value) => {
                 let mut text = String::new();
                 value.format(&context, &mut text, Style::Default, None).ok();
@@ -160,7 +167,6 @@ fn runtime(expression_rx: mpsc::Receiver<RuntimeJob>) {
 
         // TODO we can also use this for better error message formatting.
         let files = files.into_inner().expect("File hashmap was poisoned");
-
         let files_to_watch: HashSet<Arc<PathBuf>> = files.keys().cloned().collect();
 
         RuntimeOutput {
@@ -183,8 +189,8 @@ struct CommandCAD {
     active_job: Option<PendingJob>,
     last_result: Option<Result<RuntimeValue, RuntimeError>>,
     watched_files: HashSet<Arc<PathBuf>>,
-    file_watcher: Result<RecommendedWatcher, notify::Error>,
-    file_updates_rx: mpsc::Receiver<Result<notify::Event, notify::Error>>,
+    file_watcher: Result<Debouncer<RecommendedWatcher, RecommendedCache>, notify::Error>,
+    file_updates_rx: mpsc::Receiver<notify_debouncer_full::DebounceEventResult>,
 }
 
 impl CommandCAD {
@@ -195,7 +201,7 @@ impl CommandCAD {
         let (file_updates_tx, file_updates_rx) = mpsc::channel();
 
         let gui_ctx = cc.egui_ctx.clone();
-        let file_watcher = recommended_watcher(move |event| {
+        let file_watcher = new_debouncer(Duration::from_millis(10), None, move |event| {
             // Notify and refresh the GUI whenever there's an update to one of the project files.
             file_updates_tx.send(event).ok();
             gui_ctx.request_repaint();
@@ -265,18 +271,21 @@ impl CommandCAD {
 
                 // Collect a list of files to watch.
                 if let Ok(watcher) = &mut self.file_watcher {
-                    let removed = self.watched_files.difference(&output.files_to_watch);
-                    let added = output.files_to_watch.difference(&self.watched_files);
+                    // We used to be very picky, only adding and removing files from the wather as
+                    // needed. It was eventually discovered that sometimes watchers that were not
+                    // removed (and were not supposed to be removed) would fail to trigger on later
+                    // edits of files, so now we just remove and re-add everything to make sure
+                    // we're in a good known state.
 
                     let mut paths = watcher.paths_mut();
-                    for path in removed {
+                    for path in self.watched_files.iter() {
                         // TODO log errors and success here.
-                        paths.remove(&path).ok();
+                        paths.remove(path).ok();
                     }
 
-                    for path in added {
+                    for path in output.files_to_watch.iter() {
                         // TODO log errors and success here.
-                        paths.add(&path, notify::RecursiveMode::NonRecursive).ok();
+                        paths.add(path, notify::RecursiveMode::NonRecursive).ok();
                     }
                 }
 
@@ -318,6 +327,13 @@ impl eframe::App for CommandCAD {
                 None => {}
                 Some(Ok(RuntimeValue::TextValue(text))) => {
                     ui.label(text);
+                }
+                Some(Ok(RuntimeValue::LineString(line_string))) => {
+                    // TODO this needs a way to scale.
+                    let painter = ui.painter();
+                    let line_string = &line_string.0;
+                    let path = PathShape { points: line_string.coords().map(|coord| Pos2::new(coord.x as f32, coord.y as f32)).collect(), closed: line_string.is_closed(), fill: Color32::TRANSPARENT, stroke: PathStroke { width: 2.0, color: ColorMode::TRANSPARENT, kind: StrokeKind::Middle } };
+                    painter.add(Shape::Path(path));
                 }
                 Some(Err(error)) => {
                     ui.label(RichText::new(format!("{error}")).color(Color32::RED));

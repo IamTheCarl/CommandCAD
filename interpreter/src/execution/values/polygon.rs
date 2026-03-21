@@ -19,13 +19,15 @@
 use std::sync::Arc;
 
 use common_data_types::{Dimension, RawFloat};
+use geo::{BooleanOps, OpType};
 use nalgebra::Matrix3;
 
 use crate::{
     execution::errors::Raise,
     values::{
-        iterators::IterableObject, BuiltinCallableDatabase, BuiltinFunction, MissingAttributeError,
-        Object, StaticType, StaticTypeName, Style, Value, ValueType, Vector2,
+        iterators::IterableObject, BuiltinCallableDatabase, BuiltinFunction, DowncastError,
+        MissingAttributeError, Object, StaticType, StaticTypeName, Style, Value, ValueType,
+        Vector2,
     },
     ExecutionContext, ExecutionResult,
 };
@@ -45,13 +47,30 @@ use crate::{
 // slice - should probably live in manifold
 // bounding rec - manifold should also have one
 
+fn boolean_op_with(
+    context: &ExecutionContext,
+    left: &impl BooleanOps<Scalar = RawFloat>,
+    right: Value,
+    op: OpType,
+) -> ExecutionResult<Value> {
+    match right {
+        Value::Polygon(right) => Ok(PolygonSet(Arc::new(left.boolean_op(&*right.0, op))).into()),
+        Value::PolygonSet(right) => Ok(PolygonSet(Arc::new(left.boolean_op(&*right.0, op))).into()),
+        value => Err(DowncastError {
+            expected: "Polygon or PolygonSet".into(),
+            got: value.get_type(context).name(),
+        }
+        .to_error(context)),
+    }
+}
+
 /// Applies a transformation to an object.
 trait ApplyTransform {
     fn apply_transform(&mut self, transform: &Matrix3<RawFloat>);
 }
 
 #[derive(Debug, Clone)]
-pub struct LineString(Arc<geo::LineString>);
+pub struct LineString(pub Arc<geo::LineString>);
 
 impl Object for LineString {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
@@ -193,7 +212,7 @@ impl IterableObject for RevLineStringIterator {
 }
 
 #[derive(Debug, Clone)]
-pub struct Polygon(Arc<geo::Polygon>);
+pub struct Polygon(pub Arc<geo::Polygon>);
 
 impl Object for Polygon {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
@@ -209,6 +228,26 @@ impl Object for Polygon {
     ) -> std::fmt::Result {
         // TODO Lazy way to do this, should come back and make this more proper.
         write!(f, "{:?}", self.0)
+    }
+
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        boolean_op_with(context, &*self.0, rhs, OpType::Union)
+    }
+
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        boolean_op_with(context, &*self.0, rhs, OpType::Difference)
+    }
+
+    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        boolean_op_with(context, &*self.0, rhs, OpType::Intersection)
+    }
+
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        boolean_op_with(context, &*self.0, rhs, OpType::Union)
+    }
+
+    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        boolean_op_with(context, &*self.0, rhs, OpType::Xor)
     }
 
     fn get_attribute(
@@ -283,7 +322,7 @@ impl ApplyTransform for geo::Polygon {
 }
 
 #[derive(Debug, Clone)]
-pub struct PolygonSet(Arc<geo::MultiPolygon>);
+pub struct PolygonSet(pub Arc<geo::MultiPolygon>);
 
 impl Object for PolygonSet {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
@@ -299,6 +338,26 @@ impl Object for PolygonSet {
     ) -> std::fmt::Result {
         // TODO Lazy way to do this, should come back and make this more proper.
         write!(f, "{:?}", self.0)
+    }
+
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        boolean_op_with(context, &*self.0, rhs, OpType::Union)
+    }
+
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        boolean_op_with(context, &*self.0, rhs, OpType::Difference)
+    }
+
+    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        boolean_op_with(context, &*self.0, rhs, OpType::Intersection)
+    }
+
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        boolean_op_with(context, &*self.0, rhs, OpType::Union)
+    }
+
+    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        boolean_op_with(context, &*self.0, rhs, OpType::Xor)
     }
 
     fn get_attribute(
@@ -764,7 +823,7 @@ pub mod methods_and_functions {
                 let number_of_points = if let Some(number_of_points) = number_of_points {
                     number_of_points.0 as usize
                 } else {
-                    (SEGMENT_ANGLE_RADIANS / segment_angle) as usize
+                    (SEGMENT_ANGLE_RADIANS / segment_angle) as usize + 1
                 };
 
                 Ok(Self {
@@ -1246,13 +1305,13 @@ mod test {
         let result =
             test_run("std.polygon.circle(radius = 1m, angle_between_points = 1rad)").unwrap();
         let polygon = result.as_polygon().unwrap();
-        assert_eq!(polygon.0.exterior().0.len(), 3);
+        assert_eq!(polygon.0.exterior().0.len(), 4);
         assert!(polygon.0.interiors().is_empty());
 
         let result =
             test_run("std.polygon.circle(radius = 1m, angle_between_points = 0.5rad)").unwrap();
         let polygon = result.as_polygon().unwrap();
-        assert_eq!(polygon.0.exterior().0.len(), 5);
+        assert_eq!(polygon.0.exterior().0.len(), 6);
         assert!(polygon.0.interiors().is_empty());
 
         // Test distance_between_points
@@ -1260,7 +1319,7 @@ mod test {
             test_run("std.polygon.circle(radius = 1m, distance_between_points = 3.14159m)")
                 .unwrap();
         let polygon = result.as_polygon().unwrap();
-        assert_eq!(polygon.0.exterior().0.len(), 3);
+        assert_eq!(polygon.0.exterior().0.len(), 4);
         assert!(polygon.0.interiors().is_empty());
 
         // Test number_of_points

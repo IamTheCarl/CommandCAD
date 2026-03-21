@@ -25,5 +25,6 @@ pub use execution::{
     ExecutionFileCache, ExecutionResult, FsStore, LogLevel, LogMessage, RuntimeLog, StackScope,
     StackTrace, Store,
 };
+pub use geo;
 pub use imstr::ImString;
 pub use tree_sitter::{Point as TextPoint, Range as TextRange};
