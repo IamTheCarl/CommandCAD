@@ -411,11 +411,11 @@ impl Default for ViewState2D {
 
 impl ViewState2D {
     fn fit_to_screen(&mut self, value: &RuntimeValue, draw_area: Rect) {
-        let (bounds, center) = match value {
-            RuntimeValue::LineString(line_string) => (line_string.0.bounding_rect(), line_string.0.centroid()),
-            RuntimeValue::Polygon(polygon) => (polygon.0.bounding_rect(), polygon.0.centroid()),
-            RuntimeValue::PolygonSet(polygon_set) => (polygon_set.0.bounding_rect(), polygon_set.0.centroid()),
-            _ => (None, None),
+        let bounds = match value {
+            RuntimeValue::LineString(line_string) => line_string.0.bounding_rect(),
+            RuntimeValue::Polygon(polygon) => polygon.0.bounding_rect(),
+            RuntimeValue::PolygonSet(polygon_set) => polygon_set.0.bounding_rect(),
+            _ => None,
         };
 
         if let Some(bounds) = bounds {
@@ -423,17 +423,13 @@ impl ViewState2D {
             let dx = draw_area.x_range().span() / size.x as f32;
             let dy = draw_area.y_range().span()/ size.y as f32;
             self.pixels_per_meter = dx.min(dy);
-        } else {
-            // We don't know how to fit this. Just assume the default.
-            self.pixels_per_meter = Self::default().pixels_per_meter;
-        }
-            
-        if let Some(center) = center {
-            let offset = Vec2::new(center.0.x as f32, center.0.y as f32) * self.pixels_per_meter;
+    
+            let center = bounds.center();
+            let offset = Vec2::new(center.x as f32, center.y as f32) * self.pixels_per_meter;
             self.offset = offset;
         } else {
             // We don't know how to fit this. Just assume the default.
-            self.offset = Self::default().offset;
+            *self = Self::default();
         }
     }
 
