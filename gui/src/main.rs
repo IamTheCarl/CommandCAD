@@ -2,17 +2,23 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, atomic::AtomicBool, mpsc}, time::Duration,
+    sync::{Arc, Mutex, atomic::AtomicBool, mpsc},
+    time::Duration,
 };
 
 use eframe::egui;
 use egui::{
-    Align, Color32, Layout, Mesh, Painter, Pos2, Rect, RichText, Shape, StrokeKind, TextEdit, epaint::{ColorMode, PathShape, PathStroke}
+    Color32, Mesh, Painter, Pos2, Rect, RichText, Sense, Shape, StrokeKind, TextEdit, Ui, Vec2,
+    epaint::{ColorMode, PathShape, PathStroke},
 };
 use interpreter::{
-    ExecutionContext, FsStore, LogMessage, Parser, RuntimeLog, SourceReference, StackScope, StackTrace, Store, build_prelude, compile, execute_expression, geo::TriangulateEarcut, new_parser, values::{BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Value}
+    ExecutionContext, FsStore, LogMessage, RuntimeLog, SourceReference, StackScope, StackTrace,
+    Store, build_prelude, compile, execute_expression,
+    geo::{BoundingRect, Centroid, TriangulateEarcut},
+    new_parser,
+    values::{BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Value},
 };
-use notify::{recommended_watcher, EventKind, RecommendedWatcher, Watcher};
+use notify::{EventKind, RecommendedWatcher, Watcher, recommended_watcher};
 use tempfile::TempDir;
 
 fn main() {
@@ -110,7 +116,7 @@ fn runtime(expression_rx: mpsc::Receiver<RuntimeJob>) {
                 return RuntimeOutput {
                     result: Err(error),
                     files_to_watch: HashSet::new(),
-                }
+                };
             }
         };
         let root = match compile(&repl_file, &input, &tree)
@@ -121,7 +127,7 @@ fn runtime(expression_rx: mpsc::Receiver<RuntimeJob>) {
                 return RuntimeOutput {
                     result: Err(error),
                     files_to_watch: HashSet::new(),
-                }
+                };
             }
         };
 
@@ -180,6 +186,8 @@ struct CommandCAD {
     watched_files: HashSet<Arc<PathBuf>>,
     file_watcher: Result<RecommendedWatcher, notify::Error>,
     file_updates_rx: mpsc::Receiver<Result<notify::Event, notify::Error>>,
+
+    view_state_2d: ViewState2D,
 }
 
 impl CommandCAD {
@@ -198,7 +206,9 @@ impl CommandCAD {
             // watching for file changes). Basically, sometimes we get this notification before the
             // file is available on disk. We need to check and possibly wait to see if the file is
             // actually ready.
-            if let Ok(event) = &event && matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
+            if let Ok(event) = &event
+                && matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_))
+            {
                 while !event.paths.iter().all(|path| path.exists()) {
                     std::thread::sleep(Duration::from_millis(10));
                 }
@@ -216,6 +226,7 @@ impl CommandCAD {
             watched_files: HashSet::new(),
             file_watcher,
             file_updates_rx,
+            view_state_2d: ViewState2D::default(),
         }
     }
 
@@ -308,12 +319,20 @@ impl eframe::App for CommandCAD {
             {
                 self.spawn_job(ctx);
             }
+                    
+            let mut draw_area = ui.available_rect_before_wrap();
+            draw_area.min.y += 30.0; // We don't know how tall the status bar is at this time, so I
+                                     // just assume 30 and that seems to be working well enough.
+            
+            ui.horizontal(|ui| {
+                if self.active_job.is_some() {
+                    ui.label(RichText::new("Working...").color(Color32::YELLOW));
+                } else {
+                    ui.label(RichText::new("Ready").color(Color32::GREEN));
+                }
 
-            if self.active_job.is_some() {
-                ui.label(RichText::new("Working...").color(Color32::YELLOW));
-            } else {
-                ui.label(RichText::new("Ready").color(Color32::GREEN));
-            }
+                self.view_state_2d.draw_interface(ui, &self.last_result, draw_area);
+            });
 
             if let Err(error) = &self.file_watcher {
                 ui.label(
@@ -325,10 +344,9 @@ impl eframe::App for CommandCAD {
             // Update the job status.
             self.check_job();
 
-            // TODO Add controls for scale and translation.
             // TODO Add some kind of scale legend.
-            let pixels_per_meter = 100.0;
 
+            let draw_area = ui.available_rect_before_wrap();
             match &self.last_result {
                 None => {}
                 Some(Ok(RuntimeValue::TextValue(text))) => {
@@ -337,29 +355,27 @@ impl eframe::App for CommandCAD {
                     });
                 }
                 Some(Ok(RuntimeValue::LineString(line_string))) => {
-                    
-                    let draw_area = ui.available_rect_before_wrap();
+                    self.view_state_2d.update(ui, draw_area);
                     let painter = Painter::new(
                         ui.ctx().clone(),
                         ui.layer_id(),
                         draw_area,
                     );
 
-                    painter.add(paint_linestring(draw_area, pixels_per_meter, StrokeKind::Middle, &line_string.0));
+                    painter.add(paint_linestring(draw_area, &self.view_state_2d, StrokeKind::Middle, &line_string.0));
                 }
                 Some(Ok(RuntimeValue::Polygon(polygon))) => {
-                    
-                    let draw_area = ui.available_rect_before_wrap();
+                    self.view_state_2d.update(ui, draw_area);
                     let painter = Painter::new(
                         ui.ctx().clone(),
                         ui.layer_id(),
                         draw_area,
                     );
 
-                    paint_polygon(&painter, draw_area, pixels_per_meter, &polygon.0);
+                    paint_polygon(&painter, draw_area, &self.view_state_2d, &polygon.0);
                 }
                 Some(Ok(RuntimeValue::PolygonSet(polygon_set))) => {
-                    let draw_area = ui.available_rect_before_wrap();
+                    self.view_state_2d.update(ui, draw_area);
                     let painter = Painter::new(
                         ui.ctx().clone(),
                         ui.layer_id(),
@@ -367,7 +383,7 @@ impl eframe::App for CommandCAD {
                     );
 
                     for polygon in polygon_set.0.iter() {
-                        paint_polygon(&painter, draw_area, pixels_per_meter, polygon);
+                        paint_polygon(&painter, draw_area, &self.view_state_2d, polygon);
                     }
                 }
                 Some(Err(error)) => {
@@ -378,14 +394,111 @@ impl eframe::App for CommandCAD {
     }
 }
 
-fn paint_linestring(draw_area: Rect, pixels_per_meter: f32, stroke_kind: StrokeKind, line_string: &interpreter::geo::LineString) -> Shape {
+#[derive(Debug)]
+struct ViewState2D {
+    offset: Vec2,
+    pixels_per_meter: f32,
+}
+
+impl Default for ViewState2D {
+    fn default() -> Self {
+        Self {
+            offset: Default::default(),
+            pixels_per_meter: 100.0,
+        }
+    }
+}
+
+impl ViewState2D {
+    fn fit_to_screen(&mut self, value: &RuntimeValue, draw_area: Rect) {
+        let (bounds, center) = match value {
+            RuntimeValue::LineString(line_string) => (line_string.0.bounding_rect(), line_string.0.centroid()),
+            RuntimeValue::Polygon(polygon) => (polygon.0.bounding_rect(), polygon.0.centroid()),
+            RuntimeValue::PolygonSet(polygon_set) => (polygon_set.0.bounding_rect(), polygon_set.0.centroid()),
+            _ => (None, None),
+        };
+
+        if let Some(bounds) = bounds {
+            let size = bounds.max() - bounds.min();
+            let dx = draw_area.x_range().span() / size.x as f32;
+            let dy = draw_area.y_range().span()/ size.y as f32;
+            self.pixels_per_meter = dx.min(dy);
+        } else {
+            // We don't know how to fit this. Just assume the default.
+            self.pixels_per_meter = Self::default().pixels_per_meter;
+        }
+            
+        if let Some(center) = center {
+            let offset = Vec2::new(center.0.x as f32, center.0.y as f32) * self.pixels_per_meter;
+            self.offset = offset;
+        } else {
+            // We don't know how to fit this. Just assume the default.
+            self.offset = Self::default().offset;
+        }
+    }
+
+    fn draw_interface(
+        &mut self,
+        ui: &mut Ui,
+        last_result: &Option<Result<RuntimeValue, RuntimeError>>,
+        draw_area: Rect
+    ) {
+        if let Some(Ok(value)) = last_result
+            && matches!(
+                value,
+                RuntimeValue::LineString(_)
+                    | RuntimeValue::Polygon(_)
+                    | RuntimeValue::PolygonSet(_)
+            )
+            && ui.button("Fit to screen").clicked()
+        {
+            self.fit_to_screen(value, draw_area);
+        }
+    }
+
+    fn update(&mut self, ui: &mut Ui, draw_area: Rect) {
+        let response = ui.allocate_rect(draw_area, Sense::DRAG);
+        self.offset += response.drag_delta();
+        ui.input(|state| {
+            self.pixels_per_meter += state.smooth_scroll_delta.y;
+            self.pixels_per_meter = self.pixels_per_meter.max(0.0);
+        });
+    }
+}
+
+fn paint_linestring(
+    draw_area: Rect,
+    view_state_2d: &ViewState2D,
+    stroke_kind: StrokeKind,
+    line_string: &interpreter::geo::LineString,
+) -> Shape {
     let center_offset = draw_area.center().to_vec2();
-    let path = PathShape { points: line_string.coords().map(|coord| Pos2::new(coord.x as f32, coord.y as f32) * pixels_per_meter + center_offset).collect(), closed: line_string.is_closed(), fill: Color32::TRANSPARENT, stroke: PathStroke { width: 2.0, color: ColorMode::Solid(Color32::WHITE), kind: stroke_kind } };
+    let path = PathShape {
+        points: line_string
+            .coords()
+            .map(|coord| {
+                Pos2::new(coord.x as f32, coord.y as f32) * view_state_2d.pixels_per_meter
+                    + center_offset
+                    + view_state_2d.offset
+            })
+            .collect(),
+        closed: line_string.is_closed(),
+        fill: Color32::TRANSPARENT,
+        stroke: PathStroke {
+            width: 2.0,
+            color: ColorMode::Solid(Color32::WHITE),
+            kind: stroke_kind,
+        },
+    };
     Shape::Path(path)
 }
 
-fn paint_polygon(painter: &Painter, draw_area: Rect, pixels_per_meter: f32, polygon: &interpreter::geo::Polygon) {
-   
+fn paint_polygon(
+    painter: &Painter,
+    draw_area: Rect,
+    view_state_2d: &ViewState2D,
+    polygon: &interpreter::geo::Polygon,
+) {
     // Render fill
     // FIXME building this on each frame is HORRIBLE
     let center_offset = draw_area.center().to_vec2();
@@ -395,7 +508,12 @@ fn paint_polygon(painter: &Painter, draw_area: Rect, pixels_per_meter: f32, poly
         let x = vert[0];
         let y = vert[1];
 
-        mesh.colored_vertex(Pos2::new(x as f32, y as f32) * pixels_per_meter + center_offset, Color32::GRAY);
+        mesh.colored_vertex(
+            Pos2::new(x as f32, y as f32) * view_state_2d.pixels_per_meter
+                + center_offset
+                + view_state_2d.offset,
+            Color32::GRAY,
+        );
     }
 
     for triangle in triangulation.triangle_indices.chunks(3) {
@@ -405,14 +523,24 @@ fn paint_polygon(painter: &Painter, draw_area: Rect, pixels_per_meter: f32, poly
 
         mesh.add_triangle(a as u32, b as u32, c as u32);
     }
-    
+
     painter.add(Shape::Mesh(Arc::new(mesh)));
 
     // Render exterior
-    painter.add(paint_linestring(draw_area, pixels_per_meter, StrokeKind::Inside, polygon.exterior()));
-   
+    painter.add(paint_linestring(
+        draw_area,
+        view_state_2d,
+        StrokeKind::Inside,
+        polygon.exterior(),
+    ));
+
     // Render interior.
     for interior in polygon.interiors() {
-        painter.add(paint_linestring(draw_area, pixels_per_meter, StrokeKind::Outside, interior));
+        painter.add(paint_linestring(
+            draw_area,
+            view_state_2d,
+            StrokeKind::Outside,
+            interior,
+        ));
     }
 }
