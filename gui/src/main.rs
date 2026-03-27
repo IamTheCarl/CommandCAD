@@ -24,21 +24,25 @@ use std::{
 };
 
 use eframe::egui;
-use egui::{
-    Color32, Mesh, Painter, RichText, StrokeKind, TextEdit, 
-};
+use egui::{Color32, Mesh, Painter, RichText, Sense, StrokeKind, TextEdit};
 use interpreter::{
     ExecutionContext, FsStore, LogMessage, RuntimeLog, SourceReference, StackScope, StackTrace,
-    Store, build_prelude, compile, execute_expression,
-    new_parser,
-    values::{BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Value},
+    Store, build_prelude, compile, execute_expression, new_parser,
+    values::{
+        BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Value,
+        manifold_mesh::ManifoldMesh3D,
+    },
 };
 use notify::{EventKind, RecommendedWatcher, Watcher, recommended_watcher};
 use tempfile::TempDir;
 
-use crate::visualize2d::{ViewState2D, build_fill_mesh_from_polygon, paint_linestring, paint_polygon};
+use crate::{
+    visualize2d::{ViewState2D, build_fill_mesh_from_polygon, paint_linestring, paint_polygon},
+    visualize3d::ViewState3D,
+};
 
 mod visualize2d;
+mod visualize3d;
 
 fn main() {
     let native_options = eframe::NativeOptions::default();
@@ -87,13 +91,18 @@ enum RuntimeValue {
     LineString(LineString),
     Polygon {
         polygon: Polygon,
-        mesh: Arc<Mesh>
+        mesh: Arc<Mesh>,
     },
     PolygonSet {
         polygon_set: PolygonSet,
-        meshes: Vec<Arc<Mesh>>
+        meshes: Vec<Arc<Mesh>>,
     },
-    // ManifoldMesh(ManifoldMesh3D),
+    ManifoldMesh(ManifoldMeshState),
+}
+
+struct ManifoldMeshState {
+    manifold: ManifoldMesh3D,
+    uploaded_to_gpu: bool,
 }
 
 enum RuntimeError {
@@ -177,19 +186,26 @@ fn runtime(expression_rx: mpsc::Receiver<RuntimeJob>) {
             Ok(Value::Polygon(polygon)) => {
                 let mesh = build_fill_mesh_from_polygon(&polygon.0);
 
-                Ok(RuntimeValue::Polygon { 
-                    polygon,
-                    mesh
-                })
-            },
+                Ok(RuntimeValue::Polygon { polygon, mesh })
+            }
             Ok(Value::PolygonSet(polygon_set)) => {
-                let meshes = polygon_set.0.iter().map(build_fill_mesh_from_polygon).collect();
+                let meshes = polygon_set
+                    .0
+                    .iter()
+                    .map(build_fill_mesh_from_polygon)
+                    .collect();
 
                 Ok(RuntimeValue::PolygonSet {
                     polygon_set,
                     meshes,
                 })
-            },
+            }
+            Ok(Value::ManifoldMesh3D(manifold)) => {
+                Ok(RuntimeValue::ManifoldMesh(ManifoldMeshState {
+                    manifold,
+                    uploaded_to_gpu: false,
+                }))
+            }
             Ok(value) => {
                 let mut text = String::new();
                 value.format(&context, &mut text, Style::Default, None).ok();
@@ -225,13 +241,12 @@ struct CommandCAD {
     watched_files: HashSet<Arc<PathBuf>>,
     file_watcher: Result<RecommendedWatcher, notify::Error>,
     file_updates_rx: mpsc::Receiver<Result<notify::Event, notify::Error>>,
-
-    view_state_2d: ViewState2D,
+    view_state: ViewState,
 }
 
 impl CommandCAD {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let (expression_tx, expression_rx) = mpsc::channel();
+        let (mut expression_tx, expression_rx) = mpsc::channel();
         std::thread::spawn(|| runtime(expression_rx));
 
         let (file_updates_tx, file_updates_rx) = mpsc::channel();
@@ -265,7 +280,11 @@ impl CommandCAD {
             watched_files: HashSet::new(),
             file_watcher,
             file_updates_rx,
-            view_state_2d: ViewState2D::default(),
+            view_state: ViewState {
+                pixels_per_meter: 100.0,
+                view_state_2d: ViewState2D::default(),
+                view_state_3d: ViewState3D::new(cc),
+            },
         }
     }
 
@@ -358,11 +377,9 @@ impl eframe::App for CommandCAD {
             {
                 self.spawn_job(ctx);
             }
-                    
             let mut draw_area = ui.available_rect_before_wrap();
             draw_area.min.y += 30.0; // We don't know how tall the status bar is at this time, so I
                                      // just assume 30 and that seems to be working well enough.
-            
             ui.horizontal(|ui| {
                 if self.active_job.is_some() {
                     ui.label(RichText::new("Working...").color(Color32::YELLOW));
@@ -370,7 +387,7 @@ impl eframe::App for CommandCAD {
                     ui.label(RichText::new("Ready").color(Color32::GREEN));
                 }
 
-                self.view_state_2d.draw_interface(ui, &self.last_result, draw_area);
+                self.view_state.view_state_2d.draw_interface(&mut self.view_state.pixels_per_meter, ui, &self.last_result, draw_area);
             });
 
             if let Err(error) = &self.file_watcher {
@@ -385,45 +402,30 @@ impl eframe::App for CommandCAD {
 
             // TODO Add some kind of scale legend.
 
-            let draw_area = ui.available_rect_before_wrap();
-            match &self.last_result {
+            match &mut self.last_result {
                 None => {}
                 Some(Ok(RuntimeValue::TextValue(text))) => {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        ui.label(text);
+                        ui.label(text.as_str());
                     });
                 }
                 Some(Ok(RuntimeValue::LineString(line_string))) => {
-                    self.view_state_2d.update(ui, draw_area);
-                    let painter = Painter::new(
-                        ui.ctx().clone(),
-                        ui.layer_id(),
-                        draw_area,
-                    );
-
-                    painter.add(paint_linestring(draw_area, &self.view_state_2d, StrokeKind::Middle, &line_string.0));
+                    let painter = self.view_state.prep_for_painting(ui);
+                    painter.add(paint_linestring(draw_area, &self.view_state, StrokeKind::Middle, &line_string.0));
                 }
                 Some(Ok(RuntimeValue::Polygon { polygon, mesh})) => {
-                    self.view_state_2d.update(ui, draw_area);
-                    let painter = Painter::new(
-                        ui.ctx().clone(),
-                        ui.layer_id(),
-                        draw_area,
-                    );
-
-                    paint_polygon(&painter, draw_area, &self.view_state_2d, &polygon.0, mesh.clone());
+                    let painter = self.view_state.prep_for_painting(ui);
+                    paint_polygon(&painter, draw_area, &self.view_state, &polygon.0, mesh.clone());
                 }
                 Some(Ok(RuntimeValue::PolygonSet { polygon_set, meshes })) => {
-                    self.view_state_2d.update(ui, draw_area);
-                    let painter = Painter::new(
-                        ui.ctx().clone(),
-                        ui.layer_id(),
-                        draw_area,
-                    );
-
+                    let painter = self.view_state.prep_for_painting(ui);
                     for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
-                        paint_polygon(&painter, draw_area, &self.view_state_2d, polygon, mesh.clone());
+                        paint_polygon(&painter, draw_area, &self.view_state, polygon, mesh.clone());
                     }
+                }
+                Some(Ok(RuntimeValue::ManifoldMesh(manifold_state))) => {
+                    let painter = self.view_state.prep_for_painting(ui);
+                    self.view_state.view_state_3d.paint(&self.view_state, manifold_state, painter);
                 }
                 Some(Err(error)) => {
                     ui.label(RichText::new(format!("{error}")).color(Color32::RED));
@@ -433,3 +435,23 @@ impl eframe::App for CommandCAD {
     }
 }
 
+struct ViewState {
+    pixels_per_meter: f32,
+    view_state_2d: ViewState2D,
+    view_state_3d: ViewState3D,
+}
+
+impl ViewState {
+    fn prep_for_painting(&mut self, ui: &mut egui::Ui) -> Painter {
+        let draw_area = ui.available_rect_before_wrap();
+        let response = ui.allocate_rect(draw_area, Sense::DRAG);
+        ui.input(|state| {
+            self.pixels_per_meter += state.smooth_scroll_delta.y;
+            self.pixels_per_meter = self.pixels_per_meter.max(0.0);
+        });
+        self.view_state_2d.update(ui, &response);
+        self.view_state_3d.update(ui, draw_area);
+
+        Painter::new(ui.ctx().clone(), ui.layer_id(), draw_area)
+    }
+}

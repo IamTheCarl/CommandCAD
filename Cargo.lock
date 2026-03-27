@@ -2160,9 +2160,11 @@ name = "gui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "eframe",
  "egui",
  "interpreter",
+ "nalgebra",
  "notify",
  "oneshot",
  "tempfile",
@@ -3068,6 +3070,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4d5b3eff5cd580f93da45e64715e8c20a3996342f1e466599cf7a267a0c2f5f"
 dependencies = [
  "approx",
+ "bytemuck",
  "glam 0.14.0",
  "glam 0.15.2",
  "glam 0.16.0",

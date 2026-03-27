@@ -41,7 +41,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct ManifoldMesh3D(Arc<Manifold>);
+pub struct ManifoldMesh3D(pub Arc<Manifold>);
 
 impl Eq for ManifoldMesh3D {}
 

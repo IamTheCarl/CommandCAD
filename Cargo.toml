@@ -27,3 +27,4 @@ tree-sitter = "0.25"
 tempfile = "3"
 git2 = "0.20"
 anyhow = "1"
+nalgebra = { version = "0.34", features = [ "serde", "bytemuck" ] }

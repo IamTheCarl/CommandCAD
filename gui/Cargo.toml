@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-eframe = { version = "0.33.3", features = ["wgpu"] }
-egui = { version = "0.33.3", features = ["mint"] }
+eframe = { version = "0.33", features = ["wgpu"] }
+egui = { version = "0.33", features = ["mint"] }
 interpreter = { path = "../interpreter" }
 anyhow = { workspace = true }
-oneshot = "0.2.1"
+oneshot = "0.2"
 tempfile = { workspace = true }
-notify = "8.2.0"
+notify = "8"
+bytemuck = "1"
+nalgebra = { workspace = true }
