@@ -47,6 +47,8 @@
           libXi
           vulkan-loader
           libGL
+          alsa-lib
+          udev
         ];
       in rec
       {
@@ -73,7 +75,7 @@
             cargo-expand
             openssl
 	    pkg-config
-          ];
+          ] ++ gui-dependencies;
 
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath ([
             openssl

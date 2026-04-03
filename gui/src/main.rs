@@ -23,7 +23,11 @@ use std::{
     time::Duration,
 };
 
-use eframe::egui;
+use bevy::{
+    prelude::*,
+    winit::{EventLoopProxyWrapper, WinitSettings, WinitUserEvent},
+};
+use bevy_egui::{EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass};
 use egui::{Color32, Mesh, Painter, RichText, Sense, StrokeKind, TextEdit};
 use interpreter::{
     ExecutionContext, FsStore, LogMessage, RuntimeLog, SourceReference, StackScope, StackTrace,
@@ -36,23 +40,29 @@ use interpreter::{
 use notify::{EventKind, RecommendedWatcher, Watcher, recommended_watcher};
 use tempfile::TempDir;
 
-use crate::{
-    visualize2d::{ViewState2D, build_fill_mesh_from_polygon, paint_linestring, paint_polygon},
-    visualize3d::ViewState3D,
+use crate::visualize2d::{
+    ViewState2D, build_fill_mesh_from_polygon, paint_linestring, paint_polygon,
 };
 
 mod visualize2d;
-mod visualize3d;
+// mod visualize3d;
 
 fn main() {
-    let native_options = eframe::NativeOptions::default();
-    if let Err(error) = eframe::run_native(
-        "Command CAD",
-        native_options,
-        Box::new(|cc| Ok(Box::new(CommandCAD::new(cc)))),
-    ) {
-        eprintln!("Failed to run application: {error}");
-    }
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            // You may want this set to `true` if you need virtual keyboard work in mobile browsers.
+            prevent_default_event_handling: false,
+            title: String::from("Command CAD"),
+            ..default()
+        }),
+        ..default()
+    }))
+    .insert_resource(WinitSettings::desktop_app())
+    .add_plugins(EguiPlugin::default())
+    .add_systems(Startup, setup)
+    .add_systems(EguiPrimaryContextPass, render_ui);
+    app.run();
 }
 
 #[derive(Debug)]
@@ -83,7 +93,7 @@ struct RuntimeJob {
 
 struct PendingJob {
     shutdown_signal: Arc<AtomicBool>,
-    response: oneshot::Receiver<RuntimeOutput>,
+    response: Mutex<oneshot::Receiver<RuntimeOutput>>,
 }
 
 enum RuntimeValue {
@@ -233,6 +243,7 @@ fn runtime(expression_rx: mpsc::Receiver<RuntimeJob>) {
     }
 }
 
+#[derive(Resource)]
 struct CommandCAD {
     expression: String,
     expression_tx: mpsc::Sender<RuntimeJob>,
@@ -240,54 +251,11 @@ struct CommandCAD {
     last_result: Option<Result<RuntimeValue, RuntimeError>>,
     watched_files: HashSet<Arc<PathBuf>>,
     file_watcher: Result<RecommendedWatcher, notify::Error>,
-    file_updates_rx: mpsc::Receiver<Result<notify::Event, notify::Error>>,
+    file_updates_rx: Mutex<mpsc::Receiver<Result<notify::Event, notify::Error>>>,
     view_state: ViewState,
 }
 
 impl CommandCAD {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let (mut expression_tx, expression_rx) = mpsc::channel();
-        std::thread::spawn(|| runtime(expression_rx));
-
-        let (file_updates_tx, file_updates_rx) = mpsc::channel();
-
-        let gui_ctx = cc.egui_ctx.clone();
-        let file_watcher = recommended_watcher(move |event: Result<notify::Event, _>| {
-            // Notify and refresh the GUI whenever there's an update to one of the project files.
-
-            // This is a really horrible hack, but I have no idea how to better fix it and it seems
-            // to be what the "experts" are doing as well (I looked at a higher-level library for
-            // watching for file changes). Basically, sometimes we get this notification before the
-            // file is available on disk. We need to check and possibly wait to see if the file is
-            // actually ready.
-            if let Ok(event) = &event
-                && matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_))
-            {
-                while !event.paths.iter().all(|path| path.exists()) {
-                    std::thread::sleep(Duration::from_millis(10));
-                }
-            }
-
-            file_updates_tx.send(event).ok();
-            gui_ctx.request_repaint();
-        });
-
-        Self {
-            expression: String::new(),
-            expression_tx,
-            active_job: None,
-            last_result: None,
-            watched_files: HashSet::new(),
-            file_watcher,
-            file_updates_rx,
-            view_state: ViewState {
-                pixels_per_meter: 100.0,
-                view_state_2d: ViewState2D::default(),
-                view_state_3d: ViewState3D::new(cc),
-            },
-        }
-    }
-
     fn spawn_job(&mut self, ctx: &egui::Context) {
         if let Some(pending_job) = self.active_job.take() {
             pending_job
@@ -301,7 +269,7 @@ impl CommandCAD {
 
         let pending_job = PendingJob {
             shutdown_signal: shutdown_signal.clone(),
-            response: response_rx,
+            response: Mutex::new(response_rx),
         };
 
         let runtime_job = RuntimeJob {
@@ -318,7 +286,7 @@ impl CommandCAD {
     }
 
     fn check_if_watched_files_changed(&mut self) -> bool {
-        match self.file_updates_rx.try_recv() {
+        match self.file_updates_rx.get_mut().unwrap().try_recv() {
             Ok(Ok(event)) => matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)),
             // TODO log that or something.
             Ok(Err(error)) => {
@@ -332,10 +300,10 @@ impl CommandCAD {
     }
 
     fn check_job(&mut self) {
-        if let Some(active_job) = &self.active_job {
+        if let Some(active_job) = &mut self.active_job {
             // This could fail by the thread being closed, but that shouldn't happen and won't
             // cause us to panic.
-            if let Ok(output) = active_job.response.try_recv() {
+            if let Ok(output) = active_job.response.get_mut().unwrap().try_recv() {
                 self.last_result = Some(output.result);
                 self.active_job = None;
 
@@ -365,80 +333,143 @@ impl CommandCAD {
     }
 }
 
-impl eframe::App for CommandCAD {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let expression_editor = TextEdit::multiline(&mut self.expression)
-                .code_editor()
-                .desired_width(f32::INFINITY)
-                .hint_text("expression");
-            if ui.add(expression_editor).changed()
-                || self.check_if_watched_files_changed()
-            {
-                self.spawn_job(ctx);
+fn setup(
+    mut commands: Commands,
+    event_loop_proxy: Res<EventLoopProxyWrapper>,
+    mut egui_global_settings: ResMut<EguiGlobalSettings>,
+) {
+    egui_global_settings.auto_create_primary_context = true;
+
+    // Only update when there are events worth updating for.
+    commands.insert_resource(WinitSettings::desktop_app());
+
+    let (expression_tx, expression_rx) = mpsc::channel();
+    std::thread::spawn(|| runtime(expression_rx));
+
+    let (file_updates_tx, file_updates_rx) = mpsc::channel();
+    let file_updates_rx = Mutex::new(file_updates_rx);
+
+    let event_loop_proxy = event_loop_proxy.clone();
+    let file_watcher = recommended_watcher(move |event: Result<notify::Event, _>| {
+        // Notify and refresh the GUI whenever there's an update to one of the project files.
+
+        // This is a really horrible hack, but I have no idea how to better fix it and it seems
+        // to be what the "experts" are doing as well (I looked at a higher-level library for
+        // watching for file changes). Basically, sometimes we get this notification before the
+        // file is available on disk. We need to check and possibly wait to see if the file is
+        // actually ready.
+        if let Ok(event) = &event
+            && matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_))
+        {
+            while !event.paths.iter().all(|path| path.exists()) {
+                std::thread::sleep(Duration::from_millis(10));
             }
-            let mut draw_area = ui.available_rect_before_wrap();
-            draw_area.min.y += 30.0; // We don't know how tall the status bar is at this time, so I
-                                     // just assume 30 and that seems to be working well enough.
-            ui.horizontal(|ui| {
-                if self.active_job.is_some() {
-                    ui.label(RichText::new("Working...").color(Color32::YELLOW));
-                } else {
-                    ui.label(RichText::new("Ready").color(Color32::GREEN));
-                }
+        }
 
-                self.view_state.view_state_2d.draw_interface(&mut self.view_state.pixels_per_meter, ui, &self.last_result, draw_area);
-            });
+        file_updates_tx.send(event).ok();
+        event_loop_proxy
+            .clone()
+            .send_event(WinitUserEvent::WakeUp)
+            .ok();
+    });
 
-            if let Err(error) = &self.file_watcher {
-                ui.label(
-                    RichText::new(format!("Failed to setup file watching: {error}\nOutput will not update automatically when files are modified"))
-                        .color(Color32::YELLOW),
-                );
+    commands.insert_resource(CommandCAD {
+        expression: String::new(),
+        expression_tx,
+        active_job: None,
+        last_result: None,
+        watched_files: HashSet::new(),
+        file_watcher,
+        file_updates_rx,
+        view_state: ViewState {
+            pixels_per_meter: 100.0,
+            view_state_2d: ViewState2D::default(),
+            // view_state_3d: ViewState3D::new(cc),
+        },
+    });
+
+    commands.spawn(Camera2d);
+}
+
+fn render_ui(mut command_cad: ResMut<CommandCAD>, mut contexts: EguiContexts) -> Result {
+    let ctx = contexts.ctx_mut()?;
+
+    egui::CentralPanel::default().show(ctx, |ui| {
+        let expression_editor = TextEdit::multiline(&mut command_cad.expression)
+            .code_editor()
+            .desired_width(f32::INFINITY)
+            .hint_text("expression");
+        if ui.add(expression_editor).changed()
+            || command_cad.check_if_watched_files_changed()
+        {
+            command_cad.spawn_job(ctx);
+        }
+        let mut draw_area = ui.available_rect_before_wrap();
+        draw_area.min.y += 30.0; // We don't know how tall the status bar is at this time, so I
+                                 // just assume 30 and that seems to be working well enough.
+        ui.horizontal(|ui| {
+            if command_cad.active_job.is_some() {
+                ui.label(RichText::new("Working...").color(Color32::YELLOW));
+            } else {
+                ui.label(RichText::new("Ready").color(Color32::GREEN));
             }
 
-            // Update the job status.
-            self.check_job();
-
-            // TODO Add some kind of scale legend.
-
-            match &mut self.last_result {
-                None => {}
-                Some(Ok(RuntimeValue::TextValue(text))) => {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        ui.label(text.as_str());
-                    });
-                }
-                Some(Ok(RuntimeValue::LineString(line_string))) => {
-                    let painter = self.view_state.prep_for_painting(ui);
-                    painter.add(paint_linestring(draw_area, &self.view_state, StrokeKind::Middle, &line_string.0));
-                }
-                Some(Ok(RuntimeValue::Polygon { polygon, mesh})) => {
-                    let painter = self.view_state.prep_for_painting(ui);
-                    paint_polygon(&painter, draw_area, &self.view_state, &polygon.0, mesh.clone());
-                }
-                Some(Ok(RuntimeValue::PolygonSet { polygon_set, meshes })) => {
-                    let painter = self.view_state.prep_for_painting(ui);
-                    for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
-                        paint_polygon(&painter, draw_area, &self.view_state, polygon, mesh.clone());
-                    }
-                }
-                Some(Ok(RuntimeValue::ManifoldMesh(manifold_state))) => {
-                    let painter = self.view_state.prep_for_painting(ui);
-                    self.view_state.view_state_3d.paint(&self.view_state, manifold_state, painter);
-                }
-                Some(Err(error)) => {
-                    ui.label(RichText::new(format!("{error}")).color(Color32::RED));
-                }
-            }
+            let command_cad = &mut *command_cad;
+            command_cad.view_state.view_state_2d.draw_interface(&mut command_cad.view_state.pixels_per_meter, ui, &command_cad.last_result, draw_area);
         });
-    }
+
+        if let Err(error) = &command_cad.file_watcher {
+            ui.label(
+                RichText::new(format!("Failed to setup file watching: {error}\nOutput will not update automatically when files are modified"))
+                    .color(Color32::YELLOW),
+            );
+        }
+
+        // Update the job status.
+        command_cad.check_job();
+
+        // TODO Add some kind of scale legend.
+
+        let command_cad = &mut *command_cad;
+
+        match &mut command_cad.last_result {
+            None => {}
+            Some(Ok(RuntimeValue::TextValue(text))) => {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.label(text.as_str());
+                });
+            }
+            Some(Ok(RuntimeValue::LineString(line_string))) => {
+                let painter = command_cad.view_state.prep_for_painting(ui);
+                painter.add(paint_linestring(draw_area, &command_cad.view_state, StrokeKind::Middle, &line_string.0));
+            }
+            Some(Ok(RuntimeValue::Polygon { polygon, mesh})) => {
+                let painter = command_cad.view_state.prep_for_painting(ui);
+                paint_polygon(&painter, draw_area, &command_cad.view_state, &polygon.0, mesh.clone());
+            }
+            Some(Ok(RuntimeValue::PolygonSet { polygon_set, meshes })) => {
+                let painter = command_cad.view_state.prep_for_painting(ui);
+                for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
+                    paint_polygon(&painter, draw_area, &command_cad.view_state, polygon, mesh.clone());
+                }
+            }
+            Some(Ok(RuntimeValue::ManifoldMesh(manifold_state))) => {
+                let painter = command_cad.view_state.prep_for_painting(ui);
+                // command_cad.view_state.view_state_3d.paint(&command_cad.view_state, manifold_state, painter);
+            }
+            Some(Err(error)) => {
+                ui.label(RichText::new(format!("{error}")).color(Color32::RED));
+            }
+        }
+    });
+
+    Ok(())
 }
 
 struct ViewState {
     pixels_per_meter: f32,
     view_state_2d: ViewState2D,
-    view_state_3d: ViewState3D,
+    // view_state_3d: ViewState3D,
 }
 
 impl ViewState {
@@ -450,7 +481,7 @@ impl ViewState {
             self.pixels_per_meter = self.pixels_per_meter.max(0.0);
         });
         self.view_state_2d.update(ui, &response);
-        self.view_state_3d.update(ui, draw_area);
+        // self.view_state_3d.update(ui, draw_area);
 
         Painter::new(ui.ctx().clone(), ui.layer_id(), draw_area)
     }

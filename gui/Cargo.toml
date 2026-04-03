@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-eframe = { version = "0.33", features = ["wgpu"] }
 egui = { version = "0.33", features = ["mint"] }
 interpreter = { path = "../interpreter" }
 anyhow = { workspace = true }
@@ -13,3 +12,5 @@ tempfile = { workspace = true }
 notify = "8"
 bytemuck = "1"
 nalgebra = { workspace = true }
+bevy = "0.18.1"
+bevy_egui = "0.39.1"
