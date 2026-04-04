@@ -28,8 +28,8 @@ use bevy::{
     prelude::*,
     winit::{EventLoopProxyWrapper, WinitSettings, WinitUserEvent},
 };
-use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
-use egui::{Color32, Mesh, Painter, RichText, Sense, StrokeKind, TextEdit, emath::TSTransform};
+use bevy_egui::{EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
+use egui::{Color32, Mesh, Painter, RichText, StrokeKind, TextEdit, emath::TSTransform};
 use interpreter::{
     ExecutionContext, FsStore, LogMessage, RuntimeLog, SourceReference, StackScope, StackTrace,
     Store, build_prelude, compile, execute_expression, new_parser,
@@ -43,7 +43,7 @@ use tempfile::TempDir;
 
 use crate::{
     visualize2d::{ViewState2d, build_fill_mesh_from_polygon, paint_linestring, paint_polygon},
-    visualize3d::{ViewState3d, setup_3d, spawn_meshes, update_projection},
+    visualize3d::{ViewState3d, setup_3d, spawn_meshes, update_3d_camera, update_model_transforms},
 };
 
 mod visualize2d;
@@ -64,7 +64,15 @@ fn main() {
     .add_plugins(EguiPlugin::default())
     .add_plugins(WireframePlugin::default())
     .add_systems(Startup, (setup, setup_3d))
-    .add_systems(Update, (spawn_meshes, check_job.before(spawn_meshes), update_projection))
+    .add_systems(
+        Update,
+        (
+            spawn_meshes,
+            check_job.before(spawn_meshes),
+            update_3d_camera,
+            update_model_transforms
+        ),
+    )
     .add_systems(EguiPrimaryContextPass, render_ui);
     app.run();
 }
@@ -128,14 +136,8 @@ fn setup(
         file_updates_rx,
     });
 
-    let mut view_state = ViewState {
-        zoom: 10.0,
-        offset: Vec2::ZERO,  
-    };
-    view_state.set_pixels_per_meter(100.0);
-    commands.insert_resource(view_state);
+    commands.insert_resource(ViewState::default());
     commands.insert_resource(ViewState2d);
-    commands.insert_resource(ViewState3d);
 }
 
 #[derive(Debug)]
@@ -419,6 +421,7 @@ fn render_ui(
     mut job_bridge: ResMut<JobBridge>,
     mut view_state: ResMut<ViewState>,
     mut view_state_2d: ResMut<ViewState2d>,
+    mut view_state_3d: ResMut<ViewState3d>,
     mut expression: ResMut<ExpressionField>,
     mut contexts: EguiContexts,
 ) -> Result {
@@ -465,10 +468,9 @@ fn render_ui(
             draw(ui, draw_area)
         });
     }
-        
+
     ctx.input(|state| {
-        view_state.zoom += state.smooth_scroll_delta.y;
-        view_state.zoom = view_state.zoom.max(0.0);
+        view_state.track_movement(state);
     });
 
     match &mut job_bridge.last_result {
@@ -501,13 +503,7 @@ fn render_ui(
         Some(Ok(JobOutput::Polygon { polygon, mesh })) => {
             draw_thing(ctx, |ui, draw_area| {
                 let painter = view_state.prep_for_painting(ui);
-                paint_polygon(
-                    &painter,
-                    draw_area,
-                    &view_state,
-                    &polygon.0,
-                    mesh.clone(),
-                );
+                paint_polygon(&painter, draw_area, &view_state, &polygon.0, mesh.clone());
             });
         }
         Some(Ok(JobOutput::PolygonSet {
@@ -517,18 +513,14 @@ fn render_ui(
             draw_thing(ctx, |ui, draw_area| {
                 let painter = view_state.prep_for_painting(ui);
                 for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
-                    paint_polygon(
-                        &painter,
-                        draw_area,
-                        &view_state,
-                        polygon,
-                        mesh.clone(),
-                    );
+                    paint_polygon(&painter, draw_area, &view_state, polygon, mesh.clone());
                 }
             });
         }
         Some(Ok(JobOutput::ManifoldMesh(_manifold_state))) => {
-            // Rendering for this is done in a different system.
+            ctx.input(|state| {
+                view_state_3d.track_movement(state);
+            });
         }
         Some(Err(error)) => {
             draw_thing(ctx, |ui, _draw_area| {
@@ -543,19 +535,37 @@ fn render_ui(
 #[derive(Resource)]
 struct ViewState {
     zoom: f32,
-    offset: Vec2
+    offset: Vec2,
+}
+
+impl Default for ViewState {
+    fn default() -> Self {
+        let mut view_state = ViewState {
+            zoom: 10.0,
+            offset: Vec2::ZERO,
+        };
+        view_state.set_pixels_per_meter(100.0);
+        view_state
+    }
 }
 
 impl ViewState {
     // Percentage of scale per scale factor unit.
     const SCALE_FACTOR: f32 = 1.01;
 
+    fn track_movement(&mut self, input_state: &egui::InputState) {
+        self.zoom += input_state.smooth_scroll_delta.y;
+        self.zoom = self.zoom.max(0.0);
+        
+        if input_state.pointer.primary_down() {
+            let drag_delta = input_state.pointer.delta();
+            let delta = drag_delta / self.pixels_per_meter();
+            self.offset += Vec2::new(delta.x, delta.y);
+        }
+    }
+
     fn prep_for_painting(&mut self, ui: &mut egui::Ui) -> Painter {
         let draw_area = ui.available_rect_before_wrap();
-        let response = ui.allocate_rect(draw_area, Sense::DRAG);
-        let delta = response.drag_delta() / self.pixels_per_meter();
-        self.offset += Vec2::new(delta.x, delta.y);
-
         Painter::new(ui.ctx().clone(), ui.layer_id(), draw_area)
     }
 

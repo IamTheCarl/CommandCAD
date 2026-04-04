@@ -16,7 +16,7 @@ use bevy::asset::RenderAssetUsages;
  * You should have received a copy of the GNU Affero General Public License along with this
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
-use bevy::camera::ScalingMode;
+use bevy::camera::{ScalingMode};
 use bevy::{
     color::palettes::css::*,
     pbr::wireframe::{Wireframe, WireframeColor},
@@ -26,30 +26,47 @@ use bevy::{ecs::system::Query, mesh::PrimitiveTopology};
 
 use crate::{JobBridge, JobOutput, ViewState};
 
-#[derive(Debug, Default, Resource)]
-pub struct ViewState3d;
+const VIEW_Z_OFFSET: f32 = -10.0;
+
+#[derive(Debug, Resource, Default)]
+pub struct ViewState3d {
+    rotation_x: f32,
+    rotation_y: f32,
+}
+
+impl ViewState3d {
+    const POINTER_SCALE: f32 = 0.007;
+
+    pub fn track_movement(&mut self, input_state: &egui::InputState) {
+        
+        if input_state.pointer.secondary_down() {
+            let drag_delta = input_state.pointer.delta();
+
+            // TODO These probably need to be scaled differently on a 4k display.
+            // It would probably be best to base the rotation factor based off the viewport size.
+            self.rotation_x -= drag_delta.y * Self::POINTER_SCALE;
+            self.rotation_y += drag_delta.x * Self::POINTER_SCALE;
+
+            self.rotation_x = self.rotation_x.clamp(-std::f32::consts::PI, std::f32::consts::PI);
+            self.rotation_y = self.rotation_y.clamp(-std::f32::consts::PI, std::f32::consts::PI);
+        }
+    }
+}
 
 pub fn setup_3d(mut commands: Commands) {
     commands.spawn((
-        // Transform::from_translation(Vec3::new(0.0, 1.5, 5.0)),
-        // PanOrbitCamera {
-        //     zoom_upper_limit: Some(1.0),
-        //     zoom_lower_limit: 1.0,
-        //     ..default()
-        // },
         Camera3d::default(),
         Projection::from(OrthographicProjection {
             scaling_mode: ScalingMode::WindowSize,
-            // scaling_mode: ScalingMode::FixedVertical {
-            //     viewport_height: 1.0,
-            // },
             ..OrthographicProjection::default_3d()
         }),
-        Transform::from_xyz(0.0, 0.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(0.0, 0.0, VIEW_Z_OFFSET).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+
+    commands.insert_resource(ViewState3d::default());
 }
 
-pub fn update_projection(
+pub fn update_3d_camera(
     view_state: Res<ViewState>,
     mut cameras: Query<&mut Projection, With<Camera3d>>,
 ) {
@@ -57,6 +74,24 @@ pub fn update_projection(
         if let Projection::Orthographic(projection) = &mut *projection {
             projection.scale = 1.0 / view_state.pixels_per_meter();
         }
+    }
+}
+
+pub fn update_model_transforms(
+    view_state: Res<ViewState>,
+    view_state_3d: Res<ViewState3d>,
+    mut models: Query<&mut Transform, With<MeshModel>>,
+) {
+    for mut transform in &mut models {
+
+        let mut new_transform = Transform::default();
+
+        new_transform.rotate(-Quat::from_rotation_y(view_state_3d.rotation_y));
+        new_transform.rotate(Quat::from_rotation_x(view_state_3d.rotation_x));
+
+        new_transform.translation = Vec3::new(-view_state.offset.x, -view_state.offset.y, 0.0);
+        
+        *transform = new_transform;
     }
 }
 
@@ -68,22 +103,17 @@ pub fn spawn_meshes(
     mut command_cad: ResMut<JobBridge>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mesh_models: Query<Entity, With<MeshModel>>,
+    mesh_models: Query<(Entity, &Mesh3d), With<MeshModel>>,
 ) {
     if let Some(Ok(JobOutput::ManifoldMesh(manifold_state))) = &mut command_cad.last_result
         && !manifold_state.uploaded_to_gpu
     {
-        // commands.spawn((
-        //     Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-        //     MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
-        //     Transform::from_xyz(0.0, 0.5, 0.0),
-        // ));
-
         manifold_state.uploaded_to_gpu = true;
 
         // Start by removing the old model.
-        for entity in mesh_models.iter() {
+        for (entity, mesh) in mesh_models.iter() {
             commands.entity(entity).despawn();
+            meshes.remove(mesh.id());
         }
 
         // Now build our  mesh.

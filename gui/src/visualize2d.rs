@@ -51,8 +51,8 @@ impl ViewState2d {
             let center = bounds.center();
             view_state.offset = bevy::prelude::Vec2::new(-center.x as f32, center.y as f32);
         } else {
-            // We don't know how to fit this. Just assume the default.
-            *self = Self::default();
+            // We don't know how to fit this. Just assume the defaults.
+            *view_state = ViewState::default();
         }
     }
 
@@ -83,9 +83,7 @@ pub fn paint_linestring(
     let path = PathShape {
         points: line_string
             .coords()
-            .map(|coord| {
-                transform.mul_pos(Pos2::new(coord.x as f32, -coord.y as f32))
-            })
+            .map(|coord| transform.mul_pos(Pos2::new(coord.x as f32, -coord.y as f32)))
             .collect(),
         closed: line_string.is_closed(),
         fill: Color32::TRANSPARENT,
@@ -142,17 +140,13 @@ pub fn paint_polygon(
 
     // Render exterior
     painter.add(paint_linestring(
-            &transform,
+        &transform,
         StrokeKind::Inside,
         polygon.exterior(),
     ));
 
     // Render interior.
     for interior in polygon.interiors() {
-        painter.add(paint_linestring(
-            &transform,
-            StrokeKind::Outside,
-            interior,
-        ));
+        painter.add(paint_linestring(&transform, StrokeKind::Outside, interior));
     }
 }
