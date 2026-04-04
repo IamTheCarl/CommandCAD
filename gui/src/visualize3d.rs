@@ -1,3 +1,4 @@
+use bevy::asset::RenderAssetUsages;
 /*
  * Copyright 2026 James Carl
  * AGPL-3.0-only or AGPL-3.0-or-later
@@ -15,282 +16,107 @@
  * You should have received a copy of the GNU Affero General Public License along with this
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
-use eframe::{
-    egui_wgpu,
-    wgpu::{self, util::DeviceExt as _},
+use bevy::camera::ScalingMode;
+use bevy::{
+    color::palettes::css::*,
+    pbr::wireframe::{Wireframe, WireframeColor},
+    prelude::*,
 };
-use egui::{Painter, Rect};
-use interpreter::values::manifold_mesh::ManifoldMesh3D;
-use nalgebra::{Matrix4, Vector3};
+use bevy::{ecs::system::Query, mesh::PrimitiveTopology};
 
-use crate::{ManifoldMeshState, ViewState};
+use crate::{JobBridge, JobOutput, ViewState};
 
-const VIEW_NEAR: f32 = -1000.0;
-const VIEW_FAR: f32 = 1000.0;
+#[derive(Debug, Default, Resource)]
+pub struct ViewState3d;
 
-#[repr(C)]
-#[derive(Default, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct VertexUniform {
-    view_projection: Matrix4<f32>,
-    pixels_per_meter: f32,
+pub fn setup_3d(mut commands: Commands) {
+    commands.spawn((
+        // Transform::from_translation(Vec3::new(0.0, 1.5, 5.0)),
+        // PanOrbitCamera {
+        //     zoom_upper_limit: Some(1.0),
+        //     zoom_lower_limit: 1.0,
+        //     ..default()
+        // },
+        Camera3d::default(),
+        Projection::from(OrthographicProjection {
+            scaling_mode: ScalingMode::WindowSize,
+            // scaling_mode: ScalingMode::FixedVertical {
+            //     viewport_height: 1.0,
+            // },
+            ..OrthographicProjection::default_3d()
+        }),
+        Transform::from_xyz(0.0, 0.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
 }
 
-#[derive(Debug)]
-pub struct ViewState3D {}
-
-impl ViewState3D {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let wgpu_render_state = cc
-            .wgpu_render_state
-            .as_ref()
-            .expect("Project built without WGPU support");
-
-        let device = &wgpu_render_state.device;
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("mesh_shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/mesh.wgsl").into()),
-        });
-
-        let vertex_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("mesh_vertex_bind_group_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-        let fragment_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("fragment_vertex_bind_group_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("mesh_pipeline_layout"),
-            bind_group_layouts: &[&vertex_bind_group_layout, &fragment_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("mesh_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Vector3<f32>>() as wgpu::BufferAddress,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float32x3],
-                }],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu_render_state.target_format.into())],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
-
-        let vertex_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("vertex_uniform_buffer"),
-            contents: bytemuck::cast_slice(&[VertexUniform::default()]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let vertex_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("vertex_bind_group"),
-            layout: &vertex_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: vertex_uniform_buffer.as_entire_binding(),
-            }],
-        });
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("vertex_buffer"),
-            contents: bytemuck::cast_slice::<Vector3<f32>, _>(&[]),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("index_buffer"),
-            contents: bytemuck::cast_slice::<u16, _>(&[]),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        let fragment_uniform_buffer =
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("fragment_uniform_buffer"),
-                contents: bytemuck::cast_slice(&[Matrix4::<f32>::zeros()]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
-        let fragment_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("fragment_bind_group"),
-            layout: &fragment_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: fragment_uniform_buffer.as_entire_binding(),
-            }],
-        });
-
-        wgpu_render_state
-            .renderer
-            .write()
-            .callback_resources
-            .insert(MeshRenderResources {
-                pipeline,
-                vertex_bind_group,
-                vertex_uniform_buffer,
-                vertex_buffer,
-                index_buffer,
-                index_buffer_length: 0,
-                fragment_bind_group,
-            });
-
-        Self {}
-    }
-
-    pub fn update(&mut self, _ui: &mut egui::Ui, _draw_area: Rect) {
-        // TODO we need to take mouse input to update our projection matrix with.
-    }
-
-    pub fn paint(
-        &self,
-        view_state: &ViewState,
-        manifold_state: &mut ManifoldMeshState,
-        painter: Painter,
-    ) {
-        let area = painter.clip_rect();
-        painter.add(egui_wgpu::Callback::new_paint_callback(
-            area,
-            MeshRenderCallback {
-                vertex_uniform: VertexUniform {
-                    view_projection: Matrix4::new_orthographic(
-                        area.left(),
-                        area.right(),
-                        area.bottom(),
-                        area.top(),
-                        VIEW_NEAR,
-                        VIEW_FAR,
-                    ),
-                    pixels_per_meter: view_state.pixels_per_meter,
-                },
-                manifold_to_upload: if manifold_state.uploaded_to_gpu {
-                    None
-                } else {
-                    manifold_state.uploaded_to_gpu = true;
-                    Some(manifold_state.manifold.clone())
-                },
-            },
-        ));
+pub fn update_projection(
+    view_state: Res<ViewState>,
+    mut cameras: Query<&mut Projection, With<Camera3d>>,
+) {
+    for mut projection in &mut cameras {
+        if let Projection::Orthographic(projection) = &mut *projection {
+            projection.scale = 1.0 / view_state.pixels_per_meter();
+        }
     }
 }
 
-struct MeshRenderResources {
-    pipeline: wgpu::RenderPipeline,
-    vertex_bind_group: wgpu::BindGroup,
-    vertex_uniform_buffer: wgpu::Buffer,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    index_buffer_length: u32,
-    fragment_bind_group: wgpu::BindGroup,
-}
+#[derive(Component)]
+pub struct MeshModel;
 
-struct MeshRenderCallback {
-    vertex_uniform: VertexUniform,
-    manifold_to_upload: Option<ManifoldMesh3D>,
-}
+pub fn spawn_meshes(
+    mut commands: Commands,
+    mut command_cad: ResMut<JobBridge>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mesh_models: Query<Entity, With<MeshModel>>,
+) {
+    if let Some(Ok(JobOutput::ManifoldMesh(manifold_state))) = &mut command_cad.last_result
+        && !manifold_state.uploaded_to_gpu
+    {
+        // commands.spawn((
+        //     Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+        //     MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
+        //     Transform::from_xyz(0.0, 0.5, 0.0),
+        // ));
 
-impl eframe::egui_wgpu::CallbackTrait for MeshRenderCallback {
-    fn prepare(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _screen_descriptor: &egui_wgpu::ScreenDescriptor,
-        _egui_encoder: &mut wgpu::CommandEncoder,
-        callback_resources: &mut egui_wgpu::CallbackResources,
-    ) -> Vec<wgpu::CommandBuffer> {
-        let resources: &mut MeshRenderResources = callback_resources
-            .get_mut()
-            .expect("Mesh render resources were never inserted");
+        manifold_state.uploaded_to_gpu = true;
 
-        queue.write_buffer(
-            &resources.vertex_uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[self.vertex_uniform]),
-        );
-
-        if let Some(manifold) = &self.manifold_to_upload {
-            resources.vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("vertex_buffer"),
-                size: (manifold.0.ps.len() * std::mem::size_of::<Vector3<f32>>()) as u64,
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            for (index, vector) in manifold.0.ps.iter().enumerate() {
-                queue.write_buffer(
-                    &resources.vertex_buffer,
-                    (index * std::mem::size_of::<Vector3<f32>>()) as u64,
-                    bytemuck::cast_slice(&[vector.cast::<f32>()]),
-                );
-            }
-
-            resources.index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("index_buffer"),
-                size: (manifold.0.hs.len() * std::mem::size_of::<u32>()) as u64,
-                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-
-            for (index, half_edge) in manifold.0.hs.iter().enumerate() {
-                queue.write_buffer(
-                    &resources.index_buffer,
-                    (index * std::mem::size_of::<u32>()) as u64,
-                    bytemuck::cast_slice(&[half_edge.tail as u32]),
-                );
-            }
-            resources.index_buffer_length = manifold.0.hs.len() as u32;
+        // Start by removing the old model.
+        for entity in mesh_models.iter() {
+            commands.entity(entity).despawn();
         }
 
-        Vec::new()
-    }
+        // Now build our  mesh.
+        let mut m = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        let mut pos = vec![];
+        let mut vns = vec![];
+        for (fid, hs) in manifold_state.manifold.0.hs.chunks(3).enumerate() {
+            let p0 = manifold_state.manifold.0.ps[hs[0].tail];
+            let p1 = manifold_state.manifold.0.ps[hs[1].tail];
+            let p2 = manifold_state.manifold.0.ps[hs[2].tail];
+            let n = manifold_state.manifold.0.face_normals[fid];
+            pos.push([p0.x as f32, p0.y as f32, p0.z as f32]);
+            pos.push([p1.x as f32, p1.y as f32, p1.z as f32]);
+            pos.push([p2.x as f32, p2.y as f32, p2.z as f32]);
+            vns.push([n.x as f32, n.y as f32, n.z as f32]);
+            vns.push([n.x as f32, n.y as f32, n.z as f32]);
+            vns.push([n.x as f32, n.y as f32, n.z as f32]);
+        }
+        m.insert_attribute(Mesh::ATTRIBUTE_POSITION, pos);
+        m.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vns);
 
-    fn paint(
-        &self,
-        _info: egui::PaintCallbackInfo,
-        render_pass: &mut wgpu::RenderPass<'static>,
-        callback_resources: &egui_wgpu::CallbackResources,
-    ) {
-        let resources: &MeshRenderResources = callback_resources
-            .get()
-            .expect("Mesh render resources were never inserted");
-
-        render_pass.set_pipeline(&resources.pipeline);
-        render_pass.set_bind_group(0, &resources.vertex_bind_group, &[]);
-        render_pass.set_bind_group(1, &resources.fragment_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, resources.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(resources.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        render_pass.draw_indexed(0..resources.index_buffer_length, 0, 0..1);
+        commands.spawn((
+            Mesh3d(meshes.add(m).clone()),
+            MeshMaterial3d(materials.add(StandardMaterial { ..default() })),
+            Transform::default(),
+            Wireframe,
+            WireframeColor {
+                color: BLACK.into(),
+            },
+            MeshModel,
+        ));
     }
 }

@@ -24,11 +24,12 @@ use std::{
 };
 
 use bevy::{
+    pbr::wireframe::WireframePlugin,
     prelude::*,
     winit::{EventLoopProxyWrapper, WinitSettings, WinitUserEvent},
 };
-use bevy_egui::{EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass};
-use egui::{Color32, Mesh, Painter, RichText, Sense, StrokeKind, TextEdit};
+use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
+use egui::{Color32, Mesh, Painter, RichText, Sense, StrokeKind, TextEdit, emath::TSTransform};
 use interpreter::{
     ExecutionContext, FsStore, LogMessage, RuntimeLog, SourceReference, StackScope, StackTrace,
     Store, build_prelude, compile, execute_expression, new_parser,
@@ -40,12 +41,13 @@ use interpreter::{
 use notify::{EventKind, RecommendedWatcher, Watcher, recommended_watcher};
 use tempfile::TempDir;
 
-use crate::visualize2d::{
-    ViewState2D, build_fill_mesh_from_polygon, paint_linestring, paint_polygon,
+use crate::{
+    visualize2d::{ViewState2d, build_fill_mesh_from_polygon, paint_linestring, paint_polygon},
+    visualize3d::{ViewState3d, setup_3d, spawn_meshes, update_projection},
 };
 
 mod visualize2d;
-// mod visualize3d;
+mod visualize3d;
 
 fn main() {
     let mut app = App::new();
@@ -60,291 +62,31 @@ fn main() {
     }))
     .insert_resource(WinitSettings::desktop_app())
     .add_plugins(EguiPlugin::default())
-    .add_systems(Startup, setup)
+    .add_plugins(WireframePlugin::default())
+    .add_systems(Startup, (setup, setup_3d))
+    .add_systems(Update, (spawn_meshes, check_job.before(spawn_meshes), update_projection))
     .add_systems(EguiPrimaryContextPass, render_ui);
     app.run();
-}
-
-#[derive(Debug)]
-struct GuiLogger;
-
-impl RuntimeLog for GuiLogger {
-    fn push_message(&self, message: LogMessage) {
-        // TODO
-    }
-
-    fn collect_syntax_errors<'t>(
-        &self,
-        input: &str,
-        tree: &'t interpreter::compile::RootTree,
-        file: &'t Arc<PathBuf>,
-        span: SourceReference,
-    ) {
-        // TODO
-    }
-}
-
-struct RuntimeJob {
-    expression: String,
-    egui_context: egui::Context,
-    response: oneshot::Sender<RuntimeOutput>,
-    shutdown_signal: Arc<AtomicBool>,
-}
-
-struct PendingJob {
-    shutdown_signal: Arc<AtomicBool>,
-    response: Mutex<oneshot::Receiver<RuntimeOutput>>,
-}
-
-enum RuntimeValue {
-    TextValue(String),
-    LineString(LineString),
-    Polygon {
-        polygon: Polygon,
-        mesh: Arc<Mesh>,
-    },
-    PolygonSet {
-        polygon_set: PolygonSet,
-        meshes: Vec<Arc<Mesh>>,
-    },
-    ManifoldMesh(ManifoldMeshState),
-}
-
-struct ManifoldMeshState {
-    manifold: ManifoldMesh3D,
-    uploaded_to_gpu: bool,
-}
-
-enum RuntimeError {
-    Execution(interpreter::Error),
-    Parse(String),
-    Compile(String),
-}
-
-impl Display for RuntimeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RuntimeError::Execution(error) => error.fmt(f),
-            RuntimeError::Parse(error) => error.fmt(f),
-            RuntimeError::Compile(error) => error.fmt(f),
-        }
-    }
-}
-
-struct RuntimeOutput {
-    result: Result<RuntimeValue, RuntimeError>,
-    files_to_watch: HashSet<Arc<PathBuf>>,
-}
-
-fn runtime(expression_rx: mpsc::Receiver<RuntimeJob>) {
-    let database = BuiltinCallableDatabase::new();
-    let prelude = build_prelude(&database);
-    let stack_top = StackScope::top(&prelude);
-
-    let mut parser = new_parser();
-    let repl_file = Arc::new(PathBuf::from("repl.ccm"));
-
-    // TODO we should prefer using `.ccad` in the local directory.
-    // Also we shouldn't be unwrapping on that.
-    let store_directory = TempDir::new().unwrap();
-    let store = Store::FsStore(FsStore::new(store_directory.path()));
-
-    let mut run_expression = |shutdown_signal: Arc<AtomicBool>, input: String| -> RuntimeOutput {
-        let files = Mutex::new(HashMap::new());
-        let tree = match parser
-            .parse(&input, None)
-            .map_err(|error| RuntimeError::Parse(format!("Failed to parse input: {error:?}")))
-        {
-            Ok(tree) => tree,
-            Err(error) => {
-                return RuntimeOutput {
-                    result: Err(error),
-                    files_to_watch: HashSet::new(),
-                };
-            }
-        };
-        let root = match compile(&repl_file, &input, &tree)
-            .map_err(|error| RuntimeError::Compile(format!("Failed to compile: {error:?}")))
-        {
-            Ok(root) => root,
-            Err(error) => {
-                return RuntimeOutput {
-                    result: Err(error),
-                    files_to_watch: HashSet::new(),
-                };
-            }
-        };
-
-        let log = GuiLogger;
-
-        let context = ExecutionContext {
-            shutdown_singal: &shutdown_signal,
-            log: &log as &dyn RuntimeLog,
-            stack_trace: &StackTrace::top(root.reference.clone()),
-            stack: &stack_top,
-            database: &database,
-            store: &store,
-            file_cache: &files,
-            working_directory: Path::new("."),
-            import_limit: 100,
-        };
-
-        let expression_result = execute_expression(&context, &root);
-
-        let result = match expression_result {
-            Ok(Value::LineString(line_string)) => Ok(RuntimeValue::LineString(line_string)),
-            Ok(Value::Polygon(polygon)) => {
-                let mesh = build_fill_mesh_from_polygon(&polygon.0);
-
-                Ok(RuntimeValue::Polygon { polygon, mesh })
-            }
-            Ok(Value::PolygonSet(polygon_set)) => {
-                let meshes = polygon_set
-                    .0
-                    .iter()
-                    .map(build_fill_mesh_from_polygon)
-                    .collect();
-
-                Ok(RuntimeValue::PolygonSet {
-                    polygon_set,
-                    meshes,
-                })
-            }
-            Ok(Value::ManifoldMesh3D(manifold)) => {
-                Ok(RuntimeValue::ManifoldMesh(ManifoldMeshState {
-                    manifold,
-                    uploaded_to_gpu: false,
-                }))
-            }
-            Ok(value) => {
-                let mut text = String::new();
-                value.format(&context, &mut text, Style::Default, None).ok();
-
-                Ok(RuntimeValue::TextValue(text))
-            }
-            Err(error) => Err(RuntimeError::Execution(error)),
-        };
-
-        // TODO we can also use this for better error message formatting.
-        let files = files.into_inner().expect("File hashmap was poisoned");
-        let files_to_watch: HashSet<Arc<PathBuf>> = files.keys().cloned().collect();
-
-        RuntimeOutput {
-            result,
-            files_to_watch,
-        }
-    };
-
-    // An error indicates that there are no more senders and that we should shutdown.
-    while let Ok(command) = expression_rx.recv() {
-        let result = run_expression(command.shutdown_signal, command.expression);
-        command.response.send(result).ok();
-        command.egui_context.request_repaint();
-    }
-}
-
-#[derive(Resource)]
-struct CommandCAD {
-    expression: String,
-    expression_tx: mpsc::Sender<RuntimeJob>,
-    active_job: Option<PendingJob>,
-    last_result: Option<Result<RuntimeValue, RuntimeError>>,
-    watched_files: HashSet<Arc<PathBuf>>,
-    file_watcher: Result<RecommendedWatcher, notify::Error>,
-    file_updates_rx: Mutex<mpsc::Receiver<Result<notify::Event, notify::Error>>>,
-    view_state: ViewState,
-}
-
-impl CommandCAD {
-    fn spawn_job(&mut self, ctx: &egui::Context) {
-        if let Some(pending_job) = self.active_job.take() {
-            pending_job
-                .shutdown_signal
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-
-        let shutdown_signal = Arc::new(AtomicBool::new(false));
-
-        let (response_tx, response_rx) = oneshot::channel();
-
-        let pending_job = PendingJob {
-            shutdown_signal: shutdown_signal.clone(),
-            response: Mutex::new(response_rx),
-        };
-
-        let runtime_job = RuntimeJob {
-            expression: self.expression.clone(),
-            egui_context: ctx.clone(),
-            response: response_tx,
-            shutdown_signal,
-        };
-
-        self.expression_tx
-            .send(runtime_job)
-            .expect("Runtime thread terminated early");
-        self.active_job = Some(pending_job);
-    }
-
-    fn check_if_watched_files_changed(&mut self) -> bool {
-        match self.file_updates_rx.get_mut().unwrap().try_recv() {
-            Ok(Ok(event)) => matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)),
-            // TODO log that or something.
-            Ok(Err(error)) => {
-                // TODO this can be logged better.
-                let notice_me = 0;
-                eprintln!("{error}");
-                false
-            }
-            Err(_) => false,
-        }
-    }
-
-    fn check_job(&mut self) {
-        if let Some(active_job) = &mut self.active_job {
-            // This could fail by the thread being closed, but that shouldn't happen and won't
-            // cause us to panic.
-            if let Ok(output) = active_job.response.get_mut().unwrap().try_recv() {
-                self.last_result = Some(output.result);
-                self.active_job = None;
-
-                // Collect a list of files to watch.
-                if let Ok(watcher) = &mut self.file_watcher {
-                    // We used to be very picky, only adding and removing files from the wather as
-                    // needed. It was eventually discovered that sometimes watchers that were not
-                    // removed (and were not supposed to be removed) would fail to trigger on later
-                    // edits of files, so now we just remove and re-add everything to make sure
-                    // we're in a good known state.
-
-                    let mut paths = watcher.paths_mut();
-                    for path in self.watched_files.iter() {
-                        // TODO log errors and success here.
-                        paths.remove(path).ok();
-                    }
-
-                    for path in output.files_to_watch.iter() {
-                        // TODO log errors and success here.
-                        paths.add(path, notify::RecursiveMode::NonRecursive).ok();
-                    }
-                }
-
-                self.watched_files = output.files_to_watch;
-            }
-        }
-    }
 }
 
 fn setup(
     mut commands: Commands,
     event_loop_proxy: Res<EventLoopProxyWrapper>,
-    mut egui_global_settings: ResMut<EguiGlobalSettings>,
 ) {
-    egui_global_settings.auto_create_primary_context = true;
-
     // Only update when there are events worth updating for.
     commands.insert_resource(WinitSettings::desktop_app());
 
     let (expression_tx, expression_rx) = mpsc::channel();
-    std::thread::spawn(|| runtime(expression_rx));
+    std::thread::spawn(|| job_executor(expression_rx));
+
+    let (response, _) = oneshot::channel();
+    expression_tx
+        .send(Job {
+            expression: "std.import(path = \"examples/modeling/mesh.ccm\")::get(i = 0u)".into(),
+            response,
+            shutdown_signal: Arc::new(AtomicBool::new(false)),
+        })
+        .unwrap();
 
     let (file_updates_tx, file_updates_rx) = mpsc::channel();
     let file_updates_rx = Mutex::new(file_updates_rx);
@@ -373,116 +115,455 @@ fn setup(
             .ok();
     });
 
-    commands.insert_resource(CommandCAD {
+    commands.insert_resource(ExpressionField {
         expression: String::new(),
+    });
+
+    commands.insert_resource(JobBridge {
         expression_tx,
         active_job: None,
         last_result: None,
         watched_files: HashSet::new(),
         file_watcher,
         file_updates_rx,
-        view_state: ViewState {
-            pixels_per_meter: 100.0,
-            view_state_2d: ViewState2D::default(),
-            // view_state_3d: ViewState3D::new(cc),
-        },
     });
 
-    commands.spawn(Camera2d);
+    let mut view_state = ViewState {
+        zoom: 10.0,
+        offset: Vec2::ZERO,  
+    };
+    view_state.set_pixels_per_meter(100.0);
+    commands.insert_resource(view_state);
+    commands.insert_resource(ViewState2d);
+    commands.insert_resource(ViewState3d);
 }
 
-fn render_ui(mut command_cad: ResMut<CommandCAD>, mut contexts: EguiContexts) -> Result {
+#[derive(Debug)]
+struct GuiLogger;
+
+impl RuntimeLog for GuiLogger {
+    fn push_message(&self, message: LogMessage) {
+        // TODO
+    }
+
+    fn collect_syntax_errors<'t>(
+        &self,
+        input: &str,
+        tree: &'t interpreter::compile::RootTree,
+        file: &'t Arc<PathBuf>,
+        span: SourceReference,
+    ) {
+        // TODO
+    }
+}
+
+struct Job {
+    expression: String,
+    response: oneshot::Sender<RuntimeOutput>,
+    shutdown_signal: Arc<AtomicBool>,
+}
+
+impl std::fmt::Debug for Job {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeJob")
+            .field("expression", &self.expression)
+            .field("shutdown_signal", &self.shutdown_signal)
+            .finish()
+    }
+}
+
+struct PendingJob {
+    shutdown_signal: Arc<AtomicBool>,
+    response: Mutex<oneshot::Receiver<RuntimeOutput>>,
+}
+
+enum JobOutput {
+    TextValue(String),
+    LineString(LineString),
+    Polygon {
+        polygon: Polygon,
+        mesh: Arc<Mesh>,
+    },
+    PolygonSet {
+        polygon_set: PolygonSet,
+        meshes: Vec<Arc<Mesh>>,
+    },
+    ManifoldMesh(ManifoldMeshState),
+}
+
+struct ManifoldMeshState {
+    manifold: ManifoldMesh3D,
+    uploaded_to_gpu: bool,
+}
+
+enum JobError {
+    Execution(interpreter::Error),
+    Parse(String),
+    Compile(String),
+}
+
+impl Display for JobError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JobError::Execution(error) => error.fmt(f),
+            JobError::Parse(error) => error.fmt(f),
+            JobError::Compile(error) => error.fmt(f),
+        }
+    }
+}
+
+struct RuntimeOutput {
+    result: Result<JobOutput, JobError>,
+    files_to_watch: HashSet<Arc<PathBuf>>,
+}
+
+fn job_executor(expression_rx: mpsc::Receiver<Job>) {
+    let database = BuiltinCallableDatabase::new();
+    let prelude = build_prelude(&database);
+    let stack_top = StackScope::top(&prelude);
+
+    let mut parser = new_parser();
+    let repl_file = Arc::new(PathBuf::from("repl.ccm"));
+
+    // TODO we should prefer using `.ccad` in the local directory.
+    // Also we shouldn't be unwrapping on that.
+    let store_directory = TempDir::new().unwrap();
+    let store = Store::FsStore(FsStore::new(store_directory.path()));
+
+    let mut run_expression = |shutdown_signal: Arc<AtomicBool>, input: String| -> RuntimeOutput {
+        let files = Mutex::new(HashMap::new());
+        let tree = match parser
+            .parse(&input, None)
+            .map_err(|error| JobError::Parse(format!("Failed to parse input: {error:?}")))
+        {
+            Ok(tree) => tree,
+            Err(error) => {
+                return RuntimeOutput {
+                    result: Err(error),
+                    files_to_watch: HashSet::new(),
+                };
+            }
+        };
+        let root = match compile(&repl_file, &input, &tree)
+            .map_err(|error| JobError::Compile(format!("Failed to compile: {error:?}")))
+        {
+            Ok(root) => root,
+            Err(error) => {
+                return RuntimeOutput {
+                    result: Err(error),
+                    files_to_watch: HashSet::new(),
+                };
+            }
+        };
+
+        let log = GuiLogger;
+
+        let context = ExecutionContext {
+            shutdown_singal: &shutdown_signal,
+            log: &log as &dyn RuntimeLog,
+            stack_trace: &StackTrace::top(root.reference.clone()),
+            stack: &stack_top,
+            database: &database,
+            store: &store,
+            file_cache: &files,
+            working_directory: Path::new("."),
+            import_limit: 100,
+        };
+
+        let expression_result = execute_expression(&context, &root);
+
+        let result = match expression_result {
+            Ok(Value::LineString(line_string)) => Ok(JobOutput::LineString(line_string)),
+            Ok(Value::Polygon(polygon)) => {
+                let mesh = build_fill_mesh_from_polygon(&polygon.0);
+
+                Ok(JobOutput::Polygon { polygon, mesh })
+            }
+            Ok(Value::PolygonSet(polygon_set)) => {
+                let meshes = polygon_set
+                    .0
+                    .iter()
+                    .map(build_fill_mesh_from_polygon)
+                    .collect();
+
+                Ok(JobOutput::PolygonSet {
+                    polygon_set,
+                    meshes,
+                })
+            }
+            Ok(Value::ManifoldMesh3D(manifold)) => Ok(JobOutput::ManifoldMesh(ManifoldMeshState {
+                manifold,
+                uploaded_to_gpu: false,
+            })),
+            Ok(value) => {
+                let mut text = String::new();
+                value.format(&context, &mut text, Style::Default, None).ok();
+
+                Ok(JobOutput::TextValue(text))
+            }
+            Err(error) => Err(JobError::Execution(error)),
+        };
+
+        // TODO we can also use this for better error message formatting.
+        let files = files.into_inner().expect("File hashmap was poisoned");
+        let files_to_watch: HashSet<Arc<PathBuf>> = files.keys().cloned().collect();
+
+        RuntimeOutput {
+            result,
+            files_to_watch,
+        }
+    };
+
+    // An error indicates that there are no more senders and that we should shutdown.
+    while let Ok(job) = expression_rx.recv() {
+        let result = run_expression(job.shutdown_signal, job.expression);
+        job.response.send(result).ok();
+        let notice_me = 0;
+        // TODO wake up Bevy to redraw the scene.
+    }
+}
+
+#[derive(Resource)]
+struct ExpressionField {
+    expression: String,
+}
+
+#[derive(Resource)]
+struct JobBridge {
+    expression_tx: mpsc::Sender<Job>,
+    active_job: Option<PendingJob>,
+    last_result: Option<Result<JobOutput, JobError>>,
+    watched_files: HashSet<Arc<PathBuf>>,
+    file_watcher: Result<RecommendedWatcher, notify::Error>,
+    file_updates_rx: Mutex<mpsc::Receiver<Result<notify::Event, notify::Error>>>,
+}
+
+impl JobBridge {
+    fn spawn_job(&mut self, job: &str) {
+        if let Some(pending_job) = self.active_job.take() {
+            pending_job
+                .shutdown_signal
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        let shutdown_signal = Arc::new(AtomicBool::new(false));
+
+        let (response_tx, response_rx) = oneshot::channel();
+
+        let pending_job = PendingJob {
+            shutdown_signal: shutdown_signal.clone(),
+            response: Mutex::new(response_rx),
+        };
+
+        let job = Job {
+            expression: job.into(),
+            response: response_tx,
+            shutdown_signal,
+        };
+
+        self.expression_tx
+            .send(job)
+            .expect("Runtime thread terminated early");
+        self.active_job = Some(pending_job);
+    }
+
+    fn check_if_watched_files_changed(&mut self) -> bool {
+        match self.file_updates_rx.get_mut().unwrap().try_recv() {
+            Ok(Ok(event)) => matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)),
+            // TODO log that or something.
+            Ok(Err(error)) => {
+                // TODO this can be logged better.
+                let notice_me = 0;
+                eprintln!("{error}");
+                false
+            }
+            Err(_) => false,
+        }
+    }
+}
+
+fn check_job(mut command_cad: ResMut<JobBridge>) {
+    let command_cad = &mut *command_cad;
+    if let Some(active_job) = &mut command_cad.active_job {
+        // This could fail by the thread being closed, but that shouldn't happen and won't
+        // cause us to panic.
+        if let Ok(output) = active_job.response.get_mut().unwrap().try_recv() {
+            command_cad.last_result = Some(output.result);
+            command_cad.active_job = None;
+
+            // Collect a list of files to watch.
+            if let Ok(watcher) = &mut command_cad.file_watcher {
+                // We used to be very picky, only adding and removing files from the wather as
+                // needed. It was eventually discovered that sometimes watchers that were not
+                // removed (and were not supposed to be removed) would fail to trigger on later
+                // edits of files, so now we just remove and re-add everything to make sure
+                // we're in a good known state.
+
+                let mut paths = watcher.paths_mut();
+                for path in command_cad.watched_files.iter() {
+                    // TODO log errors and success here.
+                    paths.remove(path).ok();
+                }
+
+                for path in output.files_to_watch.iter() {
+                    // TODO log errors and success here.
+                    paths.add(path, notify::RecursiveMode::NonRecursive).ok();
+                }
+            }
+
+            command_cad.watched_files = output.files_to_watch;
+        }
+    }
+}
+fn render_ui(
+    mut job_bridge: ResMut<JobBridge>,
+    mut view_state: ResMut<ViewState>,
+    mut view_state_2d: ResMut<ViewState2d>,
+    mut expression: ResMut<ExpressionField>,
+    mut contexts: EguiContexts,
+) -> Result {
     let ctx = contexts.ctx_mut()?;
 
-    egui::CentralPanel::default().show(ctx, |ui| {
-        let expression_editor = TextEdit::multiline(&mut command_cad.expression)
+    egui::TopBottomPanel::top("main_interface").show(ctx, |ui| {
+        let expression_editor = TextEdit::multiline(&mut expression.expression)
             .code_editor()
             .desired_width(f32::INFINITY)
             .hint_text("expression");
         if ui.add(expression_editor).changed()
-            || command_cad.check_if_watched_files_changed()
+            || job_bridge.check_if_watched_files_changed()
         {
-            command_cad.spawn_job(ctx);
+            job_bridge.spawn_job(expression.expression.as_str());
         }
-        let mut draw_area = ui.available_rect_before_wrap();
-        draw_area.min.y += 30.0; // We don't know how tall the status bar is at this time, so I
-                                 // just assume 30 and that seems to be working well enough.
+
+        let mut draw_area = ctx.viewport_rect();
+        draw_area.max.y -= 110.0;
+
         ui.horizontal(|ui| {
-            if command_cad.active_job.is_some() {
+            if job_bridge.active_job.is_some() {
                 ui.label(RichText::new("Working...").color(Color32::YELLOW));
             } else {
                 ui.label(RichText::new("Ready").color(Color32::GREEN));
             }
 
-            let command_cad = &mut *command_cad;
-            command_cad.view_state.view_state_2d.draw_interface(&mut command_cad.view_state.pixels_per_meter, ui, &command_cad.last_result, draw_area);
+            view_state_2d.draw_interface(&mut view_state, ui, &job_bridge.last_result, draw_area);
         });
 
-        if let Err(error) = &command_cad.file_watcher {
+        if let Err(error) = &job_bridge.file_watcher {
             ui.label(
                 RichText::new(format!("Failed to setup file watching: {error}\nOutput will not update automatically when files are modified"))
                     .color(Color32::YELLOW),
             );
         }
 
-        // Update the job status.
-        command_cad.check_job();
-
         // TODO Add some kind of scale legend.
 
-        let command_cad = &mut *command_cad;
+    });
 
-        match &mut command_cad.last_result {
-            None => {}
-            Some(Ok(RuntimeValue::TextValue(text))) => {
+    fn draw_thing(ctx: &mut egui::Context, draw: impl FnOnce(&mut egui::Ui, egui::Rect)) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let draw_area = ui.available_rect_before_wrap();
+            draw(ui, draw_area)
+        });
+    }
+        
+    ctx.input(|state| {
+        view_state.zoom += state.smooth_scroll_delta.y;
+        view_state.zoom = view_state.zoom.max(0.0);
+    });
+
+    match &mut job_bridge.last_result {
+        None => {}
+        Some(Ok(JobOutput::TextValue(text))) => {
+            draw_thing(ctx, |ui, _draw_area| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.label(text.as_str());
                 });
-            }
-            Some(Ok(RuntimeValue::LineString(line_string))) => {
-                let painter = command_cad.view_state.prep_for_painting(ui);
-                painter.add(paint_linestring(draw_area, &command_cad.view_state, StrokeKind::Middle, &line_string.0));
-            }
-            Some(Ok(RuntimeValue::Polygon { polygon, mesh})) => {
-                let painter = command_cad.view_state.prep_for_painting(ui);
-                paint_polygon(&painter, draw_area, &command_cad.view_state, &polygon.0, mesh.clone());
-            }
-            Some(Ok(RuntimeValue::PolygonSet { polygon_set, meshes })) => {
-                let painter = command_cad.view_state.prep_for_painting(ui);
-                for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
-                    paint_polygon(&painter, draw_area, &command_cad.view_state, polygon, mesh.clone());
-                }
-            }
-            Some(Ok(RuntimeValue::ManifoldMesh(manifold_state))) => {
-                let painter = command_cad.view_state.prep_for_painting(ui);
-                // command_cad.view_state.view_state_3d.paint(&command_cad.view_state, manifold_state, painter);
-            }
-            Some(Err(error)) => {
-                ui.label(RichText::new(format!("{error}")).color(Color32::RED));
-            }
+            });
         }
-    });
+        Some(Ok(JobOutput::LineString(line_string))) => {
+            draw_thing(ctx, |ui, draw_area| {
+                let painter = view_state.prep_for_painting(ui);
+                let pixels_per_meter = view_state.pixels_per_meter();
+                let center_offset = draw_area.center().to_vec2();
+                let view_offset = egui::Vec2::new(view_state.offset.x, view_state.offset.y);
+
+                let transform = TSTransform {
+                    scaling: pixels_per_meter,
+                    translation: center_offset + view_offset * pixels_per_meter,
+                };
+                painter.add(paint_linestring(
+                    &transform,
+                    StrokeKind::Middle,
+                    &line_string.0,
+                ));
+            });
+        }
+        Some(Ok(JobOutput::Polygon { polygon, mesh })) => {
+            draw_thing(ctx, |ui, draw_area| {
+                let painter = view_state.prep_for_painting(ui);
+                paint_polygon(
+                    &painter,
+                    draw_area,
+                    &view_state,
+                    &polygon.0,
+                    mesh.clone(),
+                );
+            });
+        }
+        Some(Ok(JobOutput::PolygonSet {
+            polygon_set,
+            meshes,
+        })) => {
+            draw_thing(ctx, |ui, draw_area| {
+                let painter = view_state.prep_for_painting(ui);
+                for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
+                    paint_polygon(
+                        &painter,
+                        draw_area,
+                        &view_state,
+                        polygon,
+                        mesh.clone(),
+                    );
+                }
+            });
+        }
+        Some(Ok(JobOutput::ManifoldMesh(_manifold_state))) => {
+            // Rendering for this is done in a different system.
+        }
+        Some(Err(error)) => {
+            draw_thing(ctx, |ui, _draw_area| {
+                ui.label(RichText::new(format!("{error}")).color(Color32::RED));
+            });
+        }
+    }
 
     Ok(())
 }
 
+#[derive(Resource)]
 struct ViewState {
-    pixels_per_meter: f32,
-    view_state_2d: ViewState2D,
-    // view_state_3d: ViewState3D,
+    zoom: f32,
+    offset: Vec2
 }
 
 impl ViewState {
+    // Percentage of scale per scale factor unit.
+    const SCALE_FACTOR: f32 = 1.01;
+
     fn prep_for_painting(&mut self, ui: &mut egui::Ui) -> Painter {
         let draw_area = ui.available_rect_before_wrap();
         let response = ui.allocate_rect(draw_area, Sense::DRAG);
-        ui.input(|state| {
-            self.pixels_per_meter += state.smooth_scroll_delta.y;
-            self.pixels_per_meter = self.pixels_per_meter.max(0.0);
-        });
-        self.view_state_2d.update(ui, &response);
-        // self.view_state_3d.update(ui, draw_area);
+        let delta = response.drag_delta() / self.pixels_per_meter();
+        self.offset += Vec2::new(delta.x, delta.y);
 
         Painter::new(ui.ctx().clone(), ui.layer_id(), draw_area)
+    }
+
+    pub fn pixels_per_meter(&self) -> f32 {
+        Self::SCALE_FACTOR.powf(self.zoom)
+    }
+
+    pub fn set_pixels_per_meter(&mut self, pixels_per_meter: f32) {
+        self.zoom = pixels_per_meter.log(Self::SCALE_FACTOR);
     }
 }

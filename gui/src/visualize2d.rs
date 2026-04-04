@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use bevy::ecs::resource::Resource;
 /*
  * Copyright 2026 James Carl
  * AGPL-3.0-only or AGPL-3.0-or-later
@@ -18,27 +19,25 @@ use std::sync::Arc;
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 use egui::{
-    Color32, Mesh, Painter, Pos2, Rect, Response, Shape, StrokeKind, Ui, Vec2,
+    Color32, Mesh, Painter, Pos2, Rect, Shape, StrokeKind, Ui, Vec2,
     emath::TSTransform,
     epaint::{ColorMode, PathShape, PathStroke},
 };
 use interpreter::geo::{BoundingRect, TriangulateEarcut};
 
-use crate::{RuntimeError, ViewState};
+use crate::{JobError, ViewState};
 
-use super::RuntimeValue;
+use super::JobOutput;
 
-#[derive(Debug, Default)]
-pub struct ViewState2D {
-    offset: Vec2,
-}
+#[derive(Debug, Default, Resource)]
+pub struct ViewState2d;
 
-impl ViewState2D {
-    fn fit_to_screen(&mut self, pixels_per_meter: &mut f32, value: &RuntimeValue, draw_area: Rect) {
+impl ViewState2d {
+    fn fit_to_screen(&mut self, view_state: &mut ViewState, value: &JobOutput, draw_area: Rect) {
         let bounds = match value {
-            RuntimeValue::LineString(line_string) => line_string.0.bounding_rect(),
-            RuntimeValue::Polygon { polygon, .. } => polygon.0.bounding_rect(),
-            RuntimeValue::PolygonSet { polygon_set, .. } => polygon_set.0.bounding_rect(),
+            JobOutput::LineString(line_string) => line_string.0.bounding_rect(),
+            JobOutput::Polygon { polygon, .. } => polygon.0.bounding_rect(),
+            JobOutput::PolygonSet { polygon_set, .. } => polygon_set.0.bounding_rect(),
             _ => None,
         };
 
@@ -46,11 +45,11 @@ impl ViewState2D {
             let size = bounds.max() - bounds.min();
             let dx = draw_area.x_range().span() / size.x as f32;
             let dy = draw_area.y_range().span() / size.y as f32;
-            *pixels_per_meter = dx.min(dy);
+            let pixels_per_meter = dx.min(dy);
+            view_state.set_pixels_per_meter(pixels_per_meter);
 
             let center = bounds.center();
-            let offset = Vec2::new(center.x as f32, center.y as f32) * *pixels_per_meter;
-            self.offset = offset;
+            view_state.offset = bevy::prelude::Vec2::new(-center.x as f32, center.y as f32);
         } else {
             // We don't know how to fit this. Just assume the default.
             *self = Self::default();
@@ -59,43 +58,33 @@ impl ViewState2D {
 
     pub fn draw_interface(
         &mut self,
-        pixels_per_meter: &mut f32,
+        view_state: &mut ViewState,
         ui: &mut Ui,
-        last_result: &Option<Result<RuntimeValue, RuntimeError>>,
+        last_result: &Option<Result<JobOutput, JobError>>,
         draw_area: Rect,
     ) {
         if let Some(Ok(value)) = last_result
             && matches!(
                 value,
-                RuntimeValue::LineString(_)
-                    | RuntimeValue::Polygon { .. }
-                    | RuntimeValue::PolygonSet { .. }
+                JobOutput::LineString(_) | JobOutput::Polygon { .. } | JobOutput::PolygonSet { .. }
             )
             && ui.button("Fit to screen").clicked()
         {
-            self.fit_to_screen(pixels_per_meter, value, draw_area);
+            self.fit_to_screen(view_state, value, draw_area);
         }
-    }
-
-    pub fn update(&mut self, _ui: &mut Ui, response: &Response) {
-        self.offset += response.drag_delta();
     }
 }
 
 pub fn paint_linestring(
-    draw_area: Rect,
-    view_state: &ViewState,
+    transform: &TSTransform,
     stroke_kind: StrokeKind,
     line_string: &interpreter::geo::LineString,
 ) -> Shape {
-    let center_offset = draw_area.center().to_vec2();
     let path = PathShape {
         points: line_string
             .coords()
             .map(|coord| {
-                Pos2::new(coord.x as f32, -coord.y as f32) * view_state.pixels_per_meter
-                    + center_offset
-                    + view_state.view_state_2d.offset
+                transform.mul_pos(Pos2::new(coord.x as f32, -coord.y as f32))
             })
             .collect(),
         closed: line_string.is_closed(),
@@ -137,19 +126,23 @@ pub fn paint_polygon(
     polygon: &interpreter::geo::Polygon,
     mesh: Arc<Mesh>,
 ) {
-    // Render fill
+    let pixels_per_meter = view_state.pixels_per_meter();
     let center_offset = draw_area.center().to_vec2();
+    let view_offset = Vec2::new(view_state.offset.x, view_state.offset.y);
+
+    let transform = TSTransform {
+        scaling: pixels_per_meter,
+        translation: center_offset + view_offset * pixels_per_meter,
+    };
+
+    // Render fill
     let mut shape = Shape::Mesh(mesh);
-    shape.transform(TSTransform {
-        scaling: view_state.pixels_per_meter,
-        translation: center_offset + view_state.view_state_2d.offset,
-    });
+    shape.transform(transform);
     painter.add(shape);
 
     // Render exterior
     painter.add(paint_linestring(
-        draw_area,
-        view_state,
+            &transform,
         StrokeKind::Inside,
         polygon.exterior(),
     ));
@@ -157,8 +150,7 @@ pub fn paint_polygon(
     // Render interior.
     for interior in polygon.interiors() {
         painter.add(paint_linestring(
-            draw_area,
-            view_state,
+            &transform,
             StrokeKind::Outside,
             interior,
         ));

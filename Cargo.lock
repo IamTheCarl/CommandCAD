@@ -3651,7 +3651,6 @@ dependencies = [
  "anyhow",
  "bevy",
  "bevy_egui",
- "bytemuck",
  "egui",
  "interpreter",
  "nalgebra",

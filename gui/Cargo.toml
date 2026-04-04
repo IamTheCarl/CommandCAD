@@ -10,7 +10,6 @@ anyhow = { workspace = true }
 oneshot = "0.2"
 tempfile = { workspace = true }
 notify = "8"
-bytemuck = "1"
 nalgebra = { workspace = true }
 bevy = "0.18.1"
 bevy_egui = "0.39.1"
