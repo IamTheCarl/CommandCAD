@@ -1,3 +1,4 @@
+use bevy::anti_alias::smaa::Smaa;
 use bevy::asset::RenderAssetUsages;
 /*
  * Copyright 2026 James Carl
@@ -16,13 +17,10 @@ use bevy::asset::RenderAssetUsages;
  * You should have received a copy of the GNU Affero General Public License along with this
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
-use bevy::camera::{ScalingMode};
-use bevy::{
-    color::palettes::css::*,
-    pbr::wireframe::{Wireframe, WireframeColor},
-    prelude::*,
-};
+use bevy::camera::ScalingMode;
+use bevy::prelude::*;
 use bevy::{ecs::system::Query, mesh::PrimitiveTopology};
+use bevy_mod_outline::{AsyncSceneInheritOutline, OutlineMode, OutlineVolume};
 
 use crate::{JobBridge, JobOutput, ViewState};
 
@@ -38,7 +36,6 @@ impl ViewState3d {
     const POINTER_SCALE: f32 = 0.007;
 
     pub fn track_movement(&mut self, input_state: &egui::InputState) {
-        
         if input_state.pointer.secondary_down() {
             let drag_delta = input_state.pointer.delta();
 
@@ -47,8 +44,12 @@ impl ViewState3d {
             self.rotation_x -= drag_delta.y * Self::POINTER_SCALE;
             self.rotation_y += drag_delta.x * Self::POINTER_SCALE;
 
-            self.rotation_x = self.rotation_x.clamp(-std::f32::consts::PI, std::f32::consts::PI);
-            self.rotation_y = self.rotation_y.clamp(-std::f32::consts::PI, std::f32::consts::PI);
+            self.rotation_x = self
+                .rotation_x
+                .clamp(-std::f32::consts::PI, std::f32::consts::PI);
+            self.rotation_y = self
+                .rotation_y
+                .clamp(-std::f32::consts::PI, std::f32::consts::PI);
         }
     }
 }
@@ -61,7 +62,20 @@ pub fn setup_3d(mut commands: Commands) {
             ..OrthographicProjection::default_3d()
         }),
         Transform::from_xyz(0.0, 0.0, VIEW_Z_OFFSET).looking_at(Vec3::ZERO, Vec3::Y),
+        Smaa::default(),
     ));
+
+    commands.spawn((
+        DirectionalLight {
+            illuminance: light_consts::lux::AMBIENT_DAYLIGHT,
+            ..default()
+        },
+        Transform::from_xyz(2.0, 4.0, -2.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+    commands.insert_resource(GlobalAmbientLight {
+        brightness: light_consts::lux::HALLWAY,
+        ..default()
+    });
 
     commands.insert_resource(ViewState3d::default());
 }
@@ -83,14 +97,13 @@ pub fn update_model_transforms(
     mut models: Query<&mut Transform, With<MeshModel>>,
 ) {
     for mut transform in &mut models {
-
         let mut new_transform = Transform::default();
 
         new_transform.rotate(-Quat::from_rotation_y(view_state_3d.rotation_y));
         new_transform.rotate(Quat::from_rotation_x(view_state_3d.rotation_x));
 
         new_transform.translation = Vec3::new(-view_state.offset.x, -view_state.offset.y, 0.0);
-        
+
         *transform = new_transform;
     }
 }
@@ -138,14 +151,23 @@ pub fn spawn_meshes(
         m.insert_attribute(Mesh::ATTRIBUTE_POSITION, pos);
         m.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vns);
 
+        let fill_color = egui::Color32::GRAY;
+        let wireframe_color = egui::Color32::WHITE;
+
         commands.spawn((
             Mesh3d(meshes.add(m).clone()),
-            MeshMaterial3d(materials.add(StandardMaterial { ..default() })),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::Srgba(Srgba::rgb(fill_color.r() as f32 / 255.0, fill_color.g() as f32 / 255.0, fill_color.b() as f32 / 255.0)),
+                ..default()
+            })),
             Transform::default(),
-            Wireframe,
-            WireframeColor {
-                color: BLACK.into(),
+            OutlineVolume {
+                visible: true,
+                width: 2.0,
+                colour: Color::Srgba(Srgba::rgb(wireframe_color.r() as f32 / 255.0, wireframe_color.g() as f32 / 255.0, wireframe_color.b() as f32 / 255.0)),
             },
+            AsyncSceneInheritOutline::default(),
+            OutlineMode::FloodFlatDoubleSided,
             MeshModel,
         ));
     }

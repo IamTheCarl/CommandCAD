@@ -28,7 +28,10 @@ use bevy::{
     prelude::*,
     winit::{EventLoopProxyWrapper, WinitSettings, WinitUserEvent},
 };
-use bevy_egui::{EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
+use bevy_egui::{
+    EguiContexts, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext,
+};
+use bevy_mod_outline::OutlinePlugin;
 use egui::{Color32, Mesh, Painter, RichText, StrokeKind, TextEdit, emath::TSTransform};
 use interpreter::{
     ExecutionContext, FsStore, LogMessage, RuntimeLog, SourceReference, StackScope, StackTrace,
@@ -62,7 +65,7 @@ fn main() {
     }))
     .insert_resource(WinitSettings::desktop_app())
     .add_plugins(EguiPlugin::default())
-    .add_plugins(WireframePlugin::default())
+    .add_plugins(OutlinePlugin)
     .add_systems(Startup, (setup, setup_3d))
     .add_systems(
         Update,
@@ -70,17 +73,14 @@ fn main() {
             spawn_meshes,
             check_job.before(spawn_meshes),
             update_3d_camera,
-            update_model_transforms
+            update_model_transforms,
         ),
     )
     .add_systems(EguiPrimaryContextPass, render_ui);
     app.run();
 }
 
-fn setup(
-    mut commands: Commands,
-    event_loop_proxy: Res<EventLoopProxyWrapper>,
-) {
+fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
     // Only update when there are events worth updating for.
     commands.insert_resource(WinitSettings::desktop_app());
 
@@ -424,6 +424,7 @@ fn render_ui(
     mut view_state_3d: ResMut<ViewState3d>,
     mut expression: ResMut<ExpressionField>,
     mut contexts: EguiContexts,
+    mut clear_color: ResMut<ClearColor>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
 
@@ -460,6 +461,10 @@ fn render_ui(
 
         // TODO Add some kind of scale legend.
 
+        // Inform Bevy of our background color.
+        let visuals = ui.visuals();
+        let background_color = visuals.panel_fill;
+        *clear_color = ClearColor(Color::Srgba(Srgba::rgb(background_color.r() as f32 / 255.0, background_color.g() as f32 / 255.0, background_color.b() as f32 / 255.0)));
     });
 
     fn draw_thing(ctx: &mut egui::Context, draw: impl FnOnce(&mut egui::Ui, egui::Rect)) {
@@ -556,7 +561,7 @@ impl ViewState {
     fn track_movement(&mut self, input_state: &egui::InputState) {
         self.zoom += input_state.smooth_scroll_delta.y;
         self.zoom = self.zoom.max(0.0);
-        
+
         if input_state.pointer.primary_down() {
             let drag_delta = input_state.pointer.delta();
             let delta = drag_delta / self.pixels_per_meter();
