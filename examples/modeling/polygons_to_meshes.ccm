@@ -1,0 +1,5 @@
+let
+  box = (std.polygon.box(size = {1cm, 2cm})  + {1cm, 0cm})::extrude(height = 3cm);
+  arch = (std.polygon.box(size = {1cm, 1cm})  + {1cm, 0cm})::revolve(divisions = 12u, angle = 1rad);
+in
+  box + arch

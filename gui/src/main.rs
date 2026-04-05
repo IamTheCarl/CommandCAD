@@ -24,12 +24,11 @@ use std::{
 };
 
 use bevy::{
-    pbr::wireframe::WireframePlugin,
     prelude::*,
-    winit::{EventLoopProxyWrapper, WinitSettings, WinitUserEvent},
+    winit::{EventLoopProxy, EventLoopProxyWrapper, WinitSettings, WinitUserEvent},
 };
 use bevy_egui::{
-    EguiContexts, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext,
+    EguiContexts, EguiPlugin, EguiPrimaryContextPass
 };
 use bevy_mod_outline::OutlinePlugin;
 use egui::{Color32, Mesh, Painter, RichText, StrokeKind, TextEdit, emath::TSTransform};
@@ -73,7 +72,7 @@ fn main() {
             spawn_meshes,
             check_job.before(spawn_meshes),
             update_3d_camera,
-            update_model_transforms,
+            update_model_transforms.after(spawn_meshes),
         ),
     )
     .add_systems(EguiPrimaryContextPass, render_ui);
@@ -85,7 +84,8 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
     commands.insert_resource(WinitSettings::desktop_app());
 
     let (expression_tx, expression_rx) = mpsc::channel();
-    std::thread::spawn(|| job_executor(expression_rx));
+    let executor_event_loop_proxy = event_loop_proxy.clone();
+    std::thread::spawn(move || job_executor(expression_rx, executor_event_loop_proxy));
 
     let (response, _) = oneshot::channel();
     expression_tx
@@ -99,7 +99,7 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
     let (file_updates_tx, file_updates_rx) = mpsc::channel();
     let file_updates_rx = Mutex::new(file_updates_rx);
 
-    let event_loop_proxy = event_loop_proxy.clone();
+    let wathcher_event_loop_proxy = event_loop_proxy.clone();
     let file_watcher = recommended_watcher(move |event: Result<notify::Event, _>| {
         // Notify and refresh the GUI whenever there's an update to one of the project files.
 
@@ -117,7 +117,7 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
         }
 
         file_updates_tx.send(event).ok();
-        event_loop_proxy
+        wathcher_event_loop_proxy
             .clone()
             .send_event(WinitUserEvent::WakeUp)
             .ok();
@@ -219,7 +219,7 @@ struct RuntimeOutput {
     files_to_watch: HashSet<Arc<PathBuf>>,
 }
 
-fn job_executor(expression_rx: mpsc::Receiver<Job>) {
+fn job_executor(expression_rx: mpsc::Receiver<Job>, event_loop_proxy: EventLoopProxy<WinitUserEvent>) {
     let database = BuiltinCallableDatabase::new();
     let prelude = build_prelude(&database);
     let stack_top = StackScope::top(&prelude);
@@ -320,8 +320,7 @@ fn job_executor(expression_rx: mpsc::Receiver<Job>) {
     while let Ok(job) = expression_rx.recv() {
         let result = run_expression(job.shutdown_signal, job.expression);
         job.response.send(result).ok();
-        let notice_me = 0;
-        // TODO wake up Bevy to redraw the scene.
+        event_loop_proxy.send_event(WinitUserEvent::WakeUp).ok();
     }
 }
 
@@ -417,6 +416,7 @@ fn check_job(mut command_cad: ResMut<JobBridge>) {
         }
     }
 }
+
 fn render_ui(
     mut job_bridge: ResMut<JobBridge>,
     mut view_state: ResMut<ViewState>,
