@@ -34,8 +34,8 @@ use crate::{
         scalar::{Length, UnwrapNotNan},
         vector::{Length3, Zero3},
         Boolean, BuiltinCallableDatabase, BuiltinFunction, DowncastError, File, IString,
-        MissingAttributeError, Object, Scalar, StaticType, StaticTypeName, Style, UnsignedInteger,
-        Value, ValueNone, ValueType, Vector3,
+        MissingAttributeError, Object, Scalar, StaticType, StaticTypeName, Style, Transform3d,
+        UnsignedInteger, Value, ValueNone, ValueType, Vector3,
     },
     ExecutionContext,
 };
@@ -233,6 +233,7 @@ impl Object for ManifoldMesh3D {
     fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "to_stl" => Ok(BuiltinFunction::new::<methods::ToStl>().into()),
+            "transform" => Ok(BuiltinFunction::new::<methods::Transform>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -311,6 +312,7 @@ pub mod methods {
     pub struct GenerateUvSphere;
 
     pub struct ToStl;
+    pub struct Transform;
 }
 
 fn unpack_radius(
@@ -552,6 +554,19 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                     Ok(File { path: Arc::new(path) })
                 }
             })
+        }
+    );
+    build_method!(
+        database,
+        methods::Transform, "ManifoldMesh3D::transform", (
+            context: &ExecutionContext,
+            this: ManifoldMesh3D,
+            t: Transform3d) -> ManifoldMesh3D
+        {
+            let mut this = this;
+            let manifold = Arc::make_mut(&mut this.0).transform(t.0).map_err(|error| error.to_error(context))?;
+
+            Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
 }

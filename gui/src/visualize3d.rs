@@ -125,8 +125,8 @@ pub fn spawn_meshes(
 
         // Start by removing the old model.
         for (entity, mesh) in mesh_models.iter() {
-            commands.entity(entity).despawn();
             meshes.remove(mesh.id());
+            commands.entity(entity).despawn();
         }
 
         // Now build our  mesh.

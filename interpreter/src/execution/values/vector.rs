@@ -31,8 +31,8 @@ pub type Vector4 = Vector<nalgebra::Vector4<Float>>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vector<I> {
-    dimension: Dimension,
-    value: I,
+    pub dimension: Dimension,
+    pub value: I,
 }
 
 impl<I> Eq for Vector<I> where I: PartialEq {}

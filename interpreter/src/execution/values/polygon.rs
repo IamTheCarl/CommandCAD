@@ -324,6 +324,12 @@ impl Object for Polygon {
             "into_set" => {
                 Ok(BuiltinFunction::new::<methods_and_functions::polygon::IntoSet>().into())
             }
+            "extrude" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::polygon::Extrude>().into())
+            }
+            "revolve" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::polygon::Revolve>().into())
+            }
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -452,6 +458,12 @@ impl Object for PolygonSet {
             "transform" => {
                 Ok(BuiltinFunction::new::<methods_and_functions::polygon_set::Transform>().into())
             }
+            "extrude" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::polygon::Extrude>().into())
+            }
+            "revolve" => {
+                Ok(BuiltinFunction::new::<methods_and_functions::polygon::Revolve>().into())
+            }
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -532,12 +544,15 @@ impl IterableObject for PolygonSetIterator {
 }
 
 pub mod methods_and_functions {
+    use boolmesh::prelude::ExtrudePoly;
     use common_data_types::{Dimension, Float, RawFloat};
     use geo::{Area, BoundingRect, Centroid, Point, Rect};
     use imstr::ImString;
 
     use super::{InteriorIterator, LineString, Polygon, PolygonSet};
-    use crate::values::scalar::UnwrapNotNan;
+    use crate::execution::errors::Raise as _;
+    use crate::values::manifold_mesh::ManifoldMesh3D;
+    use crate::values::scalar::{Angle, Length, UnwrapNotNan};
     use crate::values::Value;
     use crate::ExecutionResult;
     use crate::{build_function, build_method, values::BuiltinCallableDatabase};
@@ -601,6 +616,45 @@ pub mod methods_and_functions {
             dimension: Dimension::area(),
             value: Float::new(area).unwrap_not_nan(context)?,
         })
+    }
+
+    fn extrude<E>(
+        context: &ExecutionContext,
+        to_extrude: &E,
+        height: Length,
+        divisions: UnsignedInteger,
+        twist_radians: Angle,
+        scale_top: Length2,
+    ) -> ExecutionResult<ManifoldMesh3D>
+    where
+        E: ExtrudePoly<RawFloat>,
+    {
+        let manifold = to_extrude
+            .extrude(
+                *height.value,
+                divisions.0 as usize,
+                *twist_radians.value,
+                scale_top.raw_value(),
+            )
+            .map_err(|error| error.to_error(context))?;
+
+        Ok(ManifoldMesh3D(Arc::new(manifold)))
+    }
+
+    fn revolve<E>(
+        context: &ExecutionContext,
+        to_revolve: &E,
+        divisions: UnsignedInteger,
+        angle: Angle,
+    ) -> ExecutionResult<ManifoldMesh3D>
+    where
+        E: ExtrudePoly<RawFloat>,
+    {
+        let manifold = to_revolve
+            .revolve(divisions.0 as usize, *angle.value)
+            .map_err(|error| error.to_error(context))?;
+
+        Ok(ManifoldMesh3D(Arc::new(manifold)))
     }
 
     pub mod line_string {
@@ -834,6 +888,8 @@ pub mod methods_and_functions {
         pub struct Centroid;
         pub struct Transform;
         pub struct IntoSet;
+        pub struct Extrude;
+        pub struct Revolve;
 
         #[derive(Debug, Error)]
         enum CircleError {
@@ -879,7 +935,7 @@ pub mod methods_and_functions {
                     distance_between_points,
                     number_of_points,
                 ) {
-                    (Some(angle_between_points), None, None) => *angle_between_points.value,
+                    (Some(angle_between_points), None, None) => *angle_between_points.value / PI,
                     (None, Some(distance_between_points), None) => {
                         *distance_between_points.value / radius / PI
                     }
@@ -1098,6 +1154,30 @@ pub mod methods_and_functions {
                     Ok(PolygonSet(Arc::new(geo::MultiPolygon(vec![polygon]))))
                 }
             );
+            build_method!(
+                database,
+                Extrude, "Polygon::extrude", (
+                    context: &ExecutionContext,
+                    this: Polygon,
+                    height: Length,
+                    divisions: UnsignedInteger = UnsignedInteger::from(1).into(),
+                    twist_radians: Angle = Scalar { dimension: Dimension::angle(), value: Float::new(0.0).unwrap() }.into(),
+                    scale_top: Length2 = Vector2 { dimension: Dimension::length(), value: nalgebra::Vector2::new(1.0, 1.0) }.into()) -> ManifoldMesh3D
+                {
+                    extrude(context, &*this.0, height, divisions, twist_radians, scale_top)
+                }
+            );
+            build_method!(
+                database,
+                Revolve, "Polygon::revolve", (
+                    context: &ExecutionContext,
+                    this: Polygon,
+                    divisions: UnsignedInteger,
+                    angle: Angle = Scalar { dimension: Dimension::angle(), value: Float::new(std::f64::consts::PI * 2.0).unwrap() }.into()) -> ManifoldMesh3D
+                {
+                    revolve(context, &*this.0, divisions, angle)
+                }
+            );
         }
     }
 
@@ -1113,6 +1193,8 @@ pub mod methods_and_functions {
         pub struct BoundingBox;
         pub struct Centroid;
         pub struct Transform;
+        pub struct Extrude;
+        pub struct Revolve;
 
         pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             build_function!(
@@ -1188,6 +1270,30 @@ pub mod methods_and_functions {
                     Arc::make_mut(&mut this.0).apply_transform(&t.0);
 
                     Ok(this)
+                }
+            );
+            build_method!(
+                database,
+                Extrude, "PolygonSet::extrude", (
+                    context: &ExecutionContext,
+                    this: Polygon,
+                    height: Length,
+                    divisions: UnsignedInteger = UnsignedInteger::from(1).into(),
+                    twist_radians: Angle = Scalar { dimension: Dimension::angle(), value: Float::new(0.0).unwrap() }.into(),
+                    scale_top: Length2 = Vector2 { dimension: Dimension::length(), value: nalgebra::Vector2::new(1.0, 1.0) }.into()) -> ManifoldMesh3D
+                {
+                    extrude(context, &*this.0, height, divisions, twist_radians, scale_top)
+                }
+            );
+            build_method!(
+                database,
+                Revolve, "PolygonSet::revolve", (
+                    context: &ExecutionContext,
+                    this: Polygon,
+                    divisions: UnsignedInteger,
+                    angle: Angle = Scalar { dimension: Dimension::angle(), value: Float::new(std::f64::consts::PI * 2.0).unwrap() }.into()) -> ManifoldMesh3D
+                {
+                    revolve(context, &*this.0, divisions, angle)
                 }
             );
         }

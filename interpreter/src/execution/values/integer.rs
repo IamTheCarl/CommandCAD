@@ -16,6 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use common_data_types::{Dimension, Float, RawFloat};
 use enum_downcast::{AsVariant, IntoVariant};
 use num_traits::{
     pow::checked_pow, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, One, ToPrimitive,
@@ -40,7 +41,7 @@ use crate::{
     },
     values::{
         iterators::{IterableObject, ValueIterator},
-        Boolean,
+        Boolean, Scalar,
     },
 };
 
@@ -265,6 +266,10 @@ where
                 <<I as IntOps>::MethodSet as methods::MethodSet>::Midpoint,
             >()
             .into()),
+            "to_scalar" => Ok(BuiltinFunction::new::<
+                <<I as IntOps>::MethodSet as methods::MethodSet>::ToScalar,
+            >()
+            .into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -336,6 +341,7 @@ trait IntOps:
     fn is_positive(&self) -> bool;
     fn is_negative(&self) -> bool;
     fn midpoint(&self, rhs: Self) -> Self;
+    fn to_scalar(&self) -> Scalar;
 
     fn increment(&self) -> Self;
     fn decrement(&self) -> Self;
@@ -419,6 +425,13 @@ impl IntOps for i64 {
     }
     fn decrement(&self) -> Self {
         self - 1
+    }
+
+    fn to_scalar(&self) -> Scalar {
+        Scalar {
+            dimension: Dimension::zero(),
+            value: Float::new(*self as RawFloat).unwrap(),
+        }
     }
 }
 
@@ -519,6 +532,13 @@ impl IntOps for u64 {
     fn decrement(&self) -> Self {
         self - 1
     }
+
+    fn to_scalar(&self) -> Scalar {
+        Scalar {
+            dimension: Dimension::zero(),
+            value: Float::new(*self as RawFloat).unwrap(),
+        }
+    }
 }
 
 impl StaticTypeName for Integer<u64> {
@@ -562,6 +582,8 @@ mod methods {
         type IsPositive;
         type IsNegative;
         type Midpoint;
+
+        type ToScalar;
     }
 
     macro_rules! build_method_set {
@@ -583,6 +605,7 @@ mod methods {
                 pub struct [<$name IsPositive>];
                 pub struct [<$name IsNegative>];
                 pub struct [<$name Midpoint>];
+                pub struct [<$name ToScalar>];
 
                 pub struct [<$name MethodSet>];
                 impl MethodSet for [<$name MethodSet>] {
@@ -602,6 +625,7 @@ mod methods {
                     type IsPositive = [<$name IsPositive>];
                     type IsNegative = [<$name IsNegative>];
                     type Midpoint = [<$name Midpoint>];
+                    type ToScalar = [<$name ToScalar>];
                 }
             }
         };
@@ -764,6 +788,15 @@ mod methods {
                 Ok(Integer::<I>::from(this.0.midpoint(rhs.0)))
             }
         );
+        build_method!(
+            database,
+            <I::MethodSet as MethodSet>::ToScalar, format!("{}::to_scalar", Integer::<I>::static_type_name()), (
+                context: &ExecutionContext,
+                this: Integer<I>
+            ) -> Scalar {
+                Ok(this.0.to_scalar())
+            }
+        );
     }
 }
 
@@ -895,7 +928,7 @@ where
 #[cfg(test)]
 mod test {
     use crate::{
-        execution::{test_run, values::Boolean},
+        execution::{run_assert_eq, test_run, values::Boolean},
         values::UnsupportedOperationError,
     };
 
@@ -1438,5 +1471,11 @@ mod test {
             test_run("std.range.SInt(start = 4i, end = 1i, inclusive = true, reverse = true)::collect_list() == [4i, 3i, 2i, 1i]")
                 .unwrap();
         assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn to_scalar() {
+        run_assert_eq("1u::to_scalar()", "1");
+        run_assert_eq("1i::to_scalar()", "1");
     }
 }
