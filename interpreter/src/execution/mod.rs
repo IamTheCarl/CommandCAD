@@ -19,7 +19,7 @@
 use std::{
     borrow::Cow,
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
@@ -156,32 +156,28 @@ pub fn find_all_variable_accesses_in_expression(
             Ok(())
         }
         Expression::LetIn(ast_node) => {
+            // Collect environment dependencies of all our variable assignments.
+            let mut variable_names = HashSet::new();
             for assignment in ast_node.node.assignments.iter() {
                 find_all_variable_accesses_in_expression(
                     &assignment.node.value.node,
-                    access_collector,
+                    &mut |variable_name| {
+                        if !variable_names.contains(&variable_name.node) {
+                            access_collector(variable_name)?;
+                        }
+
+                        Ok(())
+                    },
                 )?;
+                variable_names.insert(assignment.node.ident.node.clone());
             }
 
-            let variable_names: Vec<&ImString> = {
-                let mut variable_names = Vec::with_capacity(ast_node.node.assignments.len());
-
-                for argument in ast_node.node.assignments.iter() {
-                    variable_names.push(&argument.node.ident.node);
-                }
-
-                // We typically won't have more than 6 arguments, so a binary search will typically
-                // outperform a hashset.
-                variable_names.sort();
-
-                variable_names
-            };
-
+            // Report wanted variables that we also don't provide.
             find_all_variable_accesses_in_expression(
                 &ast_node.node.expression.node,
                 &mut move |variable_name| {
-                    if variable_names.binary_search(&&variable_name.node).is_err() {
-                        // This is not an argument, which means it must be captured from the environment.
+                    if !variable_names.contains(&variable_name.node) {
+                        // We do not provide this, so it must have been captured by environment.
                         access_collector(variable_name)?;
                     }
 
@@ -782,6 +778,15 @@ mod test {
     #[test]
     fn let_in() {
         let product = test_run("let value = 23u; in value").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(23).into());
+    }
+
+    #[test]
+    fn nested_let_in() {
+        let product = test_run(
+            "let a = 23u; closure = () -> std.types.UInt: let value = a; in value; in closure()",
+        )
+        .unwrap();
         assert_eq!(product, values::UnsignedInteger::from(23).into());
     }
 
