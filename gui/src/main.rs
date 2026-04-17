@@ -24,8 +24,7 @@ use std::{
 };
 
 use bevy::{
-    prelude::*,
-    winit::{EventLoopProxy, EventLoopProxyWrapper, WinitSettings, WinitUserEvent},
+    pbr::wireframe::WireframePlugin, prelude::*, winit::{EventLoopProxy, EventLoopProxyWrapper, WinitSettings, WinitUserEvent}
 };
 use bevy_egui::{
     EguiContexts, EguiPlugin, EguiPrimaryContextPass
@@ -65,6 +64,7 @@ fn main() {
     .insert_resource(WinitSettings::desktop_app())
     .add_plugins(EguiPlugin::default())
     .add_plugins(OutlinePlugin)
+    .add_plugins(WireframePlugin::default())
     .add_systems(Startup, (setup, setup_3d))
     .add_systems(
         Update,
@@ -87,14 +87,15 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
     let executor_event_loop_proxy = event_loop_proxy.clone();
     std::thread::spawn(move || job_executor(expression_rx, executor_event_loop_proxy));
 
-    let (response, _) = oneshot::channel();
-    expression_tx
-        .send(Job {
-            expression: "std.import(path = \"examples/modeling/mesh.ccm\")::get(i = 0u)".into(),
-            response,
-            shutdown_signal: Arc::new(AtomicBool::new(false)),
-        })
-        .unwrap();
+    // TODO permit passing an "initial job".
+    // let (response, _) = oneshot::channel();
+    // expression_tx
+    //     .send(Job {
+    //         expression: "std.import(path = \"examples/modeling/mesh.ccm\")::get(i = 0u)".into(),
+    //         response,
+    //         shutdown_signal: Arc::new(AtomicBool::new(false)),
+    //     })
+    //     .unwrap();
 
     let (file_updates_tx, file_updates_rx) = mpsc::channel();
     let file_updates_rx = Mutex::new(file_updates_rx);

@@ -1934,7 +1934,6 @@ dependencies = [
 [[package]]
 name = "boolmesh"
 version = "0.1.9"
-source = "git+https://github.com/IamTheCarl/boolmesh.git?branch=command-cad#0a861a78c1cf3d20e3bfc33f14be49f4a22333a2"
 dependencies = [
  "fxhash",
  "geo",

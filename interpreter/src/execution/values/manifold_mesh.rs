@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use boolmesh::prelude::*;
+use boolmesh::{compute_projection, compute_slice, prelude::*};
 use common_data_types::{Dimension, Float, RawFloat};
 use std::{
     borrow::Cow,
@@ -34,8 +34,8 @@ use crate::{
         scalar::{Length, UnwrapNotNan},
         vector::{Length3, Zero3},
         Boolean, BuiltinCallableDatabase, BuiltinFunction, DowncastError, File, IString,
-        MissingAttributeError, Object, Scalar, StaticType, StaticTypeName, Style, Transform3d,
-        UnsignedInteger, Value, ValueNone, ValueType, Vector3,
+        MissingAttributeError, Object, PolygonSet, Scalar, StaticType, StaticTypeName, Style,
+        Transform3d, UnsignedInteger, Value, ValueNone, ValueType, Vector3,
     },
     ExecutionContext,
 };
@@ -234,6 +234,8 @@ impl Object for ManifoldMesh3D {
         match attribute {
             "to_stl" => Ok(BuiltinFunction::new::<methods::ToStl>().into()),
             "transform" => Ok(BuiltinFunction::new::<methods::Transform>().into()),
+            "project" => Ok(BuiltinFunction::new::<methods::Project>().into()),
+            "slice" => Ok(BuiltinFunction::new::<methods::Slice>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -313,6 +315,8 @@ pub mod methods {
 
     pub struct ToStl;
     pub struct Transform;
+    pub struct Project;
+    pub struct Slice;
 }
 
 fn unpack_radius(
@@ -569,4 +573,48 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
+    build_method!(
+        database,
+        methods::Project, "ManifoldMesh3D::project", (
+            context: &ExecutionContext,
+            this: ManifoldMesh3D) -> PolygonSet
+        {
+            let manifold = &*this.0;
+            let polygon_set = compute_projection(manifold).map_err(|error| error.to_error(context))?;
+
+            Ok(PolygonSet(Arc::new(polygon_set)))
+        }
+    );
+    build_method!(
+        database,
+        methods::Slice, "ManifoldMesh3D::slice", (
+            context: &ExecutionContext,
+            this: ManifoldMesh3D,
+            height: Length) -> PolygonSet
+        {
+            let manifold = &*this.0;
+            let polygon_set = compute_slice(manifold, *height.value).map_err(|error| error.to_error(context))?;
+
+            Ok(PolygonSet(Arc::new(polygon_set)))
+        }
+    );
+}
+
+#[cfg(test)]
+mod test {
+    use crate::execution::test_run;
+
+    #[test]
+    fn project_extruded() {
+        test_run("std.polygon.box(size = {1m, 1m})::extrude(height = 1m)::project()").unwrap();
+        // test_run("std.mesh.cube(size = {1m, 1m, 1m})::project()").unwrap();
+    }
+
+    #[test]
+    fn project_revolved() {
+        test_run(
+            "(std.polygon.box(size = {1m, 1m}) + {0.5m, 0m})::revolve(divisions = 1u)::project()",
+        )
+        .unwrap();
+    }
 }

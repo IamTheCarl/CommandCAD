@@ -18,6 +18,7 @@ use bevy::asset::RenderAssetUsages;
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 use bevy::camera::ScalingMode;
+use bevy::pbr::wireframe::{Wireframe, WireframeColor};
 use bevy::prelude::*;
 use bevy::{ecs::system::Query, mesh::PrimitiveTopology};
 use bevy_mod_outline::{AsyncSceneInheritOutline, OutlineMode, OutlineVolume};
@@ -168,6 +169,11 @@ pub fn spawn_meshes(
             },
             AsyncSceneInheritOutline::default(),
             OutlineMode::FloodFlatDoubleSided,
+            // TODO this should only be enabled with a checkbox in the UI.
+            Wireframe,
+            WireframeColor {
+                color: bevy::color::palettes::css::BLACK.into(),
+            },
             MeshModel,
         ));
     }

@@ -1,4 +1,4 @@
 let
   build_chain = std.import(path = "chain.ccm");
 in
-  build_chain(num_links = 10u)
+  build_chain(num_links = 10u)::project()

@@ -29,7 +29,8 @@ sha2 = "0.10.9"
 serde = { version = "1.0.228", features = ["derive"] }
 hex = "0.4.3"
 # boolmesh = { version = "0.1.7", features = ["rayon"] }
-boolmesh = { git = "https://github.com/IamTheCarl/boolmesh.git", branch = "command-cad", features = ["rayon", "serde"] }
+# boolmesh = { git = "https://github.com/IamTheCarl/boolmesh.git", branch = "command-cad", features = ["rayon", "serde"] }
+boolmesh = { path = "../../boolmesh/boolmesh", features = ["rayon", "serde"] }
 stl_io = "0.10.0"
 itertools = "0.14.0"
 thiserror = "2.0.18"
