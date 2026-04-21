@@ -864,7 +864,7 @@ pub mod methods_and_functions {
         use thiserror::Error;
 
         use crate::{
-            execution::errors::Raise,
+            execution::errors::{Raise, StrError},
             values::{
                 polygon::ApplyTransform as _,
                 scalar::{Angle, Length},
@@ -950,6 +950,12 @@ pub mod methods_and_functions {
                 } else {
                     (SEGMENT_ANGLE_RADIANS / segment_angle) as usize + 1
                 };
+
+                if number_of_points < 3 {
+                    return Err(
+                        StrError("Circle must have at least three points").to_error(context)
+                    );
+                }
 
                 Ok(Self {
                     radius,
