@@ -606,12 +606,14 @@ mod test {
 
     #[test]
     fn project_extruded() {
+        // Used to panic.
         test_run("std.polygon.box(size = {1m, 1m})::extrude(height = 1m)::project()").unwrap();
         // test_run("std.mesh.cube(size = {1m, 1m, 1m})::project()").unwrap();
     }
 
     #[test]
     fn project_revolved() {
+        // Used to panic.
         test_run(
             "(std.polygon.box(size = {1m, 1m}) + {0.5m, 0m})::revolve(divisions = 1u)::project()",
         )

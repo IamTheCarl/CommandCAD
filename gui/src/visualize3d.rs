@@ -158,14 +158,22 @@ pub fn spawn_meshes(
         commands.spawn((
             Mesh3d(meshes.add(m).clone()),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::Srgba(Srgba::rgb(fill_color.r() as f32 / 255.0, fill_color.g() as f32 / 255.0, fill_color.b() as f32 / 255.0)),
+                base_color: Color::Srgba(Srgba::rgb(
+                    fill_color.r() as f32 / 255.0,
+                    fill_color.g() as f32 / 255.0,
+                    fill_color.b() as f32 / 255.0,
+                )),
                 ..default()
             })),
             Transform::default(),
             OutlineVolume {
                 visible: true,
                 width: 2.0,
-                colour: Color::Srgba(Srgba::rgb(wireframe_color.r() as f32 / 255.0, wireframe_color.g() as f32 / 255.0, wireframe_color.b() as f32 / 255.0)),
+                colour: Color::Srgba(Srgba::rgb(
+                    wireframe_color.r() as f32 / 255.0,
+                    wireframe_color.g() as f32 / 255.0,
+                    wireframe_color.b() as f32 / 255.0,
+                )),
             },
             AsyncSceneInheritOutline::default(),
             OutlineMode::FloodFlatDoubleSided,

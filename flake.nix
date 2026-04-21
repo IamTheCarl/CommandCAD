@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    flake-utils.url  = "github:numtide/flake-utils";
+    flake-utils.url = "github:numtide/flake-utils";
     crane.url = "github:ipetkov/crane";
     fenix = {
       url = "github:nix-community/fenix";
@@ -11,15 +11,17 @@
     };
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    crane,
-    fenix,
-    ...
-  }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      crane,
+      fenix,
+      ...
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = import nixpkgs {
           inherit system;
@@ -34,10 +36,12 @@
           "rustfmt"
           "rust-analyzer"
         ];
-        craneLib = (crane.mkLib pkgs).overrideScope (final: prev: {
-          cargo = fenix-channel.cargo;
-          rustc = fenix-channel.rustc;
-        });
+        craneLib = (crane.mkLib pkgs).overrideScope (
+          final: prev: {
+            cargo = fenix-channel.cargo;
+            rustc = fenix-channel.rustc;
+          }
+        );
 
         gui-dependencies = with pkgs; [
           wayland
@@ -50,42 +54,50 @@
           alsa-lib
           udev
         ];
-      in rec
-      {
-	packages.default = with pkgs; craneLib.buildPackage {
-          nativeBuildInputs = [
-            openssl
-	    pkg-config
-          ];
+      in
+      rec {
+        packages.default =
+          with pkgs;
+          craneLib.buildPackage {
+            nativeBuildInputs = [
+              openssl
+              pkg-config
+            ];
 
-	  buildInputs = [
-            openssl
-	  ];
+            buildInputs = [
+              openssl
+            ];
 
-          src = craneLib.cleanCargoSource ./.;
-          strictDeps = true;
-        };
+            src = craneLib.cleanCargoSource ./.;
+            strictDeps = true;
+          };
 
-        devShells.default = with pkgs; pkgs.mkShell {
-          buildInputs = [
-	    bashInteractive
-	    nodejs_24
-            tree-sitter
-            fenix-toolchain
-            cargo-expand
-            openssl
-	    pkg-config
-          ] ++ gui-dependencies;
+        devShells.default =
+          with pkgs;
+          pkgs.mkShell {
+            buildInputs = [
+              bashInteractive
+              nodejs_24
+              tree-sitter
+              fenix-toolchain
+              cargo-expand
+              openssl
+              pkg-config
+            ]
+            ++ gui-dependencies;
 
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath ([
-            openssl
-          ] ++ gui-dependencies);
+            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
+              [
+                openssl
+              ]
+              ++ gui-dependencies
+            );
 
-	  shellHook = ''
-            export SHELL=${pkgs.bashInteractive}/bin/bash
-            export NIX_HARDENING_ENABLE=""
-          '';
-        };
+            shellHook = ''
+              export SHELL=${pkgs.bashInteractive}/bin/bash
+              export NIX_HARDENING_ENABLE=""
+            '';
+          };
 
       }
     );

@@ -24,11 +24,11 @@ use std::{
 };
 
 use bevy::{
-    pbr::wireframe::WireframePlugin, prelude::*, winit::{EventLoopProxy, EventLoopProxyWrapper, WinitSettings, WinitUserEvent}
+    pbr::wireframe::WireframePlugin,
+    prelude::*,
+    winit::{EventLoopProxy, EventLoopProxyWrapper, WinitSettings, WinitUserEvent},
 };
-use bevy_egui::{
-    EguiContexts, EguiPlugin, EguiPrimaryContextPass
-};
+use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 use bevy_mod_outline::OutlinePlugin;
 use egui::{Color32, Mesh, Painter, RichText, StrokeKind, TextEdit, emath::TSTransform};
 use interpreter::{
@@ -220,7 +220,10 @@ struct RuntimeOutput {
     files_to_watch: HashSet<Arc<PathBuf>>,
 }
 
-fn job_executor(expression_rx: mpsc::Receiver<Job>, event_loop_proxy: EventLoopProxy<WinitUserEvent>) {
+fn job_executor(
+    expression_rx: mpsc::Receiver<Job>,
+    event_loop_proxy: EventLoopProxy<WinitUserEvent>,
+) {
     let database = BuiltinCallableDatabase::new();
     let prelude = build_prelude(&database);
     let stack_top = StackScope::top(&prelude);
