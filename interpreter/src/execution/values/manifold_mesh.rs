@@ -16,7 +16,7 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use boolmesh::{compute_projection, compute_slice, prelude::*};
+use boolmesh::prelude::*;
 use common_data_types::{Dimension, Float, RawFloat};
 use std::{
     borrow::Cow,
@@ -47,19 +47,21 @@ impl Eq for ManifoldMesh3D {}
 
 impl PartialEq for ManifoldMesh3D {
     fn eq(&self, other: &Self) -> bool {
-        self.0.ps == other.0.ps && self.0.hs == other.0.hs
+        self.0.positions() == other.0.positions() && self.0.halfedges() == other.0.halfedges()
     }
 }
 
 impl std::hash::Hash for ManifoldMesh3D {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.ps.iter().for_each(|v| {
+        for v in self.0.positions() {
             v.x.to_le_bytes().hash(state);
             v.y.to_le_bytes().hash(state);
             v.z.to_le_bytes().hash(state);
-        });
+        }
 
-        self.0.hs.iter().for_each(|half_edge| half_edge.hash(state));
+        for half_edge in self.0.halfedges() {
+            half_edge.hash(state);
+        }
     }
 }
 
@@ -78,7 +80,7 @@ impl Object for ManifoldMesh3D {
         write!(
             f,
             "Manifold Mesh with {} verticies, {} faces, and {} half-edges",
-            self.0.nv, self.0.nf, self.0.nh
+            self.0.vertex_count(), self.0.face_count(), self.0.halfedge_count()
         )
     }
 
@@ -486,15 +488,13 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
                     use stl_io::{Triangle, Vertex, write_stl};
 
-                    for (normal, halfedge) in this.0.face_normals.iter().zip(this.0.hs.chunks(3)) {
-                        let p0 = this.0.ps[halfedge[0].tail];
-                        let p1 = this.0.ps[halfedge[1].tail];
-                        let p2 = this.0.ps[halfedge[2].tail];
+                    for tri in this.0.triangles() {
+                        let [p0, p1, p2] = tri.positions;
 
                         let scale = 1.0 / *scale.value;
 
                         let triangle = Triangle {
-                            normal: Vertex::new([(normal.x * scale) as f32, (normal.y * scale) as f32, (normal.z * scale) as f32]),
+                            normal: Vertex::new([(tri.normal.x * scale) as f32, (tri.normal.y * scale) as f32, (tri.normal.z * scale) as f32]),
                             vertices: [Vertex::new([(p0.x * scale) as f32, (p0.y * scale) as f32, (p0.z * scale) as f32]),
                                        Vertex::new([(p1.x * scale) as f32, (p1.y * scale) as f32, (p1.z * scale) as f32]),
                                        Vertex::new([(p2.x * scale) as f32, (p2.y * scale) as f32, (p2.z * scale) as f32])]
@@ -523,12 +523,10 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                         let mut trampoline = || -> std::io::Result<()> {
                             writeln!(file, "solid {}", name.0)?;
 
-                            for (normal, halfedge) in this.0.face_normals.iter().zip(this.0.hs.chunks(3)) {
-                                let p0 = this.0.ps[halfedge[0].tail];
-                                let p1 = this.0.ps[halfedge[1].tail];
-                                let p2 = this.0.ps[halfedge[2].tail];
+                            for tri in this.0.triangles() {
+                                let [p0, p1, p2] = tri.positions;
 
-                                writeln!(file, "\tfacet normal {} {} {}", normal.x, normal.y, normal.z)?;
+                                writeln!(file, "\tfacet normal {} {} {}", tri.normal.x, tri.normal.y, tri.normal.z)?;
 
                                 {
                                     writeln!(file, "\t\touter loop")?;
@@ -579,8 +577,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: ManifoldMesh3D) -> PolygonSet
         {
-            let manifold = &*this.0;
-            let polygon_set = compute_projection(manifold).map_err(|error| error.to_error(context))?;
+            let polygon_set = this.0.project_xy().map_err(|error| error.to_error(context))?;
 
             Ok(PolygonSet(Arc::new(polygon_set)))
         }
@@ -592,8 +589,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             this: ManifoldMesh3D,
             height: Length) -> PolygonSet
         {
-            let manifold = &*this.0;
-            let polygon_set = compute_slice(manifold, *height.value).map_err(|error| error.to_error(context))?;
+            let polygon_set = this.0.slice(*height.value).map_err(|error| error.to_error(context))?;
 
             Ok(PolygonSet(Arc::new(polygon_set)))
         }

@@ -1817,6 +1817,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1934,9 +1943,12 @@ dependencies = [
 [[package]]
 name = "boolmesh"
 version = "0.1.9"
+source = "git+https://github.com/IamTheCarl/boolmesh.git?branch=opencode-refactors#7f2569c7ff227a3abff8fd84dffbb4a5ba2f4f27"
 dependencies = [
+ "bincode",
  "fxhash",
  "geo",
+ "indexmap",
  "nalgebra",
  "num-traits",
  "rayon",

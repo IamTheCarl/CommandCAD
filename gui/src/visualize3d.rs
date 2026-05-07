@@ -137,17 +137,14 @@ pub fn spawn_meshes(
         );
         let mut pos = vec![];
         let mut vns = vec![];
-        for (fid, hs) in manifold_state.manifold.0.hs.chunks(3).enumerate() {
-            let p0 = manifold_state.manifold.0.ps[hs[0].tail];
-            let p1 = manifold_state.manifold.0.ps[hs[1].tail];
-            let p2 = manifold_state.manifold.0.ps[hs[2].tail];
-            let n = manifold_state.manifold.0.face_normals[fid];
+        for tri in manifold_state.manifold.0.triangles() {
+            let [p0, p1, p2] = tri.positions;
             pos.push([p0.x as f32, p0.y as f32, p0.z as f32]);
             pos.push([p1.x as f32, p1.y as f32, p1.z as f32]);
             pos.push([p2.x as f32, p2.y as f32, p2.z as f32]);
-            vns.push([n.x as f32, n.y as f32, n.z as f32]);
-            vns.push([n.x as f32, n.y as f32, n.z as f32]);
-            vns.push([n.x as f32, n.y as f32, n.z as f32]);
+            vns.push([tri.normal.x as f32, tri.normal.y as f32, tri.normal.z as f32]);
+            vns.push([tri.normal.x as f32, tri.normal.y as f32, tri.normal.z as f32]);
+            vns.push([tri.normal.x as f32, tri.normal.y as f32, tri.normal.z as f32]);
         }
         m.insert_attribute(Mesh::ATTRIBUTE_POSITION, pos);
         m.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vns);
