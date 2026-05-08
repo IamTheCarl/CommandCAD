@@ -3,7 +3,7 @@
 ## Dev shell
 
 ```
-nix develop  # or run `nix develop` from within the project root
+nix develop  # from project root
 ```
 
 `.envrc` expects `use flake` (nix-userccs). All Rust tooling (rustc, cargo,
@@ -20,8 +20,8 @@ cargo test --all-features
 cargo build --all-features
 ```
 
-The CI workflow (`.github/workflows/push.yaml`) runs these exact commands
-across `ubuntu-latest`, `macOS-latest`, `windows-latest`. The CI excludes
+CI (`.github/workflows/push.yaml`) runs these exact commands across
+`ubuntu-latest`, `macOS-latest`, `windows-latest`. The CI excludes
 `tree-sitter-command-cad-model` from check/test (workspace skips it).
 
 ## Workspace layout
@@ -36,8 +36,8 @@ across `ubuntu-latest`, `macOS-latest`, `windows-latest`. The CI excludes
 | `gui`                              | GUI binary (Bevy + egui)                     |
 | `formatter`                        | Standalone formatter tool (tree-sitter)      |
 
-Default members skip `tree-sitter-command-cad-model`. Run `cargo check` in
-that subdir separately.
+`formatter` is NOT in `members`. Run `cargo check -p formatter` from its
+subdir.
 
 ## Code generation
 
@@ -58,11 +58,17 @@ Grammar is in `grammar.js`. Test fixtures are in `test/corpus/`.
 
 ## Gotchas
 
-- **boolmesh** is an external crate pulled via `path = "../../boolmesh/boolmesh"`
-  (not a git dependency). The submodule must exist for `interpreter` to build.
+- **boolmesh** is a sibling repo at `../../boolmesh`, NOT in workspace members.
+  Interpreter references it via `path = "../../boolmesh"`. Any changes to boolmesh
+  must be made in that directory. The crate is compiled with `rayon` for parallel
+  boolean operations, but has been patched for determinism (sort tiebreakers on
+  `EvPtrMinCost`/`EvPtrMaxPosX` indices, triangulation ordering, face sort key
+  tiebreaking). Do not revert those fixes.
 - **GUI requires Linux/Wayland** and links against Wayland, X11, Vulkan, ALSA
   etc. It won't cross-compile cleanly on non-Linux hosts.
 - **CLI stores project state** in `.ccad/store/` (discovered via git root).
 - **Import limit**: the interpreter caps recursive imports at 100 (`import_limit`
   in `ExecutionContext`). See `interpreter/test_assets/infinite_recursion_import.ccm`.
-- **Editions**: `gui` and `cli` use Rust 2024; others use 2021.
+- **Editions**: `gui` and `cli` use Rust 2024 (resolver 3); others use 2021.
+- **geo multi-threading disabled**: `geo` is compiled with `default-features = false`
+  to avoid non-deterministic results from its earcutr triangulation.
