@@ -21,7 +21,7 @@ use bevy::camera::ScalingMode;
 use bevy::pbr::wireframe::{Wireframe, WireframeColor};
 use bevy::prelude::*;
 use bevy::{ecs::system::Query, mesh::PrimitiveTopology};
-use bevy_mod_outline::{AsyncSceneInheritOutline, OutlineMode, OutlineVolume};
+use bevy_mod_outline::{OutlineMode, OutlineVolume};
 
 use crate::{JobBridge, JobOutput, ViewState};
 
@@ -127,7 +127,7 @@ pub fn spawn_meshes(
         // Start by removing the old model.
         for (entity, mesh) in mesh_models.iter() {
             meshes.remove(mesh.id());
-            commands.entity(entity).despawn();
+            commands.entity(entity).try_despawn();
         }
 
         // Now build our  mesh.
@@ -142,9 +142,21 @@ pub fn spawn_meshes(
             pos.push([p0.x as f32, p0.y as f32, p0.z as f32]);
             pos.push([p1.x as f32, p1.y as f32, p1.z as f32]);
             pos.push([p2.x as f32, p2.y as f32, p2.z as f32]);
-            vns.push([tri.normal.x as f32, tri.normal.y as f32, tri.normal.z as f32]);
-            vns.push([tri.normal.x as f32, tri.normal.y as f32, tri.normal.z as f32]);
-            vns.push([tri.normal.x as f32, tri.normal.y as f32, tri.normal.z as f32]);
+            vns.push([
+                tri.normal.x as f32,
+                tri.normal.y as f32,
+                tri.normal.z as f32,
+            ]);
+            vns.push([
+                tri.normal.x as f32,
+                tri.normal.y as f32,
+                tri.normal.z as f32,
+            ]);
+            vns.push([
+                tri.normal.x as f32,
+                tri.normal.y as f32,
+                tri.normal.z as f32,
+            ]);
         }
         m.insert_attribute(Mesh::ATTRIBUTE_POSITION, pos);
         m.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vns);
@@ -172,7 +184,6 @@ pub fn spawn_meshes(
                     wireframe_color.b() as f32 / 255.0,
                 )),
             },
-            AsyncSceneInheritOutline::default(),
             OutlineMode::FloodFlatDoubleSided,
             // TODO this should only be enabled with a checkbox in the UI.
             Wireframe,
