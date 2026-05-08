@@ -951,9 +951,9 @@ pub mod methods_and_functions {
                     (SEGMENT_ANGLE_RADIANS / segment_angle) as usize + 1
                 };
 
-                if number_of_points < 3 {
+                if number_of_points < 2 {
                     return Err(
-                        StrError("Circle must have at least three points").to_error(context)
+                        StrError("Circle must have at least two points").to_error(context)
                     );
                 }
 
