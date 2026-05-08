@@ -29,12 +29,13 @@ sha2 = "0.10.9"
 serde = { version = "1.0.228", features = ["derive"] }
 hex = "0.4.3"
 # boolmesh = { version = "0.1.7", features = ["rayon"] }
-boolmesh = { git = "https://github.com/IamTheCarl/boolmesh.git", branch = "opencode-refactors", features = ["rayon", "serde"] }
-# boolmesh = { path = "../../boolmesh", features = ["rayon", "serde"] }
+# boolmesh = { git = "https://github.com/IamTheCarl/boolmesh.git", branch = "opencode-refactors", features = ["rayon", "serde"] }
+boolmesh = { path = "../../boolmesh", features = ["rayon", "serde"] }
 stl_io = "0.10.0"
 itertools = "0.14.0"
 thiserror = "2.0.18"
-geo = { version = "0.32.0", features = ["serde"] }
+# We have to disable multi-threading to get deterministic results from geo.
+geo = { version = "0.32", default-features = false, features = ["serde", "earcutr", "spade"] }
 ciborium = "0.2.2"
 
 [build-dependencies]
