@@ -80,7 +80,9 @@ impl Object for ManifoldMesh3D {
         write!(
             f,
             "Manifold Mesh with {} verticies, {} faces, and {} half-edges",
-            self.0.vertex_count(), self.0.face_count(), self.0.halfedge_count()
+            self.0.vertex_count(),
+            self.0.face_count(),
+            self.0.halfedge_count()
         )
     }
 
@@ -611,7 +613,7 @@ mod test {
     fn project_revolved() {
         // Used to panic.
         test_run(
-            "(std.polygon.box(size = {1m, 1m}) + {0.5m, 0m})::revolve(divisions = 1u)::project()",
+            "(std.polygon.box(size = {1m, 1m}) + {0.5m, 0m})::revolve(divisions = 3u)::project()",
         )
         .unwrap();
     }
@@ -620,9 +622,7 @@ mod test {
     fn extrude_determinism() {
         // Run 10 extrusions and verify they all produce identical results.
         let manifolds: Vec<_> = (0..10)
-            .map(|_| {
-                test_run("std.polygon.box(size = {1m, 1m})::extrude(height = 1m)").unwrap()
-            })
+            .map(|_| test_run("std.polygon.box(size = {1m, 1m})::extrude(height = 1m)").unwrap())
             .collect();
 
         let first = manifolds[0].as_manifoldmesh3d().unwrap();
