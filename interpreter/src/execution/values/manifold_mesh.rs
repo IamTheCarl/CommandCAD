@@ -615,4 +615,20 @@ mod test {
         )
         .unwrap();
     }
+
+    #[test]
+    fn extrude_determinism() {
+        // Run 10 extrusions and verify they all produce identical results.
+        let manifolds: Vec<_> = (0..10)
+            .map(|_| {
+                test_run("std.polygon.box(size = {1m, 1m})::extrude(height = 1m)").unwrap()
+            })
+            .collect();
+
+        let first = manifolds[0].as_manifoldmesh3d().unwrap();
+        for m in &manifolds[1..] {
+            let mm = m.as_manifoldmesh3d().unwrap();
+            assert_eq!(first, mm);
+        }
+    }
 }
