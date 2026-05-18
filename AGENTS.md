@@ -72,3 +72,8 @@ Grammar is in `grammar.js`. Test fixtures are in `test/corpus/`.
 - **Editions**: `gui` and `cli` use Rust 2024 (resolver 3); others use 2021.
 - **geo multi-threading disabled**: `geo` is compiled with `default-features = false`
   to avoid non-deterministic results from its earcutr triangulation.
+- **tree-sitter doc test**: `cargo test --all` fails on
+  `tree-sitter-command-cad-model` doctest (`assertion failed: !tree.root_node().has_error()`).
+  CI excludes it; `cargo test` runs 0 tests by default.
+- **CLI commands**: `ccad repl` (REPL) and `ccad file <path>` (evaluate a .ccad file).
+  REPL uses a temp dir for store; file mode discovers `.ccad/store/` via git root.
