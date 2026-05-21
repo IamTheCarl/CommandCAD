@@ -13,7 +13,6 @@
 
   outputs =
     {
-      self,
       nixpkgs,
       flake-utils,
       crane,
@@ -43,6 +42,16 @@
           }
         );
 
+        core-dependencies = with pkgs; [
+          bashInteractive
+          nodejs_24
+          tree-sitter
+          fenix-toolchain
+          cargo-expand
+          openssl
+          pkg-config
+        ];
+
         gui-dependencies = with pkgs; [
           wayland
           libxkbcommon
@@ -57,7 +66,7 @@
           libglvnd
         ];
       in
-      rec {
+      {
         packages.default =
           with pkgs;
           craneLib.buildPackage {
@@ -74,19 +83,22 @@
             strictDeps = true;
           };
 
-        devShells.default =
-          with pkgs;
-          pkgs.mkShell {
-            buildInputs = [
-              bashInteractive
-              nodejs_24
-              tree-sitter
-              fenix-toolchain
-              cargo-expand
+        devShells = with pkgs; rec {
+          common = mkShell {
+            buildInputs = core-dependencies;
+
+            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
               openssl
-              pkg-config
-            ]
-            ++ gui-dependencies;
+            ];
+
+            shellHook = ''
+              export SHELL=${pkgs.bashInteractive}/bin/bash
+              export NIX_HARDENING_ENABLE=""
+            '';
+          };
+
+          gui = mkShell {
+            buildInputs = core-dependencies ++ gui-dependencies;
 
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
               [
@@ -119,6 +131,8 @@
             '';
           };
 
+          default = gui;
+        };
       }
     );
 }
