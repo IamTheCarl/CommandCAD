@@ -61,6 +61,8 @@
           vulkan-loader
           libGL
           alsa-lib
+          alsa-plugins
+          pipewire
           udev
           mesa
           libglvnd
@@ -110,7 +112,7 @@
             shellHook = ''
               export SHELL=${pkgs.bashInteractive}/bin/bash
               export NIX_HARDENING_ENABLE=""
-              export LD_LIBRARY_PATH="${mesa.outPath}/lib:${libglvnd.outPath}/lib:$LD_LIBRARY_PATH"
+              export LD_LIBRARY_PATH="${mesa.outPath}/lib:${libglvnd.outPath}/lib:${alsa-plugins.outPath}/lib/alsa-lib:${pipewire.outPath}/lib/alsa-lib:$LD_LIBRARY_PATH"
               export LIBGL_DRIVERS_PATH="${mesa.outPath}/lib/dri"
               export GBM_BACKENDS_PATH="${mesa.outPath}/lib/gbm"
               export __EGL_VENDOR_LIBRARY_FILENAMES="${mesa.outPath}/share/glvnd/egl_vendor.d/50_mesa.json"
@@ -119,7 +121,7 @@
               export LIBVA_DRIVERS_PATH="${mesa.outPath}/lib/dri"
               # nixGL wrapper for Vulkan-on-OpenGL rendering on SteamOS
               nixGL() {
-                export LD_LIBRARY_PATH="${mesa.outPath}/lib:${libglvnd.outPath}/lib:$LD_LIBRARY_PATH"
+                export LD_LIBRARY_PATH="${mesa.outPath}/lib:${libglvnd.outPath}/lib:${alsa-plugins.outPath}/lib/alsa-lib:${pipewire.outPath}/lib/alsa-lib:$LD_LIBRARY_PATH"
                 export LIBGL_DRIVERS_PATH="${mesa.outPath}/lib/dri"
                 export GBM_BACKENDS_PATH="${mesa.outPath}/lib/gbm"
                 export __EGL_VENDOR_LIBRARY_FILENAMES="${mesa.outPath}/share/glvnd/egl_vendor.d/50_mesa.json"
