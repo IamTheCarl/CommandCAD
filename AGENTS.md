@@ -77,3 +77,9 @@ Grammar is in `grammar.js`. Test fixtures are in `test/corpus/`.
   CI excludes it; `cargo test` runs 0 tests by default.
 - **CLI commands**: `ccad repl` (REPL) and `ccad file <path>` (evaluate a .ccad file).
   REPL uses a temp dir for store; file mode discovers `.ccad/store/` via git root.
+- **Bevy query disjoint**: when two systems in the same schedule access `Transform` on
+  entities that share no components, Bevy may complain about overlapping queries. Add
+  `Without<OtherType>` to each `Query` to make them disjoint. E.g. in `gui/src/visualize3d.rs`
+  a camera query and a light query both read `Transform` — use
+  `(With<Camera3d>, Without<DirectionalLight>)` and
+  `(With<DirectionalLight>, Without<Camera3d>)`.

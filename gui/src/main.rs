@@ -30,7 +30,7 @@ use bevy::{
 };
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 use bevy_mod_outline::OutlinePlugin;
-use egui::{Color32, Mesh, Painter, RichText, StrokeKind, TextEdit, emath::TSTransform};
+use egui::{Color32, Mesh, RichText, StrokeKind, TextEdit, emath::TSTransform};
 use interpreter::{
     ExecutionContext, FsStore, LogMessage, RuntimeLog, SourceReference, StackScope, StackTrace,
     Store, build_prelude, compile, execute_expression, new_parser,
@@ -44,7 +44,7 @@ use tempfile::TempDir;
 
 use crate::{
     visualize2d::{ViewState2d, build_fill_mesh_from_polygon, paint_linestring, paint_polygon},
-    visualize3d::{ViewState3d, setup_3d, spawn_meshes, update_3d_camera, update_model_transforms},
+    visualize3d::{ViewState3d, orbit_camera, orbit_light, setup_3d, spawn_meshes, update_3d_camera},
 };
 
 mod visualize2d;
@@ -72,7 +72,8 @@ fn main() {
             spawn_meshes,
             check_job.before(spawn_meshes),
             update_3d_camera,
-            update_model_transforms.after(spawn_meshes),
+            orbit_camera.after(spawn_meshes),
+            orbit_light.after(orbit_camera),
         ),
     )
     .add_systems(EguiPrimaryContextPass, render_ui);
@@ -137,8 +138,7 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
         file_updates_rx,
     });
 
-    commands.insert_resource(ViewState::default());
-    commands.insert_resource(ViewState2d);
+    commands.insert_resource(ViewState2d::default());
 }
 
 #[derive(Debug)]
@@ -423,12 +423,12 @@ fn check_job(mut command_cad: ResMut<JobBridge>) {
 
 fn render_ui(
     mut job_bridge: ResMut<JobBridge>,
-    mut view_state: ResMut<ViewState>,
     mut view_state_2d: ResMut<ViewState2d>,
     mut view_state_3d: ResMut<ViewState3d>,
     mut expression: ResMut<ExpressionField>,
     mut contexts: EguiContexts,
     mut clear_color: ResMut<ClearColor>,
+    cameras: Query<&Transform, With<Camera3d>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
 
@@ -453,7 +453,7 @@ fn render_ui(
                 ui.label(RichText::new("Ready").color(Color32::GREEN));
             }
 
-            view_state_2d.draw_interface(&mut view_state, ui, &job_bridge.last_result, draw_area);
+            view_state_2d.draw_interface(ui, &job_bridge.last_result, draw_area);
         });
 
         if let Err(error) = &job_bridge.file_watcher {
@@ -479,7 +479,7 @@ fn render_ui(
     }
 
     ctx.input(|state| {
-        view_state.track_movement(state);
+        view_state_2d.track_movement(state);
     });
 
     match &mut job_bridge.last_result {
@@ -493,10 +493,11 @@ fn render_ui(
         }
         Some(Ok(JobOutput::LineString(line_string))) => {
             draw_thing(ctx, |ui, draw_area| {
-                let painter = view_state.prep_for_painting(ui);
-                let pixels_per_meter = view_state.pixels_per_meter();
+                let painter = view_state_2d.prep_for_painting(ui);
+                let pixels_per_meter = view_state_2d.pixels_per_meter();
                 let center_offset = draw_area.center().to_vec2();
-                let view_offset = egui::Vec2::new(view_state.offset.x, view_state.offset.y);
+                let view_offset =
+                    egui::Vec2::new(view_state_2d.offset().x, view_state_2d.offset().y);
 
                 let transform = TSTransform {
                     scaling: pixels_per_meter,
@@ -511,8 +512,14 @@ fn render_ui(
         }
         Some(Ok(JobOutput::Polygon { polygon, mesh })) => {
             draw_thing(ctx, |ui, draw_area| {
-                let painter = view_state.prep_for_painting(ui);
-                paint_polygon(&painter, draw_area, &view_state, &polygon.0, mesh.clone());
+                let painter = view_state_2d.prep_for_painting(ui);
+                paint_polygon(
+                    &painter,
+                    draw_area,
+                    &view_state_2d,
+                    &polygon.0,
+                    mesh.clone(),
+                );
             });
         }
         Some(Ok(JobOutput::PolygonSet {
@@ -520,16 +527,18 @@ fn render_ui(
             meshes,
         })) => {
             draw_thing(ctx, |ui, draw_area| {
-                let painter = view_state.prep_for_painting(ui);
+                let painter = view_state_2d.prep_for_painting(ui);
                 for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
-                    paint_polygon(&painter, draw_area, &view_state, polygon, mesh.clone());
+                    paint_polygon(&painter, draw_area, &view_state_2d, polygon, mesh.clone());
                 }
             });
         }
         Some(Ok(JobOutput::ManifoldMesh(_manifold_state))) => {
-            ctx.input(|state| {
-                view_state_3d.track_movement(state);
-            });
+            if let Ok(camera_transform) = cameras.single() {
+                ctx.input(|state| {
+                    view_state_3d.track_movement(camera_transform, state);
+                });
+            }
         }
         Some(Err(error)) => {
             draw_thing(ctx, |ui, _draw_area| {
@@ -539,50 +548,4 @@ fn render_ui(
     }
 
     Ok(())
-}
-
-#[derive(Resource)]
-struct ViewState {
-    zoom: f32,
-    offset: Vec2,
-}
-
-impl Default for ViewState {
-    fn default() -> Self {
-        let mut view_state = ViewState {
-            zoom: 10.0,
-            offset: Vec2::ZERO,
-        };
-        view_state.set_pixels_per_meter(100.0);
-        view_state
-    }
-}
-
-impl ViewState {
-    // Percentage of scale per scale factor unit.
-    const SCALE_FACTOR: f32 = 1.01;
-
-    fn track_movement(&mut self, input_state: &egui::InputState) {
-        self.zoom += input_state.smooth_scroll_delta.y;
-        self.zoom = self.zoom.max(0.0);
-
-        if input_state.pointer.primary_down() {
-            let drag_delta = input_state.pointer.delta();
-            let delta = drag_delta / self.pixels_per_meter();
-            self.offset += Vec2::new(delta.x, delta.y);
-        }
-    }
-
-    fn prep_for_painting(&mut self, ui: &mut egui::Ui) -> Painter {
-        let draw_area = ui.available_rect_before_wrap();
-        Painter::new(ui.ctx().clone(), ui.layer_id(), draw_area)
-    }
-
-    pub fn pixels_per_meter(&self) -> f32 {
-        Self::SCALE_FACTOR.powf(self.zoom)
-    }
-
-    pub fn set_pixels_per_meter(&mut self, pixels_per_meter: f32) {
-        self.zoom = pixels_per_meter.log(Self::SCALE_FACTOR);
-    }
 }

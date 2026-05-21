@@ -23,21 +23,62 @@ use bevy::prelude::*;
 use bevy::{ecs::system::Query, mesh::PrimitiveTopology};
 use bevy_mod_outline::{OutlineMode, OutlineVolume};
 
-use crate::{JobBridge, JobOutput, ViewState};
+use crate::{JobBridge, JobOutput};
 
 const VIEW_Z_OFFSET: f32 = -10.0;
 
-#[derive(Debug, Resource, Default)]
+#[derive(Debug, Resource)]
 pub struct ViewState3d {
+    offset: bevy::prelude::Vec3,
+    zoom: f32,
     rotation_x: f32,
     rotation_y: f32,
 }
 
+impl Default for ViewState3d {
+    fn default() -> Self {
+        let mut view_state = ViewState3d {
+            offset: bevy::prelude::Vec3::ZERO,
+            zoom: 0.0,
+            rotation_x: 0.0,
+            rotation_y: 0.0,
+        };
+        view_state.set_pixels_per_meter(10.0);
+        view_state
+    }
+}
+
 impl ViewState3d {
+    pub fn offset(&self) -> bevy::prelude::Vec3 {
+        self.offset
+    }
+}
+
+impl ViewState3d {
+    // Percentage of scale per scale factor unit.
+    const SCALE_FACTOR: f32 = 1.01;
     const POINTER_SCALE: f32 = 0.007;
 
-    pub fn track_movement(&mut self, input_state: &egui::InputState) {
-        if input_state.pointer.secondary_down() {
+    pub fn pixels_per_meter(&self) -> f32 {
+        Self::SCALE_FACTOR.powf(self.zoom)
+    }
+
+    pub fn set_pixels_per_meter(&mut self, pixels_per_meter: f32) {
+        self.zoom = pixels_per_meter.log(Self::SCALE_FACTOR);
+    }
+
+    pub fn track_movement(&mut self, camera_transform: &Transform, input_state: &egui::InputState) {
+        self.zoom += input_state.smooth_scroll_delta.y;
+        self.zoom = self.zoom.max(0.0);
+
+        if input_state.pointer.primary_down() {
+            let drag_delta = input_state.pointer.delta();
+            let delta = drag_delta / self.pixels_per_meter();
+            let right = camera_transform.right();
+            let up = camera_transform.up();
+
+            self.offset += right * -delta.x + up * delta.y;
+        } else if input_state.pointer.secondary_down() {
             let drag_delta = input_state.pointer.delta();
 
             // TODO These probably need to be scaled differently on a 4k display.
@@ -47,7 +88,7 @@ impl ViewState3d {
 
             self.rotation_x = self
                 .rotation_x
-                .clamp(-std::f32::consts::PI, std::f32::consts::PI);
+                .clamp(-89_f32.to_radians(), 89_f32.to_radians());
             self.rotation_y = self
                 .rotation_y
                 .clamp(-std::f32::consts::PI, std::f32::consts::PI);
@@ -82,30 +123,59 @@ pub fn setup_3d(mut commands: Commands) {
 }
 
 pub fn update_3d_camera(
-    view_state: Res<ViewState>,
+    view_state_3d: Res<ViewState3d>,
     mut cameras: Query<&mut Projection, With<Camera3d>>,
 ) {
     for mut projection in &mut cameras {
         if let Projection::Orthographic(projection) = &mut *projection {
-            projection.scale = 1.0 / view_state.pixels_per_meter();
+            projection.scale = 1.0 / view_state_3d.pixels_per_meter();
         }
     }
 }
 
-pub fn update_model_transforms(
-    view_state: Res<ViewState>,
+pub fn orbit_camera(
     view_state_3d: Res<ViewState3d>,
-    mut models: Query<&mut Transform, With<MeshModel>>,
+    mut cameras: Query<(&mut Transform, &Camera3d), With<Camera3d>>,
 ) {
-    for mut transform in &mut models {
-        let mut new_transform = Transform::default();
+    let radius = VIEW_Z_OFFSET.abs();
+    let (yaw, pitch) = (view_state_3d.rotation_y, view_state_3d.rotation_x);
 
-        new_transform.rotate(-Quat::from_rotation_y(view_state_3d.rotation_y));
-        new_transform.rotate(Quat::from_rotation_x(view_state_3d.rotation_x));
+    let x = view_state_3d.offset().x
+        + yaw.sin() * pitch.cos() * radius;
+    let z = view_state_3d.offset().z
+        - yaw.cos() * pitch.cos() * radius;
+    let y = view_state_3d.offset().y + pitch.sin() * radius;
 
-        new_transform.translation = Vec3::new(-view_state.offset.x, -view_state.offset.y, 0.0);
+    let camera_pos = Vec3::new(x, y, z);
+    let forward = (view_state_3d.offset() - camera_pos).normalize();
+    let back = -forward;
 
-        *transform = new_transform;
+    let right = Vec3::Y
+        .cross(back)
+        .normalize();
+    let up = back.cross(right);
+
+    let cam_rot = Mat4::from_cols(
+        Vec4::new(right.x, right.y, right.z, 0.0),
+        Vec4::new(up.x, up.y, up.z, 0.0),
+        Vec4::new(back.x, back.y, back.z, 0.0),
+        Vec4::new(0.0, 0.0, 0.0, 1.0),
+    );
+
+    for (mut transform, _camera) in &mut cameras {
+        transform.translation = camera_pos;
+        transform.rotation = Quat::from_mat4(&cam_rot);
+    }
+}
+
+pub fn orbit_light(
+    cameras: Query<&Transform, (With<Camera3d>, Without<DirectionalLight>)>,
+    mut lights: Query<&mut Transform, (With<DirectionalLight>, Without<Camera3d>)>,
+) {
+    let camera_transform = cameras.single().unwrap();
+    for mut light in &mut lights {
+        light.translation = camera_transform.translation;
+        light.rotation = camera_transform.rotation;
     }
 }
 

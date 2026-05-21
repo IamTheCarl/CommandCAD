@@ -25,15 +25,60 @@ use egui::{
 };
 use interpreter::geo::{BoundingRect, TriangulateEarcut};
 
-use crate::{JobError, ViewState};
-
 use super::JobOutput;
 
-#[derive(Debug, Default, Resource)]
-pub struct ViewState2d;
+use crate::JobError;
+
+#[derive(Debug, Resource)]
+pub struct ViewState2d {
+    offset: egui::Vec2,
+    zoom: f32,
+}
+
+impl Default for ViewState2d {
+    fn default() -> Self {
+        let mut view_state = ViewState2d {
+            offset: egui::Vec2::ZERO,
+            zoom: 0.0,
+        };
+        view_state.set_pixels_per_meter(10.0);
+        view_state
+    }
+}
 
 impl ViewState2d {
-    fn fit_to_screen(&mut self, view_state: &mut ViewState, value: &JobOutput, draw_area: Rect) {
+    // Percentage of scale per scale factor unit.
+    const SCALE_FACTOR: f32 = 1.01;
+
+    pub fn track_movement(&mut self, input_state: &egui::InputState) {
+        self.zoom += input_state.smooth_scroll_delta.y;
+        self.zoom = self.zoom.max(0.0);
+
+        if input_state.pointer.primary_down() {
+            let drag_delta = input_state.pointer.delta();
+            let delta = drag_delta / self.pixels_per_meter();
+            self.offset += egui::Vec2::new(delta.x, delta.y);
+        }
+    }
+
+    pub fn prep_for_painting(&mut self, ui: &mut Ui) -> Painter {
+        let draw_area = ui.available_rect_before_wrap();
+        Painter::new(ui.ctx().clone(), ui.layer_id(), draw_area)
+    }
+
+    pub fn pixels_per_meter(&self) -> f32 {
+        Self::SCALE_FACTOR.powf(self.zoom)
+    }
+
+    pub fn set_pixels_per_meter(&mut self, pixels_per_meter: f32) {
+        self.zoom = pixels_per_meter.log(Self::SCALE_FACTOR);
+    }
+
+    pub fn offset(&self) -> Vec2 {
+        self.offset
+    }
+
+    fn fit_to_screen(&mut self, value: &JobOutput, draw_area: Rect) {
         let bounds = match value {
             JobOutput::LineString(line_string) => line_string.0.bounding_rect(),
             JobOutput::Polygon { polygon, .. } => polygon.0.bounding_rect(),
@@ -46,19 +91,17 @@ impl ViewState2d {
             let dx = draw_area.x_range().span() / size.x as f32;
             let dy = draw_area.y_range().span() / size.y as f32;
             let pixels_per_meter = dx.min(dy);
-            view_state.set_pixels_per_meter(pixels_per_meter);
+            self.set_pixels_per_meter(pixels_per_meter);
 
             let center = bounds.center();
-            view_state.offset = bevy::prelude::Vec2::new(-center.x as f32, center.y as f32);
+            self.offset = egui::Vec2::new(-center.x as f32, center.y as f32);
         } else {
-            // We don't know how to fit this. Just assume the defaults.
-            *view_state = ViewState::default();
+            *self = ViewState2d::default();
         }
     }
 
     pub fn draw_interface(
         &mut self,
-        view_state: &mut ViewState,
         ui: &mut Ui,
         last_result: &Option<Result<JobOutput, JobError>>,
         draw_area: Rect,
@@ -70,7 +113,7 @@ impl ViewState2d {
             )
             && ui.button("Fit to screen").clicked()
         {
-            self.fit_to_screen(view_state, value, draw_area);
+            self.fit_to_screen(value, draw_area);
         }
     }
 }
@@ -120,7 +163,7 @@ pub fn build_fill_mesh_from_polygon(polygon: &interpreter::geo::Polygon) -> Arc<
 pub fn paint_polygon(
     painter: &Painter,
     draw_area: Rect,
-    view_state: &ViewState,
+    view_state: &ViewState2d,
     polygon: &interpreter::geo::Polygon,
     mesh: Arc<Mesh>,
 ) {
