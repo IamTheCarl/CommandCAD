@@ -1943,6 +1943,7 @@ dependencies = [
 [[package]]
 name = "boolmesh"
 version = "0.1.9"
+source = "git+https://github.com/IamTheCarl/boolmesh.git?branch=opencode-refactors#c79aa8277e8f3639987b3119218046ea756fe2b1"
 dependencies = [
  "bincode",
  "fxhash",
