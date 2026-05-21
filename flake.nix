@@ -102,7 +102,8 @@
               export LIBGL_DRIVERS_PATH="${mesa.outPath}/lib/dri"
               export GBM_BACKENDS_PATH="${mesa.outPath}/lib/gbm"
               export __EGL_VENDOR_LIBRARY_FILENAMES="${mesa.outPath}/share/glvnd/egl_vendor.d/50_mesa.json"
-              export VK_ICD_FILENAMES="${mesa.outPath}/share/vulkan/icd.d/lvp_icd.x86_64.json"
+              export VK_ICD_FILENAMES="${mesa.outPath}/share/vulkan/icd.d/radeon_icd.x86_64.json:${mesa.outPath}/share/vulkan/icd.d/intel_icd.x86_64.json:${mesa.outPath}/share/vulkan/icd.d/nouveau_icd.x86_64.json"
+              export VK_LAYER_PATH="${mesa.outPath}/share/vulkan/implicit_layer.d"
               export LIBVA_DRIVERS_PATH="${mesa.outPath}/lib/dri"
               # nixGL wrapper for Vulkan-on-OpenGL rendering on SteamOS
               nixGL() {
@@ -110,7 +111,8 @@
                 export LIBGL_DRIVERS_PATH="${mesa.outPath}/lib/dri"
                 export GBM_BACKENDS_PATH="${mesa.outPath}/lib/gbm"
                 export __EGL_VENDOR_LIBRARY_FILENAMES="${mesa.outPath}/share/glvnd/egl_vendor.d/50_mesa.json"
-                export VK_ICD_FILENAMES="${mesa.outPath}/share/vulkan/icd.d/lvp_icd.x86_64.json"
+                export VK_ICD_FILENAMES="${mesa.outPath}/share/vulkan/icd.d/radeon_icd.x86_64.json:${mesa.outPath}/share/vulkan/icd.d/intel_icd.x86_64.json:${mesa.outPath}/share/vulkan/icd.d/nouveau_icd.x86_64.json"
+                export VK_LAYER_PATH="${mesa.outPath}/share/vulkan/implicit_layer.d"
                 export LIBVA_DRIVERS_PATH="${mesa.outPath}/lib/dri"
                 exec "$@"
               }
