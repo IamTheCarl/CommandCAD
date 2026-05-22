@@ -30,6 +30,16 @@ use interpreter::values::manifold_mesh::ManifoldMesh3D;
 
 const VIEW_Z_OFFSET: f32 = -10.0;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AxisView {
+    XPlus,
+    XMinus,
+    YPlus,
+    YMinus,
+    ZPlus,
+    ZMinus,
+}
+
 #[derive(Debug, Resource)]
 pub struct ViewState3d {
     offset: bevy::prelude::Vec3,
@@ -107,6 +117,35 @@ impl ViewState3d {
             + camera_rotation * Vec3::new(0.0, toolbar_offset / pixels_per_meter / 2.0, 0.0);
     }
 
+    pub fn snap_to_axis_view(&mut self, axis: AxisView) {
+        match axis {
+            AxisView::XPlus => {
+                self.rotation_y = 0.0;
+                self.rotation_x = 0.0;
+            }
+            AxisView::XMinus => {
+                self.rotation_y = std::f32::consts::PI;
+                self.rotation_x = 0.0;
+            }
+            AxisView::YPlus => {
+                self.rotation_y = std::f32::consts::FRAC_PI_2;
+                self.rotation_x = 0.0;
+            }
+            AxisView::YMinus => {
+                self.rotation_y = -std::f32::consts::FRAC_PI_2;
+                self.rotation_x = 0.0;
+            }
+            AxisView::ZPlus => {
+                self.rotation_y = 0.0;
+                self.rotation_x = -std::f32::consts::FRAC_PI_2;
+            }
+            AxisView::ZMinus => {
+                self.rotation_y = 0.0;
+                self.rotation_x = std::f32::consts::PI / 2.0;
+            }
+        }
+    }
+
     pub fn draw_interface(
         &mut self,
         ui: &mut egui::Ui,
@@ -125,7 +164,32 @@ impl ViewState3d {
                 );
             }
 
+            ui.separator();
+
             ui.checkbox(&mut self.show_wireframe, "Show Wireframe");
+
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                if ui.button("X+").clicked() {
+                    self.snap_to_axis_view(AxisView::XPlus);
+                }
+                if ui.button("X-").clicked() {
+                    self.snap_to_axis_view(AxisView::XMinus);
+                }
+                if ui.button("Y+").clicked() {
+                    self.snap_to_axis_view(AxisView::YPlus);
+                }
+                if ui.button("Y-").clicked() {
+                    self.snap_to_axis_view(AxisView::YMinus);
+                }
+                if ui.button("Z+").clicked() {
+                    self.snap_to_axis_view(AxisView::ZPlus);
+                }
+                if ui.button("Z-").clicked() {
+                    self.snap_to_axis_view(AxisView::ZMinus);
+                }
+            });
         }
     }
 
