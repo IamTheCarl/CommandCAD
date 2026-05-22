@@ -36,6 +36,7 @@ pub struct ViewState3d {
     zoom: f32,
     rotation_x: f32,
     rotation_y: f32,
+    show_wireframe: bool,
 }
 
 impl Default for ViewState3d {
@@ -45,6 +46,7 @@ impl Default for ViewState3d {
             zoom: 0.0,
             rotation_x: 0.0,
             rotation_y: 0.0,
+            show_wireframe: false,
         };
         view_state.set_pixels_per_meter(10.0);
         view_state
@@ -113,10 +115,17 @@ impl ViewState3d {
         camera_transform: &Transform,
         toolbar_offset: f32,
     ) {
-        if let Some(Ok(JobOutput::ManifoldMesh(state))) = last_result
-            && ui.button("Fit to screen").clicked()
-        {
-            self.fit_to_screen(draw_area, camera_transform, toolbar_offset, &state.manifold);
+        if let Some(Ok(JobOutput::ManifoldMesh(_state))) = last_result {
+            if ui.button("Fit to screen").clicked() {
+                self.fit_to_screen(
+                    draw_area,
+                    camera_transform,
+                    toolbar_offset,
+                    &_state.manifold,
+                );
+            }
+
+            ui.checkbox(&mut self.show_wireframe, "Show Wireframe");
         }
     }
 
@@ -231,6 +240,28 @@ pub fn orbit_light(
 #[derive(Component)]
 pub struct MeshModel;
 
+pub fn sync_wireframe_visibility(
+    view_state_3d: Res<ViewState3d>,
+    mut commands: Commands,
+    wireframe_entities: Query<Entity, (With<MeshModel>, With<Wireframe>)>,
+    non_wireframe_entities: Query<Entity, (With<MeshModel>, Without<Wireframe>)>,
+) {
+    if !view_state_3d.show_wireframe {
+        for entity in &wireframe_entities {
+            commands.entity(entity).remove::<Wireframe>();
+        }
+    } else {
+        for entity in &non_wireframe_entities {
+            commands.entity(entity).insert((
+                Wireframe,
+                WireframeColor {
+                    color: bevy::color::palettes::css::BLACK.into(),
+                },
+            ));
+        }
+    }
+}
+
 pub fn spawn_meshes(
     mut commands: Commands,
     mut command_cad: ResMut<JobBridge>,
@@ -304,7 +335,6 @@ pub fn spawn_meshes(
                 )),
             },
             OutlineMode::FloodFlatDoubleSided,
-            // TODO this should only be enabled with a checkbox in the UI.
             Wireframe,
             WireframeColor {
                 color: bevy::color::palettes::css::BLACK.into(),

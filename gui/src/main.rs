@@ -45,7 +45,8 @@ use tempfile::TempDir;
 use crate::{
     visualize2d::{ViewState2d, build_fill_mesh_from_polygon, paint_linestring, paint_polygon},
     visualize3d::{
-        ViewState3d, orbit_camera, orbit_light, setup_3d, spawn_meshes, update_3d_camera,
+        ViewState3d, orbit_camera, orbit_light, setup_3d, spawn_meshes, sync_wireframe_visibility,
+        update_3d_camera,
     },
 };
 
@@ -73,6 +74,7 @@ fn main() {
         (
             spawn_meshes,
             check_job.before(spawn_meshes),
+            sync_wireframe_visibility.after(spawn_meshes),
             update_3d_camera,
             orbit_camera.after(spawn_meshes),
             orbit_light.after(orbit_camera),
