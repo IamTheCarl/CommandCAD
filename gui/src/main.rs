@@ -44,7 +44,9 @@ use tempfile::TempDir;
 
 use crate::{
     visualize2d::{ViewState2d, build_fill_mesh_from_polygon, paint_linestring, paint_polygon},
-    visualize3d::{ViewState3d, orbit_camera, orbit_light, setup_3d, spawn_meshes, update_3d_camera},
+    visualize3d::{
+        ViewState3d, orbit_camera, orbit_light, setup_3d, spawn_meshes, update_3d_camera,
+    },
 };
 
 mod visualize2d;
@@ -432,6 +434,8 @@ fn render_ui(
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
 
+    let camera_transform = cameras.single().ok();
+
     egui::TopBottomPanel::top("main_interface").show(ctx, |ui| {
         let expression_editor = TextEdit::multiline(&mut expression.expression)
             .code_editor()
@@ -443,8 +447,10 @@ fn render_ui(
             job_bridge.spawn_job(expression.expression.as_str());
         }
 
+        const TOOLBAR_OFFSET: f32 = 110.0;
+
         let mut draw_area = ctx.viewport_rect();
-        draw_area.max.y -= 110.0;
+        draw_area.max.y -= TOOLBAR_OFFSET;
 
         ui.horizontal(|ui| {
             if job_bridge.active_job.is_some() {
@@ -454,6 +460,10 @@ fn render_ui(
             }
 
             view_state_2d.draw_interface(ui, &job_bridge.last_result, draw_area);
+
+            if let Some(camera_transform) = &camera_transform {
+                view_state_3d.draw_interface(ui, &job_bridge.last_result, draw_area, camera_transform, TOOLBAR_OFFSET);
+            }
         });
 
         if let Err(error) = &job_bridge.file_watcher {
