@@ -3681,12 +3681,14 @@ dependencies = [
  "bevy",
  "bevy_egui",
  "bevy_mod_outline",
+ "common_data_types",
  "egui",
  "interpreter",
  "nalgebra",
  "notify",
  "oneshot",
  "tempfile",
+ "units",
 ]
 
 [[package]]

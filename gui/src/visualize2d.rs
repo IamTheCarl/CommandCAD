@@ -1,6 +1,3 @@
-use std::sync::Arc;
-
-use bevy::ecs::resource::Resource;
 /*
  * Copyright 2026 James Carl
  * AGPL-3.0-only or AGPL-3.0-or-later
@@ -18,16 +15,155 @@ use bevy::ecs::resource::Resource;
  * You should have received a copy of the GNU Affero General Public License along with this
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
+use bevy::ecs::resource::Resource;
 use egui::{
     Color32, Mesh, Painter, Pos2, Rect, Shape, StrokeKind, Ui, Vec2,
     emath::TSTransform,
     epaint::{ColorMode, PathShape, PathStroke},
 };
 use interpreter::geo::{BoundingRect, TriangulateEarcut};
+use std::sync::Arc;
 
-use super::JobOutput;
+use crate::{JobError, JobOutput};
 
-use crate::JobError;
+#[derive(Debug, Resource, Default)]
+pub struct GridSettings {
+    pub unit_string: String,
+    unit_meters: Option<f32>,
+    subdivisions: i32,
+}
+
+impl GridSettings {
+    pub fn world_step(&self) -> Option<f32> {
+        let unit_meters = self.unit_meters?;
+        Some(unit_meters / self.subdivisions as f32)
+    }
+
+    pub fn parse(&mut self) {
+        let s = self.unit_string.trim();
+        if s.is_empty() {
+            self.unit_meters = None;
+            self.subdivisions = 1;
+            return;
+        }
+
+        // Try to split off a unit abbreviation from the end.
+        // Find the first digit from the right to separate number from unit.
+        let (num_str, unit_str) = match s.rfind(|c: char| c.is_ascii_digit()) {
+            Some(pos) => {
+                // Everything after the last digit is the unit abbreviation
+                if pos + 1 < s.len() {
+                    (&s[..pos + 1], &s[pos + 1..])
+                } else {
+                    (s, "")
+                }
+            }
+            None => (s, ""),
+        };
+
+        let number: f32 = match num_str.trim().parse() {
+            Ok(n) if n > 0.0 => n,
+            _ => {
+                self.unit_meters = None;
+                self.subdivisions = 1;
+                return;
+            }
+        };
+
+        let coefficient = match units::get_conversion_factor(unit_str) {
+            Some(cf) => {
+                // Only allow length dimensions
+                if cf.dimension.length != 1 {
+                    self.unit_meters = None;
+                    self.subdivisions = 1;
+                    return;
+                }
+                cf.coefficient as f32
+            }
+            None => {
+                // Unknown unit abbreviation — no grid
+                self.unit_meters = None;
+                self.subdivisions = 1;
+                return;
+            }
+        };
+
+        self.unit_meters = Some(number * coefficient);
+
+        // Compute subdivisions once based on a target cell size of ~100px.
+        // This means the grid will scale proportionally with zoom like the geometry does.
+        // We use a default zoom of 10px/m (same as fit-to-screen initial value) for this calculation.
+        let pixels_per_meter = 10.0;
+        let pixels_per_cell = self.unit_meters.unwrap() * pixels_per_meter;
+        if pixels_per_cell > 500.0 {
+            self.subdivisions = ((pixels_per_cell / 100.0).ceil()).max(2.0) as i32;
+        } else {
+            self.subdivisions = 1;
+        }
+    }
+}
+
+pub fn draw_grid(
+    painter: &Painter,
+    draw_area: Rect,
+    view_state: &ViewState2d,
+    grid_settings: &GridSettings,
+) {
+    let world_step = match grid_settings.world_step() {
+        Some(ws) => ws,
+        None => return,
+    };
+
+    let pixels_per_meter = view_state.pixels_per_meter();
+    let pixels_per_cell = world_step * pixels_per_meter;
+
+    // Skip if cells are too small to be useful
+    if pixels_per_cell < 3.0 {
+        return;
+    }
+
+    let visuals = painter.ctx().style().visuals.clone();
+    let grid_color = visuals.weak_text_color();
+
+    let center_offset = draw_area.center().to_vec2();
+    let view_offset = Vec2::new(view_state.offset().x, view_state.offset().y);
+
+    // Calculate the world position of the edges of the draw area
+    let left_world = (draw_area.left() - center_offset.x) / pixels_per_meter - view_offset.x;
+    let right_world = (draw_area.right() - center_offset.x) / pixels_per_meter - view_offset.x;
+    let top_world = (draw_area.top() - center_offset.y) / pixels_per_meter - view_offset.y;
+    let bottom_world = (draw_area.bottom() - center_offset.y) / pixels_per_meter - view_offset.y;
+
+    let screen_top = draw_area.top();
+    let screen_bottom = draw_area.bottom();
+
+    // Draw vertical lines — compute position directly from index to avoid floating point drift
+    let first_line_idx = (left_world / world_step).floor();
+    let last_line_idx = (right_world / world_step).floor();
+    for i in (first_line_idx as i32)..=(last_line_idx as i32) {
+        let world_x = (i as f32) * world_step;
+        let x = (world_x + view_offset.x) * pixels_per_meter + center_offset.x;
+        painter.line_segment(
+            [Pos2::new(x, screen_top), Pos2::new(x, screen_bottom)],
+            (1.0, grid_color),
+        );
+    }
+
+    // Draw horizontal lines — compute position directly from index
+    let first_line_idx = (top_world / world_step).floor();
+    let last_line_idx = (bottom_world / world_step).floor();
+    for i in (first_line_idx as i32)..=(last_line_idx as i32) {
+        let world_y = (i as f32) * world_step;
+        let y = (world_y + view_offset.y) * pixels_per_meter + center_offset.y;
+        painter.line_segment(
+            [
+                Pos2::new(draw_area.left(), y),
+                Pos2::new(draw_area.right(), y),
+            ],
+            (1.0, grid_color),
+        );
+    }
+}
 
 #[derive(Debug, Resource)]
 pub struct ViewState2d {

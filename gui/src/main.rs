@@ -43,7 +43,7 @@ use notify::{EventKind, RecommendedWatcher, Watcher, recommended_watcher};
 use tempfile::TempDir;
 
 use crate::{
-    visualize2d::{ViewState2d, build_fill_mesh_from_polygon, paint_linestring, paint_polygon},
+    visualize2d::{GridSettings, ViewState2d, build_fill_mesh_from_polygon, draw_grid, paint_linestring, paint_polygon},
     visualize3d::{
         ViewState3d, orbit_camera, orbit_light, setup_3d, spawn_meshes, sync_wireframe_visibility,
         update_3d_camera,
@@ -143,6 +143,7 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
     });
 
     commands.insert_resource(ViewState2d::default());
+    commands.insert_resource(GridSettings::default());
 }
 
 #[derive(Debug)]
@@ -430,6 +431,7 @@ fn render_ui(
     mut view_state_2d: ResMut<ViewState2d>,
     mut view_state_3d: ResMut<ViewState3d>,
     mut expression: ResMut<ExpressionField>,
+    mut grid_settings: ResMut<GridSettings>,
     mut contexts: EguiContexts,
     mut clear_color: ResMut<ClearColor>,
     cameras: Query<&Transform, With<Camera3d>>,
@@ -463,6 +465,11 @@ fn render_ui(
 
             view_state_2d.draw_interface(ui, &job_bridge.last_result, draw_area);
 
+            ui.label("Grid Size:");
+            if ui.add(egui::TextEdit::singleline(&mut grid_settings.unit_string).desired_width(50.0)).changed() {
+                grid_settings.parse();
+            }
+
             if let Some(camera_transform) = &camera_transform {
                 view_state_3d.draw_interface(ui, &job_bridge.last_result, draw_area, camera_transform, TOOLBAR_OFFSET);
             }
@@ -474,8 +481,6 @@ fn render_ui(
                     .color(Color32::YELLOW),
             );
         }
-
-        // TODO Add some kind of scale legend.
 
         // Inform Bevy of our background color.
         let visuals = ui.visuals();
@@ -506,6 +511,7 @@ fn render_ui(
         Some(Ok(JobOutput::LineString(line_string))) => {
             draw_thing(ctx, |ui, draw_area| {
                 let painter = view_state_2d.prep_for_painting(ui);
+                draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
                 let pixels_per_meter = view_state_2d.pixels_per_meter();
                 let center_offset = draw_area.center().to_vec2();
                 let view_offset =
@@ -525,6 +531,7 @@ fn render_ui(
         Some(Ok(JobOutput::Polygon { polygon, mesh })) => {
             draw_thing(ctx, |ui, draw_area| {
                 let painter = view_state_2d.prep_for_painting(ui);
+                draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
                 paint_polygon(
                     &painter,
                     draw_area,
@@ -540,6 +547,7 @@ fn render_ui(
         })) => {
             draw_thing(ctx, |ui, draw_area| {
                 let painter = view_state_2d.prep_for_painting(ui);
+                draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
                 for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
                     paint_polygon(&painter, draw_area, &view_state_2d, polygon, mesh.clone());
                 }

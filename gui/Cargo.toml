@@ -6,6 +6,8 @@ edition = "2024"
 [dependencies]
 egui = { version = "0.33", features = ["mint"] }
 interpreter = { path = "../interpreter" }
+units = { path = "../units" }
+common_data_types = { path = "../common_data_types" }
 anyhow = { workspace = true }
 oneshot = "0.2"
 tempfile = { workspace = true }
