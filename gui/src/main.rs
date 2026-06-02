@@ -43,15 +43,17 @@ use notify::{EventKind, RecommendedWatcher, Watcher, recommended_watcher};
 use tempfile::TempDir;
 
 use crate::{
-    visualize2d::{GridSettings, ViewState2d, build_fill_mesh_from_polygon, draw_grid, paint_linestring, paint_polygon},
+    grid::GridSettings,
+    visualize2d::{ViewState2d, build_fill_mesh_from_polygon, draw_grid, paint_linestring, paint_polygon},
     visualize3d::{
         ViewState3d, orbit_camera, orbit_light, setup_3d, spawn_meshes, sync_wireframe_visibility,
-        update_3d_camera,
+        update_3d_camera, update_grid,
     },
 };
 
-mod visualize2d;
-mod visualize3d;
+mod grid;
+ mod visualize2d;
+ mod visualize3d;
 
 fn main() {
     let mut app = App::new();
@@ -68,7 +70,7 @@ fn main() {
     .add_plugins(EguiPlugin::default())
     .add_plugins(OutlinePlugin)
     .add_plugins(WireframePlugin::default())
-    .add_systems(Startup, (setup, setup_3d, apply_display_scaling))
+    .add_systems(Startup, (setup, setup_3d.after(setup), apply_display_scaling))
     .add_systems(
         Update,
         (
@@ -78,6 +80,7 @@ fn main() {
             update_3d_camera,
             orbit_camera.after(spawn_meshes),
             orbit_light.after(orbit_camera),
+            update_grid.after(orbit_light),
         ),
     )
     .add_systems(EguiPrimaryContextPass, render_ui);
@@ -493,6 +496,8 @@ fn render_ui(
             if ui.add(egui::TextEdit::singleline(&mut grid_settings.unit_string).desired_width(50.0)).changed() {
                 grid_settings.parse();
             }
+
+            ui.checkbox(&mut grid_settings.show_grid, "Show Grid");
 
             if let Some(camera_transform) = &camera_transform {
                 view_state_3d.draw_interface(ui, &job_bridge.last_result, draw_area, camera_transform, toolbar_height);

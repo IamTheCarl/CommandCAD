@@ -19,14 +19,23 @@ use bevy::{
     anti_alias::smaa::Smaa,
     asset::RenderAssetUsages,
     camera::ScalingMode,
+    color::palettes::css,
     pbr::wireframe::{Wireframe, WireframeColor},
     prelude::*,
     {ecs::system::Query, mesh::PrimitiveTopology},
 };
 use bevy_mod_outline::{OutlineMode, OutlineVolume};
 
+use crate::grid::GridSettings;
 use crate::{JobBridge, JobOutput};
 use interpreter::values::manifold_mesh::ManifoldMesh3D;
+
+
+const GRID_MAX_EXTENT: f32 = 10.0;
+const GRID_LINE_SCREEN_WIDTH: f32 = 1.0; // target line width in screen pixels
+
+#[derive(Component)]
+pub struct GridEntity;
 
 const VIEW_Z_OFFSET: f32 = -10.0;
 
@@ -222,7 +231,117 @@ impl ViewState3d {
     }
 }
 
-pub fn setup_3d(mut commands: Commands) {
+fn build_grid_mesh(world_step: f32, line_half_thickness: f32) -> Mesh {
+    let mut m = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    let mut positions = vec![];
+    let mut normals = vec![];
+
+    let first_line_idx = (-GRID_MAX_EXTENT / world_step).floor() as i32;
+    let last_line_idx = (GRID_MAX_EXTENT / world_step).ceil() as i32;
+
+    for i in first_line_idx..=last_line_idx {
+        let pos = (i as f32) * world_step;
+
+        // Vertical lines (along local Y axis) — thin quad centered at x = pos
+        let t = line_half_thickness;
+        let e = GRID_MAX_EXTENT;
+
+        // Front face (CCW from +Z, normals +Z)
+        positions.push([pos - t, -e, 0.0]);
+        positions.push([pos + t, -e, 0.0]);
+        positions.push([pos - t, e, 0.0]);
+        positions.push([pos - t, e, 0.0]);
+        positions.push([pos + t, -e, 0.0]);
+        positions.push([pos + t, e, 0.0]);
+
+        // Back face (CCW from -Z, normals -Z)
+        positions.push([pos - t, -e, 0.0]);
+        positions.push([pos - t, e, 0.0]);
+        positions.push([pos + t, -e, 0.0]);
+        positions.push([pos + t, -e, 0.0]);
+        positions.push([pos - t, e, 0.0]);
+        positions.push([pos + t, e, 0.0]);
+
+        // Horizontal lines (along local X axis) — thin quad centered at y = pos
+        // Front face (CCW from +Z, normals +Z)
+        positions.push([-e, pos - t, 0.0]);
+        positions.push([e, pos - t, 0.0]);
+        positions.push([-e, pos + t, 0.0]);
+        positions.push([-e, pos + t, 0.0]);
+        positions.push([e, pos - t, 0.0]);
+        positions.push([e, pos + t, 0.0]);
+
+        // Back face (CCW from -Z, normals -Z)
+        positions.push([-e, pos - t, 0.0]);
+        positions.push([-e, pos + t, 0.0]);
+        positions.push([e, pos - t, 0.0]);
+        positions.push([e, pos - t, 0.0]);
+        positions.push([-e, pos + t, 0.0]);
+        positions.push([e, pos + t, 0.0]);
+
+        for _ in 0..12 {
+            normals.push([0.0, 0.0, 1.0]);
+        }
+        for _ in 0..12 {
+            normals.push([0.0, 0.0, -1.0]);
+        }
+    }
+
+    m.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    m.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    m
+}
+
+pub fn update_grid(
+    mut grid: Query<(&mut Transform, &mut Visibility, &GridEntity, &Mesh3d)>,
+    cameras: Query<&Transform, (With<Camera3d>, Without<GridEntity>)>,
+    view_state_3d: Res<ViewState3d>,
+    grid_settings: Res<GridSettings>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let Some(camera) = cameras.iter().next() else {
+        return;
+    };
+
+    let cam_back = camera.rotation * Vec3::Z;
+    let cam_right = camera.rotation * Vec3::X;
+    let cam_up = camera.rotation * Vec3::Y;
+
+    let grid_rot = Mat4::from_cols(
+        Vec4::new(cam_right.x, cam_right.y, cam_right.z, 0.0),
+        Vec4::new(cam_up.x, cam_up.y, cam_up.z, 0.0),
+        Vec4::new(cam_back.x, cam_back.y, cam_back.z, 0.0),
+        Vec4::new(0.0, 0.0, 0.0, 1.0),
+    );
+
+    for (mut transform, mut visibility, _grid, mesh_handle) in &mut grid {
+        let look_dir = -camera.translation;
+        let dist = look_dir.length();
+        transform.translation = camera.translation + look_dir.normalize() * (dist * 1.01);
+        transform.rotation = Quat::from_mat4(&grid_rot);
+
+        if grid_settings.show_grid {
+            *visibility = Visibility::Visible;
+
+            let pixels_per_meter = view_state_3d.pixels_per_meter();
+            let line_half_thickness = GRID_LINE_SCREEN_WIDTH / pixels_per_meter / 2.0;
+            let world_step = grid_settings.world_step().unwrap_or(0.01);
+
+            if let Some(mesh) = meshes.get_mut(&mesh_handle.0) {
+                *mesh = build_grid_mesh(world_step, line_half_thickness);
+            }
+        } else {
+            *visibility = Visibility::Hidden;
+        }
+    }
+}
+
+pub fn setup_3d(
+    mut commands: Commands,
+    grid_settings: Option<Res<GridSettings>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     commands.spawn((
         Camera3d::default(),
         Projection::from(OrthographicProjection {
@@ -244,6 +363,23 @@ pub fn setup_3d(mut commands: Commands) {
         brightness: light_consts::lux::HALLWAY,
         ..default()
     });
+
+   if let Some(grid_settings) = grid_settings {
+        let world_step = grid_settings.world_step().unwrap_or(0.01);
+        let initial_thickness = GRID_LINE_SCREEN_WIDTH / 10.0;
+        let grid_mesh = meshes.add(build_grid_mesh(world_step, initial_thickness));
+        commands.spawn((
+            Mesh3d(grid_mesh),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::Srgba(css::DARK_GRAY.into()),
+                unlit: true,
+                ..default()
+            })),
+            Transform::default(),
+            Visibility::Visible,
+            GridEntity,
+        ));
+    }
 
     commands.insert_resource(ViewState3d::default());
 }
@@ -292,7 +428,7 @@ pub fn orbit_camera(
 
 pub fn orbit_light(
     cameras: Query<&Transform, (With<Camera3d>, Without<DirectionalLight>)>,
-    mut lights: Query<&mut Transform, (With<DirectionalLight>, Without<Camera3d>)>,
+    mut lights: Query<&mut Transform, (With<DirectionalLight>, Without<Camera3d>, Without<GridEntity>)>,
 ) {
     let camera_transform = cameras.single().unwrap();
     for mut light in &mut lights {
