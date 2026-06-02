@@ -497,8 +497,6 @@ fn render_ui(
                 grid_settings.parse();
             }
 
-            ui.checkbox(&mut grid_settings.show_grid, "Show Grid");
-
             if let Some(camera_transform) = &camera_transform {
                 view_state_3d.draw_interface(ui, &job_bridge.last_result, draw_area, camera_transform, toolbar_height);
             }

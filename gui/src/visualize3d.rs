@@ -320,7 +320,7 @@ pub fn update_grid(
         transform.translation = camera.translation + look_dir.normalize() * (dist * 1.01);
         transform.rotation = Quat::from_mat4(&grid_rot);
 
-        if grid_settings.show_grid {
+        if grid_settings.world_step().is_some() {
             *visibility = Visibility::Visible;
 
             let pixels_per_meter = view_state_3d.pixels_per_meter();

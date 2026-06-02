@@ -19,7 +19,6 @@ use bevy::ecs::resource::Resource;
 
 #[derive(Debug, Resource, Default)]
 pub struct GridSettings {
-    pub show_grid: bool,
     pub unit_string: String,
     unit_meters: Option<f32>,
     subdivisions: i32,
