@@ -68,7 +68,7 @@ fn main() {
     .add_plugins(EguiPlugin::default())
     .add_plugins(OutlinePlugin)
     .add_plugins(WireframePlugin::default())
-    .add_systems(Startup, (setup, setup_3d))
+    .add_systems(Startup, (setup, setup_3d, apply_display_scaling))
     .add_systems(
         Update,
         (
@@ -144,6 +144,31 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
 
     commands.insert_resource(ViewState2d::default());
     commands.insert_resource(GridSettings::default());
+}
+
+fn apply_display_scaling(
+    mut windows: Query<&mut Window>,
+) {
+    for mut window in windows.iter_mut() {
+        let base = window.resolution.base_scale_factor();
+        
+        eprintln!(
+            "Window: physical={}x{}, logical={}, base_scale={}",
+            window.physical_width(),
+            window.physical_height(),
+            window.resolution.width(),
+            base
+        );
+        
+        // Steam Deck (1280x800) with KDE Plasma on Wayland reports an extremely
+        // high scale factor (4.5) even at "100%" display settings, because KDE
+        // calculates high DPI from the small screen size. This makes UI elements
+        // appear far too large. Override to a more reasonable value.
+        if base > 2.0 {
+            window.resolution.set_scale_factor_override(Some(2.0));
+            eprintln!("Applied scale factor override: 2.0");
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -451,19 +476,18 @@ fn render_ui(
             job_bridge.spawn_job(expression.expression.as_str());
         }
 
-        const TOOLBAR_OFFSET: f32 = 110.0;
-
+        let toolbar_height = ui.max_rect().height();
         let mut draw_area = ctx.viewport_rect();
-        draw_area.max.y -= TOOLBAR_OFFSET;
+        draw_area.max.y -= toolbar_height;
 
-        ui.horizontal(|ui| {
+         ui.horizontal(|ui| {
             if job_bridge.active_job.is_some() {
                 ui.label(RichText::new("Working...").color(Color32::YELLOW));
             } else {
                 ui.label(RichText::new("Ready").color(Color32::GREEN));
             }
 
-            view_state_2d.draw_interface(ui, &job_bridge.last_result, draw_area);
+            view_state_2d.draw_interface(ui, &job_bridge.last_result);
 
             ui.label("Grid Size:");
             if ui.add(egui::TextEdit::singleline(&mut grid_settings.unit_string).desired_width(50.0)).changed() {
@@ -471,7 +495,7 @@ fn render_ui(
             }
 
             if let Some(camera_transform) = &camera_transform {
-                view_state_3d.draw_interface(ui, &job_bridge.last_result, draw_area, camera_transform, TOOLBAR_OFFSET);
+                view_state_3d.draw_interface(ui, &job_bridge.last_result, draw_area, camera_transform, toolbar_height);
             }
         });
 
@@ -510,6 +534,10 @@ fn render_ui(
         }
         Some(Ok(JobOutput::LineString(line_string))) => {
             draw_thing(ctx, |ui, draw_area| {
+                if view_state_2d.fit_to_screen_requested {
+                    view_state_2d.fit_to_screen(&JobOutput::LineString(line_string.clone()), draw_area);
+                    view_state_2d.fit_to_screen_requested = false;
+                }
                 let painter = view_state_2d.prep_for_painting(ui);
                 draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
                 let pixels_per_meter = view_state_2d.pixels_per_meter();
@@ -530,6 +558,10 @@ fn render_ui(
         }
         Some(Ok(JobOutput::Polygon { polygon, mesh })) => {
             draw_thing(ctx, |ui, draw_area| {
+                if view_state_2d.fit_to_screen_requested {
+                    view_state_2d.fit_to_screen(&JobOutput::Polygon { polygon: polygon.clone(), mesh: mesh.clone() }, draw_area);
+                    view_state_2d.fit_to_screen_requested = false;
+                }
                 let painter = view_state_2d.prep_for_painting(ui);
                 draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
                 paint_polygon(
@@ -546,6 +578,10 @@ fn render_ui(
             meshes,
         })) => {
             draw_thing(ctx, |ui, draw_area| {
+                if view_state_2d.fit_to_screen_requested {
+                    view_state_2d.fit_to_screen(&JobOutput::PolygonSet { polygon_set: polygon_set.clone(), meshes: meshes.clone() }, draw_area);
+                    view_state_2d.fit_to_screen_requested = false;
+                }
                 let painter = view_state_2d.prep_for_painting(ui);
                 draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
                 for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {

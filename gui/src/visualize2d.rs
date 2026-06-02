@@ -169,6 +169,7 @@ pub fn draw_grid(
 pub struct ViewState2d {
     offset: egui::Vec2,
     zoom: f32,
+    pub fit_to_screen_requested: bool,
 }
 
 impl Default for ViewState2d {
@@ -176,6 +177,7 @@ impl Default for ViewState2d {
         let mut view_state = ViewState2d {
             offset: egui::Vec2::ZERO,
             zoom: 0.0,
+            fit_to_screen_requested: false,
         };
         view_state.set_pixels_per_meter(10.0);
         view_state
@@ -214,7 +216,7 @@ impl ViewState2d {
         self.offset
     }
 
-    fn fit_to_screen(&mut self, value: &JobOutput, draw_area: Rect) {
+    pub fn fit_to_screen(&mut self, value: &JobOutput, draw_area: Rect) {
         let bounds = match value {
             JobOutput::LineString(line_string) => line_string.0.bounding_rect(),
             JobOutput::Polygon { polygon, .. } => polygon.0.bounding_rect(),
@@ -240,7 +242,6 @@ impl ViewState2d {
         &mut self,
         ui: &mut Ui,
         last_result: &Option<Result<JobOutput, JobError>>,
-        draw_area: Rect,
     ) {
         if let Some(Ok(value)) = last_result
             && matches!(
@@ -249,7 +250,7 @@ impl ViewState2d {
             )
             && ui.button("Fit to screen").clicked()
         {
-            self.fit_to_screen(value, draw_area);
+            self.fit_to_screen_requested = true;
         }
     }
 }
