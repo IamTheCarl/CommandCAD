@@ -159,22 +159,8 @@ impl ViewState3d {
         &mut self,
         ui: &mut egui::Ui,
         last_result: &Option<Result<JobOutput, crate::JobError>>,
-        draw_area: egui::Rect,
-        camera_transform: &Transform,
-        toolbar_offset: f32,
     ) {
         if let Some(Ok(JobOutput::ManifoldMesh(_state))) = last_result {
-            if ui.button("Fit to screen").clicked() {
-                self.fit_to_screen(
-                    draw_area,
-                    camera_transform,
-                    toolbar_offset,
-                    &_state.manifold,
-                );
-            }
-
-            ui.separator();
-
             ui.checkbox(&mut self.show_wireframe, "Show Wireframe");
 
             ui.separator();

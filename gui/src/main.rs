@@ -492,14 +492,25 @@ fn render_ui(
 
             view_state_2d.draw_interface(ui, &job_bridge.last_result);
 
+            if let Some(cam) = &camera_transform {
+                if let Some(Ok(JobOutput::ManifoldMesh(_state))) = &job_bridge.last_result {
+                    if ui.button("Fit to screen").clicked() {
+                        view_state_3d.fit_to_screen(
+                            draw_area,
+                            cam,
+                            toolbar_height,
+                            &_state.manifold,
+                        );
+                    }
+                }
+            }
+
             ui.label("Grid Size:");
             if ui.add(egui::TextEdit::singleline(&mut grid_settings.unit_string).desired_width(50.0)).changed() {
                 grid_settings.parse();
             }
 
-            if let Some(camera_transform) = &camera_transform {
-                view_state_3d.draw_interface(ui, &job_bridge.last_result, draw_area, camera_transform, toolbar_height);
-            }
+            view_state_3d.draw_interface(ui, &job_bridge.last_result);
         });
 
         if let Err(error) = &job_bridge.file_watcher {
