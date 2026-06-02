@@ -217,20 +217,20 @@ impl ViewState3d {
     }
 }
 
-fn build_grid_mesh(world_step: f32, line_half_thickness: f32) -> Mesh {
+fn build_grid_mesh(world_step: f32, line_half_thickness: f32, grid_extent: f32) -> Mesh {
     let mut m = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
     let mut positions = vec![];
     let mut normals = vec![];
 
-    let first_line_idx = (-GRID_MAX_EXTENT / world_step).floor() as i32;
-    let last_line_idx = (GRID_MAX_EXTENT / world_step).ceil() as i32;
+    let first_line_idx = (-grid_extent / world_step).floor() as i32;
+    let last_line_idx = (grid_extent / world_step).ceil() as i32;
 
     for i in first_line_idx..=last_line_idx {
         let pos = (i as f32) * world_step;
 
         // Vertical lines (along local Y axis) — thin quad centered at x = pos
         let t = line_half_thickness;
-        let e = GRID_MAX_EXTENT;
+        let e = grid_extent;
 
         // Front face (CCW from +Z, normals +Z)
         positions.push([pos - t, -e, 0.0]);
@@ -280,18 +280,18 @@ fn build_grid_mesh(world_step: f32, line_half_thickness: f32) -> Mesh {
 
 pub fn update_grid(
     mut grid: Query<(&mut Transform, &mut Visibility, &GridEntity, &Mesh3d)>,
-    cameras: Query<&Transform, (With<Camera3d>, Without<GridEntity>)>,
+    cameras: Query<(&Camera, &Transform), (With<Camera3d>, Without<GridEntity>)>,
     view_state_3d: Res<ViewState3d>,
     grid_settings: Res<GridSettings>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    let Some(camera) = cameras.iter().next() else {
+    let Some((camera, camera_transform)) = cameras.iter().next() else {
         return;
     };
 
-    let cam_back = camera.rotation * Vec3::Z;
-    let cam_right = camera.rotation * Vec3::X;
-    let cam_up = camera.rotation * Vec3::Y;
+    let cam_back = camera_transform.rotation * Vec3::Z;
+    let cam_right = camera_transform.rotation * Vec3::X;
+    let cam_up = camera_transform.rotation * Vec3::Y;
 
     let grid_rot = Mat4::from_cols(
         Vec4::new(cam_right.x, cam_right.y, cam_right.z, 0.0),
@@ -300,14 +300,23 @@ pub fn update_grid(
         Vec4::new(0.0, 0.0, 0.0, 1.0),
     );
 
+    let viewport = match camera.physical_viewport_size() {
+        Some(size) => size,
+        None => return,
+    };
+
+    let pixels_per_meter = view_state_3d.pixels_per_meter();
+    let visible_x = viewport.x as f32 / pixels_per_meter;
+    let visible_y = viewport.y as f32 / pixels_per_meter;
+    let grid_extent = (visible_x.max(visible_y) * 1.25).max(GRID_MAX_EXTENT);
+
     for (mut transform, mut visibility, _grid, mesh_handle) in &mut grid {
-        let look_dir = -camera.translation;
+        let look_dir = -camera_transform.translation;
         let dist = look_dir.length();
-        transform.translation = camera.translation + look_dir.normalize() * (dist * 1.01);
+        transform.translation = camera_transform.translation + look_dir.normalize() * (dist * 1.01);
         transform.rotation = Quat::from_mat4(&grid_rot);
 
         if grid_settings.world_step().is_some() {
-            let pixels_per_meter = view_state_3d.pixels_per_meter();
             let world_step = grid_settings.world_step().unwrap_or(0.01);
             let pixels_per_cell = world_step * pixels_per_meter;
 
@@ -318,7 +327,7 @@ pub fn update_grid(
                 let line_half_thickness = GRID_LINE_SCREEN_WIDTH / pixels_per_meter / 2.0;
 
                 if let Some(mesh) = meshes.get_mut(&mesh_handle.0) {
-                    *mesh = build_grid_mesh(world_step, line_half_thickness);
+                    *mesh = build_grid_mesh(world_step, line_half_thickness, grid_extent);
                 }
             }
         } else {
@@ -358,7 +367,7 @@ pub fn setup_3d(
    if let Some(grid_settings) = grid_settings {
         let world_step = grid_settings.world_step().unwrap_or(0.01);
         let initial_thickness = GRID_LINE_SCREEN_WIDTH / 10.0;
-        let grid_mesh = meshes.add(build_grid_mesh(world_step, initial_thickness));
+        let grid_mesh = meshes.add(build_grid_mesh(world_step, initial_thickness, GRID_MAX_EXTENT));
         commands.spawn((
             Mesh3d(grid_mesh),
             MeshMaterial3d(materials.add(StandardMaterial {
