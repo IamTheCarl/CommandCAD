@@ -307,14 +307,19 @@ pub fn update_grid(
         transform.rotation = Quat::from_mat4(&grid_rot);
 
         if grid_settings.world_step().is_some() {
-            *visibility = Visibility::Visible;
-
             let pixels_per_meter = view_state_3d.pixels_per_meter();
-            let line_half_thickness = GRID_LINE_SCREEN_WIDTH / pixels_per_meter / 2.0;
             let world_step = grid_settings.world_step().unwrap_or(0.01);
+            let pixels_per_cell = world_step * pixels_per_meter;
 
-            if let Some(mesh) = meshes.get_mut(&mesh_handle.0) {
-                *mesh = build_grid_mesh(world_step, line_half_thickness);
+            if pixels_per_cell < 3.0 {
+                *visibility = Visibility::Hidden;
+            } else {
+                *visibility = Visibility::Visible;
+                let line_half_thickness = GRID_LINE_SCREEN_WIDTH / pixels_per_meter / 2.0;
+
+                if let Some(mesh) = meshes.get_mut(&mesh_handle.0) {
+                    *mesh = build_grid_mesh(world_step, line_half_thickness);
+                }
             }
         } else {
             *visibility = Visibility::Hidden;
