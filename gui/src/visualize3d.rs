@@ -30,7 +30,6 @@ use crate::grid::GridSettings;
 use crate::{JobBridge, JobOutput};
 use interpreter::values::manifold_mesh::ManifoldMesh3D;
 
-
 const GRID_MAX_EXTENT: f32 = 10.0;
 const GRID_LINE_SCREEN_WIDTH: f32 = 1.0; // target line width in screen pixels
 
@@ -218,7 +217,10 @@ impl ViewState3d {
 }
 
 fn build_grid_mesh(world_step: f32, line_half_thickness: f32, grid_extent: f32) -> Mesh {
-    let mut m = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    let mut m = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
     let mut positions = vec![];
     let mut normals = vec![];
 
@@ -311,9 +313,7 @@ pub fn update_grid(
     let grid_extent = (visible_x.max(visible_y) * 1.25).max(GRID_MAX_EXTENT);
 
     for (mut transform, mut visibility, _grid, mesh_handle) in &mut grid {
-        let look_dir = -camera_transform.translation;
-        let dist = look_dir.length();
-        transform.translation = camera_transform.translation + look_dir.normalize() * (dist * 1.01);
+        transform.translation = Vec3::ZERO;
         transform.rotation = Quat::from_mat4(&grid_rot);
 
         if grid_settings.world_step().is_some() {
@@ -364,15 +364,20 @@ pub fn setup_3d(
         ..default()
     });
 
-   if let Some(grid_settings) = grid_settings {
+    if let Some(grid_settings) = grid_settings {
         let world_step = grid_settings.world_step().unwrap_or(0.01);
         let initial_thickness = GRID_LINE_SCREEN_WIDTH / 10.0;
-        let grid_mesh = meshes.add(build_grid_mesh(world_step, initial_thickness, GRID_MAX_EXTENT));
+        let grid_mesh = meshes.add(build_grid_mesh(
+            world_step,
+            initial_thickness,
+            GRID_MAX_EXTENT,
+        ));
         commands.spawn((
             Mesh3d(grid_mesh),
             MeshMaterial3d(materials.add(StandardMaterial {
                 base_color: Color::Srgba(css::DARK_GRAY.into()),
                 unlit: true,
+                depth_bias: 1_000_000.0,
                 ..default()
             })),
             Transform::default(),
@@ -428,7 +433,14 @@ pub fn orbit_camera(
 
 pub fn orbit_light(
     cameras: Query<&Transform, (With<Camera3d>, Without<DirectionalLight>)>,
-    mut lights: Query<&mut Transform, (With<DirectionalLight>, Without<Camera3d>, Without<GridEntity>)>,
+    mut lights: Query<
+        &mut Transform,
+        (
+            With<DirectionalLight>,
+            Without<Camera3d>,
+            Without<GridEntity>,
+        ),
+    >,
 ) {
     let camera_transform = cameras.single().unwrap();
     for mut light in &mut lights {

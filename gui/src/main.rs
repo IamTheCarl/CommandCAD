@@ -553,7 +553,6 @@ fn render_ui(
                     view_state_2d.fit_to_screen_requested = false;
                 }
                 let painter = view_state_2d.prep_for_painting(ui);
-                draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
                 let pixels_per_meter = view_state_2d.pixels_per_meter();
                 let center_offset = draw_area.center().to_vec2();
                 let view_offset =
@@ -568,6 +567,7 @@ fn render_ui(
                     StrokeKind::Middle,
                     &line_string.0,
                 ));
+                draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
             });
         }
         Some(Ok(JobOutput::Polygon { polygon, mesh })) => {
@@ -577,7 +577,6 @@ fn render_ui(
                     view_state_2d.fit_to_screen_requested = false;
                 }
                 let painter = view_state_2d.prep_for_painting(ui);
-                draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
                 paint_polygon(
                     &painter,
                     draw_area,
@@ -601,6 +600,7 @@ fn render_ui(
                 for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
                     paint_polygon(&painter, draw_area, &view_state_2d, polygon, mesh.clone());
                 }
+                draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
             });
         }
         Some(Ok(JobOutput::ManifoldMesh(_manifold_state))) => {
