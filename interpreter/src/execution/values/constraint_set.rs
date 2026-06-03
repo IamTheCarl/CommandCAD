@@ -19,6 +19,10 @@
 use common_data_types::{Dimension, Float};
 use hashable_map::{HashableMap, HashableSet};
 use imstr::ImString;
+
+use indexmap::IndexMap;
+
+use crate::execution::values::dictionary::ArgumentName;
 use selen::api::{add, div, eq, float, ge, gt, le, lt, mul, ne, sub, ExprBuilder, Model, VarId};
 
 use crate::{
@@ -629,11 +633,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     let callable = BuiltFunction {
         signature: Arc::new(Signature {
             argument_type: StructDefinition {
-                members: Arc::new(HashableMap::from(HashMap::new())),
+                members: Arc::new(IndexMap::new()),
                 variadic: true,
             },
             return_type: ValueType::Dictionary(StructDefinition {
-                members: Arc::new(HashableMap::new()),
+                members: Arc::new(IndexMap::new()),
                 variadic: true,
             }),
         }),

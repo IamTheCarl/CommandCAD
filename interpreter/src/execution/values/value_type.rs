@@ -18,8 +18,10 @@
 use std::{borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
 
 use common_data_types::Dimension;
-use hashable_map::{HashableMap, HashableSet};
+use hashable_map::HashableSet;
 use imstr::ImString;
+
+use indexmap::IndexMap;
 
 use super::{
     closure::Signature as ClosureSignature, Boolean, Object, SignedInteger, StaticTypeName,
@@ -345,7 +347,7 @@ impl Display for StructMember {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StructDefinition {
-    pub members: Arc<HashableMap<ImString, StructMember>>,
+    pub members: Arc<IndexMap<ImString, StructMember>>,
     pub variadic: bool,
 }
 
@@ -360,7 +362,7 @@ impl StructDefinition {
             members.insert(name, StructMember::new(context, member)?);
         }
 
-        let members = Arc::new(HashableMap::from(members));
+        let members = Arc::new(members.into_iter().collect());
         let variadic = source.node.variadic;
         Ok(Self { members, variadic })
     }
@@ -368,7 +370,7 @@ impl StructDefinition {
     pub fn fill_defaults(&self, dictionary: Dictionary) -> Dictionary {
         let data = Arc::unwrap_or_clone(dictionary.data);
 
-        let mut members: HashableMap<ImString, Value> = data.members;
+        let mut members: IndexMap<ImString, Value> = data.members;
         let struct_def_variadic = data.struct_def.variadic;
         let mut struct_def_members = Arc::unwrap_or_clone(data.struct_def.members);
 
@@ -486,7 +488,7 @@ impl StaticTypeName for StructDefinition {
 impl From<HashMap<ImString, StructMember>> for StructDefinition {
     fn from(map: HashMap<ImString, StructMember>) -> Self {
         Self {
-            members: Arc::new(HashableMap::from(map)),
+            members: Arc::new(map.into_iter().collect()),
             variadic: false,
         }
     }

@@ -341,8 +341,10 @@ macro_rules! build_argument_signature_list {
 #[macro_export]
 macro_rules! build_struct_definition {
     (variadic: $variadic:literal, ($($arg:ident: $ty:path $(= $default:expr)?),*)) => {{
+        let map: std::collections::HashMap<imstr::ImString, $crate::execution::values::StructMember> = std::collections::HashMap::from($crate::build_argument_signature_list!($($arg: $ty $(= $default)?),*));
+        let converted: indexmap::IndexMap<imstr::ImString, $crate::execution::values::StructMember> = map.into_iter().collect();
         $crate::execution::values::StructDefinition {
-            members: std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from($crate::build_argument_signature_list!($($arg: $ty $(= $default)?),*)))),
+            members: std::sync::Arc::new(converted),
             variadic: $variadic,
         }
     }};
@@ -633,6 +635,7 @@ mod test {
         values::value_type::{MissmatchedField, TypeQualificationError},
     };
     use hashable_map::HashableMap;
+    use indexmap::IndexMap;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -647,7 +650,7 @@ mod test {
                 data: Arc::new(UserClosureInternals {
                     signature: Arc::new(Signature {
                         argument_type: StructDefinition {
-                            members: HashableMap::new().into(),
+                            members: Arc::new(IndexMap::new()),
                             variadic: false,
                         },
                         return_type: ValueType::UnsignedInteger,

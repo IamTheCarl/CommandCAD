@@ -15,6 +15,7 @@ enum_dispatch = "0.3"
 enum_downcast = { version = "0.1", features = [ "derive" ] }
 num-traits = "0.2"
 hashable-map = { version = "0.4.0", features = ["serde"] }
+indexmap = { version = "2", features = ["serde"] }
 imstr = "0.2.0"
 nalgebra = { workspace = true }
 stack = "0.4.0"

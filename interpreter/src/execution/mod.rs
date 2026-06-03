@@ -720,7 +720,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
 #[cfg(test)]
 mod test {
-    use hashable_map::HashableMap;
+    use indexmap::IndexMap;
     use std::{collections::HashMap, sync::Arc};
 
     use super::*;
@@ -756,13 +756,13 @@ mod test {
         assert_eq!(
             product,
             values::ValueType::Dictionary(values::StructDefinition {
-                members: Arc::new(HashableMap::from(HashMap::from([(
+                members: Arc::new(HashMap::from([(
                     "name".into(),
                     values::StructMember {
                         ty: ValueType::TypeNone,
                         default: Some(Value::ValueNone(values::ValueNone))
                     }
-                )]))),
+                )]).into_iter().collect()),
                 variadic: true
             })
             .into()

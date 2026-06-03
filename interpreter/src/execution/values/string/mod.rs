@@ -20,6 +20,8 @@ use common_data_types::{Dimension, Float};
 use hashable_map::HashableMap;
 use imstr::ImString;
 
+use indexmap::IndexMap;
+
 use crate::{
     build_closure_type, build_method,
     execution::{
@@ -259,7 +261,7 @@ fn register_format_method(database: &mut BuiltinCallableDatabase) {
     let callable = BuiltFunction {
         signature: Arc::new(Signature {
             argument_type: StructDefinition {
-                members: Arc::new(HashableMap::from(HashMap::new())),
+                members: Arc::new(IndexMap::new()),
                 variadic: true,
             },
             return_type: ValueType::String,
