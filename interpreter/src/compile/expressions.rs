@@ -7,7 +7,7 @@ use unwrap_enum::EnumAs;
 
 use crate::{
     compile::{constraint_set::ConstraintSet, unwrap_missing, Scalar},
-    execution::find_all_variable_accesses_in_expression,
+    execution::{find_all_variable_accesses_in_expression, values::dictionary::ArgumentName},
 };
 
 use super::{nodes, AstNode, Error, Parse};
@@ -15,7 +15,7 @@ use super::{nodes, AstNode, Error, Parse};
 /// Used for sorting operations that have dependencies on other operations for parallel execution.
 trait DependentOperation {
     fn original_index(&self) -> usize;
-    fn name(&self) -> &ImString;
+    fn name(&self) -> &ArgumentName;
     fn dependencies(&self) -> &HashableSet<ImString>;
 }
 
@@ -32,16 +32,29 @@ where
             let a = a.dependencies();
             let b = b.dependencies();
 
-            // Dependency takes president.
-            if a.contains(b_name) && a_index > b_index {
-                Ordering::Greater
-            } else if b.contains(a_name) && b_index > a_index {
-                Ordering::Less
-            } else {
-                // If they have no dependency on each other, put the ones with fewer dependencies
-                // as a higher priority.
-                a.len().cmp(&b.len())
+            // Extract ImString from ArgumentName for dependency comparison.
+            // Positional args have empty dependency sets, so they'll sort first naturally.
+            let a_name_str = match a_name {
+                ArgumentName::Named(s) => Some(s),
+                ArgumentName::Positional(_) => None,
+            };
+            let b_name_str = match b_name {
+                ArgumentName::Named(s) => Some(s),
+                ArgumentName::Positional(_) => None,
+            };
+
+            // Only check dependencies for named arguments (positional args have empty deps).
+            if let (Some(b_str), Some(a_str)) = (b_name_str, a_name_str) {
+                if a.contains(b_str) && a_index > b_index {
+                    return Ordering::Greater;
+                } else if b.contains(a_str) && b_index > a_index {
+                    return Ordering::Less;
+                }
             }
+
+            // If they have no dependency on each other, put the ones with fewer dependencies
+            // as a higher priority.
+            a.len().cmp(&b.len())
         });
 
         let mut compute_groups = Vec::new();
@@ -825,19 +838,33 @@ impl<'t> Parse<'t, nodes::If<'t>> for IfExpression {
 pub struct DictionaryMemberAssignment {
     pub index: usize,
     pub dependencies: HashableSet<ImString>,
-    pub name: AstNode<ImString>,
+    pub name: ArgumentName,
     pub assignment: AstNode<Expression>,
 }
 
-impl<'t> Parse<'t, nodes::DictionaryMemberAssignment<'t>> for DictionaryMemberAssignment {
+impl<'t> Parse<'t, nodes::DictionaryArgument<'t>> for DictionaryMemberAssignment {
     fn parse<'i>(
         file: &Arc<PathBuf>,
         input: &'i str,
-        value: nodes::DictionaryMemberAssignment<'t>,
+        value: nodes::DictionaryArgument<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
-        let name = value.name()?;
-        let name = ImString::parse(file, input, name)?;
-        let assignment = Expression::parse(file, input, value.assignment()?)?;
+        let key = value.key()?;
+        let key_expr = Expression::parse(file, input, key)?;
+
+        // Determine if this is a named or positional argument.
+        // A key expression that is a bare identifier with no value = positional arg.
+        // A key expression that has a value = named arg (key is the name).
+        let (name, assignment) = if let Some(val_node) = value.value() {
+            // Named argument: key is the name identifier
+            let assignment = Expression::parse(file, input, val_node?)?;
+            let name = extract_name_from_key(&key_expr);
+            (name, assignment)
+        } else {
+            // Positional argument: no value field
+            let assignment = key_expr;
+            let name = ArgumentName::Positional(0); // index set later
+            (name, assignment)
+        };
 
         let mut dependencies = HashableSet::new();
 
@@ -861,13 +888,41 @@ impl<'t> Parse<'t, nodes::DictionaryMemberAssignment<'t>> for DictionaryMemberAs
     }
 }
 
+/// Extract an ArgumentName from a key expression.
+/// If the key is a bare identifier (no value), it's positional.
+/// If the key has a value, the key itself is the name.
+fn extract_name_from_key(key_expr: &AstNode<Expression>) -> ArgumentName {
+    // Check if this is a named argument by looking at the raw node.
+    // A named argument has both key and value fields; the key is an identifier.
+    // Since we can't easily check the raw node here, we use a heuristic:
+    // If the key expression is a bare identifier, it could be positional (no value) or named (key).
+    // The distinction is already made in the parse function based on value() presence.
+    // Here, if we're called, it means value() was Some, so this is a named arg.
+    // Extract the identifier from the key expression.
+    if let Some(ident) = extract_identifier_from_expr(&key_expr.node) {
+        ArgumentName::Named(ident.clone())
+    } else {
+        // Fallback - shouldn't happen for valid named args
+        ArgumentName::Positional(0)
+    }
+}
+
+/// Try to extract an ImString identifier from an expression AST node.
+fn extract_identifier_from_expr(node: &Expression) -> Option<ImString> {
+    // Check if this is a bare identifier expression
+    match node {
+        Expression::Identifier(ident_node) => Some(ident_node.node.clone()),
+        _ => None,
+    }
+}
+
 impl DependentOperation for AstNode<DictionaryMemberAssignment> {
     fn original_index(&self) -> usize {
         self.node.index
     }
 
-    fn name(&self) -> &ImString {
-        &self.node.name.node
+    fn name(&self) -> &ArgumentName {
+        &self.node.name
     }
 
     fn dependencies(&self) -> &HashableSet<ImString> {
@@ -897,7 +952,7 @@ impl<'t> Parse<'t, nodes::DictionaryConstruction<'t>> for DictionaryConstruction
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let mut assignments = Vec::new();
         let mut cursor = value.walk();
-        let assignments_iter = value.assignmentss(&mut cursor);
+        let assignments_iter = value.argumentss(&mut cursor);
 
         let mut variable_names = HashSet::new();
         let mut index = 0;
@@ -906,16 +961,25 @@ impl<'t> Parse<'t, nodes::DictionaryConstruction<'t>> for DictionaryConstruction
             let assignment = assignment?;
 
             // Skip the commas.
-            if let Some(assignment) = assignment.as_dictionary_member_assignment() {
+            if let Some(assignment) = assignment.as_dictionary_argument() {
                 let mut assignment = DictionaryMemberAssignment::parse(file, input, assignment)?;
                 assignment
                     .node
                     .dependencies
                     .retain(|name| variable_names.contains(name));
                 assignment.node.index = index;
-                index += 1;
 
-                variable_names.insert(assignment.node.name.node.clone());
+                // Update positional arg names with their actual index.
+                if let ArgumentName::Positional(_) = assignment.node.name {
+                    assignment.node.name = ArgumentName::Positional(index);
+                }
+
+                // Only named args are added to variable_names for dependency tracking.
+                if let ArgumentName::Named(ref name) = assignment.node.name {
+                    variable_names.insert(name.clone());
+                }
+
+                index += 1;
                 assignments.push(assignment);
             }
         }
@@ -1097,6 +1161,7 @@ impl<'t> Parse<'t, nodes::MethodCall<'t>> for MethodCall {
 pub struct LetInAssignment {
     pub index: usize,
     pub ident: AstNode<ImString>,
+    pub argument_name: ArgumentName,
     pub dependencies: HashableSet<ImString>,
     pub value: AstNode<Expression>,
 }
@@ -1106,8 +1171,8 @@ impl DependentOperation for AstNode<LetInAssignment> {
         self.node.index
     }
 
-    fn name(&self) -> &ImString {
-        &self.node.ident.node
+    fn name(&self) -> &ArgumentName {
+        &self.node.argument_name
     }
 
     fn dependencies(&self) -> &HashableSet<ImString> {
@@ -1122,6 +1187,7 @@ impl<'t> Parse<'t, nodes::LetInAssignment<'t>> for LetInAssignment {
         node: nodes::LetInAssignment<'t>,
     ) -> Result<AstNode<Self>, Error<'t, 'i>> {
         let ident = ImString::parse(file, input, node.ident()?)?;
+        let ident_name = ident.node.clone();
 
         let value = Expression::parse(file, input, node.value()?)?;
 
@@ -1140,6 +1206,7 @@ impl<'t> Parse<'t, nodes::LetInAssignment<'t>> for LetInAssignment {
             Self {
                 index: 0,
                 ident,
+                argument_name: ArgumentName::Named(ident_name),
                 dependencies,
                 value,
             },
@@ -1351,13 +1418,7 @@ mod test {
         let a = &construction_expression.node.assignments[0];
         let b = &construction_expression.node.assignments[1];
 
-        assert_eq!(
-            a.node.name,
-            AstNode {
-                reference: a.node.name.reference.clone(),
-                node: "a".into()
-            }
-        );
+        assert_eq!(a.node.name, ArgumentName::Named("a".into()));
         assert_eq!(
             a.node.assignment,
             AstNode {
@@ -1369,13 +1430,7 @@ mod test {
             }
         );
 
-        assert_eq!(
-            b.node.name,
-            AstNode {
-                reference: b.node.name.reference.clone(),
-                node: "b".into()
-            }
-        );
+        assert_eq!(b.node.name, ArgumentName::Named("b".into()));
         assert_eq!(
             b.node.assignment,
             AstNode {
@@ -2028,10 +2083,7 @@ mod test {
                                     reference: dict_assignment.reference.clone(),
                                     node: DictionaryMemberAssignment {
                                         index: 0,
-                                        name: AstNode {
-                                            reference: dict_assignment.node.name.reference.clone(),
-                                            node: "value".into()
-                                        },
+                                        name: ArgumentName::Named("value".into()),
                                         dependencies: HashableSet::from(HashSet::from_iter([])),
                                         assignment: AstNode {
                                             reference: dict_assignment
@@ -2146,10 +2198,7 @@ mod test {
                                     node: DictionaryMemberAssignment {
                                         index: 0,
                                         dependencies: HashableSet::from(HashSet::from_iter([])),
-                                        name: AstNode {
-                                            reference: dict_assignment.node.name.reference.clone(),
-                                            node: "value".into()
-                                        },
+                                        name: ArgumentName::Named("value".into()),
                                         assignment: AstNode {
                                             reference: dict_assignment
                                                 .node
@@ -2215,6 +2264,7 @@ mod test {
                                             reference: value1_ident.reference.clone(),
                                             node: "value1".into(),
                                         },
+                                        argument_name: ArgumentName::Named("value1".into()),
                                         index: 0,
                                         dependencies: HashableSet::new(),
                                         value: AstNode {
@@ -2233,6 +2283,7 @@ mod test {
                                             reference: value2_ident.reference.clone(),
                                             node: "value2".into(),
                                         },
+                                        argument_name: ArgumentName::Named("value2".into()),
                                         index: 1,
                                         dependencies: HashableSet::new(),
                                         value: AstNode {
@@ -2265,6 +2316,7 @@ mod test {
     #[derive(Debug, PartialEq, Eq)]
     struct TestDependency {
         name: ImString,
+        argument_name: ArgumentName,
         index: usize,
         dependencies: HashableSet<ImString>,
     }
@@ -2275,9 +2327,11 @@ mod test {
             name: impl Into<ImString>,
             dependencies: impl IntoIterator<Item = &'static str>,
         ) -> Self {
+            let name = name.into();
             Self {
                 index,
-                name: name.into(),
+                name: name.clone(),
+                argument_name: ArgumentName::Named(name),
                 dependencies: HashableSet::from(HashSet::from_iter(
                     dependencies.into_iter().map(ImString::from),
                 )),
@@ -2290,8 +2344,8 @@ mod test {
             self.index
         }
 
-        fn name(&self) -> &ImString {
-            &self.name
+        fn name(&self) -> &ArgumentName {
+            &self.argument_name
         }
 
         fn dependencies(&self) -> &HashableSet<ImString> {

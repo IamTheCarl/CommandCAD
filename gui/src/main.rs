@@ -44,7 +44,9 @@ use tempfile::TempDir;
 
 use crate::{
     grid::GridSettings,
-    visualize2d::{ViewState2d, build_fill_mesh_from_polygon, draw_grid, paint_linestring, paint_polygon},
+    visualize2d::{
+        ViewState2d, build_fill_mesh_from_polygon, draw_grid, paint_linestring, paint_polygon,
+    },
     visualize3d::{
         ViewState3d, orbit_camera, orbit_light, setup_3d, spawn_meshes, sync_wireframe_visibility,
         update_3d_camera, update_grid,
@@ -52,8 +54,8 @@ use crate::{
 };
 
 mod grid;
- mod visualize2d;
- mod visualize3d;
+mod visualize2d;
+mod visualize3d;
 
 fn main() {
     let mut app = App::new();
@@ -70,7 +72,10 @@ fn main() {
     .add_plugins(EguiPlugin::default())
     .add_plugins(OutlinePlugin)
     .add_plugins(WireframePlugin::default())
-    .add_systems(Startup, (setup, setup_3d.after(setup), apply_display_scaling))
+    .add_systems(
+        Startup,
+        (setup, setup_3d.after(setup), apply_display_scaling),
+    )
     .add_systems(
         Update,
         (
@@ -149,12 +154,10 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
     commands.insert_resource(GridSettings::default());
 }
 
-fn apply_display_scaling(
-    mut windows: Query<&mut Window>,
-) {
+fn apply_display_scaling(mut windows: Query<&mut Window>) {
     for mut window in windows.iter_mut() {
         let base = window.resolution.base_scale_factor();
-        
+
         eprintln!(
             "Window: physical={}x{}, logical={}, base_scale={}",
             window.physical_width(),
@@ -162,7 +165,7 @@ fn apply_display_scaling(
             window.resolution.width(),
             base
         );
-        
+
         // Steam Deck (1280x800) with KDE Plasma on Wayland reports an extremely
         // high scale factor (4.5) even at "100%" display settings, because KDE
         // calculates high DPI from the small screen size. This makes UI elements
@@ -549,7 +552,8 @@ fn render_ui(
         Some(Ok(JobOutput::LineString(line_string))) => {
             draw_thing(ctx, |ui, draw_area| {
                 if view_state_2d.fit_to_screen_requested {
-                    view_state_2d.fit_to_screen(&JobOutput::LineString(line_string.clone()), draw_area);
+                    view_state_2d
+                        .fit_to_screen(&JobOutput::LineString(line_string.clone()), draw_area);
                     view_state_2d.fit_to_screen_requested = false;
                 }
                 let painter = view_state_2d.prep_for_painting(ui);
@@ -573,7 +577,13 @@ fn render_ui(
         Some(Ok(JobOutput::Polygon { polygon, mesh })) => {
             draw_thing(ctx, |ui, draw_area| {
                 if view_state_2d.fit_to_screen_requested {
-                    view_state_2d.fit_to_screen(&JobOutput::Polygon { polygon: polygon.clone(), mesh: mesh.clone() }, draw_area);
+                    view_state_2d.fit_to_screen(
+                        &JobOutput::Polygon {
+                            polygon: polygon.clone(),
+                            mesh: mesh.clone(),
+                        },
+                        draw_area,
+                    );
                     view_state_2d.fit_to_screen_requested = false;
                 }
                 let painter = view_state_2d.prep_for_painting(ui);
@@ -592,7 +602,13 @@ fn render_ui(
         })) => {
             draw_thing(ctx, |ui, draw_area| {
                 if view_state_2d.fit_to_screen_requested {
-                    view_state_2d.fit_to_screen(&JobOutput::PolygonSet { polygon_set: polygon_set.clone(), meshes: meshes.clone() }, draw_area);
+                    view_state_2d.fit_to_screen(
+                        &JobOutput::PolygonSet {
+                            polygon_set: polygon_set.clone(),
+                            meshes: meshes.clone(),
+                        },
+                        draw_area,
+                    );
                     view_state_2d.fit_to_screen_requested = false;
                 }
                 let painter = view_state_2d.prep_for_painting(ui);

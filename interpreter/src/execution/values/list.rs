@@ -526,7 +526,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             let mut values: Vec<Value> = Vec::with_capacity(this.values.len());
 
             for value in this.values.iter() {
-                let retain = f.call(context, Dictionary::new(context, HashMap::from_iter([
+                let retain = f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                     (
                         "c".into(),
                         value.clone()

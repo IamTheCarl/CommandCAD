@@ -88,7 +88,7 @@ With Binary Expression
 Call function
 ==================
 
-value(value=value)
+value(a = b)
 
 ---
 
@@ -98,8 +98,75 @@ value(value=value)
       (expression
         (identifier))
       (dictionary_construction
-        (dictionary_member_assignment
-          (identifier)
+        (dictionary_argument
+          (expression
+            (identifier))
+          (expression
+            (identifier)))))))
+
+==================
+Call method deep in tree
+==================
+
+value.value::method(a = b)
+
+---
+
+(source_file
+  (expression
+    (method_call
+      (expression
+        (member_access
+          (expression
+            (identifier))
+          (identifier)))
+      (identifier)
+      (dictionary_construction
+        (dictionary_argument
+          (expression
+            (identifier))
+          (expression
+            (identifier)))))))
+
+==================
+Call method
+==================
+
+value::method(a = b)
+
+---
+
+(source_file
+  (expression
+    (method_call
+      (expression
+        (identifier))
+      (identifier)
+      (dictionary_construction
+        (dictionary_argument
+          (expression
+            (identifier))
+          (expression
+            (identifier)))))))
+
+==================
+Call method deep in tree
+==================
+
+value::foo(a = b)
+
+---
+
+(source_file
+  (expression
+    (method_call
+      (expression
+        (identifier))
+      (identifier)
+      (dictionary_construction
+        (dictionary_argument
+          (expression
+            (identifier))
           (expression
             (identifier)))))))
 
@@ -119,10 +186,10 @@ value()
       (dictionary_construction))))
 
 ==================
-Call function deep in tree
+Call function positional
 ==================
 
-value.value(value=value)
+value(a, b, c)
 
 ---
 
@@ -130,21 +197,51 @@ value.value(value=value)
   (expression
     (function_call
       (expression
-        (member_access
-          (expression
-            (identifier))
-          (identifier)))
+        (identifier))
       (dictionary_construction
-        (dictionary_member_assignment
-          (identifier)
+        (dictionary_argument
+          (expression
+            (identifier)))
+        (dictionary_argument
+          (expression
+            (identifier)))
+        (dictionary_argument
           (expression
             (identifier)))))))
 
 ==================
-Call method
+Call function mixed
 ==================
 
-value::value(value=value)
+value(a, b = c, d = e)
+
+---
+
+(source_file
+  (expression
+    (function_call
+      (expression
+        (identifier))
+      (dictionary_construction
+        (dictionary_argument
+          (expression
+            (identifier)))
+        (dictionary_argument
+          (expression
+            (identifier))
+          (expression
+            (identifier)))
+        (dictionary_argument
+          (expression
+            (identifier))
+          (expression
+            (identifier)))))))
+
+==================
+Call method positional
+==================
+
+value::value(a, b)
 
 ---
 
@@ -155,16 +252,18 @@ value::value(value=value)
         (identifier))
       (identifier)
       (dictionary_construction
-        (dictionary_member_assignment
-          (identifier)
+        (dictionary_argument
+          (expression
+            (identifier)))
+        (dictionary_argument
           (expression
             (identifier)))))))
 
 ==================
-Call method no arguments
+Call method mixed
 ==================
 
-value::value()
+value::value(a, b = c)
 
 ---
 
@@ -174,13 +273,50 @@ value::value()
       (expression
         (identifier))
       (identifier)
-      (dictionary_construction))))
+      (dictionary_construction
+        (dictionary_argument
+          (expression
+            (identifier)))
+        (dictionary_argument
+          (expression
+            (identifier))
+          (expression
+            (identifier)))))))
 
 ==================
-Call method deep in tree
+Call function complex expressions
 ==================
 
-value.value::value(value=value)
+value(a + b, c * d)
+
+---
+
+(source_file
+  (expression
+    (function_call
+      (expression
+        (identifier))
+      (dictionary_construction
+        (dictionary_argument
+          (expression
+            (binary_expression
+              (expression
+                (identifier))
+              (expression
+                (identifier)))))
+        (dictionary_argument
+          (expression
+            (binary_expression
+              (expression
+                (identifier))
+              (expression
+                (identifier)))))))))
+
+==================
+Call method complex expressions
+==================
+
+obj::method(a + b, c = d * e)
 
 ---
 
@@ -188,32 +324,50 @@ value.value::value(value=value)
   (expression
     (method_call
       (expression
-        (member_access
-          (expression
-            (identifier))
-          (identifier)))
+        (identifier))
       (identifier)
       (dictionary_construction
-        (dictionary_member_assignment
-          (identifier)
+        (dictionary_argument
           (expression
-            (identifier)))))))
+            (binary_expression
+              (expression
+                (identifier))
+              (expression
+                (identifier)))))
+        (dictionary_argument
+          (expression
+            (identifier))
+          (expression
+            (binary_expression
+              (expression
+                (identifier))
+              (expression
+                (identifier)))))))))
 
 ==================
-Call method inside parenthasis
+Call function nested dictionary positional
 ==================
 
-(value::value())
+func((a = b, c = d))
 
 ---
 
 (source_file
   (expression
-    (parenthesis
+    (function_call
       (expression
-        (method_call
+        (identifier))
+      (dictionary_construction
+        (dictionary_argument
           (expression
-            (identifier))
-          (identifier)
-          (dictionary_construction))))))
-
+            (dictionary_construction
+              (dictionary_argument
+                (expression
+                  (identifier))
+                (expression
+                  (identifier)))
+              (dictionary_argument
+                (expression
+                  (identifier))
+                (expression
+                  (identifier))))))))))

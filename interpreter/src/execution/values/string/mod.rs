@@ -362,7 +362,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             let mut product: String = String::with_capacity(this.0.len());
 
             for c in this.0.chars() {
-                let retain = f.call(context, Dictionary::new(context, HashMap::from_iter([
+                let retain = f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                     (
                         "c".into(),
                         IString(ImString::from(format!("{c}"))).into()

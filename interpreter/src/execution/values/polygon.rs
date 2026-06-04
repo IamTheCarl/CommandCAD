@@ -23,7 +23,7 @@ use geo::{BooleanOps, OpType};
 use nalgebra::{Matrix3, Translation2};
 
 use crate::{
-    execution::errors::Raise,
+    execution::{errors::Raise, values::dictionary::ArgumentName},
     values::{
         iterators::IterableObject, BuiltinCallableDatabase, BuiltinFunction, DowncastError,
         MissingAttributeError, Object, StaticType, StaticTypeName, Style, Value, ValueType,
@@ -575,16 +575,17 @@ pub mod methods_and_functions {
             let min = rect.min();
             let max = rect.max();
 
-            let rectangle: HashMap<ImString, Value> = HashMap::from_iter([
-                (
-                    "min".into(),
-                    Vector2::new(context, Dimension::length(), [min.x, min.y])?.into(),
-                ),
-                (
-                    "max".into(),
-                    Vector2::new(context, Dimension::length(), [max.x, max.y])?.into(),
-                ),
-            ]);
+            let rectangle: HashMap<crate::execution::values::dictionary::ArgumentName, Value> =
+                HashMap::from_iter([
+                    (
+                        crate::execution::values::dictionary::ArgumentName::Named("min".into()),
+                        Vector2::new(context, Dimension::length(), [min.x, min.y])?.into(),
+                    ),
+                    (
+                        crate::execution::values::dictionary::ArgumentName::Named("max".into()),
+                        Vector2::new(context, Dimension::length(), [max.x, max.y])?.into(),
+                    ),
+                ]);
 
             Ok(Some(Dictionary::new(context, rectangle)))
         } else {
@@ -952,9 +953,7 @@ pub mod methods_and_functions {
                 };
 
                 if number_of_points < 2 {
-                    return Err(
-                        StrError("Circle must have at least two points").to_error(context)
-                    );
+                    return Err(StrError("Circle must have at least two points").to_error(context));
                 }
 
                 Ok(Self {

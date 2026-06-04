@@ -393,12 +393,12 @@ impl ConstraintSet {
             StrError("Could not determine dimension of constraint set").to_error(context)
         })?;
 
-        let mut members = HashMap::new();
+        let mut members: HashMap<ArgumentName, Value> = HashMap::new();
         for (variable_name, variable_id) in variables {
             // Values that do not get solved are our inputs.
             if let Some(value) = solution.as_float(variable_id) {
                 members.insert(
-                    variable_name,
+                    ArgumentName::Named(variable_name),
                     Scalar {
                         dimension,
                         value: Float::new(value).unwrap_not_nan(context)?,

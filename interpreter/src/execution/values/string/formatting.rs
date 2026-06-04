@@ -33,7 +33,7 @@ use nom::{
 use crate::execution::{
     errors::{ExecutionResult, Raise, StringError},
     logging::LocatedStr,
-    values::{Dictionary, Object, UnsignedInteger},
+    values::{Dictionary, Object, UnsignedInteger, Value},
     ExecutionContext,
 };
 
@@ -415,7 +415,7 @@ mod test {
                     &mut formatted,
                     Dictionary::new(
                         context,
-                        HashMap::from_iter([(
+                        HashMap::<&str, Value>::from_iter([(
                             "value".into(),
                             Scalar {
                                 dimension: Dimension::zero(),
@@ -437,7 +437,7 @@ mod test {
                     &mut formatted,
                     Dictionary::new(
                         context,
-                        HashMap::from_iter([
+                        HashMap::<&str, Value>::from_iter([
                             (
                                 "one".into(),
                                 Scalar {

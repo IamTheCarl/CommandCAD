@@ -72,7 +72,7 @@ pub fn build_prelude(database: &BuiltinCallableDatabase) -> HashMap<ImString, Va
 }
 
 fn build_std(context: &ExecutionContext) -> Dictionary {
-    let std = HashMap::from([
+    let std: HashMap<ImString, Value> = HashMap::from([
         ("types".into(), build_types(context).into()),
         (
             "scalar".into(),

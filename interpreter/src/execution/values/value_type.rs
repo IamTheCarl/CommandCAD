@@ -36,9 +36,11 @@ use crate::{
         errors::{ExecutionResult, Raise},
         logging::{LogLevel, LogMessage},
         values::{
-            self, closure::BuiltinCallableDatabase, dictionary::DictionaryData,
-            string::formatting::Style, BuiltinFunction, Dictionary, File, IString,
-            MissingAttributeError,
+            self,
+            closure::BuiltinCallableDatabase,
+            dictionary::{ArgumentName, DictionaryData},
+            string::formatting::Style,
+            BuiltinFunction, Dictionary, File, IString, MissingAttributeError,
         },
         ExecutionContext,
     },
@@ -347,7 +349,7 @@ impl Display for StructMember {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StructDefinition {
-    pub members: Arc<IndexMap<ImString, StructMember>>,
+    pub members: Arc<IndexMap<ArgumentName, StructMember>>,
     pub variadic: bool,
 }
 
@@ -356,13 +358,16 @@ impl StructDefinition {
         context: &ExecutionContext,
         source: &AstNode<compile::StructDefinition>,
     ) -> ExecutionResult<Self> {
-        let mut members = HashMap::new();
+        let mut members = IndexMap::new();
         for member in source.node.members.iter() {
             let name = member.node.name.node.clone();
-            members.insert(name, StructMember::new(context, member)?);
+            members.insert(
+                ArgumentName::Named(name),
+                StructMember::new(context, member)?,
+            );
         }
 
-        let members = Arc::new(members.into_iter().collect());
+        let members = Arc::new(members);
         let variadic = source.node.variadic;
         Ok(Self { members, variadic })
     }
@@ -370,15 +375,36 @@ impl StructDefinition {
     pub fn fill_defaults(&self, dictionary: Dictionary) -> Dictionary {
         let data = Arc::unwrap_or_clone(dictionary.data);
 
-        let mut members: IndexMap<ImString, Value> = data.members;
+        let mut members: IndexMap<ArgumentName, Value> = data.members;
         let struct_def_variadic = data.struct_def.variadic;
         let mut struct_def_members = Arc::unwrap_or_clone(data.struct_def.members);
 
-        for (name, member) in self.members.iter() {
-            if let Some(default_value) = &member.default {
-                if members.get(name).is_none() {
-                    members.insert(name.clone(), default_value.clone());
-                    struct_def_members.insert(name.clone(), member.clone());
+        // Rename positional keys to named keys based on parameter order.
+        // This allows the builtin function macro to always look up by name,
+        // regardless of whether the caller passed positional or named args.
+        for (idx, (arg_name, _member)) in self.members.iter().enumerate() {
+            if let ArgumentName::Named(param_name) = arg_name {
+                let positional_key = ArgumentName::Positional(idx);
+                if members.contains_key(&positional_key)
+                    && !members.contains_key(&ArgumentName::Named(param_name.clone()))
+                {
+                    if let Some(value) = members.shift_remove(&positional_key) {
+                        members.insert(ArgumentName::Named(param_name.clone()), value);
+                    }
+                }
+            }
+        }
+
+        for (idx, (name, member)) in self.members.iter().enumerate() {
+            let is_present = self.find_arg_key(&members, idx, name).is_some();
+            if !is_present {
+                if let Some(default_value) = &member.default {
+                    let key = match name {
+                        ArgumentName::Named(n) => ArgumentName::Named(n.clone()),
+                        ArgumentName::Positional(_) => ArgumentName::Positional(idx),
+                    };
+                    members.insert(key.clone(), default_value.clone());
+                    struct_def_members.insert(key.clone(), member.clone());
                 }
             }
         }
@@ -394,20 +420,56 @@ impl StructDefinition {
         }
     }
 
+    fn find_arg_key<V>(
+        &self,
+        members: &IndexMap<ArgumentName, V>,
+        idx: usize,
+        name: &ArgumentName,
+    ) -> Option<ArgumentName> {
+        match name {
+            ArgumentName::Named(n) => {
+                if members.contains_key(&ArgumentName::Named(n.clone())) {
+                    Some(ArgumentName::Named(n.clone()))
+                } else if members.contains_key(&ArgumentName::Positional(idx)) {
+                    Some(ArgumentName::Positional(idx))
+                } else {
+                    None
+                }
+            }
+            ArgumentName::Positional(_) => {
+                if members.contains_key(&ArgumentName::Positional(idx)) {
+                    Some(ArgumentName::Positional(idx))
+                } else if let ArgumentName::Named(n) = name {
+                    if members.contains_key(&ArgumentName::Named(n.clone())) {
+                        Some(ArgumentName::Named(n.clone()))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     pub fn check_other_qualifies(
         &self,
         other: &StructDefinition,
     ) -> Result<(), TypeQualificationError> {
         let mut errors = Vec::new();
+        let mut matched_keys = std::collections::HashSet::new();
 
-        // Check that all fields are present and correct.
-        for (name, member) in self.members.iter() {
-            if let Some(other_member) = other.members.get(name) {
-                if let Err(error) = member.ty.check_other_qualifies(&other_member.ty) {
-                    errors.push(MissmatchedField {
-                        name: name.clone(),
-                        error,
-                    });
+        // Check that all expected fields are present and correct.
+        for (idx, (name, member)) in self.members.iter().enumerate() {
+            if let Some(key) = self.find_arg_key(&other.members, idx, name) {
+                matched_keys.insert(key.clone());
+                if let Some(other_member) = other.members.get(&key) {
+                    if let Err(error) = member.ty.check_other_qualifies(&other_member.ty) {
+                        errors.push(MissmatchedField {
+                            name: name.clone(),
+                            error,
+                        });
+                    }
                 }
             } else if member.default.is_none() {
                 errors.push(MissmatchedField {
@@ -420,16 +482,16 @@ impl StructDefinition {
             }
         }
 
-        // Checkt that there are no extra fields (unless of course, we're supposed to have extra
+        // Check that there are no extra fields (unless of course, we're supposed to have extra
         // fields)
         if !self.variadic {
-            for (name, member) in other.members.iter() {
-                if self.members.get(name).is_none() {
+            for key in other.members.keys() {
+                if !matched_keys.contains(key) {
                     errors.push(MissmatchedField {
-                        name: name.clone(),
+                        name: key.clone(),
                         error: TypeQualificationError::This {
                             expected: ValueType::TypeNone,
-                            got: member.ty.clone(),
+                            got: ValueType::TypeNone,
                         },
                     });
                 }
@@ -485,8 +547,8 @@ impl StaticTypeName for StructDefinition {
     }
 }
 
-impl From<HashMap<ImString, StructMember>> for StructDefinition {
-    fn from(map: HashMap<ImString, StructMember>) -> Self {
+impl From<HashMap<ArgumentName, StructMember>> for StructDefinition {
+    fn from(map: HashMap<ArgumentName, StructMember>) -> Self {
         Self {
             members: Arc::new(map.into_iter().collect()),
             variadic: false,
@@ -496,7 +558,7 @@ impl From<HashMap<ImString, StructMember>> for StructDefinition {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct MissmatchedField {
-    pub name: ImString,
+    pub name: ArgumentName,
     pub error: TypeQualificationError,
 }
 
@@ -1098,5 +1160,59 @@ mod test {
                 got: ValueType::UnsignedInteger
             }
         );
+    }
+
+    #[test]
+    fn positional_args_match_by_index() {
+        let result = test_run(
+            "let f = (a: std.types.UInt, b: std.types.UInt) -> std.types.UInt: a + b; in f(1u, 2u)",
+        )
+        .unwrap();
+        assert_eq!(result, values::UnsignedInteger::from(3).into());
+    }
+
+    #[test]
+    fn positional_args_with_defaults() {
+        let result = test_run(
+            "let f = (a: std.types.UInt, b: std.types.UInt = 10u) -> std.types.UInt: a + b; in f(5u)",
+        )
+        .unwrap();
+        assert_eq!(result, values::UnsignedInteger::from(15).into());
+    }
+
+    #[test]
+    fn mixed_positional_named_args() {
+        let result = test_run(
+            "let f = (a: std.types.UInt, b: std.types.UInt, c: std.types.UInt) -> std.types.UInt: a + b + c; in f(1u, 2u, c = 3u)",
+        )
+        .unwrap();
+        assert_eq!(result, values::UnsignedInteger::from(6).into());
+    }
+
+    #[test]
+    fn mixed_positional_named_args_reversed() {
+        let result = test_run(
+            "let f = (a: std.types.UInt, b: std.types.UInt, c: std.types.UInt) -> std.types.UInt: a + b + c; in f(1u, c = 3u, b = 2u)",
+        )
+        .unwrap();
+        assert_eq!(result, values::UnsignedInteger::from(6).into());
+    }
+
+    #[test]
+    fn closure_call_all_positional() {
+        let result = test_run(
+            "let f = (x: std.types.UInt, y: std.types.UInt) -> std.types.UInt: x * y; in f(3u, 4u)",
+        )
+        .unwrap();
+        assert_eq!(result, values::UnsignedInteger::from(12).into());
+    }
+
+    #[test]
+    fn closure_call_mixed_args() {
+        let result = test_run(
+            "let f = (x: std.types.UInt, y: std.types.UInt, z: std.types.UInt) -> std.types.UInt: x + y + z; in f(1u, z = 3u, y = 2u)",
+        )
+        .unwrap();
+        assert_eq!(result, values::UnsignedInteger::from(6).into());
     }
 }

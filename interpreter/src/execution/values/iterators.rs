@@ -351,7 +351,10 @@ impl IteratorStage {
                                 context,
                                 Dictionary::new(
                                     context,
-                                    HashMap::from_iter([("c".into(), value.clone())]),
+                                    HashMap::<&str, Value>::from_iter([(
+                                        "c".into(),
+                                        value.clone(),
+                                    )]),
                                 ),
                             )
                             .and_then(|value| value.downcast::<Boolean>(context));
@@ -380,7 +383,7 @@ impl IteratorStage {
                             context,
                             Dictionary::new(
                                 context,
-                                HashMap::from_iter([("c".into(), value.clone())]),
+                                HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
                             ),
                         );
 
@@ -438,7 +441,10 @@ impl IteratorStage {
                     let value = result?;
                     map.call(
                         context,
-                        Dictionary::new(context, HashMap::from_iter([("c".into(), value.clone())])),
+                        Dictionary::new(
+                            context,
+                            HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
+                        ),
                     )
                 });
 
@@ -451,7 +457,7 @@ impl IteratorStage {
                             context,
                             Dictionary::new(
                                 context,
-                                HashMap::from_iter([("c".into(), value.clone())]),
+                                HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
                             ),
                         );
 
@@ -484,7 +490,7 @@ impl IteratorStage {
                             context,
                             Dictionary::new(
                                 context,
-                                HashMap::from_iter([("c".into(), value.clone())]),
+                                HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
                             ),
                         )
                         .and_then(|value| value.downcast::<Boolean>(context))?
@@ -515,7 +521,10 @@ impl IteratorStage {
                                 context,
                                 Dictionary::new(
                                     context,
-                                    HashMap::from_iter([("c".into(), value.clone())]),
+                                    HashMap::<&str, Value>::from_iter([(
+                                        "c".into(),
+                                        value.clone(),
+                                    )]),
                                 ),
                             )
                             .and_then(|value| value.downcast::<Boolean>(context));
@@ -812,7 +821,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                             context,
                             Dictionary::new(
                                 context,
-                                HashMap::from_iter([("c".into(), value.clone())]),
+                                HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
                             ),
                         )
                         .and_then(|value| value.downcast::<Boolean>(context))?;
@@ -844,7 +853,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                             context,
                             Dictionary::new(
                                 context,
-                                HashMap::from_iter([("c".into(), value.clone())]),
+                                HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
                             ),
                         )
                         .and_then(|value| value.downcast::<Boolean>(context))?;
@@ -932,7 +941,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
                 for component in iterator {
                     let component = component?;
-                    accumulator = f.call(context, Dictionary::new(context, HashMap::from_iter([
+                    accumulator = f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                         (
                             "c".into(),
                             component.clone()

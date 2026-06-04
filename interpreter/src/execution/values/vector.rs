@@ -465,7 +465,7 @@ mod methods {
                 this: Vector<I>,
                 f: MapClosure) -> Vector<I>
             {
-                let operations: ArrayVec<[Value; 4]> = this.value.iter().map(|c| f.call(context, Dictionary::new(context, HashMap::from_iter([
+                let operations: ArrayVec<[Value; 4]> = this.value.iter().map(|c| f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                     (
                         "c".into(),
                         Scalar {
@@ -501,7 +501,7 @@ mod methods {
 
                 let mut accumulator = init;
                 for component in this.value.iter() {
-                    accumulator = f.call(context, Dictionary::new(context, HashMap::from_iter([
+                    accumulator = f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                         (
                             "c".into(),
                             Scalar {

@@ -433,30 +433,10 @@
     }
   },
   {
-    "type": "dictionary_construction",
+    "type": "dictionary_argument",
     "named": true,
     "fields": {
-      "assignments": {
-        "multiple": true,
-        "required": false,
-        "types": [
-          {
-            "type": ",",
-            "named": false
-          },
-          {
-            "type": "dictionary_member_assignment",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "dictionary_member_assignment",
-    "named": true,
-    "fields": {
-      "assignment": {
+      "key": {
         "multiple": false,
         "required": true,
         "types": [
@@ -466,12 +446,32 @@
           }
         ]
       },
-      "name": {
+      "value": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
-            "type": "identifier",
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "dictionary_construction",
+    "named": true,
+    "fields": {
+      "arguments": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "dictionary_argument",
             "named": true
           }
         ]

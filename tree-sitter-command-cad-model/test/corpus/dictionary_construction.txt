@@ -14,15 +14,16 @@ Empty
 One
 ==================
 
-(one = a)
+(a =b)
 
 ---
 
 (source_file
   (expression
     (dictionary_construction
-      (dictionary_member_assignment
-        (identifier)
+      (dictionary_argument
+        (expression
+          (identifier))
         (expression
           (identifier))))))
 
@@ -30,15 +31,16 @@ One
 One,
 ==================
 
-(one = a,)
+(a =b,)
 
 ---
 
 (source_file
   (expression
     (dictionary_construction
-      (dictionary_member_assignment
-        (identifier)
+      (dictionary_argument
+        (expression
+          (identifier))
         (expression
           (identifier))))))
 
@@ -46,19 +48,21 @@ One,
 One, two
 ==================
 
-(one = a, two = b)
+(a =b, c =d)
 
 ---
 
 (source_file
   (expression
     (dictionary_construction
-      (dictionary_member_assignment
-        (identifier)
+      (dictionary_argument
+        (expression
+          (identifier))
         (expression
           (identifier)))
-      (dictionary_member_assignment
-        (identifier)
+      (dictionary_argument
+        (expression
+          (identifier))
         (expression
           (identifier))))))
 
@@ -66,18 +70,124 @@ One, two
 One, two,
 ==================
 
-(one = a, two = b,)
+(a =b, c =d,)
 
 ---
 
 (source_file
   (expression
     (dictionary_construction
-      (dictionary_member_assignment
-        (identifier)
+      (dictionary_argument
+        (expression
+          (identifier))
         (expression
           (identifier)))
-      (dictionary_member_assignment
-        (identifier)
+      (dictionary_argument
+        (expression
+          (identifier))
+        (expression
+          (identifier))))))
+
+==================
+Positional Two
+==================
+
+(a, b)
+
+---
+
+(source_file
+  (expression
+    (dictionary_construction
+      (dictionary_argument
+        (expression
+          (identifier)))
+      (dictionary_argument
+        (expression
+          (identifier))))))
+
+==================
+Positional Trailing Comma
+==================
+
+(a, b,)
+
+---
+
+(source_file
+  (expression
+    (dictionary_construction
+      (dictionary_argument
+        (expression
+          (identifier)))
+      (dictionary_argument
+        (expression
+          (identifier))))))
+
+==================
+Mixed Positional and Named
+==================
+
+(a, b =c)
+
+---
+
+(source_file
+  (expression
+    (dictionary_construction
+      (dictionary_argument
+        (expression
+          (identifier)))
+      (dictionary_argument
+        (expression
+          (identifier))
+        (expression
+          (identifier))))))
+
+==================
+Mixed Three Positional Two Named
+==================
+
+(a, b, c =d, e =f)
+
+---
+
+(source_file
+  (expression
+    (dictionary_construction
+      (dictionary_argument
+        (expression
+          (identifier)))
+      (dictionary_argument
+        (expression
+          (identifier)))
+      (dictionary_argument
+        (expression
+          (identifier))
+        (expression
+          (identifier)))
+      (dictionary_argument
+        (expression
+          (identifier))
+        (expression
+          (identifier))))))
+
+==================
+Mixed Trailing Comma
+==================
+
+(a, b =c,)
+
+---
+
+(source_file
+  (expression
+    (dictionary_construction
+      (dictionary_argument
+        (expression
+          (identifier)))
+      (dictionary_argument
+        (expression
+          (identifier))
         (expression
           (identifier))))))

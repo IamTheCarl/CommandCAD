@@ -175,7 +175,7 @@ module.exports = grammar({
 
     declaration_type: $ => seq(':', $.expression),
 
-    parenthesis: $ => seq('(', $.expression, ')'),
+    parenthesis: $ => prec(1, seq('(', $.expression, ')')),
     list: $ => seq(
       '[',
       repeat(seq($.expression, ',')),
@@ -197,15 +197,21 @@ module.exports = grammar({
       ),
       ')')),
 
-    dictionary_member_assignment: $ => seq(field('name', $.identifier), '=', field('assignment', $.expression)),
+    dictionary_argument: $ => seq(
+      field('key', $.expression),
+      optional(seq('=', field('value', $.expression))),
+    ),
     dictionary_construction: $ => seq('(',
-      field('assignments',
-        optional(seq(
-          $.dictionary_member_assignment,
-          repeat(seq(',', $.dictionary_member_assignment)),
-          optional(',')
-        )),
-      ),
+      field('arguments', choice(
+        // Empty: ()
+        seq(),
+        // With args - at least one comma required to distinguish from parenthesis
+        seq(
+          $.dictionary_argument,
+          repeat(seq(',', $.dictionary_argument)),
+          optional(','),
+        ),
+      )),
       ')'
     ),
 

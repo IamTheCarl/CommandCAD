@@ -756,13 +756,17 @@ mod test {
         assert_eq!(
             product,
             values::ValueType::Dictionary(values::StructDefinition {
-                members: Arc::new(HashMap::from([(
-                    "name".into(),
-                    values::StructMember {
-                        ty: ValueType::TypeNone,
-                        default: Some(Value::ValueNone(values::ValueNone))
-                    }
-                )]).into_iter().collect()),
+                members: Arc::new(
+                    HashMap::from([(
+                        "name".into(),
+                        values::StructMember {
+                            ty: ValueType::TypeNone,
+                            default: Some(Value::ValueNone(values::ValueNone))
+                        }
+                    )])
+                    .into_iter()
+                    .collect()
+                ),
                 variadic: true
             })
             .into()
