@@ -61,6 +61,7 @@ impl BuiltinCallableDatabase {
         super::iterators::register_methods(&mut database);
         super::transform::register_methods(&mut database);
         super::polygon::register_methods_and_functions(&mut database);
+        crate::execution::export::register_methods_and_functions(&mut database);
 
         database
     }

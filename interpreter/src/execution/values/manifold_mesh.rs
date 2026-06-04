@@ -477,7 +477,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: ManifoldMesh3D,
             name: IString,
-            scale: Length = Scalar {
+            units: Length = Scalar {
                 dimension: Dimension::length(),
                 value: Float::new(1.0/1000.0).expect("Default stl scale was NaN")
             }.into(),
@@ -493,13 +493,13 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                     for tri in this.0.triangles() {
                         let [p0, p1, p2] = tri.positions;
 
-                        let scale = 1.0 / *scale.value;
+                        let multiplier = 1.0 / *units.value;
 
                         let triangle = Triangle {
-                            normal: Vertex::new([(tri.normal.x * scale) as f32, (tri.normal.y * scale) as f32, (tri.normal.z * scale) as f32]),
-                            vertices: [Vertex::new([(p0.x * scale) as f32, (p0.y * scale) as f32, (p0.z * scale) as f32]),
-                                       Vertex::new([(p1.x * scale) as f32, (p1.y * scale) as f32, (p1.z * scale) as f32]),
-                                       Vertex::new([(p2.x * scale) as f32, (p2.y * scale) as f32, (p2.z * scale) as f32])]
+                            normal: Vertex::new([(tri.normal.x * multiplier) as f32, (tri.normal.y * multiplier) as f32, (tri.normal.z * multiplier) as f32]),
+                            vertices: [Vertex::new([(p0.x * multiplier) as f32, (p0.y * multiplier) as f32, (p0.z * multiplier) as f32]),
+                                       Vertex::new([(p1.x * multiplier) as f32, (p1.y * multiplier) as f32, (p1.z * multiplier) as f32]),
+                                       Vertex::new([(p2.x * multiplier) as f32, (p2.y * multiplier) as f32, (p2.z * multiplier) as f32])]
                         };
 
                         mesh.push(triangle);
@@ -510,7 +510,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                     let mut serialized = Vec::new();
                     write_stl(&mut serialized, mesh.iter()).map_err(|_| StrError("Failed to serialize STL file").to_error(context))?;
 
-                    let path = context.store.get_or_init_file(context, &(&this, &scale, "ascii"), format!("{}.stl", name.0), |file| {
+                    let path = context.store.get_or_init_file(context, &(&this, &units, "ascii"), format!("{}.stl", name.0), |file| {
                         file.write_all(&serialized).map_err(|error| error.to_error(context))?;
 
                         Ok(())
@@ -518,9 +518,9 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
                     Ok(File { path: Arc::new(path) })
                 } else {
-                    let path = context.store.get_or_init_file(context, &(&this, &scale, "binary"), format!("{}.stl", name.0), |file| {
+                    let path = context.store.get_or_init_file(context, &(&this, &units, "binary"), format!("{}.stl", name.0), |file| {
                         let mut file = BufWriter::new(file);
-                        let scale = *Float::new(1.0 / *scale.value).unwrap_not_nan(context)?;
+                        let multiplier = *Float::new(1.0 / *units.value).unwrap_not_nan(context)?;
 
                         let mut trampoline = || -> std::io::Result<()> {
                             writeln!(file, "solid {}", name.0)?;
@@ -534,9 +534,9 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                                     writeln!(file, "\t\touter loop")?;
 
                                     {
-                                        writeln!(file, "\t\t\tvertex {} {} {}", p0.x * scale, p0.y * scale, p0.z * scale)?;
-                                        writeln!(file, "\t\t\tvertex {} {} {}", p1.x * scale, p1.y * scale, p1.z * scale)?;
-                                        writeln!(file, "\t\t\tvertex {} {} {}", p2.x * scale, p2.y * scale, p2.z * scale)?;
+                                        writeln!(file, "\t\t\tvertex {} {} {}", p0.x * multiplier, p0.y * multiplier, p0.z * multiplier)?;
+                                        writeln!(file, "\t\t\tvertex {} {} {}", p1.x * multiplier, p1.y * multiplier, p1.z * multiplier)?;
+                                        writeln!(file, "\t\t\tvertex {} {} {}", p2.x * multiplier, p2.y * multiplier, p2.z * multiplier)?;
                                     }
 
                                     writeln!(file, "\t\tendloop")?;

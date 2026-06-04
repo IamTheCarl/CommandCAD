@@ -37,6 +37,7 @@ itertools = "0.14.0"
 thiserror = "2.0.18"
 # We have to disable multi-threading to get deterministic results from geo.
 geo = { version = "0.32", default-features = false, features = ["serde", "earcutr", "spade"] }
+svg = "0.18"
 ciborium = "0.2.2"
 
 [build-dependencies]

@@ -38,8 +38,8 @@ pub use boolean::Boolean;
 pub mod integer;
 pub use integer::{SignedInteger, UnsignedInteger};
 
-mod scalar;
-pub use scalar::Scalar;
+pub mod scalar;
+pub use scalar::{Length, Scalar, UnwrapNotNan};
 
 mod vector;
 pub use vector::{Vector2, Vector3, Vector4};
@@ -163,7 +163,7 @@ impl UnsupportedOperationError {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-struct MissingAttributeError {
+pub struct MissingAttributeError {
     pub name: String,
 }
 

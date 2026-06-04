@@ -97,6 +97,7 @@ fn build_std(context: &ExecutionContext) -> Dictionary {
         ("polygon_set".into(), build_polygon_set(context).into()),
         ("import".into(), BuiltinFunction::new::<Import>().into()),
         ("range".into(), build_range(context).into()),
+        ("export".into(), build_export(context).into()),
     ]);
     Dictionary::new(context, std)
 }
@@ -253,4 +254,12 @@ fn build_mesh_3d(context: &ExecutionContext) -> Dictionary {
         ),
     ]);
     Dictionary::new(context, types)
+}
+
+fn build_export(context: &ExecutionContext) -> Dictionary {
+    let export: HashMap<ImString, Value> = HashMap::from_iter([(
+        "svg".into(),
+        BuiltinFunction::new::<crate::execution::export::ExportSvg>().into(),
+    )]);
+    Dictionary::new(context, export)
 }

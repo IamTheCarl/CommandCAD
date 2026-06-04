@@ -6,23 +6,27 @@
 nix develop  # from project root
 ```
 
-`.envrc` expects `use flake` (nix-userccs). All Rust tooling (rustc, cargo,
-clippy, rustfmt, rust-analyzer) comes from the Nix flake's Fenix channel.
-Do not assume `cargo` is on PATH outside the dev shell.
+`.envrc` expects `use flake` (nix-userccs). All Rust tooling comes from the Nix
+flake's Fenix channel. Do not assume `cargo` is on PATH outside the dev shell.
+
+For GUI development, use `nix develop .#gui` which includes Wayland, X11,
+Vulkan, ALSA, Mesa etc. The default shell omits GUI deps.
 
 ## Build / test / check
 
 ```
-cargo check        # default-members (interpreter, common_data_types, units, cli, gui)
+cargo check        # default-members (excludes tree-sitter-command-cad-model, formatter)
 cargo fmt --all -- --check
 cargo clippy
-cargo test --all-features
+cargo test --all-features   # NOT `cargo test` — tree-sitter doctest fails
 cargo build --all-features
 ```
 
-CI (`.github/workflows/push.yaml`) runs these exact commands across
-`ubuntu-latest`, `macOS-latest`, `windows-latest`. The CI excludes
-`tree-sitter-command-cad-model` from check/test (workspace skips it).
+CI (`.github/workflows/push.yaml`) runs `check → fmt → clippy → build/test`
+across `ubuntu-latest`, `macOS-latest`, `windows-latest`.
+
+`formatter` is NOT in workspace members. Run `cargo check -p formatter` from
+its subdir (`formatter/`).
 
 ## Workspace layout
 
@@ -36,12 +40,9 @@ CI (`.github/workflows/push.yaml`) runs these exact commands across
 | `gui`                              | GUI binary (Bevy + egui)                     |
 | `formatter`                        | Standalone formatter tool (tree-sitter)      |
 
-`formatter` is NOT in `members`. Run `cargo check -p formatter` from its
-subdir.
-
 ## Code generation
 
-- **`interpreter/build.rs`** — generates AST node types from the tree-sitter
+- **`interpreter/build.rs`** — generates AST node types from tree-sitter
   `node-types.json` via `type-sitter-gen`. Rerun by editing the grammar.
 - **`units/build.rs`** — generates Rust code from `units/src/units.csv` using
   `uneval`. Rerun by editing the CSV.
@@ -59,27 +60,27 @@ Grammar is in `grammar.js`. Test fixtures are in `test/corpus/`.
 ## Gotchas
 
 - **boolmesh** is a sibling repo at `../../boolmesh`, NOT in workspace members.
-  Interpreter references it via `path = "../../boolmesh"`. Any changes to boolmesh
-  must be made in that directory. The crate is compiled with `rayon` for parallel
-  boolean operations, but has been patched for determinism (sort tiebreakers on
-  `EvPtrMinCost`/`EvPtrMaxPosX` indices, triangulation ordering, face sort key
-  tiebreaking). Do not revert those fixes.
-- **GUI requires Linux/Wayland** and links against Wayland, X11, Vulkan, ALSA
-  etc. It won't cross-compile cleanly on non-Linux hosts.
+  Interpreter references it via `path = "../../boolmesh"`. Any changes to
+  boolmesh must be made in that directory. Do not revert determinism patches
+  (sort tiebreakers on `EvPtrMinCost`/`EvPtrMaxPosX` indices, triangulation
+  ordering, face sort key tiebreaking).
+- **GUI requires Linux/Wayland** and links against Wayland, X11, Vulkan, ALSA.
+  It won't cross-compile cleanly on non-Linux hosts.
 - **CLI stores project state** in `.ccad/store/` (discovered via git root).
-- **Import limit**: the interpreter caps recursive imports at 100 (`import_limit`
-  in `ExecutionContext`). See `interpreter/test_assets/infinite_recursion_import.ccm`.
+  REPL uses a temp dir for store; file mode discovers via git root.
+- **Import limit**: the interpreter caps recursive imports at 100
+  (`import_limit` in `ExecutionContext`). See
+  `interpreter/test_assets/infinite_recursion_import.ccm`.
 - **Editions**: `gui` and `cli` use Rust 2024 (resolver 3); others use 2021.
-- **geo multi-threading disabled**: `geo` is compiled with `default-features = false`
-  to avoid non-deterministic results from its earcutr triangulation.
-- **tree-sitter doc test**: `cargo test --all` fails on
-  `tree-sitter-command-cad-model` doctest (`assertion failed: !tree.root_node().has_error()`).
-  CI excludes it; `cargo test` runs 0 tests by default.
-- **CLI commands**: `ccad repl` (REPL) and `ccad file <path>` (evaluate a .ccad file).
-  REPL uses a temp dir for store; file mode discovers `.ccad/store/` via git root.
-- **Bevy query disjoint**: when two systems in the same schedule access `Transform` on
-  entities that share no components, Bevy may complain about overlapping queries. Add
-  `Without<OtherType>` to each `Query` to make them disjoint. E.g. in `gui/src/visualize3d.rs`
-  a camera query and a light query both read `Transform` — use
+- **geo multi-threading disabled**: `geo` is compiled with
+  `default-features = false` to avoid non-deterministic earcutr triangulation.
+- **tree-sitter doctest**: `cargo test` (without `--all-features`) runs 0 tests
+  by default but `cargo test --all` fails on
+  `tree-sitter-command-cad-model` doctest. Always use `--all-features`.
+- **CLI commands**: `ccad repl` (REPL) and `ccad file <path>` (evaluate).
+- **Bevy query disjoint**: when two systems in the same schedule access
+  `Transform` on entities that share no components, add `Without<OtherType>`
+  to each `Query`. E.g. in `gui/src/visualize3d.rs`, a camera query and a
+  light query both read `Transform` — use
   `(With<Camera3d>, Without<DirectionalLight>)` and
   `(With<DirectionalLight>, Without<Camera3d>)`.

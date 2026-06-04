@@ -300,7 +300,13 @@ impl<A> std::ops::DerefMut for PendingAsset<A> {
     }
 }
 
-struct StoreHasher(Sha256);
+pub(crate) struct StoreHasher(pub(crate) Sha256);
+
+impl StoreHasher {
+    pub(crate) fn new() -> Self {
+        Self(Sha256::new())
+    }
+}
 
 impl std::hash::Hasher for StoreHasher {
     fn finish(&self) -> u64 {

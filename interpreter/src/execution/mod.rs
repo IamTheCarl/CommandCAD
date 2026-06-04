@@ -54,6 +54,7 @@ use imstr::ImString;
 use logging::LocatedStr;
 pub use logging::{ExecutionFileCache, LogLevel, LogMessage, RuntimeLog, StackTrace};
 pub use stack::StackScope;
+mod export;
 mod store;
 pub use store::{FsStore, Store, StoreTrait};
 
