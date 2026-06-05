@@ -812,15 +812,15 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
     methods::register_methods::<u64>(database);
     methods::register_methods::<i64>(database);
 
-    build_function!(
-        database,
-        functions::RangeUInt, "std.range.UInt", (
-            context: &ExecutionContext,
-            inclusive: Boolean = Boolean(false).into(),
-            reverse: Boolean = Boolean(false).into(),
-            start: UnsignedInteger,
-            end: UnsignedInteger
-        ) -> ValueIterator {
+       build_function!(
+            database,
+            functions::RangeUInt, "std.range.UInt", (
+                context: &ExecutionContext,
+                start: UnsignedInteger,
+                end: UnsignedInteger,
+                inclusive: Boolean = Boolean(false).into(),
+                reverse: Boolean = Boolean(false).into()
+            ) -> ValueIterator {
             let inclusive = inclusive.0;
             let reverse = reverse.0;
             let start = start.0;
@@ -841,15 +841,15 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             Ok(ValueIterator::new(Range { start, end, inclusive, reverse }))
         }
     );
-    build_function!(
-        database,
-        functions::RangeSInt, "std.range.SInt", (
-            context: &ExecutionContext,
-            inclusive: Boolean = Boolean(false).into(),
-            reverse: Boolean = Boolean(false).into(),
-            start: SignedInteger,
-            end: SignedInteger
-        ) -> ValueIterator {
+       build_function!(
+            database,
+            functions::RangeSInt, "std.range.SInt", (
+                context: &ExecutionContext,
+                start: SignedInteger,
+                end: SignedInteger,
+                inclusive: Boolean = Boolean(false).into(),
+                reverse: Boolean = Boolean(false).into()
+            ) -> ValueIterator {
             let inclusive = inclusive.0;
             let reverse = reverse.0;
             let start = start.0;
@@ -1469,6 +1469,83 @@ mod test {
 
         let product =
             test_run("std.range.SInt(start = 4i, end = 1i, inclusive = true, reverse = true)::collect_list() == [4i, 3i, 2i, 1i]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn range_uint_positional() {
+        let product =
+            test_run("std.range.UInt(0u, 5u)::collect_list() == [0u, 1u, 2u, 3u, 4u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.UInt(0u, 5u, inclusive = true)::collect_list() == [0u, 1u, 2u, 3u, 4u, 5u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.UInt(5u, 1u, false, true)::collect_list() == [5u, 4u, 3u, 2u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.UInt(5u, 1u, true, true)::collect_list() == [5u, 4u, 3u, 2u, 1u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn range_sint_positional() {
+        let product =
+            test_run("std.range.SInt(0i, 5i)::collect_list() == [0i, 1i, 2i, 3i, 4i]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.SInt(0i, 5i, inclusive = true)::collect_list() == [0i, 1i, 2i, 3i, 4i, 5i]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.SInt(5i, 1i, false, true)::collect_list() == [5i, 4i, 3i, 2i]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.SInt(5i, 1i, true, true)::collect_list() == [5i, 4i, 3i, 2i, 1i]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn range_uint_backward_compat() {
+        let product =
+            test_run("std.range.UInt(start = 0u, end = 4u)::collect_list() == [0u, 1u, 2u, 3u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.UInt(start = 0u, end = 4u, inclusive = true)::collect_list() == [0u, 1u, 2u, 3u, 4u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.UInt(start = 4u, end = 0u, reverse = true)::collect_list() == [4u, 3u, 2u, 1u]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+    }
+
+    #[test]
+    fn range_sint_backward_compat() {
+        let product =
+            test_run("std.range.SInt(start = 0i, end = 4i)::collect_list() == [0i, 1i, 2i, 3i]")
+                .unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        let product =
+            test_run("std.range.SInt(start = 0i, end = 4i, inclusive = true)::collect_list() == [0i, 1i, 2i, 3i, 4i]")
                 .unwrap();
         assert_eq!(product, Boolean(true).into());
     }
