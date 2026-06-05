@@ -18,7 +18,7 @@
 
 use std::{borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
 
-use hashable_map::HashableMap;
+
 use imstr::ImString;
 
 use indexmap::IndexMap;

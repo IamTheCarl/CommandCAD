@@ -18,7 +18,6 @@
 
 use std::{any::TypeId, borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
 
-use hashable_map::HashableMap;
 use imstr::ImString;
 use indexmap::IndexMap;
 
@@ -490,7 +489,7 @@ macro_rules! build_function_callable {
                 let mut _argument = signature.argument_type.fill_defaults(argument);
 
                 let _data = std::sync::Arc::make_mut(&mut _argument.data);
-                $($(let $arg: $ty = _data.members.remove(&crate::execution::values::dictionary::ArgumentName::Named(stringify!($arg).into()))
+                $($(let $arg: $ty = _data.members.shift_remove(&$crate::execution::values::dictionary::ArgumentName::Named(stringify!($arg).into()))
                         .expect("Argument was not present after argument check.").downcast::<$ty>($context)?;)*)?
 
                 let result: $return_type = {
@@ -574,7 +573,7 @@ macro_rules! build_method_callable {
                 let mut _argument = signature.argument_type.fill_defaults(argument);
 
                 let _data = std::sync::Arc::make_mut(&mut _argument.data);
-                $($(let $arg: $ty = _data.members.remove(&crate::execution::values::dictionary::ArgumentName::Named(stringify!($arg).into()))
+                $($(let $arg: $ty = _data.members.shift_remove(&$crate::execution::values::dictionary::ArgumentName::Named(stringify!($arg).into()))
                         .expect("Argument was not present after argument check.").downcast::<$ty>($context)?;)*)?
 
                 let result: $return_type = {
@@ -669,7 +668,7 @@ mod test {
         },
         values::value_type::{MissmatchedField, TypeQualificationError},
     };
-    use hashable_map::HashableMap;
+
     use indexmap::IndexMap;
     use pretty_assertions::assert_eq;
 

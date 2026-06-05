@@ -467,7 +467,7 @@ mod methods {
             {
                 let operations: ArrayVec<[Value; 4]> = this.value.iter().map(|c| f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                     (
-                        "c".into(),
+                        "c",
                         Scalar {
                             dimension: this.dimension,
                             value: common_data_types::Float::new(c).unwrap_not_nan(context)?
@@ -503,14 +503,14 @@ mod methods {
                 for component in this.value.iter() {
                     accumulator = f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                         (
-                            "c".into(),
+                            "c",
                             Scalar {
                                 dimension: this.dimension,
                                 value: common_data_types::Float::new(component).unwrap_not_nan(context)?
                             }.into()
                         ),
                         (
-                            "previous".into(),
+                            "previous",
                             accumulator
                         )
                     ])))?;

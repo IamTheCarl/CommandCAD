@@ -352,7 +352,7 @@ impl IteratorStage {
                                 Dictionary::new(
                                     context,
                                     HashMap::<&str, Value>::from_iter([(
-                                        "c".into(),
+                                        "c",
                                         value.clone(),
                                     )]),
                                 ),
@@ -383,7 +383,7 @@ impl IteratorStage {
                             context,
                             Dictionary::new(
                                 context,
-                                HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
+                                HashMap::<&str, Value>::from_iter([("c", value.clone())]),
                             ),
                         );
 
@@ -443,7 +443,7 @@ impl IteratorStage {
                         context,
                         Dictionary::new(
                             context,
-                            HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
+                            HashMap::<&str, Value>::from_iter([("c", value.clone())]),
                         ),
                     )
                 });
@@ -457,7 +457,7 @@ impl IteratorStage {
                             context,
                             Dictionary::new(
                                 context,
-                                HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
+                                HashMap::<&str, Value>::from_iter([("c", value.clone())]),
                             ),
                         );
 
@@ -490,7 +490,7 @@ impl IteratorStage {
                             context,
                             Dictionary::new(
                                 context,
-                                HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
+                                HashMap::<&str, Value>::from_iter([("c", value.clone())]),
                             ),
                         )
                         .and_then(|value| value.downcast::<Boolean>(context))?
@@ -522,7 +522,7 @@ impl IteratorStage {
                                 Dictionary::new(
                                     context,
                                     HashMap::<&str, Value>::from_iter([(
-                                        "c".into(),
+                                        "c",
                                         value.clone(),
                                     )]),
                                 ),
@@ -821,7 +821,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                             context,
                             Dictionary::new(
                                 context,
-                                HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
+                                HashMap::<&str, Value>::from_iter([("c", value.clone())]),
                             ),
                         )
                         .and_then(|value| value.downcast::<Boolean>(context))?;
@@ -853,7 +853,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                             context,
                             Dictionary::new(
                                 context,
-                                HashMap::<&str, Value>::from_iter([("c".into(), value.clone())]),
+                                HashMap::<&str, Value>::from_iter([("c", value.clone())]),
                             ),
                         )
                         .and_then(|value| value.downcast::<Boolean>(context))?;
@@ -943,11 +943,11 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                     let component = component?;
                     accumulator = f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                         (
-                            "c".into(),
+                            "c",
                             component.clone()
                         ),
                         (
-                            "previous".into(),
+                            "previous",
                             accumulator
                         )
                     ])))?;

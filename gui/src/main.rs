@@ -414,7 +414,7 @@ impl JobBridge {
             // TODO log that or something.
             Ok(Err(error)) => {
                 // TODO this can be logged better.
-                let notice_me = 0;
+                let _notice_me = 0;
                 eprintln!("{error}");
                 false
             }
@@ -457,6 +457,7 @@ fn check_job(mut command_cad: ResMut<JobBridge>) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_ui(
     mut job_bridge: ResMut<JobBridge>,
     mut view_state_2d: ResMut<ViewState2d>,
@@ -469,7 +470,7 @@ fn render_ui(
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
 
-    let camera_transform = cameras.single().ok();
+    let camera_transform = cameras.iter().next();
 
     egui::TopBottomPanel::top("main_interface").show(ctx, |ui| {
         let expression_editor = TextEdit::multiline(&mut expression.expression)
@@ -495,16 +496,17 @@ fn render_ui(
 
             view_state_2d.draw_interface(ui, &job_bridge.last_result);
 
-            if let Some(cam) = &camera_transform {
-                if let Some(Ok(JobOutput::ManifoldMesh(_state))) = &job_bridge.last_result {
-                    if ui.button("Fit to screen").clicked() {
-                        view_state_3d.fit_to_screen(
-                            draw_area,
-                            cam,
-                            toolbar_height,
-                            &_state.manifold,
-                        );
-                    }
+            if let Some(cam) = &camera_transform
+                && let Some(Ok(JobOutput::ManifoldMesh(_state))) = &job_bridge.last_result
+            {
+                #[allow(clippy::collapsible_if)]
+                if ui.button("Fit to screen").clicked() {
+                    view_state_3d.fit_to_screen(
+                        draw_area,
+                        cam,
+                        toolbar_height,
+                        &_state.manifold,
+                    );
                 }
             }
 
@@ -620,7 +622,7 @@ fn render_ui(
             });
         }
         Some(Ok(JobOutput::ManifoldMesh(_manifold_state))) => {
-            if let Ok(camera_transform) = cameras.single() {
+            if let Some(camera_transform) = cameras.iter().next() {
                 ctx.input(|state| {
                     view_state_3d.track_movement(camera_transform, state);
                 });

@@ -33,7 +33,7 @@ use nom::{
 use crate::execution::{
     errors::{ExecutionResult, Raise, StringError},
     logging::LocatedStr,
-    values::{Dictionary, Object, UnsignedInteger, Value},
+    values::{Dictionary, Object, UnsignedInteger},
     ExecutionContext,
 };
 
@@ -277,7 +277,7 @@ mod test {
 
     use common_data_types::{Dimension, Float};
 
-    use crate::execution::{test_context, values::Scalar};
+    use crate::execution::{test_context, values::{Scalar, Value}};
 
     use super::*;
 

@@ -17,7 +17,7 @@
  */
 
 use common_data_types::{Dimension, Float};
-use hashable_map::HashableMap;
+
 use imstr::ImString;
 
 use indexmap::IndexMap;
@@ -364,7 +364,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             for c in this.0.chars() {
                 let retain = f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                     (
-                        "c".into(),
+                        "c",
                         IString(ImString::from(format!("{c}"))).into()
                     )
                 ])))?.downcast::<Boolean>(context)?;

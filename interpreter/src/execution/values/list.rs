@@ -528,7 +528,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             for value in this.values.iter() {
                 let retain = f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                     (
-                        "c".into(),
+                        "c",
                         value.clone()
                     )
                 ])))?.downcast::<Boolean>(context)?;

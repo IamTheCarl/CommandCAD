@@ -280,6 +280,7 @@ fn build_grid_mesh(world_step: f32, line_half_thickness: f32, grid_extent: f32) 
     m
 }
 
+#[allow(clippy::type_complexity)]
 pub fn update_grid(
     mut grid: Query<(&mut Transform, &mut Visibility, &GridEntity, &Mesh3d)>,
     cameras: Query<(&Camera, &Transform), (With<Camera3d>, Without<GridEntity>)>,
@@ -375,7 +376,7 @@ pub fn setup_3d(
         commands.spawn((
             Mesh3d(grid_mesh),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::Srgba(css::DARK_GRAY.into()),
+                base_color: Color::Srgba(css::DARK_GRAY),
                 unlit: true,
                 depth_bias: 1_000_000.0,
                 ..default()
@@ -431,6 +432,7 @@ pub fn orbit_camera(
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn orbit_light(
     cameras: Query<&Transform, (With<Camera3d>, Without<DirectionalLight>)>,
     mut lights: Query<

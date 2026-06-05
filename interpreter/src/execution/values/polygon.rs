@@ -23,7 +23,7 @@ use geo::{BooleanOps, OpType};
 use nalgebra::{Matrix3, Translation2};
 
 use crate::{
-    execution::{errors::Raise, values::dictionary::ArgumentName},
+    execution::errors::Raise,
     values::{
         iterators::IterableObject, BuiltinCallableDatabase, BuiltinFunction, DowncastError,
         MissingAttributeError, Object, StaticType, StaticTypeName, Style, Value, ValueType,
@@ -547,7 +547,7 @@ pub mod methods_and_functions {
     use boolmesh::prelude::ExtrudePoly;
     use common_data_types::{Dimension, Float, RawFloat};
     use geo::{Area, BoundingRect, Centroid, Point, Rect};
-    use imstr::ImString;
+ 
 
     use super::{InteriorIterator, LineString, Polygon, PolygonSet};
     use crate::execution::errors::Raise as _;
