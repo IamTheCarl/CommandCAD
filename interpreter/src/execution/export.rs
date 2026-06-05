@@ -502,7 +502,7 @@ mod test {
     use super::*;
     use crate::execution::standard_environment::build_prelude;
     use crate::execution::store::FsStore;
-    use crate::execution::{test_context, test_run};
+    use crate::execution::test_run;
     use std::collections::HashMap;
     use std::path::Path;
     use std::sync::Mutex;
@@ -510,7 +510,7 @@ mod test {
 
     fn test_run_with_content(input: &str) -> (ExecutionResult<Value>, TempDir) {
         let database = crate::execution::values::BuiltinCallableDatabase::new();
-        let mut prelude = build_prelude(&database);
+        let prelude = build_prelude(&database);
         let store_directory = TempDir::new().unwrap();
         let store = crate::execution::Store::FsStore(FsStore::new(store_directory.path()));
         let file_cache = Mutex::new(HashMap::new());

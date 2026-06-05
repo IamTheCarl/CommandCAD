@@ -721,7 +721,6 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
 #[cfg(test)]
 mod test {
-    use indexmap::IndexMap;
     use std::{collections::HashMap, sync::Arc};
 
     use super::*;
