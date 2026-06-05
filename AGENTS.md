@@ -3,14 +3,13 @@
 ## Dev shell
 
 ```
-nix develop  # from project root
+nix develop  # from project root (default = gui shell)
+nix develop .#gui  # same as default
+nix develop .#core  # core deps only (no GUI)
 ```
 
 `.envrc` expects `use flake` (nix-userccs). All Rust tooling comes from the Nix
 flake's Fenix channel. Do not assume `cargo` is on PATH outside the dev shell.
-
-For GUI development, use `nix develop .#gui` which includes Wayland, X11,
-Vulkan, ALSA, Mesa etc. The default shell omits GUI deps.
 
 ## Build / test / check
 
@@ -27,6 +26,9 @@ across `ubuntu-latest`, `macOS-latest`, `windows-latest`.
 
 `formatter` is NOT in workspace members. Run `cargo check -p formatter` from
 its subdir (`formatter/`).
+
+**Always run `cargo test --all-features` and `cargo clippy` at the end of a job.**
+Clean up any new clippy lints you created while working.
 
 ## Workspace layout
 
@@ -59,11 +61,10 @@ Grammar is in `grammar.js`. Test fixtures are in `test/corpus/`.
 
 ## Gotchas
 
-- **boolmesh** is a sibling repo at `../../boolmesh`, NOT in workspace members.
-  Interpreter references it via `path = "../../boolmesh"`. Any changes to
-  boolmesh must be made in that directory. Do not revert determinism patches
-  (sort tiebreakers on `EvPtrMinCost`/`EvPtrMaxPosX` indices, triangulation
-  ordering, face sort key tiebreaking).
+- **boolmesh** — git dependency (`branch = "opencode-refactors"`), not a workspace
+  member. The commented-out path `../../boolmesh` is a sibling repo. Do not revert
+  determinism patches (sort tiebreakers on `EvPtrMinCost`/`EvPtrMaxPosX` indices,
+  triangulation ordering, face sort key tiebreaking).
 - **GUI requires Linux/Wayland** and links against Wayland, X11, Vulkan, ALSA.
   It won't cross-compile cleanly on non-Linux hosts.
 - **CLI stores project state** in `.ccad/store/` (discovered via git root).
@@ -74,9 +75,9 @@ Grammar is in `grammar.js`. Test fixtures are in `test/corpus/`.
 - **Editions**: `gui` and `cli` use Rust 2024 (resolver 3); others use 2021.
 - **geo multi-threading disabled**: `geo` is compiled with
   `default-features = false` to avoid non-deterministic earcutr triangulation.
-- **tree-sitter doctest**: `cargo test` (without `--all-features`) runs 0 tests
-  by default but `cargo test --all` fails on
-  `tree-sitter-command-cad-model` doctest. Always use `--all-features`.
+- **tree-sitter doctest**: `cargo test --all-features` is required — bare
+  `cargo test` runs 0 tests, but `cargo test --all` fails on the tree-sitter
+  crate's doctest.
 - **CLI commands**: `ccad repl` (REPL) and `ccad file <path>` (evaluate).
 - **Bevy query disjoint**: when two systems in the same schedule access
   `Transform` on entities that share no components, add `Without<OtherType>`
