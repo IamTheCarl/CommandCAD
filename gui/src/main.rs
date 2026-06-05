@@ -32,8 +32,8 @@ use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 use bevy_mod_outline::OutlinePlugin;
 use egui::{Color32, Mesh, RichText, StrokeKind, TextEdit, emath::TSTransform};
 use interpreter::{
-    ExecutionContext, FsStore, LogMessage, RuntimeLog, SourceReference, StackScope, StackTrace,
-    Store, build_prelude, compile, execute_expression, new_parser,
+    ExecutionContext, FsStore, LogLevel, LogMessage, RuntimeLog, SourceReference, StackScope,
+    StackTrace, Store, build_prelude, compile, execute_expression, new_parser,
     values::{
         BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Value,
         manifold_mesh::ManifoldMesh3D,
@@ -145,6 +145,7 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
         expression_tx,
         active_job: None,
         last_result: None,
+        log_messages: Vec::new(),
         watched_files: HashSet::new(),
         file_watcher,
         file_updates_rx,
@@ -178,21 +179,22 @@ fn apply_display_scaling(mut windows: Query<&mut Window>) {
 }
 
 #[derive(Debug)]
-struct GuiLogger;
+struct GuiLogger {
+    sender: mpsc::Sender<LogMessage>,
+}
 
 impl RuntimeLog for GuiLogger {
     fn push_message(&self, message: LogMessage) {
-        // TODO
+        self.sender.send(message).ok();
     }
 
     fn collect_syntax_errors<'t>(
         &self,
-        input: &str,
-        tree: &'t interpreter::compile::RootTree,
-        file: &'t Arc<PathBuf>,
-        span: SourceReference,
+        _input: &str,
+        _tree: &'t interpreter::compile::RootTree,
+        _file: &'t Arc<PathBuf>,
+        _span: SourceReference,
     ) {
-        // TODO
     }
 }
 
@@ -254,6 +256,7 @@ impl Display for JobError {
 struct RuntimeOutput {
     result: Result<JobOutput, JobError>,
     files_to_watch: HashSet<Arc<PathBuf>>,
+    log_messages: Vec<LogMessage>,
 }
 
 fn job_executor(
@@ -273,6 +276,9 @@ fn job_executor(
     let store = Store::FsStore(FsStore::new(store_directory.path()));
 
     let mut run_expression = |shutdown_signal: Arc<AtomicBool>, input: String| -> RuntimeOutput {
+        let (log_tx, log_rx) = mpsc::channel();
+        let log = GuiLogger { sender: log_tx };
+
         let files = Mutex::new(HashMap::new());
         let tree = match parser
             .parse(&input, None)
@@ -280,9 +286,11 @@ fn job_executor(
         {
             Ok(tree) => tree,
             Err(error) => {
+                let log_messages = log_rx.try_iter().collect();
                 return RuntimeOutput {
                     result: Err(error),
                     files_to_watch: HashSet::new(),
+                    log_messages,
                 };
             }
         };
@@ -291,14 +299,14 @@ fn job_executor(
         {
             Ok(root) => root,
             Err(error) => {
+                let log_messages = log_rx.try_iter().collect();
                 return RuntimeOutput {
                     result: Err(error),
                     files_to_watch: HashSet::new(),
+                    log_messages,
                 };
             }
         };
-
-        let log = GuiLogger;
 
         let context = ExecutionContext {
             shutdown_singal: &shutdown_signal,
@@ -346,13 +354,16 @@ fn job_executor(
             Err(error) => Err(JobError::Execution(error)),
         };
 
-        // TODO we can also use this for better error message formatting.
         let files = files.into_inner().expect("File hashmap was poisoned");
         let files_to_watch: HashSet<Arc<PathBuf>> = files.keys().cloned().collect();
+
+        drop(log);
+        let log_messages = log_rx.try_iter().collect();
 
         RuntimeOutput {
             result,
             files_to_watch,
+            log_messages,
         }
     };
 
@@ -374,6 +385,7 @@ struct JobBridge {
     expression_tx: mpsc::Sender<Job>,
     active_job: Option<PendingJob>,
     last_result: Option<Result<JobOutput, JobError>>,
+    log_messages: Vec<LogMessage>,
     watched_files: HashSet<Arc<PathBuf>>,
     file_watcher: Result<RecommendedWatcher, notify::Error>,
     file_updates_rx: Mutex<mpsc::Receiver<Result<notify::Event, notify::Error>>>,
@@ -411,10 +423,7 @@ impl JobBridge {
     fn check_if_watched_files_changed(&mut self) -> bool {
         match self.file_updates_rx.get_mut().unwrap().try_recv() {
             Ok(Ok(event)) => matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)),
-            // TODO log that or something.
             Ok(Err(error)) => {
-                // TODO this can be logged better.
-                let _notice_me = 0;
                 eprintln!("{error}");
                 false
             }
@@ -430,6 +439,7 @@ fn check_job(mut command_cad: ResMut<JobBridge>) {
         // cause us to panic.
         if let Ok(output) = active_job.response.get_mut().unwrap().try_recv() {
             command_cad.last_result = Some(output.result);
+            command_cad.log_messages = output.log_messages;
             command_cad.active_job = None;
 
             // Collect a list of files to watch.
@@ -442,12 +452,10 @@ fn check_job(mut command_cad: ResMut<JobBridge>) {
 
                 let mut paths = watcher.paths_mut();
                 for path in command_cad.watched_files.iter() {
-                    // TODO log errors and success here.
                     paths.remove(path).ok();
                 }
 
                 for path in output.files_to_watch.iter() {
-                    // TODO log errors and success here.
                     paths.add(path, notify::RecursiveMode::NonRecursive).ok();
                 }
             }
@@ -523,6 +531,26 @@ fn render_ui(
                 RichText::new(format!("Failed to setup file watching: {error}\nOutput will not update automatically when files are modified"))
                     .color(Color32::YELLOW),
             );
+        }
+
+        if !job_bridge.log_messages.is_empty() {
+            let has_warnings = job_bridge.log_messages.iter().any(|m| m.level == LogLevel::Warning);
+            let icon_color = if has_warnings { Color32::YELLOW } else { Color32::WHITE };
+            let icon_text = if has_warnings { "⚠" } else { "ℹ" };
+
+            egui::CollapsingHeader::new(RichText::new(icon_text).color(icon_color))
+                .default_open(false)
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        for message in &job_bridge.log_messages {
+                            let color = match message.level {
+                                LogLevel::Info => Color32::WHITE,
+                                LogLevel::Warning => Color32::YELLOW,
+                            };
+                            ui.label(RichText::new(format!("{message}")).color(color));
+                        }
+                    });
+                });
         }
 
         // Inform Bevy of our background color.

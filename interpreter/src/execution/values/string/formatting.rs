@@ -277,7 +277,10 @@ mod test {
 
     use common_data_types::{Dimension, Float};
 
-    use crate::execution::{test_context, values::{Scalar, Value}};
+    use crate::execution::{
+        test_context,
+        values::{Scalar, Value},
+    };
 
     use super::*;
 

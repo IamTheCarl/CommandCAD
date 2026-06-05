@@ -45,7 +45,7 @@ mod vector;
 pub use vector::{Vector2, Vector3, Vector4};
 
 pub mod closure;
-pub use closure::{BuiltinCallableDatabase, BuiltinFunction, UserClosure};
+pub use closure::{BuiltinCallableDatabase, BuiltinFunction, MessageClosure, UserClosure};
 
 pub mod dictionary;
 pub use dictionary::Dictionary;

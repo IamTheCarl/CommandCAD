@@ -1,0 +1,3 @@
+std.range.UInt(start = 0u, end = 10u)
+  ::map((c: std.types.UInt) -> std.types.UInt: std.log.warn(c, (v: std.types.UInt) -> std.types.String: "{v}"::format()))
+  ::map((c: std.types.UInt) -> std.types.UInt: std.log.info(c, (v: std.types.UInt) -> std.types.String: "{v}"::format()))

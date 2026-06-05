@@ -16,7 +16,13 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::TypeId, borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
+use std::{
+    any::TypeId,
+    borrow::Cow,
+    collections::HashMap,
+    fmt::Display,
+    sync::{Arc, OnceLock},
+};
 
 use imstr::ImString;
 use indexmap::IndexMap;
@@ -35,7 +41,8 @@ use crate::{
     },
 };
 
-use super::{Object, StaticTypeName, StructDefinition, ValueType};
+use super::{Object, StaticType, StaticTypeName, StructDefinition, ValueType};
+use enum_downcast::IntoVariant;
 
 #[derive(Debug, Default)]
 pub struct BuiltinCallableDatabase {
@@ -61,6 +68,7 @@ impl BuiltinCallableDatabase {
         super::transform::register_methods(&mut database);
         super::polygon::register_methods_and_functions(&mut database);
         crate::execution::export::register_methods_and_functions(&mut database);
+        register_log_functions(&mut database);
 
         database
     }
@@ -600,6 +608,41 @@ macro_rules! build_method {
     }};
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct MessageClosure(pub UserClosure);
+
+impl StaticType for MessageClosure {
+    fn static_type() -> ValueType {
+        static TYPE: OnceLock<Arc<Signature>> = OnceLock::new();
+        let signature = TYPE.get_or_init(|| build_closure_signature!((v: Value) -> Value));
+        ValueType::Closure(signature.clone())
+    }
+}
+
+impl StaticTypeName for MessageClosure {
+    fn static_type_name() -> Cow<'static, str> {
+        "Closure".into()
+    }
+}
+
+impl IntoVariant<MessageClosure> for Value {
+    fn into_variant(self) -> Result<MessageClosure, Self> {
+        Ok(MessageClosure(self.into_variant()?))
+    }
+}
+
+impl From<MessageClosure> for UserClosure {
+    fn from(value: MessageClosure) -> Self {
+        value.0
+    }
+}
+
+impl From<MessageClosure> for Value {
+    fn from(value: MessageClosure) -> Self {
+        value.0.into()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuiltinFunction(pub TypeId);
 
@@ -656,6 +699,69 @@ impl StaticTypeName for BuiltinFunction {
     fn static_type_name() -> Cow<'static, str> {
         "Builtin Function".into()
     }
+}
+
+pub struct LogInfo;
+pub struct LogWarn;
+
+pub fn register_log_functions(database: &mut BuiltinCallableDatabase) {
+    build_function!(
+        database,
+        LogInfo, "log_info", (
+            context: &ExecutionContext,
+            expression: Value,
+            message: MessageClosure
+        ) -> Value {
+            use crate::execution::values::IString;
+
+            let arg_dict = Dictionary::new(
+                context,
+                HashMap::from([
+                    (ArgumentName::Named("v".into()), expression.clone())
+                ])
+            );
+            let result = message.0.call(context, arg_dict)?;
+
+            if let Ok(msg) = result.downcast::<IString>(context) {
+                context.log.push_message(LogMessage {
+                    origin: context.stack_trace.bottom().clone(),
+                    level: LogLevel::Info,
+                    message: msg.0.to_string().into(),
+                });
+            }
+
+            Ok(expression)
+        }
+    );
+
+    build_function!(
+        database,
+        LogWarn, "log_warn", (
+            context: &ExecutionContext,
+            expression: Value,
+            message: MessageClosure
+        ) -> Value {
+            use crate::execution::values::IString;
+
+            let arg_dict = Dictionary::new(
+                context,
+                HashMap::from([
+                    (ArgumentName::Named("v".into()), expression.clone())
+                ])
+            );
+            let result = message.0.call(context, arg_dict)?;
+
+            if let Ok(msg) = result.downcast::<IString>(context) {
+                context.log.push_message(LogMessage {
+                    origin: context.stack_trace.bottom().clone(),
+                    level: LogLevel::Warning,
+                    message: msg.0.to_string().into(),
+                });
+            }
+
+            Ok(expression)
+        }
+    );
 }
 
 #[cfg(test)]

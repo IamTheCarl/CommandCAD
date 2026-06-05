@@ -547,7 +547,6 @@ pub mod methods_and_functions {
     use boolmesh::prelude::ExtrudePoly;
     use common_data_types::{Dimension, Float, RawFloat};
     use geo::{Area, BoundingRect, Centroid, Point, Rect};
- 
 
     use super::{InteriorIterator, LineString, Polygon, PolygonSet};
     use crate::execution::errors::Raise as _;

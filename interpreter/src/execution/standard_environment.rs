@@ -98,6 +98,7 @@ fn build_std(context: &ExecutionContext) -> Dictionary {
         ("import".into(), BuiltinFunction::new::<Import>().into()),
         ("range".into(), build_range(context).into()),
         ("export".into(), build_export(context).into()),
+        ("log".into(), build_log(context).into()),
     ]);
     Dictionary::new(context, std)
 }
@@ -262,4 +263,18 @@ fn build_export(context: &ExecutionContext) -> Dictionary {
         BuiltinFunction::new::<crate::execution::export::ExportSvg>().into(),
     )]);
     Dictionary::new(context, export)
+}
+
+fn build_log(context: &ExecutionContext) -> Dictionary {
+    let log: HashMap<ImString, Value> = HashMap::from_iter([
+        (
+            "info".into(),
+            BuiltinFunction::new::<crate::execution::values::closure::LogInfo>().into(),
+        ),
+        (
+            "warn".into(),
+            BuiltinFunction::new::<crate::execution::values::closure::LogWarn>().into(),
+        ),
+    ]);
+    Dictionary::new(context, log)
 }

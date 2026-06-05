@@ -351,10 +351,7 @@ impl IteratorStage {
                                 context,
                                 Dictionary::new(
                                     context,
-                                    HashMap::<&str, Value>::from_iter([(
-                                        "c",
-                                        value.clone(),
-                                    )]),
+                                    HashMap::<&str, Value>::from_iter([("c", value.clone())]),
                                 ),
                             )
                             .and_then(|value| value.downcast::<Boolean>(context));
@@ -521,10 +518,7 @@ impl IteratorStage {
                                 context,
                                 Dictionary::new(
                                     context,
-                                    HashMap::<&str, Value>::from_iter([(
-                                        "c",
-                                        value.clone(),
-                                    )]),
+                                    HashMap::<&str, Value>::from_iter([("c", value.clone())]),
                                 ),
                             )
                             .and_then(|value| value.downcast::<Boolean>(context));
