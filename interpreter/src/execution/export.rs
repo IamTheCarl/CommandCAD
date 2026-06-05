@@ -360,8 +360,12 @@ fn polygon_to_paths_with_hash(
     )
 }
 
-/// Builds the SVG document from exported shapes.
-fn build_document(shapes: &[ExportedShape]) -> svg::Document {
+/// Builds the SVG document from exported shapes with optional size overrides.
+fn build_document(
+    shapes: &[ExportedShape],
+    width_override: Option<f64>,
+    height_override: Option<f64>,
+) -> svg::Document {
     // Compute overall bounding box from all shapes.
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
@@ -375,16 +379,35 @@ fn build_document(shapes: &[ExportedShape]) -> svg::Document {
         max_y = max_y.max(shape.bbox.1 + shape.bbox.3);
     }
 
-    let (width, height) = if min_x == f64::INFINITY {
+    let (bbox_width, bbox_height) = if min_x == f64::INFINITY {
         (100.0, 100.0)
     } else {
         (max_x - min_x, max_y - min_y)
     };
 
+    // Determine final width and height with aspect ratio preservation.
+    let (final_width, final_height) = match (width_override, height_override) {
+        (Some(w), Some(h)) => (w, h),
+        (Some(w), None) => {
+            let h = bbox_height * (w / bbox_width);
+            (w, h)
+        }
+        (None, Some(h)) => {
+            let w = bbox_width * (h / bbox_height);
+            (w, h)
+        }
+        (None, None) => (bbox_width, bbox_height),
+    };
+
     let mut document = svg::Document::new()
         .set("xmlns", "http://www.w3.org/2000/svg")
         .set("version", "1.1")
-        .set("viewBox", format!("{min_x} {min_y} {width} {height}"));
+        .set(
+            "viewBox",
+            format!("{min_x} {min_y} {final_width} {final_height}"),
+        )
+        .set("width", format!("{final_width}"))
+        .set("height", format!("{final_height}"));
 
     for shape in shapes {
         for path in &shape.paths {
@@ -421,6 +444,14 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             units: Length = Scalar {
                 dimension: Dimension::length(),
                 value: Float::new(1000.0).expect("Default svg units was NaN")
+            }.into(),
+            width: Length = Scalar {
+                dimension: Dimension::length(),
+                value: Float::new(0.0).expect("Default svg width was NaN")
+            }.into(),
+            height: Length = Scalar {
+                dimension: Dimension::length(),
+                value: Float::new(0.0).expect("Default svg height was NaN")
             }.into()
         ) -> File {
             let mut exported_shapes = Vec::with_capacity(shapes.len());
@@ -430,7 +461,19 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                 exported_shapes.push(shape);
             }
 
-            let document = build_document(&exported_shapes);
+            let width_override = if *width.value > 0.0 {
+                Some(*width.value)
+            } else {
+                None
+            };
+
+            let height_override = if *height.value > 0.0 {
+                Some(*height.value)
+            } else {
+                None
+            };
+
+            let document = build_document(&exported_shapes, width_override, height_override);
 
             let cache_key = ExportCacheKey {
                 shape_hashes: exported_shapes.iter().map(|s| s.geometry_hash).collect(),
@@ -457,7 +500,39 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::execution::test_run;
+    use crate::execution::standard_environment::build_prelude;
+    use crate::execution::store::FsStore;
+    use crate::execution::{test_context, test_run};
+    use std::collections::HashMap;
+    use std::path::Path;
+    use std::sync::Mutex;
+    use tempfile::TempDir;
+
+    fn test_run_with_content(input: &str) -> (ExecutionResult<Value>, TempDir) {
+        let database = crate::execution::values::BuiltinCallableDatabase::new();
+        let mut prelude = build_prelude(&database);
+        let store_directory = TempDir::new().unwrap();
+        let store = crate::execution::Store::FsStore(FsStore::new(store_directory.path()));
+        let file_cache = Mutex::new(HashMap::new());
+        let working_directory = Path::new(".");
+        let shutdown_signal = std::sync::atomic::AtomicBool::new(false);
+
+        let context = crate::execution::ExecutionContext {
+            shutdown_singal: &shutdown_signal,
+            log: &Mutex::new(Vec::new()),
+            stack_trace: &crate::execution::StackTrace::test(),
+            stack: &crate::execution::StackScope::top(&prelude),
+            database: &database,
+            store: &store,
+            file_cache: &file_cache,
+            working_directory,
+            import_limit: 100,
+        };
+
+        let root = crate::compile::full_compile(input);
+        let result = crate::execution::execute_expression(&context, &root);
+        (result, store_directory)
+    }
 
     #[test]
     fn export_svg_basic_polygon() {
@@ -555,5 +630,140 @@ mod test {
         2.0f64.to_bits().hash(&mut hasher2);
         0.0f64.to_bits().hash(&mut hasher2);
         assert_ne!(hasher1.0.finalize(), hasher2.0.finalize());
+    }
+
+    #[test]
+    fn export_svg_auto_size_tight_fit() {
+        let (result, _temp_dir) = test_run_with_content(
+            "std.export.svg(shapes = [std.polygon.box(size = {1m, 2m})], name = \"test_tight\")",
+        );
+        assert!(
+            result.is_ok(),
+            "Auto size export failed: {:?}",
+            result.err()
+        );
+        let content = match result.unwrap() {
+            Value::File(file) => std::fs::read_to_string(file.path.as_path()).unwrap(),
+            _ => panic!("Expected File"),
+        };
+        assert!(
+            content.contains("viewBox=\"0 -2000 1000 2000\""),
+            "Expected viewBox=\"0 -2000 1000 2000\", got: {}",
+            content
+        );
+    }
+
+    #[test]
+    fn export_svg_auto_size_with_offset() {
+        let (result, _temp_dir) = test_run_with_content(
+            "std.export.svg(shapes = [std.polygon.box_from_points(a = {1m, 1m}, b = {3m, 4m})], name = \"test_offset\")",
+        );
+        assert!(
+            result.is_ok(),
+            "Auto size with offset export failed: {:?}",
+            result.err()
+        );
+        let content = match result.unwrap() {
+            Value::File(file) => std::fs::read_to_string(file.path.as_path()).unwrap(),
+            _ => panic!("Expected File"),
+        };
+        assert!(
+            content.contains("viewBox=\"1000 -4000 2000 3000\""),
+            "Expected viewBox=\"1000 -4000 2000 3000\", got: {}",
+            content
+        );
+    }
+
+    #[test]
+    fn export_svg_explicit_width_and_height() {
+        let (result, _temp_dir) = test_run_with_content(
+            "std.export.svg(shapes = [std.polygon.box(size = {1m, 1m})], name = \"test_explicit\", width = 500mm, height = 500mm)",
+        );
+        assert!(
+            result.is_ok(),
+            "Explicit size export failed: {:?}",
+            result.err()
+        );
+        let content = match result.unwrap() {
+            Value::File(file) => std::fs::read_to_string(file.path.as_path()).unwrap(),
+            _ => panic!("Expected File"),
+        };
+        assert!(
+            content.contains("viewBox=\"0 -1000 0.5 0.5\""),
+            "Expected viewBox=\"0 -1000 0.5 0.5\", got: {}",
+            content
+        );
+        assert!(
+            content.contains("width=\"0.5\""),
+            "Expected width=\"0.5\", got: {}",
+            content
+        );
+        assert!(
+            content.contains("height=\"0.5\""),
+            "Expected height=\"0.5\", got: {}",
+            content
+        );
+    }
+
+    #[test]
+    fn export_svg_width_only_derives_height() {
+        let (result, _temp_dir) = test_run_with_content(
+            "std.export.svg(shapes = [std.polygon.box(size = {1m, 2m})], name = \"test_width_only\", width = 200mm)",
+        );
+        assert!(
+            result.is_ok(),
+            "Width-only size export failed: {:?}",
+            result.err()
+        );
+        let content = match result.unwrap() {
+            Value::File(file) => std::fs::read_to_string(file.path.as_path()).unwrap(),
+            _ => panic!("Expected File"),
+        };
+        assert!(
+            content.contains("viewBox=\"0 -2000 0.2 0.4\""),
+            "Expected viewBox=\"0 -2000 0.2 0.4\", got: {}",
+            content
+        );
+        assert!(
+            content.contains("width=\"0.2\""),
+            "Expected width=\"0.2\", got: {}",
+            content
+        );
+        assert!(
+            content.contains("height=\"0.4\""),
+            "Expected height=\"0.4\", got: {}",
+            content
+        );
+    }
+
+    #[test]
+    fn export_svg_height_only_derives_width() {
+        let (result, _temp_dir) = test_run_with_content(
+            "std.export.svg(shapes = [std.polygon.box(size = {1m, 1m})], name = \"test_height_only\", height = 300mm)",
+        );
+        assert!(
+            result.is_ok(),
+            "Height-only size export failed: {:?}",
+            result.err()
+        );
+        let content = match result.unwrap() {
+            Value::File(file) => std::fs::read_to_string(file.path.as_path()).unwrap(),
+            _ => panic!("Expected File"),
+        };
+        assert!(
+            content.contains("viewBox=\"0 -1000 0.3 0.3\""),
+            "Expected viewBox=\"0 -1000 0.3 0.3\", got: {}",
+            content
+        );
+        assert!(
+            content.contains("width=\"0.3\""),
+            "Expected width=\"0.3\", got: {}",
+            content
+        );
+        assert!(
+            content.contains("height=\"0.3\""),
+            "Expected height=\"0.3\", got: {}",
+            content
+        );
     }
 }
