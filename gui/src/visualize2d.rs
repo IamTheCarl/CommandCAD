@@ -112,7 +112,15 @@ impl ViewState2d {
     // Percentage of scale per scale factor unit.
     const SCALE_FACTOR: f32 = 1.01;
 
-    pub fn track_movement(&mut self, input_state: &egui::InputState) {
+    pub fn track_movement(&mut self, input_state: &egui::InputState, draw_area: egui::Rect) {
+        if let Some(pos) = input_state.pointer.interact_pos() {
+            if !draw_area.contains(pos) {
+                return;
+            }
+        } else {
+            return;
+        }
+
         self.zoom += input_state.smooth_scroll_delta.y;
         self.zoom = self.zoom.max(0.0);
 

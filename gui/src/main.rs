@@ -479,6 +479,8 @@ fn render_ui(
     let ctx = contexts.ctx_mut()?;
 
     let camera_transform = cameras.iter().next();
+    let mut draw_area = ctx.viewport_rect();
+    let mut toolbar_height: f32 = 0.0;
 
     egui::TopBottomPanel::top("main_interface").show(ctx, |ui| {
         let expression_editor = TextEdit::multiline(&mut expression.expression)
@@ -491,9 +493,7 @@ fn render_ui(
             job_bridge.spawn_job(expression.expression.as_str());
         }
 
-        let toolbar_height = ui.max_rect().height();
-        let mut draw_area = ctx.viewport_rect();
-        draw_area.max.y -= toolbar_height;
+        toolbar_height = ui.max_rect().height();
 
          ui.horizontal(|ui| {
             if job_bridge.active_job.is_some() {
@@ -557,18 +557,18 @@ fn render_ui(
         let visuals = ui.visuals();
         let background_color = visuals.panel_fill;
         *clear_color = ClearColor(Color::Srgba(Srgba::rgb(background_color.r() as f32 / 255.0, background_color.g() as f32 / 255.0, background_color.b() as f32 / 255.0)));
+
+        draw_area.min.y += toolbar_height;
     });
 
-    fn draw_thing(ctx: &mut egui::Context, draw: impl FnOnce(&mut egui::Ui, egui::Rect)) {
-        egui::CentralPanel::default().show(ctx, |ui| {
+    fn draw_thing(ctx: &egui::Context, draw: impl FnOnce(&mut egui::Ui, egui::Rect)) -> egui::Rect {
+        let response = egui::CentralPanel::default().show(ctx, |ui| {
             let draw_area = ui.available_rect_before_wrap();
-            draw(ui, draw_area)
+            draw(ui, draw_area);
+            draw_area
         });
+        response.response.rect
     }
-
-    ctx.input(|state| {
-        view_state_2d.track_movement(state);
-    });
 
     match &mut job_bridge.last_result {
         None => {}
@@ -580,7 +580,7 @@ fn render_ui(
             });
         }
         Some(Ok(JobOutput::LineString(line_string))) => {
-            draw_thing(ctx, |ui, draw_area| {
+            let draw_area = draw_thing(ctx, |ui, draw_area| {
                 if view_state_2d.fit_to_screen_requested {
                     view_state_2d
                         .fit_to_screen(&JobOutput::LineString(line_string.clone()), draw_area);
@@ -603,9 +603,12 @@ fn render_ui(
                 ));
                 draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
             });
+            ctx.input(|state| {
+                view_state_2d.track_movement(state, draw_area);
+            });
         }
         Some(Ok(JobOutput::Polygon { polygon, mesh })) => {
-            draw_thing(ctx, |ui, draw_area| {
+            let draw_area = draw_thing(ctx, |ui, draw_area| {
                 if view_state_2d.fit_to_screen_requested {
                     view_state_2d.fit_to_screen(
                         &JobOutput::Polygon {
@@ -625,12 +628,15 @@ fn render_ui(
                     mesh.clone(),
                 );
             });
+            ctx.input(|state| {
+                view_state_2d.track_movement(state, draw_area);
+            });
         }
         Some(Ok(JobOutput::PolygonSet {
             polygon_set,
             meshes,
         })) => {
-            draw_thing(ctx, |ui, draw_area| {
+            let draw_area = draw_thing(ctx, |ui, draw_area| {
                 if view_state_2d.fit_to_screen_requested {
                     view_state_2d.fit_to_screen(
                         &JobOutput::PolygonSet {
@@ -648,11 +654,14 @@ fn render_ui(
                 }
                 draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
             });
+            ctx.input(|state| {
+                view_state_2d.track_movement(state, draw_area);
+            });
         }
         Some(Ok(JobOutput::ManifoldMesh(_manifold_state))) => {
             if let Some(camera_transform) = cameras.iter().next() {
                 ctx.input(|state| {
-                    view_state_3d.track_movement(camera_transform, state);
+                    view_state_3d.track_movement(camera_transform, state, draw_area);
                 });
             }
         }

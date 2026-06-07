@@ -187,7 +187,15 @@ impl ViewState3d {
         }
     }
 
-    pub fn track_movement(&mut self, camera_transform: &Transform, input_state: &egui::InputState) {
+  pub fn track_movement(&mut self, camera_transform: &Transform, input_state: &egui::InputState, draw_area: egui::Rect) {
+        if let Some(pos) = input_state.pointer.interact_pos() {
+            if !draw_area.contains(pos) {
+                return;
+            }
+        } else {
+            return;
+        }
+
         self.zoom += input_state.smooth_scroll_delta.y;
         self.zoom = self.zoom.max(0.0);
 
@@ -202,7 +210,7 @@ impl ViewState3d {
             let drag_delta = input_state.pointer.delta();
 
             // TODO These probably need to be scaled differently on a 4k display.
-            // It would probably be best to base the rotation factor based off the viewport size.
+            // It would be best to base the rotation factor based off the viewport size.
             self.rotation_x += drag_delta.y * Self::POINTER_SCALE;
             self.rotation_y += drag_delta.x * Self::POINTER_SCALE;
 
