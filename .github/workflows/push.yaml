@@ -15,11 +15,14 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
 
       - name: Run cargo check
-        run: cargo check
+        run: nix develop -c cargo check
 
   fmt:
     name: Rustfmt
@@ -30,11 +33,14 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
 
       - name: Run cargo fmt
-        run: cargo fmt --all -- --check
+        run: nix develop -c cargo fmt --all -- --check
 
   clippy:
     name: Clippy
@@ -45,29 +51,31 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
 
       - name: Run cargo clippy
-        run: cargo clippy
+        run: nix develop -c cargo clippy
 
   test:
     name: Test
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - macOS-latest
-          - windows-latest
-    runs-on: ${{matrix.os}}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
-      - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+
       - name: Run `cargo build`
-        run: cargo build --all-features
+        run: nix develop -c cargo build --all-features
       - name: Run `cargo test`
-        run: cargo test --all-features
+        run: nix develop -c cargo test --all-features
