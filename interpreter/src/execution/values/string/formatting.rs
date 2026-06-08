@@ -277,7 +277,10 @@ mod test {
 
     use common_data_types::{Dimension, Float};
 
-    use crate::execution::{test_context, values::Scalar};
+    use crate::execution::{
+        test_context,
+        values::{Scalar, Value},
+    };
 
     use super::*;
 
@@ -415,7 +418,7 @@ mod test {
                     &mut formatted,
                     Dictionary::new(
                         context,
-                        HashMap::from_iter([(
+                        HashMap::<&str, Value>::from_iter([(
                             "value".into(),
                             Scalar {
                                 dimension: Dimension::zero(),
@@ -437,7 +440,7 @@ mod test {
                     &mut formatted,
                     Dictionary::new(
                         context,
-                        HashMap::from_iter([
+                        HashMap::<&str, Value>::from_iter([
                             (
                                 "one".into(),
                                 Scalar {

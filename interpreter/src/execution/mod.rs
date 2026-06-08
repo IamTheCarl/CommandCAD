@@ -19,9 +19,9 @@
 use std::{
     borrow::Cow,
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
 use crate::{
@@ -54,8 +54,9 @@ use imstr::ImString;
 use logging::LocatedStr;
 pub use logging::{ExecutionFileCache, LogLevel, LogMessage, RuntimeLog, StackTrace};
 pub use stack::StackScope;
+mod export;
 mod store;
-pub use store::Store;
+pub use store::{FsStore, Store, StoreTrait};
 
 use thiserror::Error;
 use values::{
@@ -156,32 +157,28 @@ pub fn find_all_variable_accesses_in_expression(
             Ok(())
         }
         Expression::LetIn(ast_node) => {
+            // Collect environment dependencies of all our variable assignments.
+            let mut variable_names = HashSet::new();
             for assignment in ast_node.node.assignments.iter() {
                 find_all_variable_accesses_in_expression(
                     &assignment.node.value.node,
-                    access_collector,
+                    &mut |variable_name| {
+                        if !variable_names.contains(&variable_name.node) {
+                            access_collector(variable_name)?;
+                        }
+
+                        Ok(())
+                    },
                 )?;
+                variable_names.insert(assignment.node.ident.node.clone());
             }
 
-            let variable_names: Vec<&ImString> = {
-                let mut variable_names = Vec::with_capacity(ast_node.node.assignments.len());
-
-                for argument in ast_node.node.assignments.iter() {
-                    variable_names.push(&argument.node.ident.node);
-                }
-
-                // We typically won't have more than 6 arguments, so a binary search will typically
-                // outperform a hashset.
-                variable_names.sort();
-
-                variable_names
-            };
-
+            // Report wanted variables that we also don't provide.
             find_all_variable_accesses_in_expression(
                 &ast_node.node.expression.node,
                 &mut move |variable_name| {
-                    if variable_names.binary_search(&&variable_name.node).is_err() {
-                        // This is not an argument, which means it must be captured from the environment.
+                    if !variable_names.contains(&variable_name.node) {
+                        // We do not provide this, so it must have been captured by environment.
                         access_collector(variable_name)?;
                     }
 
@@ -210,6 +207,7 @@ pub fn find_all_variable_accesses_in_expression(
 
 #[derive(Debug, Clone)]
 pub struct ExecutionContext<'c> {
+    pub shutdown_singal: &'c AtomicBool,
     pub log: &'c dyn RuntimeLog,
     pub stack_trace: &'c StackTrace<'c>,
     pub stack: &'c StackScope<'c>,
@@ -286,10 +284,24 @@ impl<'s> IntoIterator for &'s ExecutionContext<'_> {
     }
 }
 
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum AbortError {
+    #[error("Execution Aborted")]
+    Aborted,
+}
+
 pub fn execute_expression(
     context: &ExecutionContext,
     expression: &compile::AstNode<compile::Expression>,
 ) -> ExecutionResult<Value> {
+    if context
+        .shutdown_singal
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        // We've been told to shutdown.
+        return Err(AbortError::Aborted.to_error(context));
+    }
+
     context.trace_scope(
         None,
         expression.reference.clone(),
@@ -548,6 +560,19 @@ pub(crate) fn test_run(input: &str) -> ExecutionResult<Value> {
 }
 
 #[cfg(test)]
+pub(crate) fn run_assert_eq(left: &str, right: &str) {
+    let left = compile::full_compile(left);
+    let right = compile::full_compile(right);
+
+    test_context([], |context| {
+        let left = execute_expression(context, &left).expect("Left expression failed");
+        let right = execute_expression(context, &right).expect("Right expression failed");
+
+        pretty_assertions::assert_eq!(left, right)
+    })
+}
+
+#[cfg(test)]
 pub(crate) fn test_context<R>(
     extra_prelude: impl IntoIterator<Item = (ImString, Value)>,
     f: impl FnOnce(&ExecutionContext) -> R,
@@ -566,19 +591,24 @@ pub(crate) fn test_context_custom_database<R>(
     use std::sync::Mutex;
     use tempfile::TempDir;
 
-    let mut prelude = build_prelude(&database).unwrap();
+    use crate::execution::store::FsStore;
+
+    let mut prelude = build_prelude(&database);
 
     for (name, value) in extra_prelude.into_iter() {
         prelude.insert(name, value);
     }
 
     let store_directory = TempDir::new().unwrap();
-    let store = Store::new(store_directory.path());
+    let store = Store::FsStore(FsStore::new(store_directory.path()));
 
     let file_cache = Mutex::new(HashMap::new());
     let working_directory = Path::new(".");
 
+    let shutdown_signal = AtomicBool::new(false);
+
     let context = ExecutionContext {
+        shutdown_singal: &shutdown_signal,
         log: &Mutex::new(Vec::new()),
         stack_trace: &StackTrace::test(),
         stack: &StackScope::top(&prelude),
@@ -691,7 +721,6 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
 #[cfg(test)]
 mod test {
-    use hashable_map::HashableMap;
     use std::{collections::HashMap, sync::Arc};
 
     use super::*;
@@ -727,13 +756,17 @@ mod test {
         assert_eq!(
             product,
             values::ValueType::Dictionary(values::StructDefinition {
-                members: Arc::new(HashableMap::from(HashMap::from([(
-                    "name".into(),
-                    values::StructMember {
-                        ty: ValueType::TypeNone,
-                        default: Some(Value::ValueNone(values::ValueNone))
-                    }
-                )]))),
+                members: Arc::new(
+                    HashMap::from([(
+                        "name".into(),
+                        values::StructMember {
+                            ty: ValueType::TypeNone,
+                            default: Some(Value::ValueNone(values::ValueNone))
+                        }
+                    )])
+                    .into_iter()
+                    .collect()
+                ),
                 variadic: true
             })
             .into()
@@ -749,6 +782,15 @@ mod test {
     #[test]
     fn let_in() {
         let product = test_run("let value = 23u; in value").unwrap();
+        assert_eq!(product, values::UnsignedInteger::from(23).into());
+    }
+
+    #[test]
+    fn nested_let_in() {
+        let product = test_run(
+            "let a = 23u; closure = () -> std.types.UInt: let value = a; in value; in closure()",
+        )
+        .unwrap();
         assert_eq!(product, values::UnsignedInteger::from(23).into());
     }
 

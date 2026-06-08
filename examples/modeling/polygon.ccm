@@ -1,0 +1,1 @@
+std.polygon.circle(diameter = 1m, distance_between_points = 15cm) - std.polygon.circle(diameter = 0.5m, distance_between_points = 15cm)

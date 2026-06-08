@@ -17,103 +17,130 @@
  */
 
 use std::{
-    io::{ErrorKind, Write},
+    io::{BufReader, BufWriter, ErrorKind, Write},
     path::{Path, PathBuf},
 };
 
+use enum_dispatch::enum_dispatch;
+use serde::{de::DeserializeOwned, Serialize};
 use sha2::{Digest, Sha256};
 use tempfile::{NamedTempFile, TempDir};
 
 use crate::{
-    execution::errors::{ExecutionResult, Raise},
+    execution::errors::{ExecutionResult, Raise, StringError},
     ExecutionContext,
 };
 
-#[derive(Debug)]
-pub struct Store {
-    path: PathBuf,
-}
-
-impl Store {
-    pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
-    }
-
-    pub fn get_or_init_file(
+#[enum_dispatch]
+pub trait StoreTrait {
+    fn get_or_init_file(
         &self,
         context: &ExecutionContext,
         hashable: &impl std::hash::Hash,
         name: impl AsRef<str>,
         init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
-    ) -> ExecutionResult<PathBuf> {
-        let name = name.as_ref();
+    ) -> ExecutionResult<PathBuf>;
 
-        context.trace_scope(
-            Some(format!("Failed to fetch or create file {name} in store").into()),
-            context.stack_trace.bottom().clone(),
-            |context| {
-                let store_path = self.generate_store_path(hashable, name);
+    fn get_or_init_object<S>(
+        &self,
+        context: &ExecutionContext,
+        hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        init: impl FnOnce() -> ExecutionResult<S>,
+    ) -> ExecutionResult<S>
+    where
+        S: Serialize + DeserializeOwned,
+    {
+        let mut object = None;
+        let file_path = self.get_or_init_file(context, hashable, name, |file| {
+            let new_object = init()?;
+            let mut buf_writer = BufWriter::new(file);
+            ciborium::into_writer(&new_object, &mut buf_writer)
+                .map_err(|error| error.to_error(context))?;
+            buf_writer
+                .flush()
+                .map_err(|error| error.to_error(context))?;
 
-                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
-                    Ok(store_path)
-                } else {
-                    // TODO should we be creating these in the project directory to increase the chances of
-                    // them being on the same filesystem as the store?
-                    let mut asset = PendingAsset {
-                        store_path,
-                        asset: NamedTempFile::new().map_err(|error| error.to_error(context))?,
-                    };
-                    init(&mut asset.asset)?;
+            object = Some(new_object);
 
-                    let (mut file, temp_path) = asset
-                        .asset
-                        .keep()
-                        .map_err(|error| error.error.to_error(context))?;
+            Ok(())
+        })?;
 
-                    // Make sure that file is flushed and closed.
-                    file.flush().map_err(|error| error.to_error(context))?;
-                    drop(file);
-
-                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
-
-                    Ok(asset.store_path)
-                }
-            },
-        )
+        if let Some(object) = object {
+            Ok(object)
+        } else {
+            let file = std::fs::File::open(file_path).map_err(|error| error.to_error(context))?;
+            let reader = BufReader::new(file);
+            let object = ciborium::from_reader(reader).map_err(|error| error.to_error(context))?;
+            Ok(object)
+        }
     }
 
-    pub fn get_or_init_directory(
+    fn get_or_init_directory(
         &self,
         context: &ExecutionContext,
         hashable: &impl std::hash::Hash,
         name: impl AsRef<str>,
         init: impl FnOnce(&mut TempDir) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf>;
+}
+
+#[enum_dispatch(StoreTrait)]
+#[derive(Debug)]
+pub enum Store {
+    FsStore,
+    DummyStore,
+}
+
+#[derive(Debug)]
+pub struct DummyStore;
+
+impl StoreTrait for DummyStore {
+    fn get_or_init_file(
+        &self,
+        context: &ExecutionContext,
+        _hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        _init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
     ) -> ExecutionResult<PathBuf> {
-        let name = name.as_ref();
+        Err(StringError(format!(
+            "Cannot store a file with a dummy store: {}",
+            name.as_ref()
+        ))
+        .to_error(context))
+    }
 
-        context.trace_scope(
-            Some(format!("Failed to fetch or create directory {name} in store").into()),
-            context.stack_trace.bottom().clone(),
-            |context| {
-                let store_path = self.generate_store_path(hashable, name);
+    fn get_or_init_directory(
+        &self,
+        context: &ExecutionContext,
+        _hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        _init: impl FnOnce(&mut TempDir) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
+        Err(StringError(format!(
+            "Cannot store a directory with a dummy store: {}",
+            name.as_ref()
+        ))
+        .to_error(context))
+    }
+}
 
-                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
-                    Ok(store_path)
-                } else {
-                    // TODO should we be creating these in the project directory to increase the chances of
-                    // them being on the same filesystem as the store?
-                    let mut asset = PendingAsset {
-                        store_path,
-                        asset: TempDir::new().map_err(|error| error.to_error(context))?,
-                    };
-                    init(&mut asset.asset)?;
-                    let temp_path = asset.asset.keep();
-                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+#[derive(Debug)]
+pub struct FsStore {
+    /// Path to the store itself.
+    path: PathBuf,
 
-                    Ok(asset.store_path)
-                }
-            },
-        )
+    /// Temporary directory within the store.
+    /// Is put into the parent directory of the store because it MUST live on the same filesystem
+    /// as the store itself, otherwise transferring files into the store may fail.
+    temp_dir: PathBuf,
+}
+
+impl FsStore {
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        let path = path.into();
+        let temp_dir = path.join("../temp");
+        Self { path, temp_dir }
     }
 
     fn generate_store_path(
@@ -172,6 +199,87 @@ impl Store {
     }
 }
 
+impl StoreTrait for FsStore {
+    fn get_or_init_file(
+        &self,
+        context: &ExecutionContext,
+        hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        init: impl FnOnce(&mut NamedTempFile) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
+        let name = name.as_ref();
+
+        context.trace_scope(
+            Some(format!("Failed to fetch or create file {name} in store").into()),
+            context.stack_trace.bottom().clone(),
+            |context| {
+                let store_path = self.generate_store_path(hashable, name);
+
+                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
+                    Ok(store_path)
+                } else {
+                    std::fs::create_dir_all(&self.temp_dir)
+                        .map_err(|error| error.to_error(context))?;
+                    let mut asset = PendingAsset {
+                        store_path,
+                        asset: NamedTempFile::new_in(&self.temp_dir)
+                            .map_err(|error| error.to_error(context))?,
+                    };
+                    init(&mut asset.asset)?;
+
+                    let (mut file, temp_path) = asset
+                        .asset
+                        .keep()
+                        .map_err(|error| error.error.to_error(context))?;
+
+                    // Make sure that file is flushed and closed.
+                    file.flush().map_err(|error| error.to_error(context))?;
+                    drop(file);
+
+                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+
+                    Ok(asset.store_path)
+                }
+            },
+        )
+    }
+
+    fn get_or_init_directory(
+        &self,
+        context: &ExecutionContext,
+        hashable: &impl std::hash::Hash,
+        name: impl AsRef<str>,
+        init: impl FnOnce(&mut TempDir) -> ExecutionResult<()>,
+    ) -> ExecutionResult<PathBuf> {
+        let name = name.as_ref();
+
+        context.trace_scope(
+            Some(format!("Failed to fetch or create directory {name} in store").into()),
+            context.stack_trace.bottom().clone(),
+            |context| {
+                let store_path = self.generate_store_path(hashable, name);
+
+                if std::fs::exists(&store_path).map_err(|error| error.to_error(context))? {
+                    Ok(store_path)
+                } else {
+                    std::fs::create_dir_all(&self.temp_dir)
+                        .map_err(|error| error.to_error(context))?;
+                    let mut asset = PendingAsset {
+                        store_path,
+                        asset: TempDir::new_in(&self.temp_dir)
+                            .map_err(|error| error.to_error(context))?,
+                    };
+                    init(&mut asset.asset)?;
+                    let temp_path = asset.asset.keep();
+                    self.move_path_into_store(context, &temp_path, &asset.store_path)?;
+
+                    Ok(asset.store_path)
+                }
+            },
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct PendingAsset<A> {
     store_path: PathBuf,
@@ -192,7 +300,13 @@ impl<A> std::ops::DerefMut for PendingAsset<A> {
     }
 }
 
-struct StoreHasher(Sha256);
+pub(crate) struct StoreHasher(pub(crate) Sha256);
+
+impl StoreHasher {
+    pub(crate) fn new() -> Self {
+        Self(Sha256::new())
+    }
+}
 
 impl std::hash::Hasher for StoreHasher {
     fn finish(&self) -> u64 {

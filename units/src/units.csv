@@ -85,7 +85,7 @@ Angle,0,0,0,0,0,0,0,true,false,false,false,false,false,degree,degrees,°,deg,0.0
 Angle,0,0,0,0,0,0,0,true,false,false,false,false,false,gon,gons,gon,gon,0.015707963267949,0
 Angle,0,0,0,0,0,0,0,true,false,false,false,false,false,mil,mils,mil,mil,0.0009817477,0
 Angle,0,0,0,0,0,0,0,true,false,false,false,false,false,minute,minutes,′,angle_minute,0.000290888208665722,0
-Angle,0,0,0,0,0,0,0,true,false,false,false,false,false,radian,radians,rad,rad,1,0
+Angle,0,0,0,0,0,0,0,true,false,false,false,false,false,radian,radians,rad,rad,3.14159265358979323846264338327950288,0
 Angle,0,0,0,0,0,0,0,true,false,false,false,false,false,revolution,revolutions,r,r,6.28318530717959,0
 Angle,0,0,0,0,0,0,0,true,false,false,false,false,false,second,seconds,″,angle_second,4.84813681109536E-06,0
 AngularAbsement,0,0,1,0,0,0,0,true,false,false,false,false,false,degree second,degree seconds,° · s,deg*s,0.0174532925199433,0

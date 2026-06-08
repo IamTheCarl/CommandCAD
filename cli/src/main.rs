@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
 mod arguments;
@@ -17,7 +17,7 @@ use type_sitter::Node as _;
 use crate::arguments::Commands;
 
 use interpreter::{
-    ExecutionContext, ExecutionFileCache, ImString, LogMessage, Parser, RuntimeLog,
+    ExecutionContext, ExecutionFileCache, FsStore, ImString, LogMessage, Parser, RuntimeLog,
     SourceReference, StackScope, StackTrace, Store, build_prelude,
     compile::{compile, iter_raw_nodes},
     execute_expression,
@@ -78,7 +78,7 @@ fn process_file(file: PathBuf) -> Result<()> {
     }
 
     let database = BuiltinCallableDatabase::new();
-    let prelude = build_prelude(&database).context("Failed to build prelude")?;
+    let prelude = build_prelude(&database);
 
     let parent = file
         .parent()
@@ -102,11 +102,14 @@ fn process_file(file: PathBuf) -> Result<()> {
     };
     std::fs::create_dir_all(&store_directory).context("Failed to create store directory")?;
 
-    let store = Store::new(store_directory);
+    let store = Store::FsStore(FsStore::new(store_directory));
     let log = StderrLog;
     let files = Mutex::new(HashMap::new());
 
+    let shutdown_signal = AtomicBool::new(false);
+
     let context = ExecutionContext {
+        shutdown_singal: &shutdown_signal,
         log: &log as &dyn RuntimeLog,
         stack_trace: &StackTrace::bootstrap(),
         stack: &StackScope::top(&prelude),
@@ -172,10 +175,10 @@ fn repl() -> Result<()> {
     let mut parser = new_parser();
 
     let database = BuiltinCallableDatabase::new();
-    let prelude = build_prelude(&database).context("Failed to build prelude")?;
+    let prelude = build_prelude(&database);
 
     let store_directory = TempDir::new().unwrap();
-    let store = Store::new(store_directory.path());
+    let store = Store::FsStore(FsStore::new(store_directory.path()));
 
     println!("Store is located at {:?}", store_directory.path());
     println!("Store will be deleted on exit.");
@@ -267,7 +270,10 @@ fn run_line(
     let log = StderrLog;
     let files = Mutex::new(HashMap::new());
 
+    let shutdown_signal = AtomicBool::new(false);
+
     let context = ExecutionContext {
+        shutdown_singal: &shutdown_signal,
         log: &log as &dyn RuntimeLog,
         stack_trace: &StackTrace::top(root.reference.clone()),
         stack: &StackScope::top(prelude),

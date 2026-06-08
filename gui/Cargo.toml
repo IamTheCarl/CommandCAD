@@ -1,0 +1,18 @@
+[package]
+name = "gui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+egui = { version = "0.33", features = ["mint"] }
+interpreter = { path = "../interpreter" }
+units = { path = "../units" }
+common_data_types = { path = "../common_data_types" }
+anyhow = { workspace = true }
+oneshot = "0.2"
+tempfile = { workspace = true }
+notify = "8"
+nalgebra = { workspace = true }
+bevy = "0.18.1"
+bevy_egui = "0.39.1"
+bevy_mod_outline = "0.12.0"

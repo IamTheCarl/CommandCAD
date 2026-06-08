@@ -16,10 +16,16 @@
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::TypeId, borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
+use std::{
+    any::TypeId,
+    borrow::Cow,
+    collections::HashMap,
+    fmt::Display,
+    sync::{Arc, OnceLock},
+};
 
-use hashable_map::HashableMap;
 use imstr::ImString;
+use indexmap::IndexMap;
 
 use crate::{
     compile::{AstNode, ClosureDefinition, Expression},
@@ -29,12 +35,14 @@ use crate::{
         find_all_variable_accesses_in_expression,
         logging::{LocatedStr, LogLevel, LogMessage},
         stack::ScopeType,
+        values::dictionary::ArgumentName,
         values::{string::formatting::Style, Dictionary, Value},
         ExecutionContext,
     },
 };
 
-use super::{Object, StaticTypeName, StructDefinition, ValueType};
+use super::{Object, StaticType, StaticTypeName, StructDefinition, ValueType};
+use enum_downcast::IntoVariant;
 
 #[derive(Debug, Default)]
 pub struct BuiltinCallableDatabase {
@@ -57,6 +65,10 @@ impl BuiltinCallableDatabase {
         super::manifold_mesh::register_methods_and_functions(&mut database);
         crate::execution::register_methods_and_functions(&mut database);
         super::iterators::register_methods(&mut database);
+        super::transform::register_methods(&mut database);
+        super::polygon::register_methods_and_functions(&mut database);
+        crate::execution::export::register_methods_and_functions(&mut database);
+        register_log_functions(&mut database);
 
         database
     }
@@ -70,12 +82,15 @@ impl BuiltinCallableDatabase {
             panic!("Duplicate bultin function name: {}", callable.name());
         }
 
-        if self
+        if let Some(old_callable) = self
             .callables
             .insert(TypeId::of::<T>(), CallableStorage { callable })
-            .is_some()
         {
-            panic!("Duplicate bultin function tag: {:?}", TypeId::of::<T>());
+            panic!(
+                "Duplicate bultin function tag: {:?}, originally registered with function `{}`",
+                TypeId::of::<T>(),
+                old_callable.name()
+            );
         }
     }
 
@@ -150,7 +165,7 @@ pub fn find_all_variable_accesses_in_closure_capture(
 #[derive(Debug, Eq, PartialEq)]
 struct UserClosureInternals {
     signature: Arc<Signature>,
-    captured_values: HashableMap<ImString, Value>,
+    captured_values: IndexMap<ArgumentName, Value>,
     expression: Arc<AstNode<Expression>>,
 }
 
@@ -187,9 +202,15 @@ impl UserClosure {
 
         let expression = source.node.expression.clone();
 
-        let mut captured_values = HashableMap::new();
+        let mut captured_values = IndexMap::new();
         find_all_variable_accesses_in_closure_capture(&source.node, &mut |field_name| {
-            let local_variables = signature.argument_type.members.keys().cloned();
+            let local_variables = signature.argument_type.members.keys().filter_map(|name| {
+                if let ArgumentName::Named(s) = name {
+                    Some(s.clone())
+                } else {
+                    None
+                }
+            });
 
             let value = context
                 .get_variable_for_closure(
@@ -201,7 +222,7 @@ impl UserClosure {
                 )?
                 .clone();
 
-            captured_values.insert(field_name.node.clone(), value);
+            captured_values.insert(ArgumentName::Named(field_name.node.clone()), value);
 
             Ok(())
         })?;
@@ -256,10 +277,32 @@ impl Object for UserClosure {
 
         let argument = self.data.signature.argument_type.fill_defaults(argument);
 
+        let signature_members: Vec<ArgumentName> = self
+            .data
+            .signature
+            .argument_type
+            .members
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+
         let variables: HashMap<ImString, Value> = argument
             .iter()
             .chain(self.data.captured_values.iter())
-            .map(|(name, value)| (name.clone(), value.clone()))
+            .filter_map(|(name, value)| match name {
+                ArgumentName::Named(s) => Some((s.clone(), value.clone())),
+                ArgumentName::Positional(idx) => {
+                    if *idx < signature_members.len() {
+                        if let ArgumentName::Named(s) = &signature_members[*idx] {
+                            Some((s.clone(), value.clone()))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+            })
             .collect();
 
         context.stack_scope(ScopeType::Inherited, variables, |context| {
@@ -307,7 +350,9 @@ impl std::fmt::Debug for dyn BuiltinCallable {
 macro_rules! build_member_from_sig {
     ($name:ident: $ty:ty) => {
         (
-            imstr::ImString::from(stringify!($name)),
+            $crate::execution::values::dictionary::ArgumentName::Named(imstr::ImString::from(
+                stringify!($name),
+            )),
             $crate::execution::values::StructMember {
                 ty: <$ty as $crate::execution::values::StaticType>::static_type(),
                 default: None,
@@ -316,7 +361,9 @@ macro_rules! build_member_from_sig {
     };
     ($name:ident: $ty:ty = $default:expr) => {
         (
-            imstr::ImString::from(stringify!($name)),
+            $crate::execution::values::dictionary::ArgumentName::Named(imstr::ImString::from(
+                stringify!($name),
+            )),
             $crate::execution::values::StructMember {
                 ty: <$ty as $crate::execution::values::StaticType>::static_type(),
                 default: Some($default),
@@ -328,7 +375,7 @@ macro_rules! build_member_from_sig {
 #[macro_export]
 macro_rules! build_argument_signature_list {
     ($($arg:ident: $ty:path $(= $default:expr)?),*) => {{
-        let list: [(imstr::ImString, $crate::execution::values::StructMember); _] = [$($crate::build_member_from_sig!($arg: $ty $(= $default)?),)*];
+        let list: [($crate::execution::values::dictionary::ArgumentName, $crate::execution::values::StructMember); _] = [$($crate::build_member_from_sig!($arg: $ty $(= $default)?),)*];
         list
     }};
 }
@@ -336,8 +383,10 @@ macro_rules! build_argument_signature_list {
 #[macro_export]
 macro_rules! build_struct_definition {
     (variadic: $variadic:literal, ($($arg:ident: $ty:path $(= $default:expr)?),*)) => {{
+        let list: [($crate::execution::values::dictionary::ArgumentName, $crate::execution::values::StructMember); _] = $crate::build_argument_signature_list!($($arg: $ty $(= $default)?),*);
+        let converted: indexmap::IndexMap<$crate::execution::values::dictionary::ArgumentName, $crate::execution::values::StructMember> = list.into_iter().collect();
         $crate::execution::values::StructDefinition {
-            members: std::sync::Arc::new(hashable_map::HashableMap::from(std::collections::HashMap::from($crate::build_argument_signature_list!($($arg: $ty $(= $default)?),*)))),
+            members: std::sync::Arc::new(converted),
             variadic: $variadic,
         }
     }};
@@ -448,7 +497,7 @@ macro_rules! build_function_callable {
                 let mut _argument = signature.argument_type.fill_defaults(argument);
 
                 let _data = std::sync::Arc::make_mut(&mut _argument.data);
-                $($(let $arg: $ty = _data.members.remove(stringify!($arg))
+                $($(let $arg: $ty = _data.members.shift_remove(&$crate::execution::values::dictionary::ArgumentName::Named(stringify!($arg).into()))
                         .expect("Argument was not present after argument check.").downcast::<$ty>($context)?;)*)?
 
                 let result: $return_type = {
@@ -532,7 +581,7 @@ macro_rules! build_method_callable {
                 let mut _argument = signature.argument_type.fill_defaults(argument);
 
                 let _data = std::sync::Arc::make_mut(&mut _argument.data);
-                $($(let $arg: $ty = _data.members.remove(stringify!($arg))
+                $($(let $arg: $ty = _data.members.shift_remove(&$crate::execution::values::dictionary::ArgumentName::Named(stringify!($arg).into()))
                         .expect("Argument was not present after argument check.").downcast::<$ty>($context)?;)*)?
 
                 let result: $return_type = {
@@ -557,6 +606,41 @@ macro_rules! build_method {
 
         $database.register::<$ident>(Box::new(callable))
     }};
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct MessageClosure(pub UserClosure);
+
+impl StaticType for MessageClosure {
+    fn static_type() -> ValueType {
+        static TYPE: OnceLock<Arc<Signature>> = OnceLock::new();
+        let signature = TYPE.get_or_init(|| build_closure_signature!((v: Value) -> Value));
+        ValueType::Closure(signature.clone())
+    }
+}
+
+impl StaticTypeName for MessageClosure {
+    fn static_type_name() -> Cow<'static, str> {
+        "Closure".into()
+    }
+}
+
+impl IntoVariant<MessageClosure> for Value {
+    fn into_variant(self) -> Result<MessageClosure, Self> {
+        Ok(MessageClosure(self.into_variant()?))
+    }
+}
+
+impl From<MessageClosure> for UserClosure {
+    fn from(value: MessageClosure) -> Self {
+        value.0
+    }
+}
+
+impl From<MessageClosure> for Value {
+    fn from(value: MessageClosure) -> Self {
+        value.0.into()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -617,6 +701,69 @@ impl StaticTypeName for BuiltinFunction {
     }
 }
 
+pub struct LogInfo;
+pub struct LogWarn;
+
+pub fn register_log_functions(database: &mut BuiltinCallableDatabase) {
+    build_function!(
+        database,
+        LogInfo, "log_info", (
+            context: &ExecutionContext,
+            expression: Value,
+            message: MessageClosure
+        ) -> Value {
+            use crate::execution::values::IString;
+
+            let arg_dict = Dictionary::new(
+                context,
+                HashMap::from([
+                    (ArgumentName::Named("v".into()), expression.clone())
+                ])
+            );
+            let result = message.0.call(context, arg_dict)?;
+
+            if let Ok(msg) = result.downcast::<IString>(context) {
+                context.log.push_message(LogMessage {
+                    origin: context.stack_trace.bottom().clone(),
+                    level: LogLevel::Info,
+                    message: msg.0.to_string().into(),
+                });
+            }
+
+            Ok(expression)
+        }
+    );
+
+    build_function!(
+        database,
+        LogWarn, "log_warn", (
+            context: &ExecutionContext,
+            expression: Value,
+            message: MessageClosure
+        ) -> Value {
+            use crate::execution::values::IString;
+
+            let arg_dict = Dictionary::new(
+                context,
+                HashMap::from([
+                    (ArgumentName::Named("v".into()), expression.clone())
+                ])
+            );
+            let result = message.0.call(context, arg_dict)?;
+
+            if let Ok(msg) = result.downcast::<IString>(context) {
+                context.log.push_message(LogMessage {
+                    origin: context.stack_trace.bottom().clone(),
+                    level: LogLevel::Warning,
+                    message: msg.0.to_string().into(),
+                });
+            }
+
+            Ok(expression)
+        }
+    );
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -627,7 +774,8 @@ mod test {
         },
         values::value_type::{MissmatchedField, TypeQualificationError},
     };
-    use hashable_map::HashableMap;
+
+    use indexmap::IndexMap;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -642,12 +790,12 @@ mod test {
                 data: Arc::new(UserClosureInternals {
                     signature: Arc::new(Signature {
                         argument_type: StructDefinition {
-                            members: HashableMap::new().into(),
+                            members: Arc::new(IndexMap::new()),
                             variadic: false,
                         },
                         return_type: ValueType::UnsignedInteger,
                     }),
-                    captured_values: HashableMap::new(),
+                    captured_values: IndexMap::new(),
                     expression
                 })
             }
@@ -735,7 +883,7 @@ mod test {
         assert_eq!(
             build_argument_signature_list!(value: SignedInteger),
             [(
-                ImString::from("value"),
+                ArgumentName::Named(ImString::from("value")),
                 StructMember {
                     ty: ValueType::SignedInteger,
                     default: None
@@ -745,7 +893,7 @@ mod test {
         assert_eq!(
             build_argument_signature_list!(value: UnsignedInteger),
             [(
-                ImString::from("value"),
+                ArgumentName::Named(ImString::from("value")),
                 StructMember {
                     ty: ValueType::UnsignedInteger,
                     default: None
@@ -755,7 +903,7 @@ mod test {
         assert_eq!(
             build_argument_signature_list!(value: UnsignedInteger = UnsignedInteger::from(23).into()),
             [(
-                ImString::from("value"),
+                ArgumentName::Named(ImString::from("value")),
                 StructMember {
                     ty: ValueType::UnsignedInteger,
                     default: Some(Value::UnsignedInteger(23.into()))
@@ -767,14 +915,14 @@ mod test {
             build_argument_signature_list!(value: UnsignedInteger, value1: SignedInteger),
             [
                 (
-                    ImString::from("value"),
+                    ArgumentName::Named(ImString::from("value")),
                     StructMember {
                         ty: ValueType::UnsignedInteger,
                         default: None
                     }
                 ),
                 (
-                    ImString::from("value1"),
+                    ArgumentName::Named(ImString::from("value1")),
                     StructMember {
                         ty: ValueType::SignedInteger,
                         default: None
@@ -787,14 +935,14 @@ mod test {
             build_argument_signature_list!(value: UnsignedInteger = UnsignedInteger::from(32).into(), value1: SignedInteger),
             [
                 (
-                    ImString::from("value"),
+                    ArgumentName::Named(ImString::from("value")),
                     StructMember {
                         ty: ValueType::UnsignedInteger,
                         default: Some(UnsignedInteger::from(32).into())
                     }
                 ),
                 (
-                    ImString::from("value1"),
+                    ArgumentName::Named(ImString::from("value1")),
                     StructMember {
                         ty: ValueType::SignedInteger,
                         default: None
@@ -984,6 +1132,168 @@ mod test {
                 let product = execute_expression(context, &root).unwrap();
 
                 assert_eq!(product, values::UnsignedInteger::from(15).into());
+            },
+        )
+    }
+
+    #[test]
+    fn builtin_function_positional_args() {
+        let mut database = BuiltinCallableDatabase::new();
+        struct TestFunction;
+        build_function!(
+            database,
+            TestFunction, "test_function", (
+                _context: &ExecutionContext,
+                a: UnsignedInteger,
+                b: UnsignedInteger
+            ) -> UnsignedInteger {
+                Ok(values::UnsignedInteger::from(a.0 + b.0))
+            }
+        );
+
+        let root = crate::compile::full_compile("test_function(1u, 2u)");
+        test_context_custom_database(
+            database,
+            [(
+                "test_function".into(),
+                BuiltinFunction::new::<TestFunction>().into(),
+            )],
+            |context| {
+                let product = execute_expression(context, &root).unwrap();
+
+                assert_eq!(product, values::UnsignedInteger::from(3).into());
+            },
+        )
+    }
+
+    #[test]
+    fn builtin_function_mixed_args() {
+        let mut database = BuiltinCallableDatabase::new();
+        struct TestFunction;
+        build_function!(
+            database,
+            TestFunction, "test_function", (
+                _context: &ExecutionContext,
+                a: UnsignedInteger,
+                b: UnsignedInteger,
+                c: UnsignedInteger
+            ) -> UnsignedInteger {
+                Ok(values::UnsignedInteger::from(a.0 + b.0 + c.0))
+            }
+        );
+
+        let root = crate::compile::full_compile("test_function(1u, 2u, c = 3u)");
+        test_context_custom_database(
+            database,
+            [(
+                "test_function".into(),
+                BuiltinFunction::new::<TestFunction>().into(),
+            )],
+            |context| {
+                let product = execute_expression(context, &root).unwrap();
+
+                assert_eq!(product, values::UnsignedInteger::from(6).into());
+            },
+        )
+    }
+
+    #[test]
+    fn builtin_function_positional_with_default() {
+        let mut database = BuiltinCallableDatabase::new();
+        struct TestFunction;
+        build_function!(
+            database,
+            TestFunction, "test_function", (
+                _context: &ExecutionContext,
+                a: UnsignedInteger,
+                b: UnsignedInteger = UnsignedInteger::from(10).into()
+            ) -> UnsignedInteger {
+                Ok(values::UnsignedInteger::from(a.0 + b.0))
+            }
+        );
+
+        let root = crate::compile::full_compile("test_function(5u)");
+        test_context_custom_database(
+            database,
+            [(
+                "test_function".into(),
+                BuiltinFunction::new::<TestFunction>().into(),
+            )],
+            |context| {
+                let product = execute_expression(context, &root).unwrap();
+
+                assert_eq!(product, values::UnsignedInteger::from(15).into());
+            },
+        )
+    }
+
+    #[test]
+    fn builtin_method_positional_args() {
+        let mut database = BuiltinCallableDatabase::new();
+        struct TestMethod;
+
+        build_method!(
+            database,
+            TestMethod, "test_method", (
+                context: &ExecutionContext,
+                this: Dictionary,
+                to_add: UnsignedInteger
+            ) -> UnsignedInteger {
+                let value: UnsignedInteger = this.get_attribute(context, "value")?.downcast(context)?;
+
+                Ok(values::UnsignedInteger::from(value.0 + to_add.0))
+            }
+        );
+
+        let root = crate::compile::full_compile(
+            "let object = (value = 5u, test_method = provided_test_method); in object::test_method(10u)",
+        );
+        test_context_custom_database(
+            database,
+            [(
+                "provided_test_method".into(),
+                BuiltinFunction::new::<TestMethod>().into(),
+            )],
+            |context| {
+                let product = execute_expression(context, &root).unwrap();
+
+                assert_eq!(product, values::UnsignedInteger::from(15).into());
+            },
+        )
+    }
+
+    #[test]
+    fn builtin_method_mixed_args() {
+        let mut database = BuiltinCallableDatabase::new();
+        struct TestMethod;
+
+        build_method!(
+            database,
+            TestMethod, "test_method", (
+                context: &ExecutionContext,
+                this: Dictionary,
+                to_add: UnsignedInteger,
+                to_mul: UnsignedInteger
+            ) -> UnsignedInteger {
+                let value: UnsignedInteger = this.get_attribute(context, "value")?.downcast(context)?;
+
+                Ok(values::UnsignedInteger::from((value.0 + to_add.0) * to_mul.0))
+            }
+        );
+
+        let root = crate::compile::full_compile(
+            "let object = (value = 5u, test_method = provided_test_method); in object::test_method(10u, to_mul = 2u)",
+        );
+        test_context_custom_database(
+            database,
+            [(
+                "provided_test_method".into(),
+                BuiltinFunction::new::<TestMethod>().into(),
+            )],
+            |context| {
+                let product = execute_expression(context, &root).unwrap();
+
+                assert_eq!(product, values::UnsignedInteger::from(30).into());
             },
         )
     }

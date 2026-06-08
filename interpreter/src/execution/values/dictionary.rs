@@ -18,8 +18,9 @@
 
 use std::{borrow::Cow, collections::HashMap, fmt::Display, sync::Arc};
 
-use hashable_map::HashableMap;
 use imstr::ImString;
+
+use indexmap::IndexMap;
 use rayon::prelude::*;
 
 use crate::{
@@ -40,16 +41,52 @@ use super::{
     MissingAttributeError, Object, StaticTypeName, StructDefinition, StructMember, Value, ValueType,
 };
 
-#[derive(Clone, Debug, Eq)]
-pub(crate) struct DictionaryData {
-    pub members: HashableMap<ImString, Value>,
-    pub struct_def: StructDefinition,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ArgumentName {
+    Positional(usize),
+    Named(ImString),
 }
 
-impl PartialEq for DictionaryData {
-    fn eq(&self, other: &Self) -> bool {
-        self.members == other.members
+impl Display for ArgumentName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArgumentName::Positional(n) => write!(f, "{}", n),
+            ArgumentName::Named(name) => write!(f, "{}", name),
+        }
     }
+}
+
+impl std::borrow::Borrow<str> for ArgumentName {
+    fn borrow(&self) -> &str {
+        match self {
+            ArgumentName::Named(name) => name.as_str(),
+            ArgumentName::Positional(_) => "",
+        }
+    }
+}
+
+impl From<&str> for ArgumentName {
+    fn from(s: &str) -> Self {
+        ArgumentName::Named(s.into())
+    }
+}
+
+impl From<String> for ArgumentName {
+    fn from(s: String) -> Self {
+        ArgumentName::Named(s.into())
+    }
+}
+
+impl From<ImString> for ArgumentName {
+    fn from(s: ImString) -> Self {
+        ArgumentName::Named(s)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct DictionaryData {
+    pub members: IndexMap<ArgumentName, Value>,
+    pub struct_def: StructDefinition,
 }
 
 pub fn find_all_variable_accesses_in_dictionary_construction(
@@ -101,7 +138,11 @@ impl Object for Dictionary {
     }
 
     fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
-        if let Some(member) = self.data.members.get(attribute) {
+        if let Some(member) = self
+            .data
+            .members
+            .get(&ArgumentName::Named(attribute.into()))
+        {
             Ok(member.clone())
         } else {
             Err(MissingAttributeError {
@@ -120,9 +161,9 @@ impl StaticTypeName for Dictionary {
 
 impl StaticType for Dictionary {
     fn static_type() -> ValueType {
-        static TYPE: std::sync::OnceLock<std::sync::Arc<HashableMap<ImString, StructMember>>> =
+        static TYPE: std::sync::OnceLock<std::sync::Arc<IndexMap<ArgumentName, StructMember>>> =
             std::sync::OnceLock::new();
-        let signature = TYPE.get_or_init(|| Arc::new(HashableMap::new()));
+        let signature = TYPE.get_or_init(|| Arc::new(IndexMap::new()));
         ValueType::Dictionary(StructDefinition {
             members: signature.clone(),
             variadic: true,
@@ -139,7 +180,7 @@ impl Dictionary {
         context: &ExecutionContext,
         ast_node: &AstNode<DictionaryConstruction>,
     ) -> ExecutionResult<Self> {
-        let mut members = HashMap::with_capacity(ast_node.node.assignments.len());
+        let mut members = IndexMap::with_capacity(ast_node.node.assignments.len());
 
         context.stack.scope_mut(
             context.stack_trace,
@@ -156,19 +197,26 @@ impl Dictionary {
                         };
 
                         buffer.par_extend(group.par_iter().map(|assignment| {
+                            let name_str = match &assignment.node.name {
+                                ArgumentName::Named(s) => s.clone(),
+                                ArgumentName::Positional(idx) => {
+                                    ImString::from(format!("__{}", idx))
+                                }
+                            };
                             (
-                                assignment.node.name.node.clone(),
+                                assignment.node.name.clone(),
+                                name_str,
                                 execute_expression(&context, &assignment.node.assignment),
                             )
                         }));
                     }
 
-                    for (name, result) in buffer.drain(..) {
+                    for (arg_name, name, result) in buffer.drain(..) {
                         let value = result?;
 
-                        if members.insert(name.clone(), value.clone()).is_some() {
+                        if members.contains_key(&arg_name) {
                             // That's a duplicate member.
-                            return Err(DuplicateMemberError { name }.to_error(
+                            return Err(DuplicateMemberError { name: name.clone() }.to_error(
                                 context.stack_trace.iter().chain([&StackTrace {
                                     parent: None,
                                     reference: ast_node.reference.clone(),
@@ -177,6 +225,7 @@ impl Dictionary {
                             ));
                         }
 
+                        members.insert(arg_name.clone(), value.clone());
                         stack.insert_value(name, value);
                     }
                 }
@@ -188,10 +237,16 @@ impl Dictionary {
         Ok(Self::new(context, members))
     }
 
-    pub fn new(context: &ExecutionContext, map: HashMap<ImString, Value>) -> Self {
-        let mut struct_members = HashMap::with_capacity(map.len());
+    pub fn new<K, I>(context: &ExecutionContext, map: I) -> Self
+    where
+        I: IntoIterator<Item = (K, Value)>,
+        K: Into<ArgumentName>,
+    {
+        let members: IndexMap<ArgumentName, Value> =
+            map.into_iter().map(|(k, v)| (k.into(), v)).collect();
+        let mut struct_members = IndexMap::with_capacity(members.len());
 
-        for (name, value) in map.iter() {
+        for (name, value) in members.iter() {
             let member = StructMember {
                 ty: value.get_type(context),
                 default: None,
@@ -200,11 +255,10 @@ impl Dictionary {
             struct_members.insert(name.clone(), member);
         }
 
-        // HashableMap is just a wrapper around HashMap, so this has no additional cost.
         let data = Arc::new(DictionaryData {
-            members: HashableMap::from(map),
+            members,
             struct_def: StructDefinition {
-                members: Arc::new(HashableMap::from(struct_members)),
+                members: Arc::new(struct_members),
                 variadic: false,
             },
         });
@@ -212,12 +266,12 @@ impl Dictionary {
         Self { data }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&ImString, &Value)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&ArgumentName, &Value)> {
         self.data.members.iter()
     }
 
     pub fn get(&self, name: &str) -> Option<&Value> {
-        self.data.members.get(name)
+        self.data.members.get(&ArgumentName::Named(name.into()))
     }
 }
 
@@ -247,18 +301,24 @@ mod test {
     fn build_dictionary() {
         let product = test_run("(none = std.consts.None)").unwrap();
         let expected = Arc::new(DictionaryData {
-            members: HashableMap::from(HashMap::from_iter([(
-                "none".into(),
-                values::ValueNone.into(),
-            )])),
+            members: {
+                let map: HashMap<ArgumentName, Value> = HashMap::from_iter([(
+                    ArgumentName::Named("none".into()),
+                    values::ValueNone.into(),
+                )]);
+                map.into_iter().collect()
+            },
             struct_def: StructDefinition {
-                members: Arc::new(HashableMap::from(HashMap::from([(
-                    "none".into(),
-                    StructMember {
-                        ty: ValueType::TypeNone,
-                        default: None,
-                    },
-                )]))),
+                members: Arc::new({
+                    let map: HashMap<ArgumentName, StructMember> = HashMap::from_iter([(
+                        ArgumentName::Named("none".into()),
+                        StructMember {
+                            ty: ValueType::TypeNone,
+                            default: None,
+                        },
+                    )]);
+                    map.into_iter().collect()
+                }),
                 variadic: false,
             },
         });
@@ -295,13 +355,70 @@ mod test {
         assert_eq!(product, values::Boolean(true).into());
 
         let product =
-            test_run("let result = \"{value}\"::format(value = (a = 1u, b = 2u)); in result == \"(a = 1, b = 2)\" || result == \"(b = 2, a = 1)\"")
-                .unwrap();
+            test_run("let result = \"{value}\"::format(value = (a = 1u, b = 2u)); in result == \"(a = 1, b = 2)\"").unwrap();
         assert_eq!(product, values::Boolean(true).into());
 
         let product =
             test_run("\"{value:X}\"::format(value = (a = 0xDEADBEEFu)) == \"(a = DEADBEEF)\"")
                 .unwrap();
         assert_eq!(product, values::Boolean(true).into());
+    }
+
+    #[test]
+    fn argument_name_display_positional() {
+        assert_eq!(format!("{}", ArgumentName::Positional(0)), "0");
+        assert_eq!(format!("{}", ArgumentName::Positional(3)), "3");
+    }
+
+    #[test]
+    fn argument_name_display_named() {
+        assert_eq!(format!("{}", ArgumentName::Named("foo".into())), "foo");
+    }
+
+    #[test]
+    fn argument_name_hash_and_eq() {
+        assert_eq!(ArgumentName::Positional(0), ArgumentName::Positional(0));
+        assert_eq!(
+            ArgumentName::Named("a".into()),
+            ArgumentName::Named("a".into())
+        );
+        assert_ne!(ArgumentName::Positional(0), ArgumentName::Named("0".into()));
+    }
+
+    #[test]
+    fn dictionary_insert_positional_key() {
+        let mut map: IndexMap<ArgumentName, Value> = IndexMap::new();
+        map.insert(
+            ArgumentName::Positional(0),
+            values::UnsignedInteger::from(1).into(),
+        );
+        map.insert(
+            ArgumentName::Positional(1),
+            values::UnsignedInteger::from(2).into(),
+        );
+        let keys: Vec<_> = map.keys().collect();
+        assert_eq!(keys[0], &ArgumentName::Positional(0));
+        assert_eq!(keys[1], &ArgumentName::Positional(1));
+    }
+
+    #[test]
+    fn dictionary_insert_mixed_keys() {
+        let mut map: IndexMap<ArgumentName, Value> = IndexMap::new();
+        map.insert(
+            ArgumentName::Positional(0),
+            values::UnsignedInteger::from(1).into(),
+        );
+        map.insert(
+            ArgumentName::Positional(1),
+            values::UnsignedInteger::from(2).into(),
+        );
+        map.insert(
+            ArgumentName::Named("b".into()),
+            values::UnsignedInteger::from(3).into(),
+        );
+        let keys: Vec<_> = map.keys().collect();
+        assert_eq!(keys[0], &ArgumentName::Positional(0));
+        assert_eq!(keys[1], &ArgumentName::Positional(1));
+        assert_eq!(keys[2], &ArgumentName::Named("b".into()));
     }
 }

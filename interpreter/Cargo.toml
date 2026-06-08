@@ -15,12 +15,13 @@ enum_dispatch = "0.3"
 enum_downcast = { version = "0.1", features = [ "derive" ] }
 num-traits = "0.2"
 hashable-map = { version = "0.4.0", features = ["serde"] }
+indexmap = { version = "2", features = ["serde"] }
 imstr = "0.2.0"
-nalgebra = "0.34.1"
+nalgebra = { workspace = true }
 stack = "0.4.0"
 paste = "1.0.15"
 tempfile = { workspace = true }
-rayon = "1.11.0"
+rayon = "1.11"
 nom = "8.0.0"
 ariadne = { workspace = true }
 levenshtein = "1.0.5"
@@ -29,10 +30,15 @@ sha2 = "0.10.9"
 serde = { version = "1.0.228", features = ["derive"] }
 hex = "0.4.3"
 # boolmesh = { version = "0.1.7", features = ["rayon"] }
-boolmesh = { git = "https://github.com/IamTheCarl/boolmesh.git", branch = "serde", features = ["rayon", "serde"] }
+boolmesh = { git = "https://github.com/IamTheCarl/boolmesh.git", branch = "opencode-refactors", features = ["rayon", "serde"] }
+# boolmesh = { path = "../../boolmesh", features = ["rayon", "serde"] }
 stl_io = "0.10.0"
 itertools = "0.14.0"
 thiserror = "2.0.18"
+# We have to disable multi-threading to get deterministic results from geo.
+geo = { version = "0.32", default-features = false, features = ["serde", "earcutr", "spade"] }
+svg = "0.18"
+ciborium = "0.2.2"
 
 [build-dependencies]
 type-sitter-gen = "0.8"

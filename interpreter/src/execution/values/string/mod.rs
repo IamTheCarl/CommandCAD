@@ -17,8 +17,10 @@
  */
 
 use common_data_types::{Dimension, Float};
-use hashable_map::HashableMap;
+
 use imstr::ImString;
+
+use indexmap::IndexMap;
 
 use crate::{
     build_closure_type, build_method,
@@ -147,13 +149,15 @@ pub struct CharIterator {
 impl IterableObject for CharIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+        _context: &ExecutionContext,
+        callback: impl FnOnce(&mut dyn Iterator<Item = ExecutionResult<Value>>) -> ExecutionResult<R>,
     ) -> ExecutionResult<R> {
         let mut iter = self
             .string
             .0
             .chars()
-            .map(|c| IString(format!("{c}").into()).into());
+            .map(|c| IString(format!("{c}").into()).into())
+            .map(Ok);
         callback(&mut iter)
     }
 }
@@ -167,14 +171,16 @@ pub struct LineIterator {
 impl IterableObject for LineIterator {
     fn iterate<R>(
         &self,
-        callback: impl FnOnce(&mut dyn Iterator<Item = Value>) -> ExecutionResult<R>,
+        _context: &ExecutionContext,
+        callback: impl FnOnce(&mut dyn Iterator<Item = ExecutionResult<Value>>) -> ExecutionResult<R>,
     ) -> ExecutionResult<R> {
         let mut iterator = self
             .string
             .0
             .lines()
             .filter(|line| self.include_empty || !line.is_empty())
-            .map(|line| IString(line).into());
+            .map(|line| IString(line).into())
+            .map(Ok);
 
         callback(&mut iterator)
     }
@@ -255,7 +261,7 @@ fn register_format_method(database: &mut BuiltinCallableDatabase) {
     let callable = BuiltFunction {
         signature: Arc::new(Signature {
             argument_type: StructDefinition {
-                members: Arc::new(HashableMap::from(HashMap::new())),
+                members: Arc::new(IndexMap::new()),
                 variadic: true,
             },
             return_type: ValueType::String,
@@ -356,9 +362,9 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
             let mut product: String = String::with_capacity(this.0.len());
 
             for c in this.0.chars() {
-                let retain = f.call(context, Dictionary::new(context, HashMap::from_iter([
+                let retain = f.call(context, Dictionary::new(context, HashMap::<&str, Value>::from_iter([
                     (
-                        "c".into(),
+                        "c",
                         IString(ImString::from(format!("{c}"))).into()
                     )
                 ])))?.downcast::<Boolean>(context)?;

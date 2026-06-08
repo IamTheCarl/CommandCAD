@@ -1,0 +1,6 @@
+[
+  std.mesh.icosphere(subdivions = 5u, diameter = 2cm),
+  (std.mesh.icosphere(subdivions = 5u, diameter = 2cm) | std.mesh.cube(size = {2cm, 2cm, 2cm}) + {1cm, 0cm, 0cm}),
+  (std.mesh.icosphere(subdivions = 5u, diameter = 2cm) & std.mesh.cube(size = {2cm, 2cm, 2cm}) + {1cm, 0cm, 0cm}),
+  (std.mesh.icosphere(subdivions = 5u, diameter = 2cm) ^ std.mesh.cube(size = {2cm, 2cm, 2cm}) + {1cm, 0cm, 0cm})
+]

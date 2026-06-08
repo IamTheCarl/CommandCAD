@@ -26,37 +26,42 @@ use std::{
 
 use crate::{
     build_function, build_method,
-    execution::errors::{ExecutionResult, Raise, StrError},
+    execution::{
+        errors::{ExecutionResult, Raise, StrError},
+        StoreTrait,
+    },
     values::{
         scalar::{Length, UnwrapNotNan},
         vector::{Length3, Zero3},
         Boolean, BuiltinCallableDatabase, BuiltinFunction, DowncastError, File, IString,
-        MissingAttributeError, Object, Scalar, StaticType, StaticTypeName, Style, UnsignedInteger,
-        Value, ValueNone, ValueType, Vector3,
+        MissingAttributeError, Object, PolygonSet, Scalar, StaticType, StaticTypeName, Style,
+        Transform3d, UnsignedInteger, Value, ValueNone, ValueType, Vector3,
     },
     ExecutionContext,
 };
 
 #[derive(Debug, Clone)]
-pub struct ManifoldMesh3D(Arc<Manifold>);
+pub struct ManifoldMesh3D(pub Arc<Manifold>);
 
 impl Eq for ManifoldMesh3D {}
 
 impl PartialEq for ManifoldMesh3D {
     fn eq(&self, other: &Self) -> bool {
-        // FIXME this is skipping a lot of information.
-        self.0.ps == other.0.ps
+        self.0.positions() == other.0.positions() && self.0.halfedges() == other.0.halfedges()
     }
 }
 
 impl std::hash::Hash for ManifoldMesh3D {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // FIXME this is skipping a lot of information.
-        self.0.ps.iter().for_each(|v| {
+        for v in self.0.positions() {
             v.x.to_le_bytes().hash(state);
             v.y.to_le_bytes().hash(state);
             v.z.to_le_bytes().hash(state);
-        });
+        }
+
+        for half_edge in self.0.halfedges() {
+            half_edge.hash(state);
+        }
     }
 }
 
@@ -75,7 +80,9 @@ impl Object for ManifoldMesh3D {
         write!(
             f,
             "Manifold Mesh with {} verticies, {} faces, and {} half-edges",
-            self.0.nv, self.0.nf, self.0.nh
+            self.0.vertex_count(),
+            self.0.face_count(),
+            self.0.halfedge_count()
         )
     }
 
@@ -83,15 +90,37 @@ impl Object for ManifoldMesh3D {
         let input = Self::unpack_arithmetic_input(context, 0.0, rhs)?;
         match input {
             ArethmeticInput::Vector(vector) => {
-                let vector = vector.raw_value();
+                let raw_vector = vector.raw_value();
+
+                let new_manifold = context.store.get_or_init_object(
+                    context,
+                    &(&self, &vector),
+                    "manifold-translate",
+                    || {
+                        self.0
+                            .translate(raw_vector.x, raw_vector.y, raw_vector.z)
+                            .map_err(|error| error.to_error(context))
+                    },
+                )?;
                 let manifold = Arc::make_mut(&mut self.0);
-                manifold.translate(vector.x, vector.y, vector.z);
+                *manifold = new_manifold;
+
                 Ok(self.into())
             }
             ArethmeticInput::Manifold(rhs) => {
-                let manifold = compute_boolean(&self.0, &rhs.0, OpType::Add)
-                    .map_err(|error| error.to_error(context))?;
-                Ok(Self(Arc::new(manifold)).into())
+                let new_manifold = context.store.get_or_init_object(
+                    context,
+                    &(&self, &rhs),
+                    "manifold-or",
+                    || {
+                        compute_boolean(&self.0, &rhs.0, OpType::Add)
+                            .map_err(|error| error.to_error(context))
+                    },
+                )?;
+                let manifold = Arc::make_mut(&mut self.0);
+                *manifold = new_manifold;
+
+                Ok(self.into())
             }
         }
     }
@@ -100,50 +129,102 @@ impl Object for ManifoldMesh3D {
         let input = Self::unpack_arithmetic_input(context, 0.0, rhs)?;
         match input {
             ArethmeticInput::Vector(vector) => {
-                let vector = vector.raw_value();
+                let raw_vector = vector.raw_value();
+
+                let neg_vector = Vector3::new_raw(context, Dimension::length(), -raw_vector)?;
+
+                let new_manifold = context.store.get_or_init_object(
+                    context,
+                    &(&self, &(neg_vector)),
+                    "manifold-translate",
+                    || {
+                        self.0
+                            .translate(-raw_vector.x, -raw_vector.y, -raw_vector.z)
+                            .map_err(|error| error.to_error(context))
+                    },
+                )?;
                 let manifold = Arc::make_mut(&mut self.0);
-                manifold.translate(-vector.x, -vector.y, -vector.z);
+                *manifold = new_manifold;
+
                 Ok(self.into())
             }
             ArethmeticInput::Manifold(rhs) => {
-                let manifold = compute_boolean(&self.0, &rhs.0, OpType::Subtract)
-                    .map_err(|error| error.to_error(context))?;
-                Ok(Self(Arc::new(manifold)).into())
+                let new_manifold = context.store.get_or_init_object(
+                    context,
+                    &(&self, &rhs),
+                    "manifold-subtract",
+                    || {
+                        compute_boolean(&self.0, &rhs.0, OpType::Subtract)
+                            .map_err(|error| error.to_error(context))
+                    },
+                )?;
+                let manifold = Arc::make_mut(&mut self.0);
+                *manifold = new_manifold;
+
+                Ok(self.into())
             }
         }
     }
 
     fn multiply(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let input = rhs.downcast::<Zero3>(context)?;
+        let input = input.0;
         let vector = input.raw_value();
+        let new_manifold = context.store.get_or_init_object(
+            context,
+            &(&self, &input),
+            "manifold-scale",
+            || {
+                self.0
+                    .scale(vector.x, vector.y, vector.z)
+                    .map_err(|error| error.to_error(context))
+            },
+        )?;
         let manifold = Arc::make_mut(&mut self.0);
-        manifold.scale(vector.x, vector.y, vector.z);
+        *manifold = new_manifold;
+
         Ok(self.into())
     }
 
-    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+    fn bit_or(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
-        let manifold = compute_boolean(&self.0, &rhs.0, OpType::Add)
-            .map_err(|error| error.to_error(context))?;
-        Ok(Self(Arc::new(manifold)).into())
+        let new_manifold =
+            context
+                .store
+                .get_or_init_object(context, &(&self, rhs), "manifold-or", || {
+                    compute_boolean(&self.0, &rhs.0, OpType::Add)
+                        .map_err(|error| error.to_error(context))
+                })?;
+        let manifold = Arc::make_mut(&mut self.0);
+        *manifold = new_manifold;
+
+        Ok(self.into())
     }
 
-    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+    fn bit_xor(mut self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
         let rhs: &Self = rhs.downcast_for_binary_op_ref(context)?;
+        let new_manifold =
+            context
+                .store
+                .get_or_init_object(context, &(&self, rhs), "manifold-xor", || {
+                    // To compute xor, get the intersectiona and then subtract it from the union of the two
+                    // shapes.
 
-        // To compute xor, get the intersectiona and then subtract it from the union of the two
-        // shapes.
+                    let intersection = compute_boolean(&self.0, &rhs.0, OpType::Intersect)
+                        .map_err(|error| error.to_error(context))?;
 
-        let intersection = compute_boolean(&self.0, &rhs.0, OpType::Intersect)
-            .map_err(|error| error.to_error(context))?;
+                    let union = compute_boolean(&self.0, &rhs.0, OpType::Add)
+                        .map_err(|error| error.to_error(context))?;
 
-        let union = compute_boolean(&self.0, &rhs.0, OpType::Add)
-            .map_err(|error| error.to_error(context))?;
+                    let difference = compute_boolean(&union, &intersection, OpType::Subtract)
+                        .map_err(|error| error.to_error(context))?;
 
-        let difference = compute_boolean(&union, &intersection, OpType::Subtract)
-            .map_err(|error| error.to_error(context))?;
+                    Ok(difference)
+                })?;
+        let manifold = Arc::make_mut(&mut self.0);
+        *manifold = new_manifold;
 
-        Ok(Self(Arc::new(difference)).into())
+        Ok(self.into())
     }
 
     fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
@@ -156,6 +237,9 @@ impl Object for ManifoldMesh3D {
     fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "to_stl" => Ok(BuiltinFunction::new::<methods::ToStl>().into()),
+            "transform" => Ok(BuiltinFunction::new::<methods::Transform>().into()),
+            "project" => Ok(BuiltinFunction::new::<methods::Project>().into()),
+            "slice" => Ok(BuiltinFunction::new::<methods::Slice>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -234,6 +318,9 @@ pub mod methods {
     pub struct GenerateUvSphere;
 
     pub struct ToStl;
+    pub struct Transform;
+    pub struct Project;
+    pub struct Slice;
 }
 
 fn unpack_radius(
@@ -270,8 +357,12 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
         {
             let radius = unpack_radius(context, radius, diameter)?;
 
-            let manifold = generate_cone(apex.into(), center.into(), radius, divide.0 as usize)
-                .map_err(|error| error.to_error(context))?;
+            let manifold = context
+                .store
+                .get_or_init_object(context, &(apex.0, center.0, radius.to_le_bytes(), divide), "manifold-cone", || {
+                    generate_cone(apex.into(), center.into(), radius, divide.0 as usize)
+                    .map_err(|error| error.to_error(context))
+                })?;
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
@@ -282,10 +373,15 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             size: Length3
         ) -> ManifoldMesh3D {
             let size: Vector3 = size.into();
-            let size = size.raw_value();
+            let raw_size = size.raw_value();
 
-            let mut manifold = generate_cube().map_err(|error| error.to_error(context))?;
-            manifold.scale(size.x, size.y, size.z);
+            let manifold = context
+                .store
+                .get_or_init_object(context, &(&size), "manifold-cube", || {
+                    let manifold = generate_cube().map_err(|error| error.to_error(context))?;
+                    manifold.scale(raw_size.x, raw_size.y, raw_size.z).map_err(|error| error.to_error(context))
+                })?;
+
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
@@ -302,8 +398,13 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
         ) -> ManifoldMesh3D {
             let radius = unpack_radius(context, radius, diameter)?;
 
-            let manifold = generate_cylinder(radius, height.into(), sectors.0 as usize, stacks.0 as usize)
-                .map_err(|error| error.to_error(context))?;
+            let manifold = context
+                .store
+                .get_or_init_object(context, &(radius.to_le_bytes(), height.value.to_le_bytes(), sectors.0, stacks.0), "manifold-cylinder", || {
+                    generate_cylinder(radius, height.into(), sectors.0 as usize, stacks.0 as usize)
+                        .map_err(|error| error.to_error(context))
+                })?;
+
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
@@ -317,9 +418,13 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
         ) -> ManifoldMesh3D {
             let scale = unpack_radius(context, radius, diameter)?;
 
-            let mut manifold = generate_icosphere(subdivions.0 as u32)
-                .map_err(|error| error.to_error(context))?;
-            manifold.scale(scale, scale, scale);
+            let manifold = context
+                .store
+                .get_or_init_object(context, &(scale.to_le_bytes(), subdivions.0), "manifold-icosphere", || {
+                    let manifold = generate_icosphere(subdivions.0 as u32)
+                        .map_err(|error| error.to_error(context))?;
+                    manifold.scale(scale, scale, scale).map_err(|error| error.to_error(context))
+                })?;
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
@@ -329,12 +434,17 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
         methods::GenerateTorus, "ManifoldMesh3D::torus", (
             context: &ExecutionContext,
             major_radius: Length,
-            minor_raidus: Length,
+            minor_radius: Length,
             rings: UnsignedInteger,
             sectors: UnsignedInteger
         ) -> ManifoldMesh3D {
-            let manifold = generate_torus(major_radius.into(), minor_raidus.into(), rings.0 as usize, sectors.0 as usize)
-                .map_err(|error| error.to_error(context))?;
+            let manifold = context
+                .store
+                .get_or_init_object(context, &(major_radius.value.to_le_bytes(), minor_radius.value.to_le_bytes(), rings.0, sectors.0), "manifold-torus", || {
+                    generate_torus(major_radius.into(), minor_radius.into(), rings.0 as usize, sectors.0 as usize)
+                        .map_err(|error| error.to_error(context))
+                })?;
+
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
     );
@@ -349,9 +459,13 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
         ) -> ManifoldMesh3D {
             let scale = unpack_radius(context, radius, diameter)?;
 
-            let mut manifold = generate_uv_sphere(sectors.0 as usize, stacks.0 as usize)
-                .map_err(|error| error.to_error(context))?;
-            manifold.scale(scale, scale, scale);
+            let manifold = context
+                .store
+                .get_or_init_object(context, &(sectors.0, stacks.0, scale.to_le_bytes()), "manifold-torus", || {
+                    let manifold = generate_uv_sphere(sectors.0 as usize, stacks.0 as usize)
+                        .map_err(|error| error.to_error(context))?;
+                    manifold.scale(scale, scale, scale).map_err(|error| error.to_error(context))
+                })?;
 
             Ok(ManifoldMesh3D(Arc::new(manifold)))
         }
@@ -363,7 +477,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: ManifoldMesh3D,
             name: IString,
-            scale: Length = Scalar {
+            units: Length = Scalar {
                 dimension: Dimension::length(),
                 value: Float::new(1.0/1000.0).expect("Default stl scale was NaN")
             }.into(),
@@ -376,18 +490,16 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
                     use stl_io::{Triangle, Vertex, write_stl};
 
-                    for (normal, halfedge) in this.0.face_normals.iter().zip(this.0.hs.chunks(3)) {
-                        let p0 = this.0.ps[halfedge[0].tail];
-                        let p1 = this.0.ps[halfedge[1].tail];
-                        let p2 = this.0.ps[halfedge[2].tail];
+                    for tri in this.0.triangles() {
+                        let [p0, p1, p2] = tri.positions;
 
-                        let scale = 1.0 / *scale.value;
+                        let multiplier = 1.0 / *units.value;
 
                         let triangle = Triangle {
-                            normal: Vertex::new([(normal.x * scale) as f32, (normal.y * scale) as f32, (normal.z * scale) as f32]),
-                            vertices: [Vertex::new([(p0.x * scale) as f32, (p0.y * scale) as f32, (p0.z * scale) as f32]),
-                                       Vertex::new([(p1.x * scale) as f32, (p1.y * scale) as f32, (p1.z * scale) as f32]),
-                                       Vertex::new([(p2.x * scale) as f32, (p2.y * scale) as f32, (p2.z * scale) as f32])]
+                            normal: Vertex::new([(tri.normal.x * multiplier) as f32, (tri.normal.y * multiplier) as f32, (tri.normal.z * multiplier) as f32]),
+                            vertices: [Vertex::new([(p0.x * multiplier) as f32, (p0.y * multiplier) as f32, (p0.z * multiplier) as f32]),
+                                       Vertex::new([(p1.x * multiplier) as f32, (p1.y * multiplier) as f32, (p1.z * multiplier) as f32]),
+                                       Vertex::new([(p2.x * multiplier) as f32, (p2.y * multiplier) as f32, (p2.z * multiplier) as f32])]
                         };
 
                         mesh.push(triangle);
@@ -398,7 +510,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
                     let mut serialized = Vec::new();
                     write_stl(&mut serialized, mesh.iter()).map_err(|_| StrError("Failed to serialize STL file").to_error(context))?;
 
-                    let path = context.store.get_or_init_file(context, &(&this, &scale, "ascii"), format!("{}.stl", name.0), |file| {
+                    let path = context.store.get_or_init_file(context, &(&this, &units, "ascii"), format!("{}.stl", name.0), |file| {
                         file.write_all(&serialized).map_err(|error| error.to_error(context))?;
 
                         Ok(())
@@ -406,27 +518,25 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
 
                     Ok(File { path: Arc::new(path) })
                 } else {
-                    let path = context.store.get_or_init_file(context, &(&this, &scale, "binary"), format!("{}.stl", name.0), |file| {
+                    let path = context.store.get_or_init_file(context, &(&this, &units, "binary"), format!("{}.stl", name.0), |file| {
                         let mut file = BufWriter::new(file);
-                        let scale = *Float::new(1.0 / *scale.value).unwrap_not_nan(context)?;
+                        let multiplier = *Float::new(1.0 / *units.value).unwrap_not_nan(context)?;
 
                         let mut trampoline = || -> std::io::Result<()> {
                             writeln!(file, "solid {}", name.0)?;
 
-                            for (normal, halfedge) in this.0.face_normals.iter().zip(this.0.hs.chunks(3)) {
-                                let p0 = this.0.ps[halfedge[0].tail];
-                                let p1 = this.0.ps[halfedge[1].tail];
-                                let p2 = this.0.ps[halfedge[2].tail];
+                            for tri in this.0.triangles() {
+                                let [p0, p1, p2] = tri.positions;
 
-                                writeln!(file, "\tfacet normal {} {} {}", normal.x, normal.y, normal.z)?;
+                                writeln!(file, "\tfacet normal {} {} {}", tri.normal.x, tri.normal.y, tri.normal.z)?;
 
                                 {
                                     writeln!(file, "\t\touter loop")?;
 
                                     {
-                                        writeln!(file, "\t\t\tvertex {} {} {}", p0.x * scale, p0.y * scale, p0.z * scale)?;
-                                        writeln!(file, "\t\t\tvertex {} {} {}", p1.x * scale, p1.y * scale, p1.z * scale)?;
-                                        writeln!(file, "\t\t\tvertex {} {} {}", p2.x * scale, p2.y * scale, p2.z * scale)?;
+                                        writeln!(file, "\t\t\tvertex {} {} {}", p0.x * multiplier, p0.y * multiplier, p0.z * multiplier)?;
+                                        writeln!(file, "\t\t\tvertex {} {} {}", p1.x * multiplier, p1.y * multiplier, p1.z * multiplier)?;
+                                        writeln!(file, "\t\t\tvertex {} {} {}", p2.x * multiplier, p2.y * multiplier, p2.z * multiplier)?;
                                     }
 
                                     writeln!(file, "\t\tendloop")?;
@@ -450,4 +560,75 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             })
         }
     );
+    build_method!(
+        database,
+        methods::Transform, "ManifoldMesh3D::transform", (
+            context: &ExecutionContext,
+            this: ManifoldMesh3D,
+            t: Transform3d) -> ManifoldMesh3D
+        {
+            let mut this = this;
+            let manifold = Arc::make_mut(&mut this.0).transform(t.0).map_err(|error| error.to_error(context))?;
+
+            Ok(ManifoldMesh3D(Arc::new(manifold)))
+        }
+    );
+    build_method!(
+        database,
+        methods::Project, "ManifoldMesh3D::project", (
+            context: &ExecutionContext,
+            this: ManifoldMesh3D) -> PolygonSet
+        {
+            let polygon_set = this.0.project_xy().map_err(|error| error.to_error(context))?;
+
+            Ok(PolygonSet(Arc::new(polygon_set)))
+        }
+    );
+    build_method!(
+        database,
+        methods::Slice, "ManifoldMesh3D::slice", (
+            context: &ExecutionContext,
+            this: ManifoldMesh3D,
+            height: Length) -> PolygonSet
+        {
+            let polygon_set = this.0.slice(*height.value).map_err(|error| error.to_error(context))?;
+
+            Ok(PolygonSet(Arc::new(polygon_set)))
+        }
+    );
+}
+
+#[cfg(test)]
+mod test {
+    use crate::execution::test_run;
+
+    #[test]
+    fn project_extruded() {
+        // Used to panic.
+        test_run("std.polygon.box(size = {1m, 1m})::extrude(height = 1m)::project()").unwrap();
+        // test_run("std.mesh.cube(size = {1m, 1m, 1m})::project()").unwrap();
+    }
+
+    #[test]
+    fn project_revolved() {
+        // Used to panic.
+        test_run(
+            "(std.polygon.box(size = {1m, 1m}) + {0.5m, 0m})::revolve(divisions = 3u)::project()",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn extrude_determinism() {
+        // Run 10 extrusions and verify they all produce identical results.
+        let manifolds: Vec<_> = (0..10)
+            .map(|_| test_run("std.polygon.box(size = {1m, 1m})::extrude(height = 1m)").unwrap())
+            .collect();
+
+        let first = manifolds[0].as_manifoldmesh3d().unwrap();
+        for m in &manifolds[1..] {
+            let mm = m.as_manifoldmesh3d().unwrap();
+            assert_eq!(first, mm);
+        }
+    }
 }

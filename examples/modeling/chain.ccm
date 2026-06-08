@@ -1,0 +1,10 @@
+(num_links: std.types.UInt) -> std.types.ManifoldMesh:
+  let
+    ring = (std.polygon.box(size = {1cm, 1cm}) + {1cm, 0cm})::revolve(divisions = 12u);
+    link = (index: std.types.UInt) -> std.types.ManifoldMesh:
+      ring::transform(t = std.consts.Transform3d
+          ::translate(offset = {0cm, 0cm, 2cm * index::to_scalar()})
+          ::rotate(axis = {0, 0, 1}, angle = 10deg * index::to_scalar()));
+    all_links = std.range.UInt(start = 0u, end = num_links)::map(f = (c: std.types.UInt) -> std.types.ManifoldMesh: link(index = c));
+  in
+    all_links::sum();

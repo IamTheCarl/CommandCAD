@@ -12,7 +12,7 @@ let
     # We need 3cm of cooling surface for each watt this produces
     cooling_fin_size = nominal_power_output(main_body = 15cm) / 1W * 3cm;
 in
-    std.mesh3d.cylinder(
+    std.mesh.cylinder(
         diameter = cooling_fin_size,
         height = 1cm,
         sectors = 360u,

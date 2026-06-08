@@ -38,19 +38,19 @@ pub use boolean::Boolean;
 pub mod integer;
 pub use integer::{SignedInteger, UnsignedInteger};
 
-mod scalar;
-pub use scalar::Scalar;
+pub mod scalar;
+pub use scalar::{Length, Scalar, UnwrapNotNan};
 
 mod vector;
 pub use vector::{Vector2, Vector3, Vector4};
 
 pub mod closure;
-pub use closure::{BuiltinCallableDatabase, BuiltinFunction, UserClosure};
+pub use closure::{BuiltinCallableDatabase, BuiltinFunction, MessageClosure, UserClosure};
 
 pub mod dictionary;
 pub use dictionary::Dictionary;
 
-mod list;
+pub mod list;
 pub use list::List;
 
 mod string;
@@ -64,6 +64,12 @@ pub use constraint_set::ConstraintSet;
 
 mod iterators;
 pub mod manifold_mesh;
+
+mod transform;
+pub use transform::{Transform2d, Transform3d};
+
+pub mod polygon;
+pub use polygon::{LineString, Polygon, PolygonSet};
 
 mod value_type;
 pub use value_type::{StructDefinition, StructMember, ValueType};
@@ -157,7 +163,7 @@ impl UnsupportedOperationError {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-struct MissingAttributeError {
+pub struct MissingAttributeError {
     pub name: String,
 }
 
@@ -292,7 +298,11 @@ pub enum Value {
     ConstraintSet,
     ManifoldMesh3D,
     ValueIterator,
-    // Quaternion,
+    Transform2d,
+    Transform3d,
+    LineString,
+    Polygon,
+    PolygonSet,
 }
 
 impl StaticTypeName for Value {
@@ -304,6 +314,19 @@ impl StaticTypeName for Value {
 impl StaticType for Value {
     fn static_type() -> ValueType {
         ValueType::Any
+    }
+}
+
+impl<T> From<Option<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(value: Option<T>) -> Self {
+        if let Some(value) = value {
+            value.into()
+        } else {
+            ValueNone.into()
+        }
     }
 }
 

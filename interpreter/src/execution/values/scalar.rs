@@ -1292,7 +1292,7 @@ mod test {
 
     #[test]
     fn cossin() {
-        let product = test_run("let angle = 45deg; in (angle::cossin() - <(angle::cos(), angle::sin())>)::norm() < 0.0000000001").unwrap();
+        let product = test_run("let angle = 45deg; in (angle::cossin() - {angle::cos(), angle::sin()})::norm() < 0.0000000001").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
