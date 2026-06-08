@@ -812,7 +812,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
     methods::register_methods::<u64>(database);
     methods::register_methods::<i64>(database);
 
-       build_function!(
+    build_function!(
             database,
             functions::RangeUInt, "std.range.UInt", (
                 context: &ExecutionContext,
@@ -841,7 +841,7 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
             Ok(ValueIterator::new(Range { start, end, inclusive, reverse }))
         }
     );
-       build_function!(
+    build_function!(
             database,
             functions::RangeSInt, "std.range.SInt", (
                 context: &ExecutionContext,
@@ -1476,13 +1476,13 @@ mod test {
     #[test]
     fn range_uint_positional() {
         let product =
-            test_run("std.range.UInt(0u, 5u)::collect_list() == [0u, 1u, 2u, 3u, 4u]")
-                .unwrap();
+            test_run("std.range.UInt(0u, 5u)::collect_list() == [0u, 1u, 2u, 3u, 4u]").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product =
-            test_run("std.range.UInt(0u, 5u, inclusive = true)::collect_list() == [0u, 1u, 2u, 3u, 4u, 5u]")
-                .unwrap();
+        let product = test_run(
+            "std.range.UInt(0u, 5u, inclusive = true)::collect_list() == [0u, 1u, 2u, 3u, 4u, 5u]",
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let product =
@@ -1499,13 +1499,13 @@ mod test {
     #[test]
     fn range_sint_positional() {
         let product =
-            test_run("std.range.SInt(0i, 5i)::collect_list() == [0i, 1i, 2i, 3i, 4i]")
-                .unwrap();
+            test_run("std.range.SInt(0i, 5i)::collect_list() == [0i, 1i, 2i, 3i, 4i]").unwrap();
         assert_eq!(product, Boolean(true).into());
 
-        let product =
-            test_run("std.range.SInt(0i, 5i, inclusive = true)::collect_list() == [0i, 1i, 2i, 3i, 4i, 5i]")
-                .unwrap();
+        let product = test_run(
+            "std.range.SInt(0i, 5i, inclusive = true)::collect_list() == [0i, 1i, 2i, 3i, 4i, 5i]",
+        )
+        .unwrap();
         assert_eq!(product, Boolean(true).into());
 
         let product =

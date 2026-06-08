@@ -187,7 +187,12 @@ impl ViewState3d {
         }
     }
 
-  pub fn track_movement(&mut self, camera_transform: &Transform, input_state: &egui::InputState, draw_area: egui::Rect) {
+    pub fn track_movement(
+        &mut self,
+        camera_transform: &Transform,
+        input_state: &egui::InputState,
+        draw_area: egui::Rect,
+    ) {
         if let Some(pos) = input_state.pointer.interact_pos() {
             if !draw_area.contains(pos) {
                 return;
