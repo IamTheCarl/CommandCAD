@@ -1,5 +1,7 @@
 # Command CAD
 
+![GUI Demo](./doc/assets/gui_demo.png)
+
 Command CAD is the product of my frustrations with the current state of CAD software and my curiosity of what would happen if OpenSCAD was given heavy type safety, functional programming paradigms, and fully declarative.
 
 _Please note that Command CAD is in a highly experimental state, do not expect stability, even in the short term_
