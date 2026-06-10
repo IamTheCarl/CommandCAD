@@ -55,8 +55,17 @@ impl std::fmt::Display for SolveError {
     }
 }
 
+/// Check if a SymExpr is a zero scalar constant.
+fn is_zero_scalar(expr: &SymExpr) -> bool {
+    match expr {
+        SymExpr::Scalar(s) => s.value == 0.0,
+        SymExpr::Integer(i) => *i == 0,
+        _ => false,
+    }
+}
+
 /// Convert an Expression AST node to a SymExpr for symbolic manipulation.
-fn expression_to_sym_expr(
+pub(super) fn expression_to_sym_expr(
     expr: &AstNode<Expression>,
     context: &ExecutionContext,
 ) -> ExecutionResult<SymExpr> {
@@ -616,6 +625,78 @@ pub fn solve_for(
 
     // Simplify common non-linear patterns (x*x → x^2, x+x → x*2, etc.)
     let sym_body = super::simplify_sym_expr(&sym_body);
+
+    // Try polynomial solving for degree 2-3 with mixed terms.
+    // Pure squaring (x*x) and pure cubing (x*x*x) are handled by the old trace_and_inverse path.
+    if let Some(poly) = super::extract_polynomial(&sym_body, target, &result_name) {
+        let has_linear_or_lower = match poly.degree() {
+            2 => {
+                let coefficients = &poly.coefficients;
+                let b = &coefficients[1];
+                !is_zero_scalar(b)
+            }
+            3 => {
+                let coefficients = &poly.coefficients;
+                let b = &coefficients[2];
+                let c = &coefficients[1];
+                !is_zero_scalar(b) || !is_zero_scalar(c)
+            }
+            _ => false,
+        };
+
+        if has_linear_or_lower {
+            let result = match poly.degree() {
+                2 => {
+                    let coefficients = &poly.coefficients;
+                    let a = &coefficients[2];
+                    let b = &coefficients[1];
+                    let c = &coefficients[0];
+                    super::solve_quadratic(a, b, c, context)?
+                }
+                3 => {
+                    let coefficients = &poly.coefficients;
+                    let a = &coefficients[3];
+                    let b = &coefficients[2];
+                    let c = &coefficients[1];
+                    let d = &coefficients[0];
+                    super::solve_cubic(a, b, c, d, context)?
+                }
+                _ => return Err(SolveError::NoSolution {
+                    operation: format!("polynomial degree {} is not supported (max degree 3)", poly.degree()),
+                    source: body.reference.clone(),
+                }.to_error(context)),
+            };
+            let free_var_names: Vec<ImString> = collect_free_vars(&result, target);
+            let captured: IndexMap<ImString, Value> = free_var_names
+                .iter()
+                .filter_map(|name| {
+                    captured
+                        .iter()
+                        .find_map(|(arg_name, value)| {
+                            if let ArgumentName::Named(n) = arg_name {
+                                if n == name {
+                                    Some((name.clone(), value.clone()))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                })
+                .collect();
+
+            return Ok(SolveResult {
+                body: result,
+                captured,
+                result_name,
+                target_param_name: target.clone(),
+                target_param_type: Some(inferred_target_param_type),
+                return_type: return_type.clone(),
+                param_types: param_types.clone(),
+            });
+        }
+    }
 
     // After simplification, check if the target was eliminated (e.g., x-x=0)
     if !sym_expr_contains_var(&sym_body, target) {

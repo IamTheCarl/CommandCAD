@@ -1,8 +1,11 @@
 mod algorithm;
 mod closure;
+mod polynom;
 
 pub use algorithm::{ast_return_type, solve_for};
 pub use closure::infer_sym_expr_type;
+
+pub use polynom::{extract_polynomial, solve_cubic, solve_quadratic, Polynomial};
 
 use std::any::TypeId;
 
@@ -503,6 +506,34 @@ fn apply_binop_rules(op: &BinOp, left: &SymExpr, right: &SymExpr) -> SymExpr {
                     );
                 }
             }
+            // Pow(x,n) * x → x^(n+1)
+            if let (SymExpr::BinOp(BinOp::Pow, base, exp), SymExpr::Var(v)) = (left, right) {
+                if let SymExpr::Var(b) = base.as_ref() {
+                    if b == v {
+                        if let SymExpr::Integer(n) = exp.as_ref() {
+                            return SymExpr::BinOp(
+                                BinOp::Pow,
+                                Box::new(*base.clone()),
+                                Box::new(SymExpr::Integer(n + 1)),
+                            );
+                        }
+                    }
+                }
+            }
+            // x * Pow(x,n) → x^(n+1) (commutativity)
+            if let (SymExpr::Var(v), SymExpr::BinOp(BinOp::Pow, base, exp)) = (left, right) {
+                if let SymExpr::Var(b) = base.as_ref() {
+                    if b == v {
+                        if let SymExpr::Integer(n) = exp.as_ref() {
+                            return SymExpr::BinOp(
+                                BinOp::Pow,
+                                Box::new(*base.clone()),
+                                Box::new(SymExpr::Integer(n + 1)),
+                            );
+                        }
+                    }
+                }
+            }
             // x*1 → x, 1*x → x
             if matches!(right, SymExpr::Integer(1)) {
                 return left.clone();
@@ -939,14 +970,13 @@ mod test {
         let inner = SymExpr::BinOp(BinOp::Mul, Box::new(x.clone()), Box::new(x.clone()));
         let expr = SymExpr::BinOp(BinOp::Mul, Box::new(inner), Box::new(x.clone()));
         let result = simplify_sym_expr(&expr);
+        // Pow(x,2) * x → Pow(x,3) via new simplification rule
         match result {
-            SymExpr::BinOp(BinOp::Mul, left, right) => {
-                // x^2 * x → Mul(Pow(x, 2), x) — the second x*x match won't fire because
-                // after simplifying the first level, we get Pow(x,2) which is not Var(x)
-                assert!(matches!(left.as_ref(), SymExpr::BinOp(BinOp::Pow, _, _)));
-                assert!(matches!(right.as_ref(), SymExpr::Var(v) if v == "x"));
+            SymExpr::BinOp(BinOp::Pow, base, exp) => {
+                assert!(matches!(*base, SymExpr::Var(v) if v == "x"));
+                assert!(matches!(*exp, SymExpr::Integer(3)));
             }
-            _ => panic!("Expected Mul(Pow(x,2), x), got {:?}", result),
+            _ => panic!("Expected Pow(x,3), got {:?}", result),
         }
     }
 
@@ -1013,7 +1043,7 @@ mod test {
     fn symexpr_display_sqrt_of_sub() {
         let result = SymExpr::Var("original_result".into());
         let y = SymExpr::Var("y".into());
-        let sub = SymExpr::BinOp(BinOp::Sub, Box::new(result), Box::new(SymExpr::BinOp(BinOp::Mul, Box::new(y.clone()), Box::new(y))));;
+        let sub = SymExpr::BinOp(BinOp::Sub, Box::new(result), Box::new(SymExpr::BinOp(BinOp::Mul, Box::new(y.clone()), Box::new(y))));
         let expr = SymExpr::MethodCall {
             method_name: "sqrt".into(),
             self_expr: Box::new(sub),
