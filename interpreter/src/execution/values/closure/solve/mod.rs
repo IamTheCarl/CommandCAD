@@ -1,7 +1,7 @@
 mod algorithm;
 mod closure;
 
-pub use algorithm::solve_for;
+pub use algorithm::{ast_return_type, solve_for};
 pub use closure::infer_sym_expr_type;
 
 use std::any::TypeId;

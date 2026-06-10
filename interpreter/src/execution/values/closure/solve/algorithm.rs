@@ -155,6 +155,115 @@ fn expression_to_sym_expr(
     }
 }
 
+/// Compute the ValueType of an expression AST node by walking the tree.
+/// This is used to infer the return type of a closure body for inverse typing.
+pub fn ast_return_type(expr: &AstNode<Expression>) -> crate::execution::values::ValueType {
+    match &expr.node {
+        Expression::Scalar(s) => crate::execution::values::ValueType::Scalar(Some(s.node.dimension)),
+        Expression::SignedInteger(_) => crate::execution::values::ValueType::SignedInteger,
+        Expression::UnsignedInteger(_) => crate::execution::values::ValueType::UnsignedInteger,
+        Expression::Boolean(_) => crate::execution::values::ValueType::Boolean,
+        Expression::String(_) => crate::execution::values::ValueType::String,
+        Expression::Identifier(_) => {
+            crate::execution::values::ValueType::Scalar(None)
+        }
+        Expression::BinaryExpression(binop) => {
+            let left_type = ast_return_type(&binop.node.a);
+            let right_type = ast_return_type(&binop.node.b);
+            match binop.node.operation.node {
+                crate::compile::BinaryExpressionOperation::Add
+                | crate::compile::BinaryExpressionOperation::Sub => {
+                    // Add/sub: dimensions must match, return left's dimension
+                    if let (
+                        crate::execution::values::ValueType::Scalar(Some(l)),
+                        crate::execution::values::ValueType::Scalar(Some(r)),
+                    ) = (&left_type, &right_type)
+                    {
+                        if l == r {
+                            crate::execution::values::ValueType::Scalar(Some(*l))
+                        } else {
+                            crate::execution::values::ValueType::Scalar(None)
+                        }
+                    } else {
+                        crate::execution::values::ValueType::Scalar(None)
+                    }
+                }
+                crate::compile::BinaryExpressionOperation::Mul => {
+                    // Mul: multiply dimensions (e.g., Length * Length = Area)
+                    if let (
+                        crate::execution::values::ValueType::Scalar(Some(l)),
+                        crate::execution::values::ValueType::Scalar(Some(r)),
+                    ) = (&left_type, &right_type)
+                    {
+                        crate::execution::values::ValueType::Scalar(Some(*l + *r))
+                    } else {
+                        crate::execution::values::ValueType::Scalar(None)
+                    }
+                }
+                crate::compile::BinaryExpressionOperation::Div => {
+                    // Div: divide dimensions (e.g., Area / Length = Length)
+                    if let (
+                        crate::execution::values::ValueType::Scalar(Some(l)),
+                        crate::execution::values::ValueType::Scalar(Some(r)),
+                    ) = (&left_type, &right_type)
+                    {
+                        crate::execution::values::ValueType::Scalar(Some(*l - *r))
+                    } else {
+                        crate::execution::values::ValueType::Scalar(None)
+                    }
+                }
+                crate::compile::BinaryExpressionOperation::MulMul => {
+                    // Pow: base keeps its dimension, exponent must be zero-dimension
+                    if let crate::execution::values::ValueType::Scalar(Some(dim)) = &left_type {
+                        if let (
+                            crate::execution::values::ValueType::Scalar(Some(exp_dim)),
+                        ) = (&right_type,)
+                        {
+                            if exp_dim.is_zero_dimension() {
+                                crate::execution::values::ValueType::Scalar(Some(*dim))
+                            } else {
+                                crate::execution::values::ValueType::Scalar(None)
+                            }
+                        } else {
+                            crate::execution::values::ValueType::Scalar(None)
+                        }
+                    } else {
+                        crate::execution::values::ValueType::Scalar(None)
+                    }
+                }
+                _ => crate::execution::values::ValueType::Scalar(None),
+            }
+        }
+        Expression::UnaryExpression(unary) => {
+            // Unary ops don't change dimension
+            ast_return_type(&unary.node.expression)
+        }
+        Expression::MethodCall(method) => {
+            let method_name = &method.node.to_call.node;
+            // Default to Scalar for method calls — type will be validated at runtime
+            if method_name == "to_signed_integer" || method_name == "to_unsigned_integer" {
+                crate::execution::values::ValueType::SignedInteger
+            } else {
+                crate::execution::values::ValueType::Scalar(None)
+            }
+        }
+        Expression::Parenthesis(inner) => ast_return_type(inner),
+        Expression::ClosureDefinition(_)
+        | Expression::DictionaryConstruction(_)
+        | Expression::If(_)
+        | Expression::List(_)
+        | Expression::MemberAccess(_)
+        | Expression::Self_(_)
+        | Expression::Vector2(_)
+        | Expression::Vector3(_)
+        | Expression::Vector4(_)
+        | Expression::StructDefinition(_)
+        | Expression::FunctionCall(_)
+        | Expression::LetIn(_)
+        | Expression::Malformed(_) => crate::execution::values::ValueType::Scalar(None),
+    }
+}
+
 /// Trace the path from root to target, applying inverse operations.
 fn trace_and_inverse(
     context: &ExecutionContext,

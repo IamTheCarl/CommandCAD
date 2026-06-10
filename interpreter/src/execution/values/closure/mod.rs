@@ -413,9 +413,9 @@ impl BuiltinCallable for methods::Inverse {
             }
             .to_error(context))?;
 
-     // The inverse closure's input parameter type should match the original closure's return type.
+    // Infer the input parameter type from the body expression (captures actual dimension info).
         // When solving f(x) = y for x, the inverse is g(y) = x, so g takes what f returned.
-        let target_param_type = Some(closure.data.signature.return_type.clone());
+        let target_param_type = Some(solve::ast_return_type(&closure.data.expression));
 
         // The return type of the inverse closure should be the type of the target parameter.
         // When solving f(x) = y for x, the inverse is g(y) = x, so the return type is x's type.
@@ -1728,6 +1728,22 @@ mod test {
         );
         if let Err(e) = result {
             panic!("inverse_sqrt_of_sum failed: {:?}", e);
+        }
+        let val = result.unwrap();
+        let scalar = val.as_scalar().expect("Expected Scalar");
+        assert!((scalar.value - 4.0).abs() < 1e-10, "Expected 4.0, got {}", scalar.value);
+    }
+
+    #[test]
+    fn inverse_body_inferred_area_type() {
+        // When the body is x*x + y*y (which produces Area), the inverse closure's
+        // original_result parameter should be typed as Area, not Length.
+        // This tests that ast_return_type correctly infers the body's return type.
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length, y: std.scalar.Length) -> std.scalar.Area: x*x + y*y; in f::inverse(wanted_output = "x")(y=3m, original_result=25'm^2')"#,
+        );
+        if let Err(e) = result {
+            panic!("inverse_body_inferred_area_type failed: {:?}", e);
         }
         let val = result.unwrap();
         let scalar = val.as_scalar().expect("Expected Scalar");
