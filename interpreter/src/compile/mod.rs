@@ -1,4 +1,3 @@
-pub mod constraint_set;
 mod expressions;
 
 use ariadne::Span;
@@ -55,17 +54,20 @@ impl<N> AstNode<N> {
         }
     }
 
+    pub fn new_from_source(file: Arc<PathBuf>, source_ref: &SourceReference, node: N) -> Self {
+        Self {
+            reference: SourceReference {
+                file,
+                range: source_ref.range,
+            },
+            node,
+        }
+    }
+
     fn into_box(self) -> AstNode<Box<N>> {
         AstNode {
             reference: self.reference,
             node: Box::new(self.node),
-        }
-    }
-
-    fn into_arc(self) -> AstNode<Arc<N>> {
-        AstNode {
-            reference: self.reference,
-            node: Arc::new(self.node),
         }
     }
 }

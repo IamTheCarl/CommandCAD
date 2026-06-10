@@ -4134,7 +4134,6 @@ dependencies = [
  "paste",
  "pretty_assertions",
  "rayon",
- "selen",
  "serde",
  "sha2",
  "stack",
@@ -6197,12 +6196,6 @@ dependencies = [
  "smithay-client-toolkit",
  "tiny-skia",
 ]
-
-[[package]]
-name = "selen"
-version = "0.15.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "069ccc9fbbb7f2de521452b5c96d7d898b0d2e5f49698adbcfc13914f218d3af"
 
 [[package]]
 name = "self_cell"

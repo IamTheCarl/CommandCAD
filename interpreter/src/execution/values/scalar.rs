@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License along with this
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
-use std::{borrow::Cow, cmp::Ordering, f64::consts::PI};
+use std::{any::TypeId, borrow::Cow, cmp::Ordering, f64::consts::PI};
 
 use common_data_types::{Dimension, Float, FloatIsNan};
 use thiserror::Error;
@@ -234,6 +234,8 @@ impl Object for Scalar {
             "is_normal" => Ok(BuiltinFunction::new::<methods::IsNormal>().into()),
             "cbrt" => Ok(BuiltinFunction::new::<methods::Cbrt>().into()),
             "pow" => Ok(BuiltinFunction::new::<methods::Pow>().into()),
+            "log" => Ok(BuiltinFunction::new::<methods::Log>().into()),
+            "exp" => Ok(BuiltinFunction::new::<methods::Exp>().into()),
             "sqrt" => Ok(BuiltinFunction::new::<methods::Sqrt>().into()),
             "is_sign_negative" => Ok(BuiltinFunction::new::<methods::IsSignNegative>().into()),
             "is_sign_positive" => Ok(BuiltinFunction::new::<methods::IsSignPositive>().into()),
@@ -359,6 +361,8 @@ mod methods {
     pub struct IsNormal;
     pub struct Cbrt;
     pub struct Pow;
+    pub struct Log;
+    pub struct Exp;
     pub struct Sqrt;
     pub struct IsSignNegative;
     pub struct IsSignPositive;
@@ -518,7 +522,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: this.dimension / 3,
                 value: Float::new(this.value.cbrt()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Pow>()
     );
     build_method!(
         database,
@@ -535,6 +540,32 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
     );
     build_method!(
         database,
+        methods::Log, "Scalar::log", (
+            context: &ExecutionContext,
+            this: Scalar) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(this.value.ln()).unwrap_not_nan(context)?
+            })
+        },
+        TypeId::of::<methods::Exp>()
+    );
+    build_method!(
+        database,
+        methods::Exp, "Scalar::exp", (
+            context: &ExecutionContext,
+            this: Scalar) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new((this.value * PI).exp()).unwrap_not_nan(context)?
+            })
+        },
+        TypeId::of::<methods::Log>()
+    );
+    build_method!(
+        database,
         methods::Sqrt, "Scalar::sqrt", (
             context: &ExecutionContext,
             this: Scalar) -> Scalar
@@ -543,7 +574,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: this.dimension / 2,
                 value: Float::new(this.value.sqrt()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Pow>()
     );
     build_method!(
         database,
@@ -573,7 +605,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: -this.dimension,
                 value: Float::new(this.value.recip()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Recip>()
     );
     build_method!(
         database,
@@ -702,7 +735,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::angle(),
                 value: Float::new((this.value * PI).acos()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Cos>()
     );
     build_method!(
         database,
@@ -716,7 +750,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::angle(),
                 value: Float::new((this.value).acosh() / PI).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Cosh>()
     );
     build_method!(
         database,
@@ -730,7 +765,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::zero(),
                 value: Float::new((this.value * PI).cos()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Acos>()
     );
     build_method!(
         database,
@@ -744,7 +780,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::zero(),
                 value: Float::new((this.value * PI).cosh()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Acosh>()
     );
     build_method!(
         database,
@@ -758,7 +795,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::angle(),
                 value: Float::new((this.value * PI).asin()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Sin>()
     );
     build_method!(
         database,
@@ -772,7 +810,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::angle(),
                 value: Float::new((this.value).asinh() / PI).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Sinh>()
     );
     build_method!(
         database,
@@ -786,7 +825,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::zero(),
                 value: Float::new((this.value * PI).sin()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Asin>()
     );
     build_method!(
         database,
@@ -800,7 +840,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::zero(),
                 value: Float::new((this.value * PI).sinh()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Asinh>()
     );
     build_method!(
         database,
@@ -826,7 +867,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::angle(),
                 value: Float::new((this.value * PI).atan()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Tan>()
     );
     build_method!(
         database,
@@ -840,7 +882,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::angle(),
                 value: Float::new((this.value).atanh() / PI).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Tanh>()
     );
     build_method!(
         database,
@@ -854,7 +897,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::zero(),
                 value: Float::new((this.value * PI).tan()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Atan>()
     );
     build_method!(
         database,
@@ -868,7 +912,8 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
                 dimension: Dimension::zero(),
                 value: Float::new((this.value * PI).tanh()).unwrap_not_nan(context)?
             })
-        }
+        },
+        TypeId::of::<methods::Atanh>()
     );
 }
 

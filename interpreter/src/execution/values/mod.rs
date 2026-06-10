@@ -46,6 +46,7 @@ pub use vector::{Vector2, Vector3, Vector4};
 
 pub mod closure;
 pub use closure::{BuiltinCallableDatabase, BuiltinFunction, MessageClosure, UserClosure};
+pub use closure::solve_for;
 
 pub mod dictionary;
 pub use dictionary::Dictionary;
@@ -59,8 +60,6 @@ pub use string::{formatting::Style, IString};
 mod file;
 pub use file::File;
 
-pub mod constraint_set;
-pub use constraint_set::ConstraintSet;
 
 mod iterators;
 pub mod manifold_mesh;
@@ -295,7 +294,7 @@ pub enum Value {
     Vector3(Vector3),
     Vector4(Vector4),
     File,
-    ConstraintSet,
+ 
     ManifoldMesh3D,
     ValueIterator,
     Transform2d,

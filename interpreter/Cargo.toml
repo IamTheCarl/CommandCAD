@@ -25,7 +25,6 @@ rayon = "1.11"
 nom = "8.0.0"
 ariadne = { workspace = true }
 levenshtein = "1.0.5"
-selen = "0.15.5"
 sha2 = "0.10.9"
 serde = { version = "1.0.228", features = ["derive"] }
 hex = "0.4.3"

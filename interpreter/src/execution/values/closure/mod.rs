@@ -42,6 +42,8 @@ use crate::{
 };
 
 use super::{Object, StaticType, StaticTypeName, StructDefinition, ValueType};
+pub mod solve;
+pub use solve::solve_for;
 use enum_downcast::IntoVariant;
 
 #[derive(Debug, Default)]
@@ -61,14 +63,14 @@ impl BuiltinCallableDatabase {
         super::list::register_methods(&mut database);
         super::file::register_methods(&mut database);
         super::string::register_methods(&mut database);
-        super::constraint_set::register_methods(&mut database);
-        super::manifold_mesh::register_methods_and_functions(&mut database);
+         super::manifold_mesh::register_methods_and_functions(&mut database);
         crate::execution::register_methods_and_functions(&mut database);
         super::iterators::register_methods(&mut database);
         super::transform::register_methods(&mut database);
         super::polygon::register_methods_and_functions(&mut database);
         crate::execution::export::register_methods_and_functions(&mut database);
         register_log_functions(&mut database);
+        register_closure_inverse_callable(&mut database);
 
         database
     }
@@ -84,7 +86,7 @@ impl BuiltinCallableDatabase {
 
         if let Some(old_callable) = self
             .callables
-            .insert(TypeId::of::<T>(), CallableStorage { callable })
+            .insert(TypeId::of::<T>(), CallableStorage { callable, inverse_type_id: None })
         {
             panic!(
                 "Duplicate bultin function tag: {:?}, originally registered with function `{}`",
@@ -92,6 +94,30 @@ impl BuiltinCallableDatabase {
                 old_callable.name()
             );
         }
+    }
+
+    /// Set the inverse TypeId for a registered callable.
+    pub fn set_inverse<T: 'static>(&mut self, inverse: TypeId) {
+        let forward_id = TypeId::of::<T>();
+        if let Some(storage) = self.callables.get_mut(&forward_id) {
+            storage.inverse_type_id = Some(inverse);
+        }
+    }
+
+    /// Get the inverse TypeId for a given TypeId.
+    pub fn get_inverse(&self, id: TypeId) -> Option<TypeId> {
+        self.callables.get(&id).and_then(|s| s.inverse_type_id)
+    }
+
+    pub fn get_callable_id(&self, name: &str) -> Option<TypeId> {
+        self.names.get(name).copied()
+    }
+
+    pub fn get_method_name(&self, id: TypeId) -> Option<ImString> {
+        self.names
+            .iter()
+            .find(|(_, tid)| **tid == id)
+            .map(|(name, _)| ImString::from(name.as_str()))
     }
 
     fn get_callable(&self, id: TypeId) -> &CallableStorage {
@@ -104,6 +130,7 @@ impl BuiltinCallableDatabase {
 #[derive(Debug)]
 struct CallableStorage {
     callable: Box<dyn BuiltinCallable>,
+    inverse_type_id: Option<TypeId>,
 }
 
 impl std::ops::Deref for CallableStorage {
@@ -163,15 +190,15 @@ pub fn find_all_variable_accesses_in_closure_capture(
 /// Closures are immutable, meaning that all copies can reference the same data.
 /// This is that common data.
 #[derive(Debug, Eq, PartialEq)]
-struct UserClosureInternals {
-    signature: Arc<Signature>,
-    captured_values: IndexMap<ArgumentName, Value>,
-    expression: Arc<AstNode<Expression>>,
+pub struct UserClosureInternals {
+    pub signature: Arc<Signature>,
+    pub captured_values: IndexMap<ArgumentName, Value>,
+    pub expression: Arc<AstNode<Expression>>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct UserClosure {
-    data: Arc<UserClosureInternals>,
+    pub data: Arc<UserClosureInternals>,
 }
 
 impl UserClosure {
@@ -240,6 +267,16 @@ impl UserClosure {
 impl Object for UserClosure {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::Closure(self.data.signature.clone())
+    }
+
+    fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
+        match attribute {
+            "inverse" => Ok(BuiltinFunction::new::<methods::Inverse>().into()),
+            _ => Err(super::MissingAttributeError {
+                name: attribute.into(),
+            }
+            .to_error(context)),
+        }
     }
 
     fn format(
@@ -322,6 +359,151 @@ impl Object for UserClosure {
 impl StaticTypeName for UserClosure {
     fn static_type_name() -> Cow<'static, str> {
         "Closure".into()
+    }
+}
+
+mod methods {
+    pub struct Inverse;
+}
+
+/// The `Inverse` callable is invoked on a `UserClosure` via method syntax.
+/// We cannot use the `build_method!` macro here because that macro is designed
+/// for dictionary methods where `$this: Dictionary` is passed as the first
+/// parameter. `inverse` operates on a `UserClosure` and must look up `self`
+/// from the call stack rather than receiving it as an argument. The complex
+/// logic (solve-for, synthetic AST node creation, captured-value forwarding)
+/// also doesn't fit the macro's simple function-call pattern.
+impl BuiltinCallable for methods::Inverse {
+    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
+        let wanted_output: crate::execution::values::IString = argument
+            .get("wanted_output")
+            .ok_or_else(|| super::MissingAttributeError {
+                name: "wanted_output".into(),
+            }
+            .to_error(context))?
+            .clone()
+            .downcast::<crate::execution::values::IString>(context)?;
+
+        let result_name: crate::execution::values::IString = argument
+            .get("result_name")
+            .map(|v| v.clone().downcast::<crate::execution::values::IString>(context))
+            .transpose()?
+            .unwrap_or_else(|| crate::execution::values::IString::from("original_result"));
+
+        // Find the closure in the stack — the caller's "self"
+        let closure = context
+            .stack
+            .get_variable(
+                context.stack_trace,
+                vec![],
+                LocatedStr {
+                    location: context.stack_trace.bottom().clone(),
+                    string: "self",
+                },
+            )
+            .map_err(|_| super::MissingAttributeError {
+                name: "self".into(),
+            }
+            .to_error(context))?
+            .clone()
+            .downcast::<UserClosure>(context)
+            .map_err(|_| super::DowncastError {
+                expected: "UserClosure".into(),
+                got: "Value".into(),
+            }
+            .to_error(context))?;
+
+     // The inverse closure's input parameter type should match the original closure's return type.
+        // When solving f(x) = y for x, the inverse is g(y) = x, so g takes what f returned.
+        let target_param_type = Some(closure.data.signature.return_type.clone());
+
+        // The return type of the inverse closure should be the type of the target parameter.
+        // When solving f(x) = y for x, the inverse is g(y) = x, so the return type is x's type.
+        let return_type_for_target = closure
+            .data
+            .signature
+            .argument_type
+            .members
+            .iter()
+            .find_map(|(name, member)| {
+                if let ArgumentName::Named(s) = name {
+                    if s.as_str() == wanted_output.0.as_str() {
+                        return Some(member.ty.clone());
+                    }
+                }
+                None
+            });
+
+        // Build a map of parameter names to their types from the original closure.
+        // This is used to give the inverse closure's captured parameters the correct types.
+        let param_types: IndexMap<ImString, crate::execution::values::ValueType> = closure
+            .data
+            .signature
+            .argument_type
+            .members
+            .iter()
+            .filter_map(|(name, member)| {
+                if let ArgumentName::Named(s) = name {
+                    Some((s.clone(), member.ty.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+       // Solve for the target variable
+      let result = solve::solve_for(
+            context,
+            &closure.data.expression,
+            &closure
+                .data
+                .signature
+                .argument_type
+                .members
+                .keys()
+                .filter_map(|name| match name {
+                    ArgumentName::Named(s) => Some(s.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            &closure.data.captured_values,
+            &wanted_output.0,
+            result_name.0.clone(),
+            target_param_type,
+            return_type_for_target,
+            param_types,
+        )?;
+
+        let inverse_closure = result.into_closure(context, &closure)?;
+
+        Ok(inverse_closure.into())
+    }
+
+    fn name(&self) -> &str {
+        "UserClosure::inverse"
+    }
+
+    fn signature(&self) -> &Arc<Signature> {
+        static SIGNATURE: OnceLock<Arc<Signature>> = OnceLock::new();
+        SIGNATURE.get_or_init(|| {
+            Arc::new(Signature {
+                argument_type: crate::build_struct_definition!(
+                    variadic: false,
+                    (wanted_output: crate::execution::values::IString, result_name: crate::execution::values::IString = crate::execution::values::IString::from("original_result").into())
+                ),
+                return_type: ValueType::Closure(Arc::new(Signature {
+                    argument_type: crate::build_struct_definition!(
+                        variadic: false,
+                        (_dummy: crate::execution::values::IString)
+                    ),
+                    return_type: ValueType::Scalar(None),
+                })),
+            })
+        })
+    }
+
+    fn scope_type(&self) -> ScopeType {
+        ScopeType::Isolated
     }
 }
 
@@ -606,6 +788,16 @@ macro_rules! build_method {
 
         $database.register::<$ident>(Box::new(callable))
     }};
+    ($database:ident,
+        $ident:ty, $name:expr, ($context:ident: &ExecutionContext, $this:ident: $this_type:ty $(, $($arg:ident: $ty:path $(= $default:expr)?),+)?) -> $return_type:path $code:block, $inverse:expr
+    ) => {{
+        let callable = $crate::build_method_callable!($name,
+            ($context: &ExecutionContext, $this: $this_type $(, $($arg: $ty $(= $default)?),+)?) -> $return_type $code
+        );
+
+        $database.register::<$ident>(Box::new(callable));
+        $database.set_inverse::<$ident>($inverse);
+    }};
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -762,6 +954,10 @@ pub fn register_log_functions(database: &mut BuiltinCallableDatabase) {
             Ok(expression)
         }
     );
+}
+
+fn register_closure_inverse_callable(database: &mut BuiltinCallableDatabase) {
+    database.register::<methods::Inverse>(Box::new(methods::Inverse));
 }
 
 #[cfg(test)]
@@ -1296,5 +1492,245 @@ mod test {
                 assert_eq!(product, values::UnsignedInteger::from(30).into());
             },
         )
+    }
+
+    #[test]
+    fn inverse_x_squared() {
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x*x; in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().as_userclosure().is_some());
+    }
+
+    #[test]
+    fn inverse_x_doubled() {
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x+x; in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().as_userclosure().is_some());
+    }
+
+    #[test]
+    fn inverse_x_times_two() {
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x*2.0; in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().as_userclosure().is_some());
+    }
+
+    #[test]
+    fn inverse_x_minus_x_zero() {
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x-x; in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().as_userclosure().is_some());
+    }
+
+    #[test]
+    fn inverse_x_minus_x_plus_5() {
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x-x+5.0; in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_err());
+        let err_str = format!("{}", result.unwrap_err().ty);
+        assert!(err_str.contains("no solution"));
+    }
+
+    #[test]
+    fn inverse_sin() {
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x::sin(); in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().as_userclosure().is_some());
+    }
+
+    #[test]
+    fn inverse_sin_plus_one() {
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x::sin()+1.0; in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().as_userclosure().is_some());
+    }
+
+    #[test]
+    fn inverse_sinh() {
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x::sinh(); in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().as_userclosure().is_some());
+    }
+
+    #[test]
+    fn inverse_pow_error() {
+        // pow(x, y) for x where y is not a constant is complex
+        // This tests that non-invertible operations are handled
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length, y: std.scalar.Length) -> std.scalar.Length: x::pow(y); in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_err());
+        let err_str = format!("{}", result.unwrap_err().ty);
+        assert!(err_str.contains("not invertible"));
+    }
+
+    #[test]
+    fn inverse_quadratic() {
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length, y: std.scalar.Length) -> std.scalar.Length: x*x+y*y; in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_ok());
+        assert!(result.unwrap().as_userclosure().is_some());
+    }
+
+    #[test]
+    fn inverse_dimension_mismatch_input_type() {
+        // Body uses Angle + angle — should succeed at compile, but the inverse
+        // should have Angle type for its wanted_output parameter
+        let result = test_run(
+            r#"let f = (x: std.scalar.Angle) -> std.scalar.Angle: x + 5deg; in f::inverse(wanted_output = "x")"#,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn inverse_dimension_mismatch_caller_provides_length() {
+        // Inverse expects Angle but caller provides Length — should fail
+        let result = test_run(
+            r#"let f = (x: std.scalar.Angle) -> std.scalar.Angle: x + 5m; in f::inverse(wanted_output = "x")(5m)"#,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn inverse_dimension_mismatch_caller_provides_time() {
+        // Inverse expects Length but caller provides Time — should fail
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x + 5m; in f::inverse(wanted_output = "x")(5s)"#,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn inverse_dimension_mismatch_caller_provides_angle() {
+        // Inverse expects Length but caller provides Angle — should fail
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x + 5m; in f::inverse(wanted_output = "x")(90deg)"#,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn inverse_dimension_correct_length() {
+        // Same dimension — should succeed
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Length: x + 5m; in f::inverse(wanted_output = "x")(5m)"#,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn inverse_dimension_correct_angle() {
+        // Same dimension — should succeed
+        let result = test_run(
+            r#"let f = (x: std.scalar.Angle) -> std.scalar.Angle: x + 5deg; in f::inverse(wanted_output = "x")(90deg)"#,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn inverse_dimension_no_dimension_any_scalar() {
+        // Scalar(None) with dimensionless value — should succeed
+        let result = test_run(
+            r#"let f = (x: std.scalar.Number) -> std.scalar.Number: x + 5.0; in f::inverse(wanted_output = "x")(5.0)"#,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn inverse_with_two_params_solves_for_first() {
+        // Solving x*x + y*y = result for x, y remains as a captured parameter
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length, y: std.scalar.Length) -> std.scalar.Length: x*x + y*y; in f::inverse(wanted_output = "x")"#,
+        );
+        if let Err(e) = result {
+            panic!("Two params test failed: {:?}", e);
+        }
+        assert!(result.is_ok());
+        assert!(result.unwrap().as_userclosure().is_some());
+    }
+
+    #[test]
+    fn inverse_with_two_params_wrong_dimension() {
+        // Solving x*x + y*y = result for x, but y has wrong dimension — should fail
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length, y: std.scalar.Length) -> std.scalar.Length: x*x + y*y; in f::inverse(wanted_output = "x")(y=1s, original_result=2cm)"#,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn inverse_x_squared_returns_sqrt() {
+        // inverse of x*x = area for x: x = sqrt(area)
+        // area = 4'm^2', sqrt(4'm^2') = 2m
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length) -> std.scalar.Area: x*x; in f::inverse(wanted_output = "x")(original_result=4'm^2')"#,
+        );
+        if let Err(e) = result {
+            panic!("inverse_x_squared_returns_sqrt failed: {:?}", e);
+        }
+        let val = result.unwrap();
+        let scalar = val.as_scalar().expect("Expected Scalar");
+        assert!((scalar.value - 2.0).abs() < 1e-10, "Expected 2.0, got {}", scalar.value);
+    }
+
+    #[test]
+    fn inverse_pow_with_two_params() {
+        // inverse of x*x + y*y = area for x: x = sqrt(area - y*y)
+        // With y=3m, area=25'm^2' → sqrt(25-9) = 4m
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length, y: std.scalar.Length) -> std.scalar.Area: x*x + y*y; in f::inverse(wanted_output = "x")(y=3m, original_result=25'm^2')"#,
+        );
+        if let Err(e) = result {
+            panic!("inverse_pow_with_two_params failed: {:?}", e);
+        }
+        let val = result.unwrap();
+        let scalar = val.as_scalar().expect("Expected Scalar");
+        assert!((scalar.value - 4.0).abs() < 1e-10, "Expected 4.0, got {}", scalar.value);
+    }
+
+    #[test]
+    fn inverse_pow_declared_return_type_mismatch() {
+        // The declared return type is Length but the body produces Area.
+        // The inverse should infer the type from the body (Area), not the declared type (Length).
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length, y: std.scalar.Length) -> std.scalar.Length: x*x + y*y; in f::inverse(wanted_output = "x")(y=3m, original_result=25'm^2')"#,
+        );
+        if let Err(e) = result {
+            panic!("inverse_pow_declared_return_type_mismatch failed: {:?}", e);
+        }
+        let val = result.unwrap();
+        let scalar = val.as_scalar().expect("Expected Scalar");
+        assert!((scalar.value - 4.0).abs() < 1e-10, "Expected 4.0, got {}", scalar.value);
+    }
+
+    #[test]
+    fn inverse_sqrt_of_sum() {
+        // inverse of sqrt(x*x + y*y) = result for x: x = sqrt(result^2 - y^2)
+        // With y=3m, result=5m → sqrt(25-9) = 4m
+        let result = test_run(
+            r#"let f = (x: std.scalar.Length, y: std.scalar.Length) -> std.scalar.Length: (x*x + y*y)::sqrt(); in f::inverse(wanted_output = "x")(y=3m, original_result=5m)"#,
+        );
+        if let Err(e) = result {
+            panic!("inverse_sqrt_of_sum failed: {:?}", e);
+        }
+        let val = result.unwrap();
+        let scalar = val.as_scalar().expect("Expected Scalar");
+        assert!((scalar.value - 4.0).abs() < 1e-10, "Expected 4.0, got {}", scalar.value);
     }
 }
