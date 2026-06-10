@@ -85,3 +85,51 @@ Grammar is in `grammar.js`. Test fixtures are in `test/corpus/`.
   light query both read `Transform` — use
   `(With<Camera3d>, Without<DirectionalLight>)` and
   `(With<DirectionalLight>, Without<Camera3d>)`.
+
+## Inverse solver (constraint solving)
+
+The inverse solver lives in `interpreter/src/execution/values/closure/solve/`.
+It transforms `f(x)` into an expression for `x` by walking the SymExpr tree
+and applying inverse operations.
+
+### Polynomial root finding
+
+Quadratic (degree 2) and cubic (degree 3) polynomials are solved via explicit
+formulas. Expressions that don't match these patterns fall through to the
+linear `trace_and_inverse()` path, which raises `VariableAppearsMultipleTimes`
+for non-linear cases.
+
+Key files:
+- `polynom.rs` — `extract_polynomial()`, `solve_quadratic()`, `solve_cubic()`
+- `algorithm.rs` — `solve_for()` entry point; polynomial solving is tried
+  after `simplify_sym_expr()` and before `trace_and_inverse()`
+- `mod.rs` — `SymExpr` enum, `simplify_sym_expr()`, `count_var_occurrences()`
+
+### Key implementation details
+
+- `simplify_sym_expr` collapses `Pow(x,n) * x` → `Pow(x,n+1)`. This is required
+  for `x*x*x` to become `Pow(x,3)` instead of `Pow(x,2) * x`, which would
+  prevent polynomial extraction.
+- The polynomial solver has a guard: pure squaring (`x*x`) and pure cubing
+  (`x*x*x`) fall through to the old `sqrt`/`pow` inverse path to avoid
+  dimension mismatches (b=0 is dimensionless but 4ac has a dimension).
+- Polynomial extraction decomposes Add/Sub trees into terms, extracts
+  `(power, coefficient)` from each monomial, and sums by power.
+
+### Coding gotchas for solver work
+
+- `Scalar` is a struct, not a tuple variant. Use `Scalar { dimension, value }`
+  syntax, never `Scalar(...)`.
+- In `polynom.rs`, `BinOp` conflicts with the `SymExpr::BinOp` variant. Alias
+  it: `use super::BinOp as BinOpType;` and use `BinOpType::Add` etc.
+- `Dimension` only implements `Mul<i8>`, not `Mul<Dimension>`. When combining
+  dimensions, use the same dimension or cast to i8 first.
+- Match patterns on `SymExpr::Integer` give `&mut i64`. Dereference with `*a`.
+- When matching `existing` (a `&mut SymExpr`) and `coeff` (an owned `SymExpr`)
+  together, match `existing` first then `&coeff` to avoid moves.
+
+## CI
+
+CI runs via `nix develop -c cargo ...` (not bare `cargo`). The pipeline is:
+`check → fmt → clippy → build → test`, each as a separate job on
+`ubuntu-latest`. All jobs use the same Nix flake shell for toolchain consistency.
