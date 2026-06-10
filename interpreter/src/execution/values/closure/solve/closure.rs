@@ -83,7 +83,15 @@ impl SolveResult {
         };
 
         // Build the body expression from SymExpr
-        let body_expr = sym_expr_to_expression(&self.body, context)?;
+        let body_expr = sym_expr_to_expression(&self.body, context).map_err(|e| {
+            let formula = self.body.to_string();
+            let msg = format!("Inverse body: {}\n{}", formula, e.ty);
+            crate::execution::errors::Error {
+                ty: Box::new(crate::execution::errors::StringError(msg)),
+                trace: e.trace,
+                failure_chain: e.failure_chain,
+            }
+        })?;
 
         // The return type of the inverse closure is the type of the target variable being solved for.
         // When solving f(x) = y for x, the inverse is g(y) = x, so the return type is x's type.
@@ -106,6 +114,7 @@ impl SolveResult {
                 signature,
                 captured_values,
                 expression: Arc::new(body_expr),
+                formula: Some(self.body.to_string()),
             }),
         })
     }

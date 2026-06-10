@@ -194,6 +194,7 @@ pub struct UserClosureInternals {
     pub signature: Arc<Signature>,
     pub captured_values: IndexMap<ArgumentName, Value>,
     pub expression: Arc<AstNode<Expression>>,
+    pub formula: Option<String>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -259,6 +260,7 @@ impl UserClosure {
                 signature,
                 captured_values,
                 expression,
+                formula: None,
             }),
         })
     }
@@ -343,7 +345,18 @@ impl Object for UserClosure {
             .collect();
 
         context.stack_scope(ScopeType::Inherited, variables, |context| {
-            let result = execute_expression(context, &self.data.expression)?;
+            let result = execute_expression(context, &self.data.expression).map_err(|e| {
+                if let Some(formula) = &self.data.formula {
+                    let msg = format!("Inverse body: {}\n{}", formula, e.ty);
+                    crate::execution::errors::Error {
+                        ty: Box::new(crate::execution::errors::StringError(msg)),
+                        trace: e.trace,
+                        failure_chain: e.failure_chain,
+                    }
+                } else {
+                    e
+                }
+            })?;
 
             self.data
                 .signature
@@ -474,7 +487,15 @@ impl BuiltinCallable for methods::Inverse {
             param_types,
         )?;
 
-        let inverse_closure = result.into_closure(context, &closure)?;
+        let formula = result.body.to_string();
+        let inverse_closure = result.into_closure(context, &closure).map_err(|e| {
+            let msg = format!("Inverse body: {}\n{}", formula, e.ty);
+            crate::execution::errors::Error {
+                ty: Box::new(crate::execution::errors::StringError(msg)),
+                trace: e.trace,
+                failure_chain: e.failure_chain,
+            }
+        })?;
 
         Ok(inverse_closure.into())
     }
@@ -992,7 +1013,8 @@ mod test {
                         return_type: ValueType::UnsignedInteger,
                     }),
                     captured_values: IndexMap::new(),
-                    expression
+                    expression,
+                    formula: None,
                 })
             }
             .into()

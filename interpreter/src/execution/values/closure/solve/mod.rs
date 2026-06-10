@@ -57,6 +57,135 @@ pub enum UnaryOp {
     Neg,
 }
 
+impl std::fmt::Display for BinOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BinOp::Add => write!(f, "+"),
+            BinOp::Sub => write!(f, "-"),
+            BinOp::Mul => write!(f, "*"),
+            BinOp::Div => write!(f, "/"),
+            BinOp::Pow => write!(f, "**"),
+        }
+    }
+}
+
+impl std::fmt::Display for BoolOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BoolOp::And => write!(f, "and"),
+            BoolOp::Or => write!(f, "or"),
+        }
+    }
+}
+
+impl std::fmt::Display for UnaryOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnaryOp::Not => write!(f, "!"),
+            UnaryOp::Neg => write!(f, "-"),
+        }
+    }
+}
+
+/// Precedence levels for binary operations (higher = binds tighter).
+fn binop_precedence(op: &BinOp) -> u8 {
+    match op {
+        BinOp::Pow => 4,
+        BinOp::Mul | BinOp::Div => 3,
+        BinOp::Add | BinOp::Sub => 2,
+    }
+}
+
+/// Format a SymExpr with parentheses only when needed for precedence.
+fn format_sym_expr_with_parens(expr: &SymExpr, parent_precedence: u8, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match expr {
+        SymExpr::Var(v) => write!(f, "{}", v),
+        SymExpr::Scalar(s) => {
+            let unit_name = units::get_base_unit_name(&s.dimension);
+            if s.value == common_data_types::Float::new(0.0).unwrap() && unit_name.is_none() {
+                write!(f, "0.0")
+            } else if let Some(unit) = unit_name {
+                write!(f, "{:.1}{}", s.value, unit)
+            } else {
+                write!(f, "{:.1}", s.value)
+            }
+        }
+        SymExpr::Integer(i) => write!(f, "{}.0", i),
+        SymExpr::Boolean(b) => write!(f, "{}", b.0),
+        SymExpr::BinOp(op, left, right) => {
+            let prec = binop_precedence(op);
+            let needs_parens = prec < parent_precedence;
+            if needs_parens {
+                write!(f, "(")?;
+            }
+            format_sym_expr_with_parens(left, prec, f)?;
+            write!(f, " {} ", op)?;
+            format_sym_expr_with_parens(right, prec + 1, f)?;
+            if needs_parens {
+                write!(f, ")")?;
+            }
+            Ok(())
+        }
+        SymExpr::BoolOp(op, left, right) => {
+            let prec = 1;
+            let needs_parens = prec < parent_precedence;
+            if needs_parens {
+                write!(f, "(")?;
+            }
+            format_sym_expr_with_parens(left, prec, f)?;
+            write!(f, " {} ", op)?;
+            format_sym_expr_with_parens(right, prec + 1, f)?;
+            if needs_parens {
+                write!(f, ")")?;
+            }
+            Ok(())
+        }
+        SymExpr::UnaryOp(op, inner) => {
+            let prec = 5;
+            let needs_parens = prec < parent_precedence;
+            if needs_parens {
+                write!(f, "(")?;
+            }
+            write!(f, "{}", op)?;
+            format_sym_expr_with_parens(inner, prec, f)?;
+            if needs_parens {
+                write!(f, ")")?;
+            }
+            Ok(())
+        }
+        SymExpr::MethodCall { method_name, self_expr, args, args_names } => {
+            format_sym_expr_with_parens(self_expr, 6, f)?;
+            if args.is_empty() {
+                write!(f, "::{}", method_name)
+            } else {
+                write!(f, "::{}", method_name)?;
+                write!(f, "(")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    if let Some(name) = args_names.get(i) {
+                        match name {
+                            crate::execution::values::dictionary::ArgumentName::Named(n) => {
+                                write!(f, "{}=", n)?;
+                            }
+                            crate::execution::values::dictionary::ArgumentName::Positional(_) => {}
+                        }
+                    }
+                    format_sym_expr_with_parens(arg, 0, f)?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for SymExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        format_sym_expr_with_parens(self, 0, f)
+    }
+}
+
 /// Operation-specific inverse logic.
 pub trait InverseOp {
     /// Given parent_op and sibling_expr, compute what isolates the child.
@@ -819,5 +948,78 @@ mod test {
             }
             _ => panic!("Expected Mul(Pow(x,2), x), got {:?}", result),
         }
+    }
+
+    #[test]
+    fn symexpr_display_var() {
+        let expr = SymExpr::Var("x".into());
+        assert_eq!(format!("{}", expr), "x");
+    }
+
+    #[test]
+    fn symexpr_display_binop_add() {
+        let x = SymExpr::Var("x".into());
+        let y = SymExpr::Var("y".into());
+        let expr = SymExpr::BinOp(BinOp::Add, Box::new(x), Box::new(y));
+        assert_eq!(format!("{}", expr), "x + y");
+    }
+
+    #[test]
+    fn symexpr_display_binop_mul_add_parens() {
+        let x = SymExpr::Var("x".into());
+        let y = SymExpr::Var("y".into());
+        let z = SymExpr::Var("z".into());
+        let add = SymExpr::BinOp(BinOp::Add, Box::new(x), Box::new(y));
+        let expr = SymExpr::BinOp(BinOp::Mul, Box::new(add), Box::new(z));
+        assert_eq!(format!("{}", expr), "(x + y) * z");
+    }
+
+    #[test]
+    fn symexpr_display_binop_add_mul_no_parens() {
+        let x = SymExpr::Var("x".into());
+        let y = SymExpr::Var("y".into());
+        let z = SymExpr::Var("z".into());
+        let mul = SymExpr::BinOp(BinOp::Mul, Box::new(x), Box::new(y));
+        let expr = SymExpr::BinOp(BinOp::Add, Box::new(mul), Box::new(z));
+        assert_eq!(format!("{}", expr), "x * y + z");
+    }
+
+    #[test]
+    fn symexpr_display_method_call() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "sqrt".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        assert_eq!(format!("{}", expr), "x::sqrt");
+    }
+
+    #[test]
+    fn symexpr_display_method_call_with_args() {
+        let x = SymExpr::Var("x".into());
+        let two = SymExpr::Integer(2);
+        let expr = SymExpr::MethodCall {
+            method_name: "pow".into(),
+            self_expr: Box::new(x),
+            args: vec![two],
+            args_names: vec![crate::execution::values::dictionary::ArgumentName::Named("exp".into())],
+        };
+        assert_eq!(format!("{}", expr), "x::pow(exp=2.0)");
+    }
+
+    #[test]
+    fn symexpr_display_sqrt_of_sub() {
+        let result = SymExpr::Var("original_result".into());
+        let y = SymExpr::Var("y".into());
+        let sub = SymExpr::BinOp(BinOp::Sub, Box::new(result), Box::new(SymExpr::BinOp(BinOp::Mul, Box::new(y.clone()), Box::new(y))));;
+        let expr = SymExpr::MethodCall {
+            method_name: "sqrt".into(),
+            self_expr: Box::new(sub),
+            args: vec![],
+            args_names: vec![],
+        };
+        assert_eq!(format!("{}", expr), "(original_result - y * y)::sqrt");
     }
 }
