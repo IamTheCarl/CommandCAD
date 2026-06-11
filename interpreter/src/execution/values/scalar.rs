@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License along with this
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
-use std::{any::TypeId, borrow::Cow, cmp::Ordering, f64::consts::PI};
+use std::{any::TypeId, borrow::Cow, cmp::Ordering};
 
 use common_data_types::{Dimension, Float, FloatIsNan};
 use thiserror::Error;
@@ -559,7 +559,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).exp()).unwrap_not_nan(context)?
+                value: Float::new(this.value.exp()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Log>()
@@ -733,7 +733,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value * PI).acos()).unwrap_not_nan(context)?
+                value: Float::new(this.value.acos()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Cos>()
@@ -748,7 +748,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value).acosh() / PI).unwrap_not_nan(context)?
+                value: Float::new(this.value.acosh()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Cosh>()
@@ -763,7 +763,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).cos()).unwrap_not_nan(context)?
+                value: Float::new(this.value.cos()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Acos>()
@@ -778,7 +778,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).cosh()).unwrap_not_nan(context)?
+                value: Float::new(this.value.cosh()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Acosh>()
@@ -793,7 +793,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value * PI).asin()).unwrap_not_nan(context)?
+                value: Float::new(this.value.asin()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Sin>()
@@ -808,7 +808,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value).asinh() / PI).unwrap_not_nan(context)?
+                value: Float::new(this.value.asinh()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Sinh>()
@@ -823,7 +823,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).sin()).unwrap_not_nan(context)?
+                value: Float::new(this.value.sin()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Asin>()
@@ -838,7 +838,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).sinh()).unwrap_not_nan(context)?
+                value: Float::new(this.value.sinh()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Asinh>()
@@ -851,7 +851,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
         {
             this.check_trig_compatible(context)?;
 
-            let (sin, cos) = (this.value * PI).sin_cos();
+            let (sin, cos) = this.value.sin_cos();
             Vector2::new(context, Dimension::zero(), [cos, sin])
         }
     );
@@ -865,7 +865,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value * PI).atan()).unwrap_not_nan(context)?
+                value: Float::new(this.value.atan()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Tan>()
@@ -880,7 +880,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::angle(),
-                value: Float::new((this.value).atanh() / PI).unwrap_not_nan(context)?
+                value: Float::new(this.value.atanh()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Tanh>()
@@ -895,7 +895,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).tan()).unwrap_not_nan(context)?
+                value: Float::new(this.value.tan()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Atan>()
@@ -910,7 +910,7 @@ pub fn register_methods(database: &mut BuiltinCallableDatabase) {
 
             Ok(Scalar {
                 dimension: Dimension::zero(),
-                value: Float::new((this.value * PI).tanh()).unwrap_not_nan(context)?
+                value: Float::new(this.value.tanh()).unwrap_not_nan(context)?
             })
         },
         TypeId::of::<methods::Atanh>()
@@ -1315,11 +1315,15 @@ mod test {
     fn cos() {
         let product = test_run("90deg::cos() - 1 < 0.000000000001").unwrap();
         assert_eq!(product, Boolean(true).into());
+
+        // Verify correct: cos(0) = 1
+        let product = test_run("0rad::cos() - 1 < 0.000000000001").unwrap();
+        assert_eq!(product, Boolean(true).into());
     }
 
     #[test]
     fn asin() {
-        let product = test_run("0::asin() - 90deg < 0.000000000001deg").unwrap();
+        let product = test_run("0::asin() - 0deg < 0.000000000001deg").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
@@ -1332,6 +1336,10 @@ mod test {
     #[test]
     fn sin() {
         let product = test_run("90deg::sin() - 1 < 0.000000000001").unwrap();
+        assert_eq!(product, Boolean(true).into());
+
+        // Verify correct: sin(0) = 0
+        let product = test_run("0rad::sin() - 0 < 0.000000000001").unwrap();
         assert_eq!(product, Boolean(true).into());
     }
 
