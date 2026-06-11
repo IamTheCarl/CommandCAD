@@ -2,7 +2,7 @@ mod algorithm;
 mod closure;
 mod polynom;
 
-pub use algorithm::{ast_return_type, solve_for};
+pub use algorithm::{ast_return_type, expression_to_sym_expr, solve_for};
 pub use closure::infer_sym_expr_type;
 
 pub use polynom::{extract_polynomial, solve_cubic, solve_quadratic, Polynomial};
@@ -13,6 +13,8 @@ use imstr::ImString;
 use indexmap::IndexMap;
 
 use super::BuiltinCallableDatabase;
+
+use common_data_types::{Dimension, Float};
 
 use crate::execution::values::{
     boolean::Boolean,
@@ -87,6 +89,836 @@ impl std::fmt::Display for UnaryOp {
             UnaryOp::Not => write!(f, "!"),
             UnaryOp::Neg => write!(f, "-"),
         }
+    }
+}
+
+/// Differentiate a SymExpr with respect to a variable.
+/// Returns the derivative as a new SymExpr.
+pub fn differentiate(expr: &SymExpr, var: &str) -> SymExpr {
+    match expr {
+        // Constants have zero derivative
+        SymExpr::Scalar(_) | SymExpr::Integer(_) | SymExpr::Boolean(_) => {
+            SymExpr::Scalar(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(0.0).unwrap(),
+            })
+        }
+        // d/dx(x) = 1
+        SymExpr::Var(v) if v == var => {
+            SymExpr::Scalar(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(1.0).unwrap(),
+            })
+        }
+        // d/dx(captured) = 0 (captured variable not being differentiated w.r.t.)
+        SymExpr::Var(_) => {
+            SymExpr::Scalar(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(0.0).unwrap(),
+            })
+        }
+        // Sum rule: d/dx(u + v) = du/dx + dv/dx
+        SymExpr::BinOp(BinOp::Add, left, right) => {
+            let du = differentiate(left, var);
+            let dv = differentiate(right, var);
+            SymExpr::BinOp(BinOp::Add, Box::new(du), Box::new(dv))
+        }
+        // Difference rule: d/dx(u - v) = du/dx - dv/dx
+        SymExpr::BinOp(BinOp::Sub, left, right) => {
+            let du = differentiate(left, var);
+            let dv = differentiate(right, var);
+            SymExpr::BinOp(BinOp::Sub, Box::new(du), Box::new(dv))
+        }
+        // Product rule: d/dx(u*v) = du/dx * v + u * dv/dx
+        SymExpr::BinOp(BinOp::Mul, left, right) => {
+            let du = differentiate(left, var);
+            let dv = differentiate(right, var);
+            SymExpr::BinOp(
+                BinOp::Add,
+                Box::new(SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(du),
+                    Box::new(right.as_ref().clone()),
+                )),
+                Box::new(SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(left.as_ref().clone()),
+                    Box::new(dv),
+                )),
+            )
+        }
+        // Quotient rule: d/dx(u/v) = (du*v - u*dv) / v²
+        SymExpr::BinOp(BinOp::Div, left, right) => {
+            let du = differentiate(left, var);
+            let dv = differentiate(right, var);
+      let v = right.as_ref().clone();
+            SymExpr::BinOp(
+                BinOp::Div,
+                Box::new(SymExpr::BinOp(
+                    BinOp::Sub,
+                    Box::new(SymExpr::BinOp(
+                        BinOp::Mul,
+                        Box::new(du),
+                        Box::new(v.clone()),
+                    )),
+                    Box::new(SymExpr::BinOp(
+                        BinOp::Mul,
+                        Box::new(left.as_ref().clone()),
+                        Box::new(dv),
+                    )),
+                )),
+                Box::new(SymExpr::BinOp(BinOp::Mul, Box::new(v.clone()), Box::new(v))),
+            )
+        }
+        // Chain + power rule: d/dx(u^n) = n * u^(n-1) * du/dx
+        SymExpr::BinOp(BinOp::Pow, base, exp) => {
+            let n = exp.as_ref().clone();
+            let one = SymExpr::Integer(1);
+            let n_minus_1 = SymExpr::BinOp(BinOp::Sub, Box::new(n.clone()), Box::new(one));
+            let db = differentiate(base, var);
+            SymExpr::BinOp(
+                BinOp::Mul,
+                Box::new(SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(n),
+                    Box::new(SymExpr::BinOp(
+                        BinOp::Pow,
+                        Box::new(*base.clone()),
+                        Box::new(n_minus_1),
+                    )),
+                )),
+                Box::new(db),
+            )
+        }
+        // Unary negation: d/dx(-u) = -du/dx
+        SymExpr::UnaryOp(UnaryOp::Neg, inner) => {
+            let di = differentiate(inner, var);
+            SymExpr::UnaryOp(UnaryOp::Neg, Box::new(di))
+        }
+        // Unary not: d/dx(!u) = 0 (boolean, treated as constant)
+        SymExpr::UnaryOp(UnaryOp::Not, _) => {
+            SymExpr::Scalar(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(0.0).unwrap(),
+            })
+        }
+        // Method calls with chain rule for known differentiable functions
+        SymExpr::MethodCall {
+            method_name,
+            self_expr,
+            args,
+            args_names,
+        } => {
+            let ds = differentiate(self_expr, var);
+
+            match method_name.as_str() {
+                "sin" => SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(SymExpr::MethodCall {
+                        method_name: "cos".into(),
+                        self_expr: self_expr.clone(),
+                        args: vec![],
+                        args_names: vec![],
+                    }),
+                    Box::new(ds),
+                ),
+                "cos" => SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(SymExpr::UnaryOp(
+                        UnaryOp::Neg,
+                        Box::new(SymExpr::MethodCall {
+                            method_name: "sin".into(),
+                            self_expr: self_expr.clone(),
+                            args: vec![],
+                            args_names: vec![],
+                        }),
+                    )),
+                    Box::new(ds),
+                ),
+                "tan" => {
+                    let tan_self = SymExpr::MethodCall {
+                        method_name: "tan".into(),
+                        self_expr: self_expr.clone(),
+                        args: vec![],
+                        args_names: vec![],
+                    };
+                    let one = SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(1.0).unwrap(),
+                    });
+                    SymExpr::BinOp(
+                        BinOp::Mul,
+                        Box::new(SymExpr::BinOp(
+                            BinOp::Add,
+                            Box::new(one),
+                            Box::new(SymExpr::BinOp(
+                                BinOp::Pow,
+                                Box::new(tan_self),
+                                Box::new(SymExpr::Integer(2)),
+                            )),
+                        )),
+                        Box::new(ds),
+                    )
+                }
+                "sinh" => SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(SymExpr::MethodCall {
+                        method_name: "cosh".into(),
+                        self_expr: self_expr.clone(),
+                        args: vec![],
+                        args_names: vec![],
+                    }),
+                    Box::new(ds),
+                ),
+                "cosh" => SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(SymExpr::MethodCall {
+                        method_name: "sinh".into(),
+                        self_expr: self_expr.clone(),
+                        args: vec![],
+                        args_names: vec![],
+                    }),
+                    Box::new(ds),
+                ),
+                "exp" => SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(SymExpr::MethodCall {
+                        method_name: "exp".into(),
+                        self_expr: self_expr.clone(),
+                        args: vec![],
+                        args_names: vec![],
+                    }),
+                    Box::new(ds),
+                ),
+                "log" => SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(1.0).unwrap(),
+                    })),
+                    Box::new(self_expr.as_ref().clone()),
+                ),
+                "asin" => SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(1.0).unwrap(),
+                    })),
+                    Box::new(SymExpr::MethodCall {
+                        method_name: "sqrt".into(),
+                        self_expr: Box::new(SymExpr::BinOp(
+                            BinOp::Sub,
+                            Box::new(SymExpr::Scalar(Scalar {
+                                dimension: Dimension::zero(),
+                                value: Float::new(1.0).unwrap(),
+                            })),
+                            Box::new(SymExpr::BinOp(
+                                BinOp::Pow,
+                                Box::new(self_expr.as_ref().clone()),
+                                Box::new(SymExpr::Integer(2)),
+                            )),
+                        )),
+                        args: vec![],
+                        args_names: vec![],
+                    }),
+                ),
+                "acos" => SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(SymExpr::UnaryOp(
+                        UnaryOp::Neg,
+                        Box::new(SymExpr::Scalar(Scalar {
+                            dimension: Dimension::zero(),
+                            value: Float::new(1.0).unwrap(),
+                        })),
+                    )),
+                    Box::new(SymExpr::MethodCall {
+                        method_name: "sqrt".into(),
+                        self_expr: Box::new(SymExpr::BinOp(
+                            BinOp::Sub,
+                            Box::new(SymExpr::Scalar(Scalar {
+                                dimension: Dimension::zero(),
+                                value: Float::new(1.0).unwrap(),
+                            })),
+                            Box::new(SymExpr::BinOp(
+                                BinOp::Pow,
+                                Box::new(self_expr.as_ref().clone()),
+                                Box::new(SymExpr::Integer(2)),
+                            )),
+                        )),
+                        args: vec![],
+                        args_names: vec![],
+                    }),
+                ),
+                "atan" => SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(1.0).unwrap(),
+                    })),
+                    Box::new(SymExpr::BinOp(
+                        BinOp::Add,
+                        Box::new(SymExpr::Scalar(Scalar {
+                            dimension: Dimension::zero(),
+                            value: Float::new(1.0).unwrap(),
+                        })),
+                        Box::new(SymExpr::BinOp(
+                            BinOp::Pow,
+                            Box::new(self_expr.as_ref().clone()),
+                            Box::new(SymExpr::Integer(2)),
+                        )),
+                    )),
+                ),
+                "asinh" => SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(1.0).unwrap(),
+                    })),
+                    Box::new(SymExpr::MethodCall {
+                        method_name: "sqrt".into(),
+                        self_expr: Box::new(SymExpr::BinOp(
+                            BinOp::Add,
+                            Box::new(SymExpr::Scalar(Scalar {
+                                dimension: Dimension::zero(),
+                                value: Float::new(1.0).unwrap(),
+                            })),
+                            Box::new(SymExpr::BinOp(
+                                BinOp::Pow,
+                                Box::new(self_expr.as_ref().clone()),
+                                Box::new(SymExpr::Integer(2)),
+                            )),
+                        )),
+                        args: vec![],
+                        args_names: vec![],
+                    }),
+                ),
+                "acosh" => SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(1.0).unwrap(),
+                    })),
+                    Box::new(SymExpr::MethodCall {
+                        method_name: "sqrt".into(),
+                        self_expr: Box::new(SymExpr::BinOp(
+                            BinOp::Sub,
+                            Box::new(SymExpr::BinOp(
+                                BinOp::Pow,
+                                Box::new(self_expr.as_ref().clone()),
+                                Box::new(SymExpr::Integer(2)),
+                            )),
+                            Box::new(SymExpr::Scalar(Scalar {
+                                dimension: Dimension::zero(),
+                                value: Float::new(1.0).unwrap(),
+                            })),
+                        )),
+                        args: vec![],
+                        args_names: vec![],
+                    }),
+                ),
+                "atanh" => SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(1.0).unwrap(),
+                    })),
+                    Box::new(SymExpr::BinOp(
+                        BinOp::Sub,
+                        Box::new(SymExpr::Scalar(Scalar {
+                            dimension: Dimension::zero(),
+                            value: Float::new(1.0).unwrap(),
+                        })),
+                        Box::new(SymExpr::BinOp(
+                            BinOp::Pow,
+                            Box::new(self_expr.as_ref().clone()),
+                            Box::new(SymExpr::Integer(2)),
+                        )),
+                    )),
+                ),
+                "abs" => SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(SymExpr::MethodCall {
+                        method_name: "signum".into(),
+                        self_expr: self_expr.clone(),
+                        args: vec![],
+                        args_names: vec![],
+                    }),
+                    Box::new(ds),
+                ),
+                "cbrt" => SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(1.0).unwrap(),
+                    })),
+                    Box::new(SymExpr::BinOp(
+                        BinOp::Mul,
+                        Box::new(SymExpr::Integer(3)),
+                        Box::new(SymExpr::BinOp(
+                            BinOp::Pow,
+                            Box::new(SymExpr::MethodCall {
+                                method_name: "cbrt".into(),
+                                self_expr: self_expr.clone(),
+                                args: vec![],
+                                args_names: vec![],
+                            }),
+                            Box::new(SymExpr::Integer(2)),
+                        )),
+                    )),
+                ),
+                "sqrt" => SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(1.0).unwrap(),
+                    })),
+                    Box::new(SymExpr::BinOp(
+                        BinOp::Mul,
+                        Box::new(SymExpr::Integer(2)),
+                        Box::new(SymExpr::MethodCall {
+                            method_name: "sqrt".into(),
+                            self_expr: self_expr.clone(),
+                            args: vec![],
+                            args_names: vec![],
+                        }),
+                    )),
+                ),
+                "recip" => SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(SymExpr::UnaryOp(
+                        UnaryOp::Neg,
+                        Box::new(ds),
+                    )),
+                    Box::new(SymExpr::BinOp(
+                        BinOp::Pow,
+                        Box::new(self_expr.as_ref().clone()),
+                        Box::new(SymExpr::Integer(2)),
+                    )),
+                ),
+                "tanh" => SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(SymExpr::BinOp(
+                        BinOp::Sub,
+                        Box::new(SymExpr::Scalar(Scalar {
+                            dimension: Dimension::zero(),
+                            value: Float::new(1.0).unwrap(),
+                        })),
+                        Box::new(SymExpr::BinOp(
+                            BinOp::Pow,
+                            Box::new(SymExpr::MethodCall {
+                                method_name: "tanh".into(),
+                                self_expr: self_expr.clone(),
+                                args: vec![],
+                                args_names: vec![],
+                            }),
+                            Box::new(SymExpr::Integer(2)),
+                        )),
+                    )),
+                    Box::new(ds),
+                ),
+                "signum" => SymExpr::Scalar(Scalar {
+                    dimension: Dimension::zero(),
+                    value: Float::new(0.0).unwrap(),
+                }),
+                "pow" => {
+                    let exp = args.first().and_then(|a| {
+                        match a {
+                            SymExpr::Integer(i) => Some(*i),
+                            _ => None,
+                        }
+                    });
+                    if let Some(exp) = exp {
+                        let n_minus_1 = SymExpr::Integer(exp - 1);
+                        SymExpr::BinOp(
+                            BinOp::Mul,
+                            Box::new(SymExpr::BinOp(
+                                BinOp::Mul,
+                                Box::new(SymExpr::Integer(exp)),
+                                Box::new(SymExpr::BinOp(
+                                    BinOp::Pow,
+                                    Box::new(self_expr.as_ref().clone()),
+                                    Box::new(n_minus_1),
+                                )),
+                            )),
+                            Box::new(ds),
+                        )
+                    } else {
+                        SymExpr::MethodCall {
+                            method_name: "not_differentiable".into(),
+                            self_expr: Box::new(SymExpr::Var("pow".into())),
+                            args: args.clone(),
+                            args_names: args_names.clone(),
+                        }
+                    }
+                }
+                // All other methods are not differentiable
+                _ => SymExpr::MethodCall {
+                    method_name: "not_differentiable".into(),
+                    self_expr: Box::new(SymExpr::Var(method_name.clone())),
+                    args: vec![],
+                    args_names: vec![],
+                },
+            }
+        }
+        // BoolOps are not differentiable
+        SymExpr::BoolOp(_, _, _) => SymExpr::Scalar(Scalar {
+            dimension: Dimension::zero(),
+            value: Float::new(0.0).unwrap(),
+        }),
+    }
+}
+
+/// Check if a SymExpr is a constant (doesn't contain the given variable).
+fn is_constant_wrt(expr: &SymExpr, var: &str) -> bool {
+    !sym_expr_contains_var(expr, var)
+}
+
+/// Extract a constant factor from a multiplication expression.
+/// Returns (constant_factor, rest_of_expression) or None if no constant factor.
+fn extract_constant_factor(expr: &SymExpr, var: &str) -> Option<(SymExpr, SymExpr)> {
+    match expr {
+        SymExpr::BinOp(BinOp::Mul, left, right) => {
+            if is_constant_wrt(left, var) {
+                Some((left.as_ref().clone(), right.as_ref().clone()))
+            } else if is_constant_wrt(right, var) {
+                Some((right.as_ref().clone(), left.as_ref().clone()))
+            } else {
+                None
+            }
+        }
+        SymExpr::BinOp(BinOp::Div, left, right) => {
+            if is_constant_wrt(right, var) && !is_constant_wrt(left, var) {
+                Some((right.as_ref().clone(), left.as_ref().clone()))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Integrate a SymExpr with respect to a variable.
+/// Returns Result because some integrals don't have closed forms.
+pub fn integrate(expr: &SymExpr, var: &str, max_recursion: usize) -> Result<SymExpr, String> {
+    integrate_inner(expr, var, max_recursion)
+}
+
+fn integrate_inner(expr: &SymExpr, var: &str, max_recursion: usize) -> Result<SymExpr, String> {
+    match expr {
+        // Constants integrate to 0 (c=0 as specified)
+        SymExpr::Scalar(_) | SymExpr::Integer(_) | SymExpr::Boolean(_) => {
+            Ok(SymExpr::Scalar(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(0.0).unwrap(),
+            }))
+        }
+        // ∫x dx = x²/2
+        SymExpr::Var(v) if v == var => {
+            Ok(SymExpr::BinOp(
+                BinOp::Div,
+                Box::new(SymExpr::BinOp(
+                    BinOp::Pow,
+                    Box::new(SymExpr::Var(var.into())),
+                    Box::new(SymExpr::Integer(2)),
+                )),
+                Box::new(SymExpr::Integer(2)),
+            ))
+        }
+        // Captured variable: ∫c dx = 0
+        SymExpr::Var(_) => {
+            Ok(SymExpr::Scalar(Scalar {
+                dimension: Dimension::zero(),
+                value: Float::new(0.0).unwrap(),
+            }))
+        }
+        // Linearity: ∫(u ± v) = ∫u ± ∫v
+        SymExpr::BinOp(BinOp::Add, left, right) => {
+            let iu = integrate_inner(left, var, max_recursion)?;
+            let iv = integrate_inner(right, var, max_recursion)?;
+            Ok(SymExpr::BinOp(BinOp::Add, Box::new(iu), Box::new(iv)))
+        }
+        SymExpr::BinOp(BinOp::Sub, left, right) => {
+            let iu = integrate_inner(left, var, max_recursion)?;
+            let iv = integrate_inner(right, var, max_recursion)?;
+            Ok(SymExpr::BinOp(BinOp::Sub, Box::new(iu), Box::new(iv)))
+        }
+        // Constant factor: ∫(c*u) = c*∫u
+        SymExpr::BinOp(BinOp::Mul, _left, _right) => {
+            if let Some((c, rest)) = extract_constant_factor(expr, var) {
+                let ir = integrate_inner(&rest, var, max_recursion)?;
+                return Ok(SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(c),
+                    Box::new(ir),
+                ));
+            }
+            // No constant factor - try integration by parts
+            integrate_by_parts(expr, var, max_recursion)
+        }
+        SymExpr::BinOp(BinOp::Div, left, right) => {
+            // ∫(u/v) = ∫u * (1/v) if v is constant, else by parts
+            if is_constant_wrt(right, var) && !is_constant_wrt(left, var) {
+                let il = integrate_inner(left, var, max_recursion)?;
+                return Ok(SymExpr::BinOp(
+                    BinOp::Div,
+                    Box::new(il),
+                    Box::new(right.as_ref().clone()),
+                ));
+            }
+            // Otherwise try by parts (convert to multiplication)
+            let inv_right = SymExpr::BinOp(
+                BinOp::Pow,
+                Box::new(right.as_ref().clone()),
+                Box::new(SymExpr::Integer(-1)),
+            );
+            let mul_expr = SymExpr::BinOp(
+                BinOp::Mul,
+                Box::new(left.as_ref().clone()),
+                Box::new(inv_right),
+            );
+            integrate_by_parts(&mul_expr, var, max_recursion)
+        }
+        // Power rule: ∫x^n dx = x^(n+1)/(n+1) for n ≠ -1
+        SymExpr::BinOp(BinOp::Pow, base, exp) => {
+            if let SymExpr::Var(v) = base.as_ref() {
+                if v == var {
+                    if let SymExpr::Integer(n) = exp.as_ref() {
+                        if *n == -1 {
+                            return Err(format!(
+                                "operation 'Pow({}, -1)' is not integrable",
+                                v
+                            ));
+                        }
+                        let n_plus_1 = n + 1;
+                        return Ok(SymExpr::BinOp(
+                            BinOp::Div,
+                            Box::new(SymExpr::BinOp(
+                                BinOp::Pow,
+                                Box::new(SymExpr::Var(var.into())),
+                                Box::new(SymExpr::Integer(n_plus_1)),
+                            )),
+                            Box::new(SymExpr::Integer(n_plus_1)),
+                        ));
+                    }
+                }
+            }
+            // Base is not a simple variable - try by parts
+            integrate_by_parts(expr, var, max_recursion)
+        }
+        // Method calls - standard integrals
+        SymExpr::MethodCall {
+            method_name,
+            self_expr,
+            args,
+            args_names: _,
+        } => {
+            if !args.is_empty() {
+                return Err(format!("operation '{}' is not integrable", method_name));
+            }
+
+            match method_name.as_str() {
+                "sin" => Ok(SymExpr::UnaryOp(
+                    UnaryOp::Neg,
+                    Box::new(SymExpr::MethodCall {
+                        method_name: "cos".into(),
+                        self_expr: self_expr.clone(),
+                        args: vec![],
+                        args_names: vec![],
+                    }),
+                )),
+                "cos" => Ok(SymExpr::MethodCall {
+                    method_name: "sin".into(),
+                    self_expr: self_expr.clone(),
+                    args: vec![],
+                    args_names: vec![],
+                }),
+                "sinh" => Ok(SymExpr::MethodCall {
+                    method_name: "cosh".into(),
+                    self_expr: self_expr.clone(),
+                    args: vec![],
+                    args_names: vec![],
+                }),
+                "cosh" => Ok(SymExpr::MethodCall {
+                    method_name: "sinh".into(),
+                    self_expr: self_expr.clone(),
+                    args: vec![],
+                    args_names: vec![],
+                }),
+                "exp" => Ok(SymExpr::MethodCall {
+                    method_name: "exp".into(),
+                    self_expr: self_expr.clone(),
+                    args: vec![],
+                    args_names: vec![],
+                }),
+                "tan" => {
+                    let cos_self = SymExpr::MethodCall {
+                        method_name: "cos".into(),
+                        self_expr: self_expr.clone(),
+                        args: vec![],
+                        args_names: vec![],
+                    };
+                    let abs_cos = SymExpr::MethodCall {
+                        method_name: "abs".into(),
+                        self_expr: Box::new(cos_self),
+                        args: vec![],
+                        args_names: vec![],
+                    };
+                    let log_abs_cos = SymExpr::MethodCall {
+                        method_name: "log".into(),
+                        self_expr: Box::new(abs_cos),
+                        args: vec![],
+                        args_names: vec![],
+                    };
+                    Ok(SymExpr::UnaryOp(UnaryOp::Neg, Box::new(log_abs_cos)))
+                }
+                "cbrt" => {
+                    let coeff = SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(0.75).unwrap(),
+                    });
+                    let exp = SymExpr::BinOp(
+                        BinOp::Div,
+                        Box::new(SymExpr::Integer(4)),
+                        Box::new(SymExpr::Integer(3)),
+                    );
+                    Ok(SymExpr::BinOp(
+                        BinOp::Mul,
+                        Box::new(coeff),
+                        Box::new(SymExpr::BinOp(
+                            BinOp::Pow,
+                            Box::new(SymExpr::Var(var.into())),
+                            Box::new(exp),
+                        )),
+                    ))
+                }
+                "sqrt" => {
+                    let coeff = SymExpr::Scalar(Scalar {
+                        dimension: Dimension::zero(),
+                        value: Float::new(0.666667).unwrap(),
+                    });
+                    let exp = SymExpr::BinOp(
+                        BinOp::Div,
+                        Box::new(SymExpr::Integer(3)),
+                        Box::new(SymExpr::Integer(2)),
+                    );
+                    Ok(SymExpr::BinOp(
+                        BinOp::Mul,
+                        Box::new(coeff),
+                        Box::new(SymExpr::BinOp(
+                            BinOp::Pow,
+                            Box::new(SymExpr::Var(var.into())),
+                            Box::new(exp),
+                        )),
+                    ))
+                }
+                "recip" => Ok(SymExpr::MethodCall {
+                    method_name: "log".into(),
+                    self_expr: Box::new(SymExpr::Var(var.into())),
+                    args: vec![],
+                    args_names: vec![],
+                }),
+                _ => Err(format!("operation '{}' is not integrable", method_name)),
+            }
+        }
+        // BoolOps are not integrable
+        SymExpr::BoolOp(_, _, _) => {
+            Err("operation 'BoolOp' is not integrable".to_string())
+        }
+        // UnaryOp - integrate the inner expression and apply negation if needed
+        SymExpr::UnaryOp(UnaryOp::Neg, inner) => {
+            let ii = integrate_inner(inner, var, max_recursion)?;
+            Ok(SymExpr::UnaryOp(UnaryOp::Neg, Box::new(ii)))
+        }
+        SymExpr::UnaryOp(UnaryOp::Not, _) => {
+            Err("operation 'Not' is not integrable".to_string())
+        }
+    }
+}
+
+/// Integration by parts: ∫u*v dx = u*∫v dx - ∫(du/dx * ∫v dx) dx
+fn integrate_by_parts(expr: &SymExpr, var: &str, max_recursion: usize) -> Result<SymExpr, String> {
+    if max_recursion == 0 {
+        return Err(
+            "operation 'Mul (integration by parts limit reached)' is not integrable".to_string()
+        );
+    }
+
+    match expr {
+        SymExpr::BinOp(BinOp::Mul, left, right) => {
+            // Try to find a polynomial factor (variable raised to integer power or the variable itself)
+            // Use it as u (since differentiating reduces its degree)
+            let (u, v) = find_polynomial_factor(left, right, var)
+                .or_else(|| find_polynomial_factor(right, left, var))
+                .unwrap_or_else(|| (left.as_ref().clone(), right.as_ref().clone()));
+
+            // Compute ∫v dx
+            let iv = integrate_inner(&v, var, max_recursion - 1)?;
+
+            // Compute du/dx (derivative of u)
+            let du = differentiate(&u, var);
+
+            // Compute ∫(du * ∫v dx) dx
+            let du_times_iv = SymExpr::BinOp(
+                BinOp::Mul,
+                Box::new(du),
+                Box::new(iv.clone()),
+            );
+            let i_du_iv = integrate_inner(&du_times_iv, var, max_recursion - 1)?;
+
+            // Result: u * ∫v dx - ∫(du * ∫v dx) dx
+            Ok(SymExpr::BinOp(
+                BinOp::Sub,
+                Box::new(SymExpr::BinOp(
+                    BinOp::Mul,
+                    Box::new(u.clone()),
+                    Box::new(iv),
+                )),
+                Box::new(i_du_iv),
+            ))
+        }
+        _ => {
+            Err("operation 'Mul' is not integrable".to_string())
+        }
+    }
+}
+
+/// Try to find a polynomial factor in left or right of a product.
+fn find_polynomial_factor(
+    candidate: &SymExpr,
+    rest: &SymExpr,
+    var: &str,
+) -> Option<(SymExpr, SymExpr)> {
+    if is_polynomial_wrt(candidate, var) {
+        Some((candidate.clone(), rest.clone()))
+    } else {
+        None
+    }
+}
+
+/// Check if a SymExpr is a polynomial in the given variable.
+fn is_polynomial_wrt(expr: &SymExpr, var: &str) -> bool {
+    match expr {
+        SymExpr::Var(v) if v == var => true,
+        SymExpr::BinOp(BinOp::Pow, base, exp) => {
+            if let SymExpr::Var(v) = base.as_ref() {
+                if v == var {
+                    is_constant_wrt(exp, var)
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        }
+        SymExpr::BinOp(BinOp::Mul, left, right) => {
+            is_polynomial_wrt(left, var) && is_polynomial_wrt(right, var)
+        }
+        SymExpr::BinOp(BinOp::Add | BinOp::Sub, left, right) => {
+            is_polynomial_wrt(left, var) && is_polynomial_wrt(right, var)
+        }
+        SymExpr::UnaryOp(UnaryOp::Neg, inner) => is_polynomial_wrt(inner, var),
+        SymExpr::Scalar(_) | SymExpr::Integer(_) | SymExpr::Boolean(_) => true,
+        _ => false,
     }
 }
 
@@ -643,6 +1475,7 @@ fn test_context<R>(f: impl FnOnce(&crate::execution::ExecutionContext) -> R) -> 
 mod test {
     use super::*;
     use common_data_types::Dimension;
+    use crate::execution::{run_assert_eq, test_run};
     
 
     #[test]
@@ -1051,5 +1884,434 @@ mod test {
             args_names: vec![],
         };
         assert_eq!(format!("{}", expr), "(original_result - y * y)::sqrt");
+    }
+
+    #[test]
+    fn differentiate_x_mul_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::BinOp(BinOp::Mul, Box::new(x.clone()), Box::new(x.clone()));
+        let result = differentiate(&expr, "x");
+        // d/dx(x²) = 1*x + x*1 (product rule, not simplified)
+        match result {
+            SymExpr::BinOp(BinOp::Add, left, right) => {
+                assert!(matches!(left.as_ref(), SymExpr::BinOp(BinOp::Mul, _, _)));
+                assert!(matches!(right.as_ref(), SymExpr::BinOp(BinOp::Mul, _, _)));
+            }
+            _ => panic!("Expected Add(Mul, Mul), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn differentiate_constant() {
+        let expr = SymExpr::Scalar(Scalar {
+            dimension: Dimension::zero(),
+            value: Float::new(5.0).unwrap(),
+        });
+        let result = differentiate(&expr, "x");
+        assert!(matches!(result, SymExpr::Scalar(s) if s.value == Float::new(0.0).unwrap()));
+    }
+
+    #[test]
+    fn differentiate_sin_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "sin".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = differentiate(&expr, "x");
+        // d/dx(sin(x)) = cos(x)
+        match result {
+            SymExpr::BinOp(BinOp::Mul, left, right) => {
+                assert!(matches!(left.as_ref(), SymExpr::MethodCall { method_name, .. } if method_name == "cos"));
+                assert!(matches!(right.as_ref(), SymExpr::Scalar(s) if s.value == Float::new(1.0).unwrap()));
+            }
+            _ => panic!("Expected Mul(cos(x), 1), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn integrate_x() {
+        let x = SymExpr::Var("x".into());
+        let result = integrate(&x, "x", 5).unwrap();
+        // ∫x dx = x²/2
+        match result {
+            SymExpr::BinOp(BinOp::Div, left, right) => {
+                assert!(matches!(right.as_ref(), SymExpr::Integer(2)));
+                assert!(matches!(left.as_ref(), SymExpr::BinOp(BinOp::Pow, _, _)));
+            }
+            _ => panic!("Expected Div(x², 2), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn integrate_x_pow_2() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::BinOp(BinOp::Pow, Box::new(x.clone()), Box::new(SymExpr::Integer(2)));
+        let result = integrate(&expr, "x", 5).unwrap();
+        // ∫x² dx = x³/3
+        match result {
+            SymExpr::BinOp(BinOp::Div, left, right) => {
+                assert!(matches!(right.as_ref(), SymExpr::Integer(3)));
+                assert!(matches!(left.as_ref(), SymExpr::BinOp(BinOp::Pow, _, _)));
+            }
+            _ => panic!("Expected Div(x³, 3), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn integrate_sin_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "sin".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = integrate(&expr, "x", 5).unwrap();
+        // ∫sin(x) dx = -cos(x)
+        match result {
+            SymExpr::UnaryOp(UnaryOp::Neg, inner) => {
+                assert!(matches!(inner.as_ref(), SymExpr::MethodCall { method_name, .. } if method_name == "cos"));
+            }
+            _ => panic!("Expected Neg(cos(x)), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn integrate_by_parts_x_sin() {
+        let x = SymExpr::Var("x".into());
+        let sin_x = SymExpr::MethodCall {
+            method_name: "sin".into(),
+            self_expr: Box::new(x.clone()),
+            args: vec![],
+            args_names: vec![],
+        };
+        let expr = SymExpr::BinOp(BinOp::Mul, Box::new(x), Box::new(sin_x));
+        let result = integrate(&expr, "x", 5);
+        // ∫x*sin(x) dx should succeed (integration by parts)
+        assert!(result.is_ok(), "Integration by parts should succeed: {:?}", result);
+    }
+
+    #[test]
+    fn integrate_max_fails() {
+        let x = SymExpr::Var("x".into());
+        let five = SymExpr::Scalar(Scalar {
+            dimension: Dimension::zero(),
+            value: Float::new(5.0).unwrap(),
+        });
+        let expr = SymExpr::MethodCall {
+            method_name: "max".into(),
+            self_expr: Box::new(x),
+            args: vec![five],
+            args_names: vec![],
+        };
+        let result = integrate(&expr, "x", 5);
+        assert!(result.is_err(), "Integration of max should fail");
+        assert!(result.unwrap_err().contains("not integrable"));
+    }
+
+    #[test]
+    fn differentiate_abs_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "abs".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = differentiate(&expr, "x");
+        // d/dx|x| = signum(x) * 1
+        match result {
+            SymExpr::BinOp(BinOp::Mul, left, right) => {
+                assert!(matches!(left.as_ref(), SymExpr::MethodCall { method_name, .. } if method_name == "signum"));
+                assert!(matches!(right.as_ref(), SymExpr::Scalar(s) if s.value == Float::new(1.0).unwrap()));
+            }
+            _ => panic!("Expected Mul(signum(x), 1), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn differentiate_cbrt_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "cbrt".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = differentiate(&expr, "x");
+        // d/dx∛x = 1/(3*∛x²)
+        match result {
+            SymExpr::BinOp(BinOp::Div, _, right) => {
+                assert!(matches!(right.as_ref(), SymExpr::BinOp(BinOp::Mul, _, _)));
+            }
+            _ => panic!("Expected Div(1, 3*cbrt(x)²), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn differentiate_sqrt_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "sqrt".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = differentiate(&expr, "x");
+        // d/dx√x = 1/(2*√x)
+        match result {
+            SymExpr::BinOp(BinOp::Div, _, right) => {
+                assert!(matches!(right.as_ref(), SymExpr::BinOp(BinOp::Mul, _, _)));
+            }
+            _ => panic!("Expected Div(1, 2*sqrt(x)), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn differentiate_recip_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "recip".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = differentiate(&expr, "x");
+        // d/dx(1/x) = -1/x²
+        match result {
+            SymExpr::BinOp(BinOp::Div, left, right) => {
+                assert!(matches!(left.as_ref(), SymExpr::UnaryOp(UnaryOp::Neg, _)));
+                assert!(matches!(right.as_ref(), SymExpr::BinOp(BinOp::Pow, _, _)));
+            }
+            _ => panic!("Expected Div(-1, x²), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn differentiate_tanh_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "tanh".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = differentiate(&expr, "x");
+        // d/dxtanh(x) = 1 - tanh(x)²
+        match result {
+            SymExpr::BinOp(BinOp::Mul, left, right) => {
+                assert!(matches!(left.as_ref(), SymExpr::BinOp(BinOp::Sub, _, _)));
+                assert!(matches!(right.as_ref(), SymExpr::Scalar(s) if s.value == Float::new(1.0).unwrap()));
+            }
+            _ => panic!("Expected Mul(1-tanh(x)², 1), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn differentiate_signum_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "signum".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = differentiate(&expr, "x");
+        // d/dxsignum(x) = 0
+        assert!(matches!(result, SymExpr::Scalar(s) if s.value == Float::new(0.0).unwrap()));
+    }
+
+    #[test]
+    fn differentiate_pow_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "pow".into(),
+            self_expr: Box::new(x),
+            args: vec![SymExpr::Integer(3)],
+            args_names: vec![],
+        };
+        let result = differentiate(&expr, "x");
+        // d/dx(x³) = 3*x²
+        match result {
+            SymExpr::BinOp(BinOp::Mul, left, right) => {
+                assert!(matches!(left.as_ref(), SymExpr::BinOp(BinOp::Mul, _, _)));
+                assert!(matches!(right.as_ref(), SymExpr::Scalar(s) if s.value == Float::new(1.0).unwrap()));
+            }
+            _ => panic!("Expected Mul(3*x², 1), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn integrate_cbrt_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "cbrt".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = integrate(&expr, "x", 5).unwrap();
+        // ∫∛x dx = 0.75 * x^(4/3)
+        match result {
+            SymExpr::BinOp(BinOp::Mul, left, right) => {
+                assert!(matches!(left.as_ref(), SymExpr::Scalar(_)));
+                assert!(matches!(right.as_ref(), SymExpr::BinOp(BinOp::Pow, _, _)));
+            }
+            _ => panic!("Expected Mul(0.75, x^(4/3)), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn integrate_sqrt_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "sqrt".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = integrate(&expr, "x", 5).unwrap();
+        // ∫√x dx = 0.666667 * x^(3/2)
+        match result {
+            SymExpr::BinOp(BinOp::Mul, left, right) => {
+                assert!(matches!(left.as_ref(), SymExpr::Scalar(_)));
+                assert!(matches!(right.as_ref(), SymExpr::BinOp(BinOp::Pow, _, _)));
+            }
+            _ => panic!("Expected Mul(0.666667, x^(3/2)), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn integrate_recip_x() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::MethodCall {
+            method_name: "recip".into(),
+            self_expr: Box::new(x),
+            args: vec![],
+            args_names: vec![],
+        };
+        let result = integrate(&expr, "x", 5).unwrap();
+        // ∫(1/x) dx = log(x)
+        match result {
+            SymExpr::MethodCall { method_name, .. } => {
+                assert_eq!(method_name, "log");
+            }
+            _ => panic!("Expected log(x), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn derive_x_squared_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x*x; in f::derive(wanted_output = \"x\")(3)",
+            "6",
+        );
+    }
+
+    #[test]
+    fn derive_constant_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: 5.0; in f::derive(wanted_output = \"x\")(3)",
+            "0",
+        );
+    }
+
+    #[test]
+    fn integrate_x_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x; in f::integrate(wanted_output = \"x\")(3)",
+            "4.5",
+        );
+    }
+
+    #[test]
+    fn integrate_x_pow_2_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x*x; in f::integrate(wanted_output = \"x\")(3)",
+            "9",
+        );
+    }
+
+    #[test]
+    fn integrate_max_fails_e2e() {
+        let result = test_run(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x::max(other = 5); in f::integrate(wanted_output = \"x\")(0)",
+        );
+        assert!(result.is_err(), "Integration of max should fail");
+    }
+
+    #[test]
+    fn derive_abs_x_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x::abs(); in f::derive(wanted_output = \"x\")(5)",
+            "1",
+        );
+    }
+
+    #[test]
+    fn derive_cbrt_x_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x::cbrt(); in f::derive(wanted_output = \"x\")(1)",
+            "0.3333333333333333",
+        );
+    }
+
+    #[test]
+    fn derive_sqrt_x_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x::sqrt(); in f::derive(wanted_output = \"x\")(1)",
+            "0.5",
+        );
+    }
+
+    #[test]
+    fn derive_recip_x_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x::recip(); in f::derive(wanted_output = \"x\")(2)",
+            "-0.25",
+        );
+    }
+
+    #[test]
+    fn derive_signum_x_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x::signum(); in f::derive(wanted_output = \"x\")(5)",
+            "0",
+        );
+    }
+
+    #[test]
+    fn derive_pow_x_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x*x*x; in f::derive(wanted_output = \"x\")(2)",
+            "12",
+        );
+    }
+
+    #[test]
+    fn integrate_cbrt_x_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x::cbrt(); in f::integrate(wanted_output = \"x\")(1)",
+            "0.75",
+        );
+    }
+
+    #[test]
+    fn integrate_sqrt_x_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x::sqrt(); in f::integrate(wanted_output = \"x\")(1)",
+            "0.666667",
+        );
+    }
+
+    #[test]
+    fn integrate_recip_x_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x::recip(); in f::integrate(wanted_output = \"x\")(1)",
+            "0",
+        );
     }
 }

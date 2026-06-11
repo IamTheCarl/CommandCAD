@@ -28,6 +28,10 @@ pub enum SolveError {
     VariableAppearsMultipleTimes { variable: ImString },
     NonInvertibleOperation { operation: String, source: crate::compile::SourceReference },
     NoSolution { operation: String, source: crate::compile::SourceReference },
+    #[allow(dead_code)]
+    NotDifferentiable { operation: String, source: crate::compile::SourceReference },
+    #[allow(dead_code)]
+    NotIntegrable { operation: String, source: crate::compile::SourceReference },
 }
 
 impl std::error::Error for SolveError {}
@@ -51,6 +55,12 @@ impl std::fmt::Display for SolveError {
             SolveError::NoSolution { operation, .. } => {
                 write!(f, "no solution: {}", operation)
             }
+            SolveError::NotDifferentiable { operation, .. } => {
+                write!(f, "operation '{}' is not differentiable", operation)
+            }
+            SolveError::NotIntegrable { operation, .. } => {
+                write!(f, "operation '{}' is not integrable", operation)
+            }
         }
     }
 }
@@ -65,7 +75,7 @@ fn is_zero_scalar(expr: &SymExpr) -> bool {
 }
 
 /// Convert an Expression AST node to a SymExpr for symbolic manipulation.
-pub(super) fn expression_to_sym_expr(
+pub fn expression_to_sym_expr(
     expr: &AstNode<Expression>,
     context: &ExecutionContext,
 ) -> ExecutionResult<SymExpr> {

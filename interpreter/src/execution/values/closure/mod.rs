@@ -43,7 +43,7 @@ use crate::{
 
 use super::{Object, StaticType, StaticTypeName, StructDefinition, ValueType};
 pub mod solve;
-pub use solve::solve_for;
+pub use solve::{differentiate, integrate, solve_for};
 use enum_downcast::IntoVariant;
 
 #[derive(Debug, Default)]
@@ -70,7 +70,7 @@ impl BuiltinCallableDatabase {
         super::polygon::register_methods_and_functions(&mut database);
         crate::execution::export::register_methods_and_functions(&mut database);
         register_log_functions(&mut database);
-        register_closure_inverse_callable(&mut database);
+        register_closure_methods(&mut database);
 
         database
     }
@@ -274,6 +274,8 @@ impl Object for UserClosure {
     fn get_attribute(&self, context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
         match attribute {
             "inverse" => Ok(BuiltinFunction::new::<methods::Inverse>().into()),
+            "derive" => Ok(BuiltinFunction::new::<methods::Derive>().into()),
+            "integrate" => Ok(BuiltinFunction::new::<methods::Integrate>().into()),
             _ => Err(super::MissingAttributeError {
                 name: attribute.into(),
             }
@@ -377,6 +379,8 @@ impl StaticTypeName for UserClosure {
 
 mod methods {
     pub struct Inverse;
+    pub struct Derive;
+    pub struct Integrate;
 }
 
 /// The `Inverse` callable is invoked on a `UserClosure` via method syntax.
@@ -511,6 +515,274 @@ impl BuiltinCallable for methods::Inverse {
                 argument_type: crate::build_struct_definition!(
                     variadic: false,
                     (wanted_output: crate::execution::values::IString, result_name: crate::execution::values::IString = crate::execution::values::IString::from("original_result").into())
+                ),
+                return_type: ValueType::Closure(Arc::new(Signature {
+                    argument_type: crate::build_struct_definition!(
+                        variadic: false,
+                        (_dummy: crate::execution::values::IString)
+                    ),
+                    return_type: ValueType::Scalar(None),
+                })),
+            })
+        })
+    }
+
+    fn scope_type(&self) -> ScopeType {
+        ScopeType::Isolated
+    }
+}
+
+impl BuiltinCallable for methods::Derive {
+    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
+        let wanted_output: crate::execution::values::IString = argument
+            .get("wanted_output")
+            .ok_or_else(|| super::MissingAttributeError {
+                name: "wanted_output".into(),
+            }
+            .to_error(context))?
+            .clone()
+            .downcast::<crate::execution::values::IString>(context)?;
+
+        let _result_name: crate::execution::values::IString = argument
+            .get("result_name")
+            .map(|v| v.clone().downcast::<crate::execution::values::IString>(context))
+            .transpose()?
+            .unwrap_or_else(|| crate::execution::values::IString::from("original_result"));
+
+        let closure = context
+            .stack
+            .get_variable(
+                context.stack_trace,
+                vec![],
+                crate::execution::logging::LocatedStr {
+                    location: context.stack_trace.bottom().clone(),
+                    string: "self",
+                },
+            )
+            .map_err(|_| super::MissingAttributeError {
+                name: "self".into(),
+            }
+            .to_error(context))?
+            .clone()
+            .downcast::<UserClosure>(context)
+            .map_err(|_| super::DowncastError {
+                expected: "UserClosure".into(),
+                got: "Value".into(),
+            }
+            .to_error(context))?;
+
+        let target_param_type = Some(solve::ast_return_type(&closure.data.expression));
+
+        let return_type_for_target = closure
+            .data
+            .signature
+            .argument_type
+            .members
+            .iter()
+            .find_map(|(name, member)| {
+                if let ArgumentName::Named(s) = name {
+                    if s.as_str() == wanted_output.0.as_str() {
+                        return Some(member.ty.clone());
+                    }
+                }
+                None
+            });
+
+        let param_types: IndexMap<ImString, crate::execution::values::ValueType> = closure
+            .data
+            .signature
+            .argument_type
+            .members
+            .iter()
+            .filter_map(|(name, member)| {
+                if let ArgumentName::Named(s) = name {
+                    Some((s.clone(), member.ty.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let sym_body = solve::expression_to_sym_expr(&closure.data.expression, context)?;
+        let sym_body = solve::simplify_sym_expr(&sym_body);
+        let derivative = solve::differentiate(&sym_body, &wanted_output.0);
+
+        let formula = derivative.to_string();
+        let result = solve::SolveResult {
+            body: derivative,
+            captured: IndexMap::new(),
+            result_name: wanted_output.0.clone(),
+            target_param_name: wanted_output.0.clone(),
+            target_param_type,
+            return_type: return_type_for_target,
+            param_types,
+        };
+
+        let derived_closure = result.into_closure(context, &closure).map_err(|e| {
+            let msg = format!("Derivative body: {}\n{}", formula, e.ty);
+            crate::execution::errors::Error {
+                ty: Box::new(crate::execution::errors::StringError(msg)),
+                trace: e.trace,
+                failure_chain: e.failure_chain,
+            }
+        })?;
+
+        Ok(derived_closure.into())
+    }
+
+    fn name(&self) -> &str {
+        "UserClosure::derive"
+    }
+
+    fn signature(&self) -> &Arc<Signature> {
+        static SIGNATURE: OnceLock<Arc<Signature>> = OnceLock::new();
+        SIGNATURE.get_or_init(|| {
+            Arc::new(Signature {
+                argument_type: crate::build_struct_definition!(
+                    variadic: false,
+                    (wanted_output: crate::execution::values::IString, result_name: crate::execution::values::IString = crate::execution::values::IString::from("original_result").into())
+                ),
+                return_type: ValueType::Closure(Arc::new(Signature {
+                    argument_type: crate::build_struct_definition!(
+                        variadic: false,
+                        (_dummy: crate::execution::values::IString)
+                    ),
+                    return_type: ValueType::Scalar(None),
+                })),
+            })
+        })
+    }
+
+    fn scope_type(&self) -> ScopeType {
+        ScopeType::Isolated
+    }
+}
+
+impl BuiltinCallable for methods::Integrate {
+    fn call(&self, context: &ExecutionContext, argument: Dictionary) -> ExecutionResult<Value> {
+        let wanted_output: crate::execution::values::IString = argument
+            .get("wanted_output")
+            .ok_or_else(|| super::MissingAttributeError {
+                name: "wanted_output".into(),
+            }
+            .to_error(context))?
+            .clone()
+            .downcast::<crate::execution::values::IString>(context)?;
+
+        let max_recursion: i64 = argument
+            .get("max_recursion")
+            .map(|v| v.clone().downcast::<crate::execution::values::SignedInteger>(context))
+            .transpose()?
+            .map(|si| si.0)
+            .unwrap_or(5);
+
+        let max_recursion = max_recursion as usize;
+
+        let _result_name: crate::execution::values::IString = argument
+            .get("result_name")
+            .map(|v| v.clone().downcast::<crate::execution::values::IString>(context))
+            .transpose()?
+            .unwrap_or_else(|| crate::execution::values::IString::from("original_result"));
+
+        let closure = context
+            .stack
+            .get_variable(
+                context.stack_trace,
+                vec![],
+                crate::execution::logging::LocatedStr {
+                    location: context.stack_trace.bottom().clone(),
+                    string: "self",
+                },
+            )
+            .map_err(|_| super::MissingAttributeError {
+                name: "self".into(),
+            }
+            .to_error(context))?
+            .clone()
+            .downcast::<UserClosure>(context)
+            .map_err(|_| super::DowncastError {
+                expected: "UserClosure".into(),
+                got: "Value".into(),
+            }
+            .to_error(context))?;
+
+        let target_param_type = Some(solve::ast_return_type(&closure.data.expression));
+
+        let return_type_for_target = closure
+            .data
+            .signature
+            .argument_type
+            .members
+            .iter()
+            .find_map(|(name, member)| {
+                if let ArgumentName::Named(s) = name {
+                    if s.as_str() == wanted_output.0.as_str() {
+                        return Some(member.ty.clone());
+                    }
+                }
+                None
+            });
+
+        let param_types: IndexMap<ImString, crate::execution::values::ValueType> = closure
+            .data
+            .signature
+            .argument_type
+            .members
+            .iter()
+            .filter_map(|(name, member)| {
+                if let ArgumentName::Named(s) = name {
+                    Some((s.clone(), member.ty.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let sym_body = solve::expression_to_sym_expr(&closure.data.expression, context)?;
+        let sym_body = solve::simplify_sym_expr(&sym_body);
+
+        let integral = solve::integrate(&sym_body, &wanted_output.0, max_recursion).map_err(|e| {
+            crate::execution::errors::Error {
+                ty: Box::new(crate::execution::errors::StringError(e)),
+                trace: vec![context.stack_trace.bottom().clone()],
+                failure_chain: vec![],
+            }
+        })?;
+
+        let formula = integral.to_string();
+        let result = solve::SolveResult {
+            body: integral,
+            captured: IndexMap::new(),
+            result_name: wanted_output.0.clone(),
+            target_param_name: wanted_output.0.clone(),
+            target_param_type,
+            return_type: return_type_for_target,
+            param_types,
+        };
+
+        let integrated_closure = result.into_closure(context, &closure).map_err(|e| {
+            let msg = format!("Integral body: {}\n{}", formula, e.ty);
+            crate::execution::errors::Error {
+                ty: Box::new(crate::execution::errors::StringError(msg)),
+                trace: e.trace,
+                failure_chain: e.failure_chain,
+            }
+        })?;
+
+        Ok(integrated_closure.into())
+    }
+
+    fn name(&self) -> &str {
+        "UserClosure::integrate"
+    }
+
+    fn signature(&self) -> &Arc<Signature> {
+        static SIGNATURE: OnceLock<Arc<Signature>> = OnceLock::new();
+        SIGNATURE.get_or_init(|| {
+            Arc::new(Signature {
+                argument_type: crate::build_struct_definition!(
+                    variadic: false,
+                    (wanted_output: crate::execution::values::IString, max_recursion: crate::execution::values::SignedInteger = crate::execution::values::SignedInteger::from(5).into(), result_name: crate::execution::values::IString = crate::execution::values::IString::from("original_result").into())
                 ),
                 return_type: ValueType::Closure(Arc::new(Signature {
                     argument_type: crate::build_struct_definition!(
@@ -977,8 +1249,10 @@ pub fn register_log_functions(database: &mut BuiltinCallableDatabase) {
     );
 }
 
-fn register_closure_inverse_callable(database: &mut BuiltinCallableDatabase) {
+fn register_closure_methods(database: &mut BuiltinCallableDatabase) {
     database.register::<methods::Inverse>(Box::new(methods::Inverse));
+    database.register::<methods::Derive>(Box::new(methods::Derive));
+    database.register::<methods::Integrate>(Box::new(methods::Integrate));
 }
 
 #[cfg(test)]
