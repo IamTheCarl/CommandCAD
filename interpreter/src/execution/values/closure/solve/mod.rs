@@ -39,6 +39,11 @@ pub enum SymExpr {
         args: Vec<SymExpr>,
         args_names: Vec<crate::execution::values::dictionary::ArgumentName>,
     },
+    Vector(Vec<SymExpr>),
+    MemberAccess {
+        base: Box<SymExpr>,
+        member: ImString,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -565,6 +570,18 @@ pub fn differentiate(expr: &SymExpr, var: &str) -> SymExpr {
             dimension: Dimension::zero(),
             value: Float::new(0.0).unwrap(),
         }),
+      SymExpr::Vector(comps) => SymExpr::Vector(
+             comps.iter()
+                 .map(|c| differentiate(c, var))
+                 .collect()
+         ),
+        SymExpr::MemberAccess { base, member } => {
+            let deriv_base = differentiate(base.as_ref(), var);
+            SymExpr::MemberAccess {
+                base: Box::new(deriv_base),
+                member: member.clone(),
+            }
+        }
     }
 }
 
@@ -832,6 +849,20 @@ fn integrate_inner(expr: &SymExpr, var: &str, max_recursion: usize) -> Result<Sy
         SymExpr::UnaryOp(UnaryOp::Not, _) => {
             Err("operation 'Not' is not integrable".to_string())
         }
+        SymExpr::Vector(comps) => {
+            let mut results = Vec::with_capacity(comps.len());
+            for comp in comps {
+                results.push(integrate_inner(comp, var, max_recursion)?);
+            }
+            Ok(SymExpr::Vector(results))
+        }
+        SymExpr::MemberAccess { base, member } => {
+            let int_base = integrate_inner(base.as_ref(), var, max_recursion)?;
+            Ok(SymExpr::MemberAccess {
+                base: Box::new(int_base),
+                member: member.clone(),
+            })
+        }
     }
 }
 
@@ -1011,6 +1042,43 @@ fn format_sym_expr_with_parens(expr: &SymExpr, parent_precedence: u8, f: &mut st
                 }
                 write!(f, ")")
             }
+        }
+        SymExpr::Vector(comps) => {
+            if comps.len() == 2 {
+                write!(f, "Vector2(")?;
+                format_sym_expr_with_parens(&comps[0], 0, f)?;
+                write!(f, ", ")?;
+                format_sym_expr_with_parens(&comps[1], 0, f)?;
+            } else if comps.len() == 3 {
+                write!(f, "Vector3(")?;
+                format_sym_expr_with_parens(&comps[0], 0, f)?;
+                write!(f, ", ")?;
+                format_sym_expr_with_parens(&comps[1], 0, f)?;
+                write!(f, ", ")?;
+                format_sym_expr_with_parens(&comps[2], 0, f)?;
+            } else if comps.len() == 4 {
+                write!(f, "Vector4(")?;
+                format_sym_expr_with_parens(&comps[0], 0, f)?;
+                write!(f, ", ")?;
+                format_sym_expr_with_parens(&comps[1], 0, f)?;
+                write!(f, ", ")?;
+                format_sym_expr_with_parens(&comps[2], 0, f)?;
+                write!(f, ", ")?;
+                format_sym_expr_with_parens(&comps[3], 0, f)?;
+            } else {
+                write!(f, "Vector(")?;
+                for (i, comp) in comps.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    format_sym_expr_with_parens(comp, 0, f)?;
+                }
+            }
+            write!(f, ")")
+        }
+        SymExpr::MemberAccess { base, member } => {
+            format_sym_expr_with_parens(base, 0, f)?;
+            write!(f, ".{}", member)
         }
     }
 }
@@ -1231,6 +1299,8 @@ pub fn sym_expr_contains_var(expr: &SymExpr, var: &str) -> bool {
             sym_expr_contains_var(self_expr, var)
                 || args.iter().any(|a| sym_expr_contains_var(a, var))
         }
+  SymExpr::Vector(comps) => comps.iter().any(|c| sym_expr_contains_var(c, var)),
+        SymExpr::MemberAccess { base, member: _ } => sym_expr_contains_var(base, var),
     }
 }
 
@@ -1269,6 +1339,14 @@ fn collect_free_vars_inner(expr: &SymExpr, exclude: &str, vars: &mut Vec<ImStrin
             }
         }
         SymExpr::Scalar(_) | SymExpr::Integer(_) | SymExpr::Boolean(_) => {}
+        SymExpr::Vector(comps) => {
+            for comp in comps {
+                collect_free_vars_inner(comp, exclude, vars);
+            }
+        }
+        SymExpr::MemberAccess { base, member: _ } => {
+            collect_free_vars_inner(base, exclude, vars);
+        }
     }
 }
 
@@ -1292,10 +1370,10 @@ pub fn count_var_occurrences(expr: &SymExpr, var: &str) -> usize {
             count
         }
         SymExpr::Scalar(_) | SymExpr::Integer(_) | SymExpr::Boolean(_) => 0,
+ SymExpr::Vector(comps) => comps.iter().map(|c| count_var_occurrences(c, var)).sum(),
+        SymExpr::MemberAccess { base, member: _ } => count_var_occurrences(base, var),
     }
 }
-
-/// Apply algebraic simplification rules to a SymExpr.
 /// Post-order traversal: simplify children first, then apply rules at this node.
 pub fn simplify_sym_expr(expr: &SymExpr) -> SymExpr {
     match expr {
@@ -1319,6 +1397,13 @@ pub fn simplify_sym_expr(expr: &SymExpr) -> SymExpr {
             self_expr: Box::new(simplify_sym_expr(self_expr)),
             args: args.iter().map(simplify_sym_expr).collect(),
             args_names: args_names.clone(),
+        },
+    SymExpr::Vector(comps) => SymExpr::Vector(
+             comps.iter().map(simplify_sym_expr).collect()
+         ),
+        SymExpr::MemberAccess { base, member } => SymExpr::MemberAccess {
+            base: Box::new(simplify_sym_expr(base)),
+            member: member.clone(),
         },
         _ => expr.clone(),
     }
@@ -1476,6 +1561,7 @@ mod test {
     use super::*;
     use common_data_types::Dimension;
     use crate::execution::{run_assert_eq, test_run};
+    use super::algorithm::{substitute_result, sym_exprs_equal};
     
 
     #[test]
@@ -2312,6 +2398,383 @@ mod test {
         run_assert_eq(
             "let f = (x: std.scalar.Number) -> std.scalar.Number: x::recip(); in f::integrate(wanted_output = \"x\")(1)",
             "0",
+        );
+    }
+
+    #[test]
+    fn differentiate_vector2() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![
+            SymExpr::BinOp(BinOp::Mul, Box::new(x.clone()), Box::new(x.clone())),
+            SymExpr::Scalar(Scalar { dimension: Dimension::zero(), value: Float::new(3.0).unwrap() }),
+        ]);
+        let result = differentiate(&expr, "x");
+        match result {
+            SymExpr::Vector(comps) => {
+                assert_eq!(comps.len(), 2);
+                // d/dx(x*x) = x + x (product rule), d/dx(3) = 0
+                assert!(matches!(&comps[0], SymExpr::BinOp(BinOp::Add, _, _)));
+                assert!(matches!(&comps[1], SymExpr::Scalar(_)));
+            }
+            _ => panic!("Expected Vector result, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn differentiate_vector3() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![
+            x.clone(),
+            SymExpr::Integer(5),
+            SymExpr::BinOp(BinOp::Mul, Box::new(x.clone()), Box::new(x)),
+        ]);
+        let result = differentiate(&expr, "x");
+        match result {
+            SymExpr::Vector(comps) => {
+                assert_eq!(comps.len(), 3);
+                // d/dx(x) = 1, d/dx(5) = 0, d/dx(x*x) = 2x
+            }
+            _ => panic!("Expected Vector result, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn integrate_vector2() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![
+            x.clone(),
+            SymExpr::Integer(2),
+        ]);
+        let result = integrate(&expr, "x", 5).unwrap();
+        match result {
+            SymExpr::Vector(comps) => {
+                assert_eq!(comps.len(), 2);
+                // ∫x dx = 0.5*x^2, ∫2 dx = 2x
+            }
+            _ => panic!("Expected Vector result, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn integrate_vector3() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![
+            SymExpr::BinOp(BinOp::Mul, Box::new(x.clone()), Box::new(x.clone())),
+            x.clone(),
+            SymExpr::Integer(1),
+        ]);
+        let result = integrate(&expr, "x", 5).unwrap();
+        match result {
+            SymExpr::Vector(comps) => {
+                assert_eq!(comps.len(), 3);
+            }
+            _ => panic!("Expected Vector result, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn sym_expr_contains_var_in_vector() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![
+            x.clone(),
+            SymExpr::Integer(5),
+        ]);
+        assert!(sym_expr_contains_var(&expr, "x"));
+        assert!(!sym_expr_contains_var(&expr, "y"));
+    }
+
+    #[test]
+    fn count_var_occurrences_in_vector() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![
+            SymExpr::BinOp(BinOp::Mul, Box::new(x.clone()), Box::new(x.clone())),
+            x,
+        ]);
+        assert_eq!(count_var_occurrences(&expr, "x"), 3);
+    }
+
+    #[test]
+    fn collect_free_vars_in_vector() {
+        let x = SymExpr::Var("x".into());
+        let y = SymExpr::Var("y".into());
+        let expr = SymExpr::Vector(vec![x, y]);
+        let vars = collect_free_vars(&expr, "result");
+        assert!(vars.contains(&ImString::from("x")));
+        assert!(vars.contains(&ImString::from("y")));
+    }
+
+    #[test]
+    fn simplify_sym_expr_vector() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![
+            SymExpr::BinOp(BinOp::Mul, Box::new(x.clone()), Box::new(SymExpr::Integer(1))),
+            SymExpr::Integer(0),
+        ]);
+        let result = simplify_sym_expr(&expr);
+        match result {
+            SymExpr::Vector(comps) => {
+                assert_eq!(comps.len(), 2);
+                // x*1 → x, 0 stays 0
+            }
+            _ => panic!("Expected Vector result, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn infer_sym_expr_type_vector2() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![x, SymExpr::Integer(5)]);
+        let ty = infer_sym_expr_type(&expr);
+        assert!(matches!(ty, ValueType::Vector2(_)));
+    }
+
+    #[test]
+    fn infer_sym_expr_type_vector3() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![x, SymExpr::Integer(5), SymExpr::Integer(10)]);
+        let ty = infer_sym_expr_type(&expr);
+        assert!(matches!(ty, ValueType::Vector3(_)));
+    }
+
+    #[test]
+    fn infer_sym_expr_type_vector4() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![x, SymExpr::Integer(5), SymExpr::Integer(10), SymExpr::Integer(15)]);
+        let ty = infer_sym_expr_type(&expr);
+        assert!(matches!(ty, ValueType::Vector4(_)));
+    }
+
+    #[test]
+    fn display_vector2() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![x.clone(), SymExpr::Integer(5)]);
+        let s = expr.to_string();
+        assert!(s.contains("Vector2"));
+        assert!(s.contains("x"));
+        assert!(s.contains("5.0"));
+    }
+
+    #[test]
+    fn display_vector3() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![x.clone(), SymExpr::Integer(5), SymExpr::Integer(10)]);
+        let s = expr.to_string();
+        assert!(s.contains("Vector3"));
+    }
+
+    #[test]
+    fn display_vector4() {
+        let x = SymExpr::Var("x".into());
+        let expr = SymExpr::Vector(vec![x, SymExpr::Integer(1), SymExpr::Integer(2), SymExpr::Integer(3)]);
+        let s = expr.to_string();
+        assert!(s.contains("Vector4"));
+    }
+
+    #[test]
+    fn expression_to_sym_expr_vector2() {
+        let result = test_run(
+            "let v = (1.0, 2.0); in v",
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn expression_to_sym_expr_vector3() {
+        let result = test_run(
+            "let v = (1.0, 2.0, 3.0); in v",
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn differentiate_vector_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.vector2.Any: {x*x, x*3}; in f::derive(wanted_output = \"x\")(2)",
+            "{4, 3}",
+        );
+    }
+
+    #[test]
+    fn integrate_vector_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.vector2.Any: {x, x*2}; in f::integrate(wanted_output = \"x\")(3)",
+            "{4.5, 9}",
+        );
+    }
+
+    #[test]
+    fn differentiate_vector3_e2e() {
+        run_assert_eq(
+            "let f = (t: std.scalar.Number) -> std.vector3.Any: {t*t, t*t*t, t*5}; in f::derive(wanted_output = \"t\")(2)",
+            "{4, 12, 5}",
+        );
+    }
+
+#[test]
+    fn integrate_vector3_e2e() {
+        run_assert_eq(
+            "let f = (t: std.scalar.Number) -> std.vector3.Any: {t, t*t, t*t*t}; in f::integrate(wanted_output = \"t\")(1)",
+            "{0.5, 1/3.0, 1/4.0}",
+        );
+    }
+
+    #[test]
+    fn differentiate_member_access_vector() {
+        let result = test_run(
+            "let f = (v: std.vector2.Any) -> std.scalar.Number: v.x*v.x + v.y*v.y; in f::derive(wanted_output = \"v\")(1)",
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn sym_expr_member_access_display() {
+        let var_x = SymExpr::Var("x".into());
+        let member = SymExpr::MemberAccess {
+            base: Box::new(var_x),
+            member: "x".into(),
+        };
+        let s = member.to_string();
+        assert_eq!(s, "x.x");
+    }
+
+    #[test]
+    fn sym_expr_member_access_contains_var() {
+        let var_x = SymExpr::Var("x".into());
+        let member = SymExpr::MemberAccess {
+            base: Box::new(var_x),
+            member: "y".into(),
+        };
+        assert!(sym_expr_contains_var(&member, "x"));
+        assert!(!sym_expr_contains_var(&member, "z"));
+    }
+
+    #[test]
+    fn sym_expr_member_access_count_occurrences() {
+        let var_x = SymExpr::Var("x".into());
+        let member = SymExpr::MemberAccess {
+            base: Box::new(var_x),
+            member: "x".into(),
+        };
+        assert_eq!(count_var_occurrences(&member, "x"), 1);
+    }
+
+    #[test]
+    fn sym_expr_member_access_collect_free_vars() {
+        let var_x = SymExpr::Var("x".into());
+        let member = SymExpr::MemberAccess {
+            base: Box::new(var_x),
+            member: "y".into(),
+        };
+        let vars = collect_free_vars(&member, "target");
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars[0], "x");
+    }
+
+    #[test]
+    fn sym_expr_member_access_simplify() {
+        let x = SymExpr::Var("x".into());
+        let member = SymExpr::MemberAccess {
+            base: Box::new(SymExpr::BinOp(BinOp::Add, Box::new(x.clone()), Box::new(SymExpr::Scalar(Scalar { dimension: Dimension::zero(), value: Float::new(0.0).unwrap() })))),
+            member: "x".into(),
+        };
+        let simplified = simplify_sym_expr(&member);
+        match simplified {
+            SymExpr::MemberAccess { base, member: m } => {
+                assert_eq!(m, "x");
+                assert!(matches!(*base, SymExpr::Var(_)));
+            }
+            _ => panic!("Expected MemberAccess"),
+        }
+    }
+
+    #[test]
+    fn sym_expr_member_access_substitute() {
+        let x = SymExpr::Var("__result__".into());
+        let member = SymExpr::MemberAccess {
+            base: Box::new(x),
+            member: "x".into(),
+        };
+        let replacement = SymExpr::Scalar(Scalar { dimension: Dimension::zero(), value: Float::new(5.0).unwrap() });
+        let substituted = substitute_result(&member, &replacement);
+        match substituted {
+            SymExpr::MemberAccess { base, member: m } => {
+                assert_eq!(m, "x");
+                match *base {
+                    SymExpr::Scalar(s) => assert_eq!(s.value, 5.0),
+                    _ => panic!("Expected Scalar, got {:?}", base),
+                }
+            }
+            _ => panic!("Expected MemberAccess, got {:?}", substituted),
+        }
+    }
+
+    #[test]
+    fn sym_expr_member_access_equal() {
+        let x1 = SymExpr::Var("x".into());
+        let x2 = SymExpr::Var("x".into());
+        let m1 = SymExpr::MemberAccess { base: Box::new(x1), member: "y".into() };
+        let m2 = SymExpr::MemberAccess { base: Box::new(x2), member: "y".into() };
+        assert!(sym_exprs_equal(&m1, &m2));
+    }
+
+    #[test]
+    fn infer_sym_expr_type_member_access() {
+        let x = SymExpr::Var("x".into());
+        let member = SymExpr::MemberAccess {
+            base: Box::new(x),
+            member: "x".into(),
+        };
+        let ty = infer_sym_expr_type(&member);
+        assert!(matches!(ty, ValueType::Scalar(_)));
+    }
+
+    #[test]
+    fn differentiate_member_access() {
+        let x = SymExpr::Var("x".into());
+        let member = SymExpr::MemberAccess {
+            base: Box::new(SymExpr::BinOp(BinOp::Mul, Box::new(x.clone()), Box::new(x))),
+            member: "x".into(),
+        };
+        let deriv = differentiate(&member, "x");
+        match deriv {
+            SymExpr::MemberAccess { base, member: m } => {
+                assert_eq!(m, "x");
+                assert!(matches!(*base, SymExpr::BinOp(_, _, _)));
+            }
+            _ => panic!("Expected MemberAccess"),
+        }
+    }
+
+    #[test]
+    fn integrate_member_access() {
+        let x = SymExpr::Var("x".into());
+        let member = SymExpr::MemberAccess {
+            base: Box::new(x),
+            member: "y".into(),
+        };
+        let integrated = integrate(&member, "x", 5).unwrap();
+        match integrated {
+            SymExpr::MemberAccess { base, member: m } => {
+                assert_eq!(m, "y");
+                assert!(matches!(*base, SymExpr::BinOp(_, _, _)));
+            }
+            _ => panic!("Expected MemberAccess"),
+        }
+    }
+
+    #[test]
+    fn differentiate_member_access_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x*x; in f::derive(wanted_output = \"x\")(3)",
+            "6",
+        );
+    }
+
+    #[test]
+    fn integrate_member_access_e2e() {
+        run_assert_eq(
+            "let f = (x: std.scalar.Number) -> std.scalar.Number: x; in f::integrate(wanted_output = \"x\")(2)",
+            "2",
         );
     }
 }

@@ -335,10 +335,89 @@ fn sym_expr_to_expression(
                 )),
             ))
         }
+        super::SymExpr::Vector(comps) => {
+            let comp_exprs: Vec<AstNode<Expression>> = comps
+                .iter()
+                .map(|c| sym_expr_to_expression(c, context))
+                .collect::<Result<_, _>>()?;
+            
+            let len = comp_exprs.len();
+            match len {
+                2 => {
+                    let mut iter = comp_exprs.into_iter();
+                    let x = iter.next().unwrap();
+                    let y = iter.next().unwrap();
+                    Ok(AstNode::new_from_source(
+                        file.clone(),
+                        source_ref,
+                        Expression::Vector2(AstNode::new_from_source(
+                            file.clone(),
+                            source_ref,
+                            Box::new(crate::compile::Vector2 { x, y }),
+                        )),
+                    ))
+                }
+                3 => {
+                    let mut iter = comp_exprs.into_iter();
+                    let x = iter.next().unwrap();
+                    let y = iter.next().unwrap();
+                    let z = iter.next().unwrap();
+                    Ok(AstNode::new_from_source(
+                        file.clone(),
+                        source_ref,
+                        Expression::Vector3(AstNode::new_from_source(
+                            file.clone(),
+                            source_ref,
+                            Box::new(crate::compile::Vector3 { x, y, z }),
+                        )),
+                    ))
+                }
+                4 => {
+                    let mut iter = comp_exprs.into_iter();
+                    let x = iter.next().unwrap();
+                    let y = iter.next().unwrap();
+                    let z = iter.next().unwrap();
+                    let w = iter.next().unwrap();
+                    Ok(AstNode::new_from_source(
+                        file.clone(),
+                        source_ref,
+                        Expression::Vector4(AstNode::new_from_source(
+                            file.clone(),
+                            source_ref,
+                            Box::new(crate::compile::Vector4 { x, y, z, w }),
+                        )),
+                    ))
+                }
+                _ => Err(crate::execution::errors::Error {
+                    ty: Box::new(crate::execution::errors::StringError(
+                        format!("unsupported vector size: {}", len)
+                    )),
+                    trace: vec![source_ref.clone()],
+                    failure_chain: vec![],
+                }),
+            }
+        }
+        super::SymExpr::MemberAccess { base, member } => {
+            let base_expr = sym_expr_to_expression(base, context)?;
+            Ok(AstNode::new_from_source(
+                file.clone(),
+                source_ref,
+                Expression::MemberAccess(Box::new(AstNode::new_from_source(
+                    file.clone(),
+                    source_ref,
+                    crate::compile::MemberAccess {
+                        base: base_expr,
+                        member: AstNode::new_from_source(
+                            file.clone(),
+                            source_ref,
+                            member.clone(),
+                        ),
+                    },
+                ))),
+            ))
+        }
     }
 }
-
-/// Infer the ValueType of a SymExpr.
 pub fn infer_sym_expr_type(expr: &super::SymExpr) -> ValueType {
     match expr {
         super::SymExpr::Scalar(s) => ValueType::Scalar(Some(s.dimension)),
@@ -358,5 +437,17 @@ pub fn infer_sym_expr_type(expr: &super::SymExpr) -> ValueType {
                 ValueType::Scalar(None)
             }
         }
+        super::SymExpr::Vector(comps) => {
+            if comps.len() == 2 {
+                ValueType::Vector2(None)
+            } else if comps.len() == 3 {
+                ValueType::Vector3(None)
+            } else if comps.len() == 4 {
+                ValueType::Vector4(None)
+            } else {
+                ValueType::Scalar(None)
+            }
+        }
+        super::SymExpr::MemberAccess { .. } => ValueType::Scalar(None),
     }
 }

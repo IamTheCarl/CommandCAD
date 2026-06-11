@@ -571,9 +571,7 @@ impl BuiltinCallable for methods::Derive {
             }
             .to_error(context))?;
 
-        let target_param_type = Some(solve::ast_return_type(&closure.data.expression));
-
-        let return_type_for_target = closure
+       let target_param_type = closure
             .data
             .signature
             .argument_type
@@ -608,13 +606,14 @@ impl BuiltinCallable for methods::Derive {
         let derivative = solve::differentiate(&sym_body, &wanted_output.0);
 
         let formula = derivative.to_string();
+        let derived_return_type = closure.data.signature.return_type.clone();
         let result = solve::SolveResult {
             body: derivative,
             captured: IndexMap::new(),
             result_name: wanted_output.0.clone(),
             target_param_name: wanted_output.0.clone(),
             target_param_type,
-            return_type: return_type_for_target,
+            return_type: Some(derived_return_type),
             param_types,
         };
 
@@ -647,7 +646,7 @@ impl BuiltinCallable for methods::Derive {
                         variadic: false,
                         (_dummy: crate::execution::values::IString)
                     ),
-                    return_type: ValueType::Scalar(None),
+                    return_type: ValueType::Any,
                 })),
             })
         })
@@ -706,9 +705,7 @@ impl BuiltinCallable for methods::Integrate {
             }
             .to_error(context))?;
 
-        let target_param_type = Some(solve::ast_return_type(&closure.data.expression));
-
-        let return_type_for_target = closure
+        let target_param_type = closure
             .data
             .signature
             .argument_type
@@ -750,13 +747,14 @@ impl BuiltinCallable for methods::Integrate {
         })?;
 
         let formula = integral.to_string();
+        let integrated_return_type = closure.data.signature.return_type.clone();
         let result = solve::SolveResult {
             body: integral,
             captured: IndexMap::new(),
             result_name: wanted_output.0.clone(),
             target_param_name: wanted_output.0.clone(),
             target_param_type,
-            return_type: return_type_for_target,
+            return_type: Some(integrated_return_type),
             param_types,
         };
 
@@ -789,7 +787,7 @@ impl BuiltinCallable for methods::Integrate {
                         variadic: false,
                         (_dummy: crate::execution::values::IString)
                     ),
-                    return_type: ValueType::Scalar(None),
+                    return_type: ValueType::Any,
                 })),
             })
         })

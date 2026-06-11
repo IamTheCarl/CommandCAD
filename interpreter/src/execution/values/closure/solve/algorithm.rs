@@ -151,15 +151,39 @@ pub fn expression_to_sym_expr(
             })
         }
         Expression::Parenthesis(inner) => expression_to_sym_expr(inner, context),
+        Expression::Vector2(v) => {
+            Ok(SymExpr::Vector(vec![
+                expression_to_sym_expr(&v.node.x, context)?,
+                expression_to_sym_expr(&v.node.y, context)?,
+            ]))
+        }
+        Expression::Vector3(v) => {
+            Ok(SymExpr::Vector(vec![
+                expression_to_sym_expr(&v.node.x, context)?,
+                expression_to_sym_expr(&v.node.y, context)?,
+                expression_to_sym_expr(&v.node.z, context)?,
+            ]))
+        }
+        Expression::Vector4(v) => {
+            Ok(SymExpr::Vector(vec![
+                expression_to_sym_expr(&v.node.x, context)?,
+                expression_to_sym_expr(&v.node.y, context)?,
+                expression_to_sym_expr(&v.node.z, context)?,
+                expression_to_sym_expr(&v.node.w, context)?,
+            ]))
+        }
+        Expression::MemberAccess(member_access) => {
+            let base = expression_to_sym_expr(&member_access.node.base, context)?;
+            Ok(SymExpr::MemberAccess {
+                base: Box::new(base),
+                member: member_access.node.member.node.clone(),
+            })
+        }
         Expression::ClosureDefinition(_)
         | Expression::DictionaryConstruction(_)
         | Expression::If(_)
         | Expression::List(_)
-        | Expression::MemberAccess(_)
         | Expression::Self_(_)
-        | Expression::Vector2(_)
-        | Expression::Vector3(_)
-        | Expression::Vector4(_)
         | Expression::String(_)
         | Expression::StructDefinition(_)
         | Expression::FunctionCall(_)
@@ -267,19 +291,25 @@ pub fn ast_return_type(expr: &AstNode<Expression>) -> crate::execution::values::
             }
         }
         Expression::Parenthesis(inner) => ast_return_type(inner),
+        Expression::MemberAccess(_) => crate::execution::values::ValueType::Scalar(None),
         Expression::ClosureDefinition(_)
         | Expression::DictionaryConstruction(_)
         | Expression::If(_)
         | Expression::List(_)
-        | Expression::MemberAccess(_)
         | Expression::Self_(_)
-        | Expression::Vector2(_)
-        | Expression::Vector3(_)
-        | Expression::Vector4(_)
         | Expression::StructDefinition(_)
         | Expression::FunctionCall(_)
         | Expression::LetIn(_)
         | Expression::Malformed(_) => crate::execution::values::ValueType::Scalar(None),
+        Expression::Vector2(_) => {
+            crate::execution::values::ValueType::Vector2(None)
+        }
+        Expression::Vector3(_) => {
+            crate::execution::values::ValueType::Vector3(None)
+        }
+        Expression::Vector4(_) => {
+            crate::execution::values::ValueType::Vector4(None)
+        }
     }
 }
 
@@ -507,11 +537,42 @@ fn trace_inner(
                 context,
             ))
         }
+        SymExpr::Vector(comps) => {
+            let mut first_result: Option<SymExpr> = None;
+            for comp in comps {
+                let result = trace_inner(context, comp, target, result_name, db, &mut SymExpr::Var(result_name.clone()))?;
+                match &first_result {
+                    Some(first) => {
+                        if !sym_exprs_equal(first, &result) {
+                            return Err(SolveError::NonInvertibleOperation {
+                                operation: format!("vector with inconsistent component solutions for '{}'", target),
+                                source: crate::compile::SourceReference {
+                                    file: std::sync::Arc::new(std::path::PathBuf::from("solve")),
+                                    range: tree_sitter::Range { start_byte: 0, end_byte: 0, start_point: tree_sitter::Point { row: 0, column: 0 }, end_point: tree_sitter::Point { row: 0, column: 0 } },
+                                },
+                            }
+                            .to_error(context))
+                        }
+                    }
+                    None => { first_result = Some(result); }
+                }
+            }
+            first_result.ok_or_else(|| SolveError::VariableNotFound {
+                variable: target.into(),
+            }.to_error(context))
+        }
+        SymExpr::MemberAccess { base, member } => {
+            let mut new_accumulated = SymExpr::MemberAccess {
+                base: Box::new(accumulated.clone()),
+                member: member.clone(),
+            };
+            trace_inner(context, base.as_ref(), target, result_name, db, &mut new_accumulated)
+        }
     }
 }
 
 /// Substitute __result__ in an expression with the given value.
-fn substitute_result(expr: &SymExpr, replacement: &SymExpr) -> SymExpr {
+pub(crate) fn substitute_result(expr: &SymExpr, replacement: &SymExpr) -> SymExpr {
     match expr {
         SymExpr::Var(v) if v == "__result__" => replacement.clone(),
         SymExpr::Var(v) => SymExpr::Var(v.clone()),
@@ -545,6 +606,44 @@ fn substitute_result(expr: &SymExpr, replacement: &SymExpr) -> SymExpr {
                 .map(|a| substitute_result(a, replacement))
                 .collect(),
         },
+ SymExpr::Vector(comps) => SymExpr::Vector(
+             comps.iter().map(|c| substitute_result(c, replacement)).collect()
+         ),
+        SymExpr::MemberAccess { base, member } => SymExpr::MemberAccess {
+            base: Box::new(substitute_result(base, replacement)),
+            member: member.clone(),
+        },
+    }
+}
+
+/// Check if two SymExpr trees are structurally equal.
+pub(crate) fn sym_exprs_equal(a: &SymExpr, b: &SymExpr) -> bool {
+    match (a, b) {
+        (SymExpr::Var(va), SymExpr::Var(vb)) => va == vb,
+        (SymExpr::Scalar(sa), SymExpr::Scalar(sb)) => sa == sb,
+        (SymExpr::Integer(ia), SymExpr::Integer(ib)) => ia == ib,
+        (SymExpr::Boolean(ba), SymExpr::Boolean(bb)) => ba == bb,
+        (SymExpr::BinOp(opa, la, ra), SymExpr::BinOp(opb, lb, rb)) => {
+            opa == opb && sym_exprs_equal(la, lb) && sym_exprs_equal(ra, rb)
+        }
+        (SymExpr::BoolOp(opa, la, ra), SymExpr::BoolOp(opb, lb, rb)) => {
+            opa == opb && sym_exprs_equal(la, lb) && sym_exprs_equal(ra, rb)
+        }
+        (SymExpr::UnaryOp(opa, ia), SymExpr::UnaryOp(opb, ib)) => {
+            opa == opb && sym_exprs_equal(ia, ib)
+        }
+        (SymExpr::MethodCall { method_name: ma, self_expr: sa, args: aa, args_names: ana },
+         SymExpr::MethodCall { method_name: mb, self_expr: sb, args: ab, args_names: anb }) => {
+            ma == mb && sym_exprs_equal(sa, sb) && ana == anb && 
+            aa.len() == ab.len() && aa.iter().zip(ab.iter()).all(|(x, y)| sym_exprs_equal(x, y))
+        }
+        (SymExpr::Vector(va), SymExpr::Vector(vb)) => {
+            va.len() == vb.len() && va.iter().zip(vb.iter()).all(|(x, y)| sym_exprs_equal(x, y))
+        }
+        (SymExpr::MemberAccess { base: ba, member: ma }, SymExpr::MemberAccess { base: bb, member: mb }) => {
+            ma == mb && sym_exprs_equal(ba, bb)
+        }
+        _ => false,
     }
 }
 
@@ -610,6 +709,56 @@ fn evaluate_constant_expr(
                     .collect::<IndexMap<_, _>>(),
             );
             self_val.get_attribute(context, method_name)?.call(context, arg_dict)
+        }
+        SymExpr::Vector(comps) => {
+            let vals: Vec<common_data_types::Float> = comps
+                .iter()
+                .map(|c| {
+                    let v = evaluate_constant_expr(c, context).unwrap();
+                    match v {
+                        Value::Scalar(s) => s.value,
+                        _ => common_data_types::Float::new(0.0).unwrap(),
+                    }
+                })
+                .collect();
+            
+            let dim = comps.first()
+                .and_then(|c| {
+                    match c {
+                        SymExpr::Scalar(s) => Some(s.dimension),
+                        _ => None,
+                    }
+                })
+                .unwrap_or_else(common_data_types::Dimension::zero);
+            
+            if vals.len() == 2 {
+                Ok(Value::Vector2(super::super::super::vector::Vector2 {
+                    dimension: dim,
+                    value: nalgebra::Vector2::new(vals[0].into_inner(), vals[1].into_inner()),
+                }))
+            } else if vals.len() == 3 {
+                Ok(Value::Vector3(super::super::super::vector::Vector3 {
+                    dimension: dim,
+                    value: nalgebra::Vector3::new(vals[0].into_inner(), vals[1].into_inner(), vals[2].into_inner()),
+                }))
+            } else if vals.len() == 4 {
+                Ok(Value::Vector4(super::super::super::vector::Vector4 {
+                    dimension: dim,
+                    value: nalgebra::Vector4::new(vals[0].into_inner(), vals[1].into_inner(), vals[2].into_inner(), vals[3].into_inner()),
+                }))
+            } else {
+                Err(crate::execution::errors::Error {
+                    ty: Box::new(crate::execution::errors::StringError(
+                        format!("unsupported vector size: {}", vals.len())
+                    )),
+                    trace: vec![],
+                    failure_chain: vec![],
+                })
+            }
+        }
+        SymExpr::MemberAccess { base, member } => {
+            let base_val = evaluate_constant_expr(base, context)?;
+            base_val.get_attribute(context, member.as_str())
         }
     }
 }

@@ -412,6 +412,10 @@ fn extract_dimension(expr: &SymExpr) -> Dimension {
             let r = extract_dimension(right);
             if l == Dimension::zero() { r } else { l }
         }
+SymExpr::Vector(comps) => comps.first()
+            .map(extract_dimension)
+            .unwrap_or_else(Dimension::zero),
+        SymExpr::MemberAccess { base, member: _ } => extract_dimension(base),
     }
 }
 
