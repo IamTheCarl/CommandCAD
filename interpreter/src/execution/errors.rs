@@ -33,7 +33,7 @@ pub struct Error {
 
 impl Error {
     pub fn report(&self) -> Report<'_, SourceReference> {
-        let bottom = self.trace.first().expect("Error has no trace").clone();
+        let bottom = self.find_primary_source();
 
         let mut builder = Report::build(ReportKind::Error, bottom.clone());
         builder.set_message("Failed to evaluate");
@@ -42,6 +42,28 @@ impl Error {
         builder.with_helps(self.failure_chain.iter());
 
         builder.finish()
+    }
+}
+
+impl Error {
+    /// Find the most meaningful source reference for error reporting.
+    /// Prefers real files with non-zero ranges over synthetic sources (like "solve").
+    fn find_primary_source(&self) -> SourceReference {
+        // First try to find a trace entry that points to a real file with a meaningful range
+        for trace in self.trace.iter().rev() {
+            let file_name = trace.file.to_string_lossy();
+            let has_range = trace.range.start_byte != trace.range.end_byte;
+            // Skip synthetic sources and entries with zero ranges
+            if !file_name.starts_with('<')
+                && file_name != "solve"
+                && file_name != "repl.ccm"
+                && has_range
+            {
+                return trace.clone();
+            }
+        }
+        // Fall back to the first trace entry if no real file with range found
+        self.trace.first().expect("Error has no trace").clone()
     }
 }
 

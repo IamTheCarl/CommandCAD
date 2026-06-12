@@ -347,18 +347,7 @@ impl Object for UserClosure {
             .collect();
 
         context.stack_scope(ScopeType::Inherited, variables, |context| {
-            let result = execute_expression(context, &self.data.expression).map_err(|e| {
-                if let Some(formula) = &self.data.formula {
-                    let msg = format!("Inverse body: {}\n{}", formula, e.ty);
-                    crate::execution::errors::Error {
-                        ty: Box::new(crate::execution::errors::StringError(msg)),
-                        trace: e.trace,
-                        failure_chain: e.failure_chain,
-                    }
-                } else {
-                    e
-                }
-            })?;
+            let result = execute_expression(context, &self.data.expression)?;
 
             self.data
                 .signature
@@ -491,15 +480,7 @@ impl BuiltinCallable for methods::Inverse {
             param_types,
         )?;
 
-        let formula = result.body.to_string();
-        let inverse_closure = result.into_closure(context, &closure).map_err(|e| {
-            let msg = format!("Inverse body: {}\n{}", formula, e.ty);
-            crate::execution::errors::Error {
-                ty: Box::new(crate::execution::errors::StringError(msg)),
-                trace: e.trace,
-                failure_chain: e.failure_chain,
-            }
-        })?;
+        let inverse_closure = result.into_closure(context, &closure)?;
 
         Ok(inverse_closure.into())
     }
