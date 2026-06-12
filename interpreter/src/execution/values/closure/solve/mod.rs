@@ -1409,6 +1409,107 @@ pub fn simplify_sym_expr(expr: &SymExpr) -> SymExpr {
     }
 }
 
+/// Collect all factors from a Mul tree into a flat list.
+fn collect_mul_factors(expr: &SymExpr) -> Vec<&SymExpr> {
+    match expr {
+        SymExpr::BinOp(BinOp::Mul, left, right) => {
+            let mut factors = collect_mul_factors(left);
+            factors.extend(collect_mul_factors(right));
+            factors
+        }
+        _ => vec![expr],
+    }
+}
+
+/// Combine a list of factors into a simplified expression.
+/// Scalars are multiplied together, same variables are combined into powers.
+fn combine_factors(factors: Vec<&SymExpr>) -> SymExpr {
+    if factors.is_empty() {
+        return SymExpr::Scalar(Scalar {
+            dimension: Dimension::zero(),
+            value: Float::new(1.0).unwrap(),
+        });
+    }
+
+    let mut scalar_product: Option<(Dimension, Float)> = None;
+    let mut var_counts: IndexMap<ImString, i64> = IndexMap::new();
+
+    for factor in factors {
+        match factor {
+            SymExpr::Scalar(s) => {
+                let entry = scalar_product.get_or_insert((s.dimension, Float::new(1.0).unwrap()));
+                entry.0 = s.dimension;
+                entry.1 = Float::new(entry.1.into_inner() * s.value.into_inner()).unwrap();
+            }
+            SymExpr::Integer(i) => {
+                let entry = scalar_product.get_or_insert((Dimension::zero(), Float::new(1.0).unwrap()));
+                entry.1 = Float::new(entry.1.into_inner() * (*i as f64)).unwrap();
+            }
+            SymExpr::Var(v) => {
+                *var_counts.entry(v.clone()).or_insert(0) += 1;
+            }
+            SymExpr::BinOp(BinOp::Pow, base, exp) => {
+                // Handle existing powers: extract base variable and add exponent
+                if let SymExpr::Var(b) = base.as_ref() {
+                    if let SymExpr::Integer(n) = exp.as_ref() {
+                        *var_counts.entry(b.clone()).or_insert(0) += n;
+                    } else {
+                        // Complex exponent, keep as-is
+                        var_counts.insert(format!("__pow_{}_{}", b, exp).into(), 1);
+                    }
+                } else {
+                    var_counts.insert(format!("__pow_{:?}_", base).into(), 1);
+                }
+            }
+            _ => {
+                // Non-simple factor, keep as-is
+                var_counts.insert(format!("__factor_{:?}_", factor).into(), 1);
+            }
+        }
+    }
+
+    // Build the result expression
+    let mut parts: Vec<SymExpr> = Vec::new();
+
+    // Add scalar product if present
+    if let Some((dim, value)) = scalar_product {
+        parts.push(SymExpr::Scalar(Scalar { dimension: dim, value }));
+    }
+
+    // Add variable powers
+    for (var, count) in &var_counts {
+        if var.starts_with("__") {
+            // Placeholder for complex factors - skip for now
+            continue;
+        }
+        if *count == 1 {
+            parts.push(SymExpr::Var(var.clone()));
+        } else {
+            parts.push(SymExpr::BinOp(
+                BinOp::Pow,
+                Box::new(SymExpr::Var(var.clone())),
+                Box::new(SymExpr::Integer(*count)),
+            ));
+        }
+    }
+
+    // Combine all parts with Mul
+    match parts.len() {
+        0 => SymExpr::Scalar(Scalar {
+            dimension: Dimension::zero(),
+            value: Float::new(1.0).unwrap(),
+        }),
+        1 => parts.into_iter().next().unwrap(),
+        _ => {
+            let mut iter = parts.into_iter();
+            let first = iter.next().unwrap();
+            iter.fold(first, |acc, next| {
+                SymExpr::BinOp(BinOp::Mul, Box::new(acc), Box::new(next))
+            })
+        }
+    }
+}
+
 /// Apply identity and commutativity rules at a BinOp node.
 fn apply_binop_rules(op: &BinOp, left: &SymExpr, right: &SymExpr) -> SymExpr {
     match op {
@@ -1457,6 +1558,13 @@ fn apply_binop_rules(op: &BinOp, left: &SymExpr, right: &SymExpr) -> SymExpr {
             }
             if matches!(left, SymExpr::Integer(1)) {
                 return right.clone();
+            }
+            // Collect all factors from both sides and combine them
+            let mut factors = collect_mul_factors(left);
+            factors.extend(collect_mul_factors(right));
+            if factors.len() > 2 {
+                // Multiple factors - try to combine them
+                return combine_factors(factors);
             }
             SymExpr::BinOp(op.clone(), Box::new(left.clone()), Box::new(right.clone()))
         }
