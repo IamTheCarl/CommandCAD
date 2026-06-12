@@ -1,0 +1,51 @@
+# Engineering design examples using the inverse solver.
+#
+# These examples demonstrate practical engineering calculations where
+# you know the desired output and need to find the input parameters.
+
+[
+  # Stress: sigma = F / A, solve for required cross-sectional area.
+  # Given: max stress = 250 MPa, force = 50 kN
+  # Inverse: A = 50000 / 250e6 = 2e-4 m^2 = 200 mm^2
+  let stress = (force: std.scalar.Force, area: std.scalar.Area) -> std.scalar.Pressure:
+    force / area; in
+    stress::inverse(wanted_output = "area")(
+      force = 50e3N, original_result = 250e6Pa
+    ),
+
+  # Natural frequency of spring-mass: f = (1/(2*pi)) * sqrt(k/m)
+  # Given: target frequency = 5 Hz, mass = 10 kg
+  # Inverse: k = (2*pi*f)^2 * m = (2*pi*5)^2 * 10 = 98696 N/m (approx)
+  let natural_frequency = (mass: std.scalar.Mass, stiffness: std.scalar.Stiffness) -> std.scalar.Frequency:
+    (1.0 / (2 * 3.141592653589793)) * (stiffness / mass)::sqrt(); in
+    natural_frequency::inverse(wanted_output = "stiffness")(
+      mass = 10kg, original_result = 5Hz
+    ),
+
+  # Heat transfer: Q = h * A * delta_T
+  # Given: heat rate = 500W, h = 25 W/(m^2*K), delta_T = 50K
+  # Inverse: A = 500 / (25 * 50) = 0.4 m^2
+  let heat_transfer = (h_coeff: std.scalar.Power, area: std.scalar.Area, delta_temp: std.scalar.Temperature) -> std.scalar.Power:
+    h_coeff * area * delta_temp; in
+    heat_transfer::inverse(wanted_output = "area")(
+      h_coeff = 25W/'m^2'/'K', original_result = 500W, delta_temp = 50'K'
+    ),
+
+  # Bernoulli: P + 0.5*rho*v^2 = constant, solve for velocity.
+  # Given: pressure drop = 1000 Pa, rho = 1.225 kg/m^3
+  # Inverse: v = sqrt(2 * delta_P / rho) = sqrt(2*1000/1.225) = 40.41 m/s (approx)
+  let bernoulli_velocity = (density: std.scalar.Density, pressure_drop: std.scalar.Pressure) -> std.scalar.Velocity:
+    (2 * pressure_drop / density)::sqrt(); in
+    bernoulli_velocity::inverse(wanted_output = "x")(
+      density = 1.225kg/'m^3', original_result = 1000Pa
+    ),
+
+  # Centripetal acceleration: a = v^2 / r, solve for radius.
+  # Given: max acceleration = 9.81 m/s^2 (1g), velocity = 30 m/s
+  # Inverse: r = v^2 / a = 900 / 9.81 = 91.74m (approx)
+  let centripetal_accel = (velocity: std.scalar.Velocity, radius: std.scalar.Length) -> std.scalar.Acceleration:
+    velocity * velocity / radius; in
+    centripetal_accel::inverse(wanted_output = "radius")(
+      velocity = 30m/1s, original_result = 9.81m/'s^2'
+    ),
+]

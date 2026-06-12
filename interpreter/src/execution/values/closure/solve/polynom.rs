@@ -162,23 +162,23 @@ fn extract_monomial(expr: &SymExpr, target: &str) -> Option<(usize, SymExpr)> {
             None
         }
 
-        // Product: collect scalar factors and check remaining part
+        // Product: recursively extract power and coefficient from all factors
         SymExpr::BinOp(BinOpType::Mul, left, right) => {
-            let (_scalar_factors, remaining) = collect_scalar_factors(right, target);
-            if let Some((power, remaining_coeff)) = extract_monomial(remaining.as_ref(), target) {
-                // Multiply scalar_factors with the coefficient
-                let coeff = multiply_scalar_exprs(left, &remaining_coeff)?;
-                Some((power, coeff))
+            let left_result = extract_monomial(left.as_ref(), target)?;
+            let right_result = extract_monomial(right.as_ref(), target)?;
+
+            // Combine: add powers, multiply coefficients
+            let total_power = left_result.0 + right_result.0;
+            let coeff = if left_result.0 > 0 && right_result.0 > 0 {
+                // Both sides contain the target variable - this is still a monomial
+                // as long as they're the same variable (e.g., x * x = x^2)
+                multiply_scalar_exprs(&left_result.1, &right_result.1)?
+            } else if left_result.0 > 0 {
+                multiply_scalar_exprs(&left_result.1, &right_result.1)?
             } else {
-                // Try left as the main part, right as scalar factors
-                let (_scalar_factors2, remaining2) = collect_scalar_factors(left, target);
-                if let Some((power, remaining_coeff)) = extract_monomial(remaining2.as_ref(), target) {
-                    let coeff = multiply_scalar_exprs(right, &remaining_coeff)?;
-                    Some((power, coeff))
-                } else {
-                    None
-                }
-            }
+                multiply_scalar_exprs(&right_result.1, &left_result.1)?
+            };
+            Some((total_power, coeff))
         }
 
         // Scalar constant: (0, scalar_value)
@@ -198,64 +198,6 @@ fn extract_monomial(expr: &SymExpr, target: &str) -> Option<(usize, SymExpr)> {
         }
 
         _ => None,
-    }
-}
-
-/// Recursively collect scalar factors from a Mul tree.
-/// Returns (product_of_scalars, remaining_non_scalar_part).
-#[allow(clippy::only_used_in_recursion)]
-fn collect_scalar_factors(expr: &SymExpr, target: &str) -> (SymExpr, Box<SymExpr>) {
-    match expr {
-        SymExpr::BinOp(BinOpType::Mul, left, right) => {
-            let (left_scalar, left_remaining) = collect_scalar_factors(left, target);
-            let (right_scalar, right_remaining) = collect_scalar_factors(right, target);
-
-            // If both sides have non-scalar remaining parts, this is not a monomial
-            let is_left_scalar = is_scalar_expr(&left_remaining);
-            let is_right_scalar = is_scalar_expr(&right_remaining);
-
-            if is_left_scalar && is_right_scalar {
-                // Both are scalars, multiply them
-                let product = multiply_scalar_exprs(&left_scalar, &right_scalar)
-                    .unwrap_or(SymExpr::Scalar(one_scalar()));
-                (product, Box::new(SymExpr::Scalar(one_scalar())))
-            } else if is_left_scalar {
-                // Left is scalar, right has the variable
-                let product = multiply_scalar_exprs(&left_scalar, &right_scalar)
-                    .unwrap_or(right_scalar);
-                (product, right_remaining)
-            } else if is_right_scalar {
-                // Right is scalar, left has the variable
-                let product = multiply_scalar_exprs(&left_scalar, &right_scalar)
-                    .unwrap_or(left_scalar);
-                (product, left_remaining)
-            } else {
-                // Both have non-scalar parts — not a monomial
-                (SymExpr::Scalar(one_scalar()), Box::new(expr.clone()))
-            }
-        }
-        _ => {
-            // Leaf node
-            if is_scalar_expr(expr) {
-                (expr.clone(), Box::new(SymExpr::Scalar(one_scalar())))
-            } else {
-                (SymExpr::Scalar(one_scalar()), Box::new(expr.clone()))
-            }
-        }
-    }
-}
-
-/// Check if a SymExpr is a scalar (no variable references).
-fn is_scalar_expr(expr: &SymExpr) -> bool {
-    match expr {
-        SymExpr::Scalar(_) | SymExpr::Integer(_) => true,
-        SymExpr::Var(_) => false,
-        SymExpr::BinOp(_, left, right) => is_scalar_expr(left) && is_scalar_expr(right),
-        SymExpr::UnaryOp(_, inner) => is_scalar_expr(inner),
-        SymExpr::MethodCall { self_expr, args, .. } => {
-            is_scalar_expr(self_expr) && args.iter().all(is_scalar_expr)
-        }
-        _ => false,
     }
 }
 

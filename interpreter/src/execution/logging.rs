@@ -268,16 +268,32 @@ pub enum LogLevel {
     Warning,
 }
 
-pub struct ExecutionFileCache<'i>(pub &'i HashMap<Arc<PathBuf>, Source<ImString>>);
+pub struct ExecutionFileCache<'i> {
+    pub sources: &'i HashMap<Arc<PathBuf>, Source<ImString>>,
+    synthetic: HashMap<Arc<PathBuf>, Source<ImString>>,
+}
+
+impl<'i> ExecutionFileCache<'i> {
+    pub fn new(sources: &'i HashMap<Arc<PathBuf>, Source<ImString>>) -> Self {
+        Self {
+            sources,
+            synthetic: HashMap::new(),
+        }
+    }
+}
 
 impl<'i> Cache<Arc<PathBuf>> for ExecutionFileCache<'i> {
     type Storage = ImString;
 
-    fn fetch(&mut self, id: &Arc<PathBuf>) -> Result<&Source<Self::Storage>, impl std::fmt::Debug> {
-        if let Some(source) = self.0.get(id) {
+    #[allow(refining_impl_trait)]
+    fn fetch(&mut self, id: &Arc<PathBuf>) -> Result<&Source<Self::Storage>, ()> {
+        if let Some(source) = self.sources.get(id) {
             Ok(source)
         } else {
-            Err("File was never loaded during execution")
+            let synthetic = self.synthetic.entry(id.clone()).or_insert_with(|| {
+                Source::from(ImString::from(format!("<synthetic file: {}>", id.display())))
+            });
+            Ok(synthetic)
         }
     }
 

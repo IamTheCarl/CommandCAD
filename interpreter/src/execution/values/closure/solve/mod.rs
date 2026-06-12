@@ -1206,10 +1206,10 @@ impl InverseOp for BoolOp {
 }
 
 impl InverseOp for UnaryOp {
-    fn isolate(&self, _target_is_left: bool, sibling: &SymExpr) -> SymExpr {
+    fn isolate(&self, _target_is_left: bool, _sibling: &SymExpr) -> SymExpr {
         match self {
-            UnaryOp::Neg => SymExpr::UnaryOp(UnaryOp::Neg, Box::new(sibling.clone())),
-            UnaryOp::Not => SymExpr::UnaryOp(UnaryOp::Not, Box::new(sibling.clone())),
+            UnaryOp::Neg => SymExpr::UnaryOp(UnaryOp::Neg, Box::new(SymExpr::Var("__result__".into()))),
+            UnaryOp::Not => SymExpr::UnaryOp(UnaryOp::Not, Box::new(SymExpr::Var("__result__".into()))),
         }
     }
 

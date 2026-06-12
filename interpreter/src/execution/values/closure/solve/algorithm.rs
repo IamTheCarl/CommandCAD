@@ -785,7 +785,7 @@ pub fn solve_for(
     // Simplify common non-linear patterns (x*x → x^2, x+x → x*2, etc.)
     let sym_body = super::simplify_sym_expr(&sym_body);
 
-    // Try polynomial solving for degree 2-3 with mixed terms.
+  // Try polynomial solving for degree 2-3 with mixed terms.
     // Pure squaring (x*x) and pure cubing (x*x*x) are handled by the old trace_and_inverse path.
     if let Some(poly) = super::extract_polynomial(&sym_body, target, &result_name) {
         let has_linear_or_lower = match poly.degree() {

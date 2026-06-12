@@ -1,0 +1,49 @@
+# Exponential and logarithmic inverse solver examples.
+#
+# The solver applies inverse functions: exp <-> log, sqrt <-> square,
+# cbrt <-> cube.
+
+[
+  # Solve exp(x) = result for x.
+  # Given: f(x) = exp(x), result = e^2 (approximately 7.389)
+  # Inverse: x = log(e^2) = 2
+  let f = (x: std.scalar.Length) -> std.scalar.Length: x::exp(); in
+    f::inverse(wanted_output = "x")(2.718281828459045 * 2.718281828459045),
+
+  # Solve log(x) = result for x.
+  # Given: f(x) = log(x), result = 3
+  # Inverse: x = exp(3) = approximately 20.086
+  let g = (x: std.scalar.Length) -> std.scalar.Length: x::log(); in
+    g::inverse(wanted_output = "x")(3),
+
+  # Solve sqrt(x) = result for x.
+  # Given: f(x) = sqrt(x), result = 5m
+  # Inverse: x = 5^2 = 25 m^2
+  let h = (x: std.scalar.Area) -> std.scalar.Length: x::sqrt(); in
+    h::inverse(wanted_output = "x")(5m),
+
+  # Solve cbrt(x) = result for x.
+  # Given: f(x) = cbrt(x), result = 4m
+  # Inverse: x = 4^3 = 64 m^3
+  let i = (x: std.scalar.Volume) -> std.scalar.Length: x::cbrt(); in
+    i::inverse(wanted_output = "x")(4m),
+
+  # Solve sqrt(x*x + y*y) = result for x (Pythagorean with sqrt).
+  # Given: result = 5m, y = 3m
+  # Inverse: x = sqrt(25 - 9) = sqrt(16) = 4m
+  let j = (x: std.scalar.Length, y: std.scalar.Length) -> std.scalar.Length:
+    (x * x + y * y)::sqrt(); in
+    j::inverse(wanted_output = "x")(y = 3m, original_result = 5m),
+
+  # Solve exp(x) * coefficient = result for x.
+  # Given: f(x) = exp(x) * 2, result = 2*e (approximately 5.437)
+  # Inverse: x = log(2*e / 2) = log(e) = 1
+  let k = (x: std.scalar.Length) -> std.scalar.Length: x::exp() * 2; in
+    k::inverse(wanted_output = "x")(2.718281828459045 * 2),
+
+  # Solve log(x) + offset = result for x.
+  # Given: f(x) = log(x) + 1, result = 4
+  # Inverse: x = exp(4 - 1) = exp(3) = approximately 20.086
+  let l = (x: std.scalar.Length) -> std.scalar.Length: x::log() + 1; in
+    l::inverse(wanted_output = "x")(4),
+]

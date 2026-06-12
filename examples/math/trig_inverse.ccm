@@ -1,0 +1,61 @@
+# Trigonometric inverse solver examples.
+#
+# The solver applies inverse trig functions (asin, acos, atan) to
+# isolate the target variable when it appears inside a trig call.
+
+[
+  # Solve sin(x) = result for x.
+  # Given: f(x) = sin(x), result = 0.5
+  # Inverse: x = asin(0.5) = 30deg (or pi/6 radians)
+  let f = (x: std.scalar.Angle) -> std.scalar.Length: x::sin(); in
+    f::inverse(wanted_output = "x")(0.5),
+
+  # Solve cos(x) = result for x.
+  # Given: f(x) = cos(x), result = 0.5
+  # Inverse: x = acos(0.5) = 60deg (or pi/3 radians)
+  let g = (x: std.scalar.Angle) -> std.scalar.Length: x::cos(); in
+    g::inverse(wanted_output = "x")(0.5),
+
+  # Solve tan(x) = result for x.
+  # Given: f(x) = tan(x), result = 1
+  # Inverse: x = atan(1) = 45deg (or pi/4 radians)
+  let h = (x: std.scalar.Angle) -> std.scalar.Length: x::tan(); in
+    h::inverse(wanted_output = "x")(1),
+
+  # Solve sin(x) + offset = result for x.
+  # Given: f(x) = sin(x) + 0.5, result = 1.0
+  # Inverse: x = asin(1.0 - 0.5) = asin(0.5) = 30deg
+  let i = (x: std.scalar.Angle) -> std.scalar.Length: x::sin() + 0.5; in
+    i::inverse(wanted_output = "x")(1.0),
+
+  # Solve cos(x) - offset = result for x.
+  # Given: f(x) = cos(x) - 0.2, result = 0.3
+  # Inverse: x = acos(0.3 + 0.2) = acos(0.5) = 60deg
+  let j = (x: std.scalar.Angle) -> std.scalar.Length: x::cos() - 0.2; in
+    j::inverse(wanted_output = "x")(0.3),
+
+  # Solve tan(x) * coefficient = result for x.
+  # Given: f(x) = tan(x) * 2, result = 1
+  # Inverse: x = atan(1/2) = 26.565deg (approx)
+  let k = (x: std.scalar.Angle) -> std.scalar.Length: x::tan() * 2; in
+    k::inverse(wanted_output = "x")(1),
+
+  # Inverted pendulum angle from horizontal component.
+  # Given: horizontal = length * cos(angle), solve for angle.
+  # Given: horizontal = 5m, length = 10m
+  # Inverse: angle = acos(5/10) = acos(0.5) = 60deg
+  let pendulum_horizontal = (length: std.scalar.Length, angle: std.scalar.Angle) -> std.scalar.Length:
+    length * (angle::cos()); in
+    pendulum_horizontal::inverse(wanted_output = "angle")(
+      length = 10m, original_result = 5m
+    ),
+
+  # Inclined plane: height = length * sin(angle), solve for angle.
+  # Given: height = 3m, length = 5m
+  # Inverse: angle = asin(3/5) = 36.87deg (approx)
+  let inclined_height = (length: std.scalar.Length, angle: std.scalar.Angle) -> std.scalar.Length:
+    length * (angle::sin()); in
+    inclined_height::inverse(wanted_output = "angle")(
+      length = 5m, original_result = 3m
+    ),
+]

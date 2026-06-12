@@ -1,0 +1,62 @@
+# Multi-parameter inverse solver examples.
+#
+# When a closure has multiple parameters, the inverse solver can solve
+# for one variable while using captured values for the others.
+# This is powerful for design exploration: fix some parameters and
+# solve for the one you need.
+
+[
+  # Rectangle area: A = w * h, solve for width given area and height.
+  # Given: area = 50 m^2, height = 5m
+  # Inverse: width = 50 / 5 = 10m
+  let rectangle_area = (width: std.scalar.Length, height: std.scalar.Length) -> std.scalar.Area:
+    width * height; in
+    rectangle_area::inverse(wanted_output = "width")(
+      height = 5m, original_result = 50'm^2'
+    ),
+
+  # Rectangle perimeter: P = 2*(w + h), solve for width.
+  # Given: perimeter = 30m, height = 5m
+  # Inverse: width = 30/2 - 5 = 10m
+  let rectangle_perimeter = (width: std.scalar.Length, height: std.scalar.Length) -> std.scalar.Length:
+    2 * (width + height); in
+    rectangle_perimeter::inverse(wanted_output = "width")(
+      height = 5m, original_result = 30m
+    ),
+
+  # Triangle area: A = 0.5 * base * height, solve for base.
+  # Given: area = 20 m^2, height = 8m
+  # Inverse: base = 2 * 20 / 8 = 5m
+  let triangle_area = (base: std.scalar.Length, height: std.scalar.Length) -> std.scalar.Area:
+    0.5 * base * height; in
+    triangle_area::inverse(wanted_output = "base")(
+      height = 8m, original_result = 20'm^2'
+    ),
+
+  # Ohm's law: V = I * R, solve for resistance.
+  # Given: voltage = 12V, current = 2A
+  # Inverse: R = 12 / 2 = 6 ohms
+  let ohms_law = (current: std.scalar.Current, resistance: std.scalar.Resistance) -> std.scalar.Voltage:
+    current * resistance; in
+    ohms_law::inverse(wanted_output = "resistance")(
+      current = 2A, original_result = 12V
+    ),
+
+  # Power law: P = V^2 / R, solve for voltage.
+  # Given: power = 100W, resistance = 50 ohms
+  # Inverse: V = sqrt(100 * 50) = sqrt(5000) = 70.71V (approx)
+  let power_law = (voltage: std.scalar.Voltage, resistance: std.scalar.Resistance) -> std.scalar.Power:
+    voltage * voltage / resistance; in
+    power_law::inverse(wanted_output = "voltage")(
+      resistance = 50, original_result = 100W
+    ),
+
+  # Kinematic equation: v = u + a*t, solve for acceleration.
+  # Given: final_velocity = 20m/s, initial = 5m/s, time = 3s
+  # Inverse: a = (20 - 5) / 3 = 5 m/s^2
+  let kinematic_velocity = (initial: std.scalar.Velocity, accel: std.scalar.Acceleration, time: std.scalar.Time) -> std.scalar.Velocity:
+    initial + accel * time; in
+    kinematic_velocity::inverse(wanted_output = "accel")(
+      initial = 5m/1s, time = 3s, original_result = 20m/1s
+    ),
+]

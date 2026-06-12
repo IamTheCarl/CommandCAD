@@ -1,0 +1,52 @@
+# Error cases and edge conditions for the inverse solver.
+#
+# These examples demonstrate situations where the inverse solver cannot
+# find a solution, helping users understand the solver's limitations.
+#
+# Note: This file is expected to fail when run via `ccad file`.
+# The errors demonstrate the solver's behavior for non-invertible expressions.
+
+[
+  # Non-invertible: x - x = 0 (variable appears in both branches of subtraction)
+  # The expression simplifies to a constant (0), so there is no unique solution.
+  # This will raise NoSolution because the result is always 0 regardless of x.
+  let f = (x: std.scalar.Length) -> std.scalar.Length: x - x; in
+    f::inverse(wanted_output = "x"),
+
+  # Non-invertible: x - x + 5 = 5 (simplifies to constant 5)
+  # Again, the expression is independent of x, so no solution exists.
+  let g = (x: std.scalar.Length) -> std.scalar.Length: x - x + 5; in
+    g::inverse(wanted_output = "x"),
+
+  # Non-invertible: x * x * x * x (degree 4 polynomial)
+  # The solver only handles degree 2-3 polynomials. Degree 4+ falls through
+  # and fails because the variable appears in multiple Add/Sub branches.
+  let h = (x: std.scalar.Length) -> std.scalar.Length: x * x * x * x; in
+    h::inverse(wanted_output = "x"),
+
+  # Non-invertible: sin(x) * cos(x) (product of two non-invertible operations)
+  # The solver cannot handle products of trig functions.
+  let i = (x: std.scalar.Angle) -> std.scalar.Length: x::sin() * x::cos(); in
+    i::inverse(wanted_output = "x"),
+
+  # Non-invertible: x + sin(x) (variable appears in both linear and trig contexts)
+  # The variable appears in multiple branches of the Add tree.
+  let j = (x: std.scalar.Length) -> std.scalar.Length: x + x::sin(); in
+    j::inverse(wanted_output = "x"),
+
+  # Non-invertible: sin(sin(x)) (nested trig with same function)
+  # The solver can handle one level of method nesting but not repeated
+  # application of the same non-linear operation.
+  let k = (x: std.scalar.Angle) -> std.scalar.Length: x::sin()::sin(); in
+    k::inverse(wanted_output = "x"),
+
+  # Non-invertible: abs(x) (absolute value has no unique inverse)
+  # Both x=5 and x=-5 give abs(x)=5, so the inverse is ambiguous.
+  let l = (x: std.scalar.Length) -> std.scalar.Length: x::abs(); in
+    l::inverse(wanted_output = "x")(5m),
+
+  # Non-invertible: x * sin(x) (variable appears in both linear and trig contexts)
+  # The variable is multiplied by a function of itself.
+  let m = (x: std.scalar.Length) -> std.scalar.Length: x * x::sin(); in
+    m::inverse(wanted_output = "x"),
+]

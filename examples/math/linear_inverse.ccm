@@ -1,0 +1,49 @@
+# Linear inverse solver examples.
+#
+# The solver walks the expression tree and applies inverse operations
+# to isolate the target variable. This covers addition, subtraction,
+# multiplication, division, and unary negation.
+
+[
+  # Solve x + c = result for x.
+  # Given: f(x) = x + 5m, result = 90m
+  # Inverse: x = result - 5m = 85m
+  let f = (x: std.scalar.Length) -> std.scalar.Length: x + 5m; in
+    f::inverse(wanted_output = "x")(90m),
+
+  # Solve x - c = result for x.
+  # Given: f(x) = x - 10m, result = 40m
+  # Inverse: x = result + 10m = 50m
+  let g = (x: std.scalar.Length) -> std.scalar.Length: x - 10m; in
+    g::inverse(wanted_output = "x")(40m),
+
+  # Solve x * c = result for x.
+  # Given: f(x) = x * 3, result = 15m
+  # Inverse: x = result / 3 = 5m
+  let h = (x: std.scalar.Length) -> std.scalar.Length: x * 3; in
+    h::inverse(wanted_output = "x")(15m),
+
+  # Solve x / c = result for x.
+  # Given: f(x) = x / 4, result = 2m
+  # Inverse: x = result * 4 = 8m
+  let i = (x: std.scalar.Length) -> std.scalar.Length: x / 4; in
+    i::inverse(wanted_output = "x")(2m),
+
+  # Solve -x = result for x.
+  # Given: f(x) = -x, result = -7m
+  # Inverse: x = -result = 7m (negation is self-inverse)
+  let j = (x: std.scalar.Length) -> std.scalar.Length: -x; in
+    j::inverse(wanted_output = "x")(-7m),
+
+  # Chain of linear operations: x * 2 + 3.
+  # Given: f(x) = x * 2 + 3m, result = 13m
+  # Inverse: x = (result - 3m) / 2 = 5m
+  let k = (x: std.scalar.Length) -> std.scalar.Length: x * 2 + 3m; in
+    k::inverse(wanted_output = "x")(13m),
+
+  # Chain of linear operations: x / 2 - 1m.
+  # Given: f(x) = x / 2 - 1m, result = 4m
+  # Inverse: x = (result + 1m) * 2 = 10m
+  let l = (x: std.scalar.Length) -> std.scalar.Length: x / 2 - 1m; in
+    l::inverse(wanted_output = "x")(4m),
+]

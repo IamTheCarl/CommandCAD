@@ -135,7 +135,7 @@ fn process_file(file: PathBuf) -> Result<()> {
 
             let report = error.report();
             report
-                .eprint(ExecutionFileCache(&file_cache))
+                .eprint(ExecutionFileCache::new(&file_cache))
                 .context("Failed to format error message")?;
         }
     }

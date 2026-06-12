@@ -1,0 +1,42 @@
+# Hyperbolic function inverse solver examples.
+#
+# The solver applies inverse hyperbolic functions (asinh, acosh, atanh)
+# to isolate the target variable when it appears inside a hyperbolic call.
+
+[
+  # Solve sinh(x) = result for x.
+  # Given: f(x) = sinh(x), result = 1
+  # Inverse: x = asinh(1) = approximately 0.881
+  let f = (x: std.scalar.Length) -> std.scalar.Length: x::sinh(); in
+    f::inverse(wanted_output = "x")(1),
+
+  # Solve cosh(x) = result for x.
+  # Given: f(x) = cosh(x), result = 2
+  # Inverse: x = acosh(2) = approximately 1.317
+  let g = (x: std.scalar.Length) -> std.scalar.Length: x::cosh(); in
+    g::inverse(wanted_output = "x")(2),
+
+  # Solve tanh(x) = result for x.
+  # Given: f(x) = tanh(x), result = 0.5
+  # Inverse: x = atanh(0.5) = approximately 0.549
+  let h = (x: std.scalar.Length) -> std.scalar.Length: x::tanh(); in
+    h::inverse(wanted_output = "x")(0.5),
+
+  # Solve sinh(x) + offset = result for x.
+  # Given: f(x) = sinh(x) + 1, result = 2
+  # Inverse: x = asinh(2 - 1) = asinh(1) = approximately 0.881
+  let i = (x: std.scalar.Length) -> std.scalar.Length: x::sinh() + 1; in
+    i::inverse(wanted_output = "x")(2),
+
+  # Solve cosh(x) - offset = result for x.
+  # Given: f(x) = cosh(x) - 0.5, result = 1.5
+  # Inverse: x = acosh(1.5 + 0.5) = acosh(2) = approximately 1.317
+  let j = (x: std.scalar.Length) -> std.scalar.Length: x::cosh() - 0.5; in
+    j::inverse(wanted_output = "x")(1.5),
+
+  # Solve tanh(x) * coefficient = result for x.
+  # Given: f(x) = tanh(x) * 2, result = 1
+  # Inverse: x = atanh(1/2) = atanh(0.5) = approximately 0.549
+  let k = (x: std.scalar.Length) -> std.scalar.Length: x::tanh() * 2; in
+    k::inverse(wanted_output = "x")(1),
+]
