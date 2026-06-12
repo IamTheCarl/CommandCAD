@@ -1617,9 +1617,14 @@ fn apply_binop_rules(op: &BinOp, left: &SymExpr, right: &SymExpr) -> SymExpr {
                     return SymExpr::Integer(1);
                 }
             }
-            // x/1 → x
+            // x/1 → x (match both Integer and Scalar with value 1)
             if matches!(right, SymExpr::Integer(1)) {
                 return left.clone();
+            }
+            if let SymExpr::Scalar(s) = right {
+                if s.value.into_inner() == 1.0 && s.dimension == Dimension::zero() {
+                    return left.clone();
+                }
             }
             SymExpr::BinOp(op.clone(), Box::new(left.clone()), Box::new(right.clone()))
         }

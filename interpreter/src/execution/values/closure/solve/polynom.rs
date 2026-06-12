@@ -1,4 +1,4 @@
-use super::{BinOp as BinOpType, Scalar as ScalarStruct, SymExpr, UnaryOp};
+use super::{BinOp as BinOpType, Scalar as ScalarStruct, SymExpr, UnaryOp, sym_expr_contains_var};
 use common_data_types::Dimension;
 
 /// Represents a polynomial: poly[i] = coefficient of x^i
@@ -69,6 +69,8 @@ pub fn extract_polynomial(
                     dimension: a.dimension,
                     value: a.value + common_data_types::Float::new(b as f64).unwrap(),
                 }),
+                // If existing is zero scalar, just use coeff (0 + x = x)
+                c if a.value.into_inner() == 0.0 && a.dimension == Dimension::zero() => c,
                 c => SymExpr::BinOp(BinOpType::Add, Box::new(existing.clone()), Box::new(c)),
             },
             SymExpr::Integer(a) => match coeff {
@@ -77,8 +79,13 @@ pub fn extract_polynomial(
                     value: b.value + common_data_types::Float::new(*a as f64).unwrap(),
                 }),
                 SymExpr::Integer(b) => SymExpr::Integer(*a + b),
+                // If existing is zero, just use coeff
+                c if *a == 0 => c,
                 c => SymExpr::BinOp(BinOpType::Add, Box::new(existing.clone()), Box::new(c)),
             },
+            // If existing is non-scalar and coeff is zero scalar, use existing
+            _ if matches!(&coeff, SymExpr::Scalar(s) if s.value.into_inner() == 0.0 && s.dimension == Dimension::zero())
+              || matches!(&coeff, SymExpr::Integer(i) if *i == 0) => existing.clone(),
             _ => SymExpr::BinOp(BinOpType::Add, Box::new(existing.clone()), Box::new(coeff)),
         };
 
@@ -100,11 +107,19 @@ pub fn extract_polynomial(
     // Adjust constant term: subtract result
     if !coefficients.is_empty() {
         let constant = &coefficients[0];
-        coefficients[0] = SymExpr::BinOp(
-            BinOpType::Sub,
-            Box::new(constant.clone()),
-            Box::new(SymExpr::Var(result_name.into())),
-        );
+        // If constant is zero, use UnaryOp(Neg, Var) to avoid dimension mismatch
+        // (0 - result would try to subtract dimensioned value from dimensionless 0)
+        let is_zero = matches!(constant, SymExpr::Scalar(s) if s.value.into_inner() == 0.0 && s.dimension == Dimension::zero())
+            || matches!(constant, SymExpr::Integer(i) if *i == 0);
+        coefficients[0] = if is_zero {
+            SymExpr::UnaryOp(UnaryOp::Neg, Box::new(SymExpr::Var(result_name.into())))
+        } else {
+            SymExpr::BinOp(
+                BinOpType::Sub,
+                Box::new(constant.clone()),
+                Box::new(SymExpr::Var(result_name.into())),
+            )
+        };
     }
 
     let poly = Polynomial { coefficients };
@@ -115,6 +130,11 @@ pub fn extract_polynomial(
     } else {
         None
     }
+}
+
+/// Check if an expression doesn't contain the target variable (power = 0).
+fn power_is_zero_for_non_target(expr: &SymExpr, target: &str) -> bool {
+    !sym_expr_contains_var(expr, target)
 }
 
 /// Recursively decompose an expression into terms.
@@ -137,6 +157,14 @@ fn decompose_terms(expr: &SymExpr, target: &str, terms: &mut Vec<(usize, SymExpr
                     terms.push((power, negated));
                 } else {
                     terms.push((power, coeff));
+                }
+            } else if power_is_zero_for_non_target(expr, target) {
+                // Expression doesn't contain the target variable — it's a constant term
+                if sign == -1 {
+                    let negated = SymExpr::UnaryOp(UnaryOp::Neg, Box::new(expr.clone()));
+                    terms.push((0, negated));
+                } else {
+                    terms.push((0, expr.clone()));
                 }
             }
         }
@@ -221,6 +249,31 @@ fn multiply_scalar_exprs(a: &SymExpr, b: &SymExpr) -> Option<SymExpr> {
     }
 }
 
+/// Check if a SymExpr is effectively zero (dimensionless with value 0).
+fn is_zero_expr(expr: &SymExpr) -> bool {
+    match expr {
+        SymExpr::Scalar(s) => s.value.into_inner() == 0.0 && s.dimension == Dimension::zero(),
+        SymExpr::Integer(i) => *i == 0,
+        SymExpr::BinOp(BinOpType::Mul, left, right) => {
+            is_zero_expr(left) || is_zero_expr(right)
+        }
+        SymExpr::BinOp(op, left, right) if matches!(op, BinOpType::Add | BinOpType::Sub) => {
+            if let (SymExpr::Scalar(ls), SymExpr::Scalar(rs)) = (left.as_ref(), right.as_ref()) {
+                let result = match op {
+                    BinOpType::Add => ls.value.into_inner() + rs.value.into_inner(),
+                    BinOpType::Sub => ls.value.into_inner() - rs.value.into_inner(),
+                    _ => unreachable!(),
+                };
+                result == 0.0 && ls.dimension == Dimension::zero() && rs.dimension == Dimension::zero()
+            } else {
+                false
+            }
+        }
+        SymExpr::UnaryOp(UnaryOp::Neg, inner) => is_zero_expr(inner),
+        _ => false,
+    }
+}
+
 /// Solve a quadratic equation ax² + bx + c = 0.
 /// Returns the "+" root as a SymExpr.
 pub fn solve_quadratic(
@@ -228,27 +281,43 @@ pub fn solve_quadratic(
     b: &SymExpr,
     c: &SymExpr,
     _context: &crate::execution::ExecutionContext,
+    _result_dim: Option<&Dimension>,
 ) -> crate::execution::errors::ExecutionResult<SymExpr> {
+    // When b is zero, use the simplified form x = sqrt(-c/a).
+    // The standard formula (-b + sqrt(b²-4ac)) / (2a) has dimensional issues
+    // when b is dimensionless but a*c has dimensions (e.g., x² = result: a=1, b=0, c=-result).
+    // In that case b² is dimensionless while 4ac has the result's dimension,
+    // making b² - 4ac dimensionally inconsistent.
+    if is_zero_expr(b) {
+        // x = sqrt(-c/a)
+        let neg_c = SymExpr::UnaryOp(UnaryOp::Neg, Box::new(c.clone()));
+        let ratio = SymExpr::BinOp(BinOpType::Div, Box::new(neg_c), Box::new(a.clone()));
+        return Ok(SymExpr::MethodCall {
+            method_name: "sqrt".into(),
+            self_expr: Box::new(ratio),
+            args: vec![],
+            args_names: vec![],
+        });
+    }
+
+    // For b != 0, use the standard quadratic formula.
     // The discriminant b² - 4ac must have consistent dimensions.
-    // When b is zero (dimensionless), we need to cast it to match 4ac's dimension.
     let a_dim = extract_dimension(a);
     let c_dim = extract_dimension(c);
 
     // Compute reference dimension for the discriminant from 4ac.
-    // 4ac has dimension D_a * D_c.
     let disc_dim = if a_dim == Dimension::zero() {
         c_dim
     } else if c_dim == Dimension::zero() {
         a_dim
     } else {
-        // Both have dimensions — use c's dimension as it typically carries the result dimension
         c_dim
     };
 
-    // Compute b² with proper dimension.
+    // Compute b²
     let b_squared = SymExpr::BinOp(BinOpType::Mul, Box::new(b.clone()), Box::new(b.clone()));
 
-    // 4ac
+    // 4ac with proper dimension
     let four = cast_to_dimension(&SymExpr::Scalar(ScalarStruct {
         dimension: Dimension::zero(),
         value: common_data_types::Float::new(4.0).unwrap(),
@@ -256,7 +325,7 @@ pub fn solve_quadratic(
     let four_a = SymExpr::BinOp(BinOpType::Mul, Box::new(four), Box::new(a.clone()));
     let four_ac = SymExpr::BinOp(BinOpType::Mul, Box::new(four_a), Box::new(c.clone()));
 
-    // Cast b_squared to disc_dim if needed (handles b=0 case)
+    // Cast b_squared to disc_dim if needed
     let b_squared_dim = extract_dimension(&b_squared);
     let b_squared = if b_squared_dim != disc_dim && b_squared_dim == Dimension::zero() {
         cast_to_dimension(&b_squared, &disc_dim)
@@ -274,17 +343,16 @@ pub fn solve_quadratic(
         args_names: vec![],
     };
 
-    // -b
+    // -b cast to disc_dim
     let neg_b = SymExpr::UnaryOp(UnaryOp::Neg, Box::new(b.clone()));
-
-    // (-b + sqrt(D)) / (2a)
-    // Cast -b to disc_dim if needed (handles b=0 case)
     let neg_b_dim = extract_dimension(&neg_b);
     let neg_b = if neg_b_dim != disc_dim && neg_b_dim == Dimension::zero() {
         cast_to_dimension(&neg_b, &disc_dim)
     } else {
         neg_b
     };
+
+    // (-b + sqrt(D)) / (2a)
     let numerator = SymExpr::BinOp(BinOpType::Add, Box::new(neg_b), Box::new(sqrt_disc));
     let two = SymExpr::Scalar(ScalarStruct {
         dimension: Dimension::zero(),
@@ -325,6 +393,47 @@ fn cast_to_dimension(expr: &SymExpr, target_dim: &Dimension) -> SymExpr {
                 return SymExpr::Scalar(ScalarStruct {
                     dimension: *target_dim,
                     value,
+                });
+            }
+            // Handle BinOp with Integer operands (e.g., 0*0 from b*b where b=0)
+            if let (SymExpr::Integer(li), SymExpr::Integer(ri)) = (left.as_ref(), right.as_ref()) {
+                let value = match op {
+                    BinOpType::Add => *li as f64 + *ri as f64,
+                    BinOpType::Sub => *li as f64 - *ri as f64,
+                    BinOpType::Mul => *li as f64 * *ri as f64,
+                    BinOpType::Div => *li as f64 / *ri as f64,
+                    _ => *li as f64,
+                };
+                return SymExpr::Scalar(ScalarStruct {
+                    dimension: *target_dim,
+                    value: common_data_types::Float::new(value).unwrap(),
+                });
+            }
+            // Handle mixed Scalar and Integer operands
+            if let (SymExpr::Scalar(ls), SymExpr::Integer(ri)) = (left.as_ref(), right.as_ref()) {
+                let value: f64 = match op {
+                    BinOpType::Add => ls.value.into_inner() + (*ri as f64),
+                    BinOpType::Sub => ls.value.into_inner() - (*ri as f64),
+                    BinOpType::Mul => ls.value.into_inner() * (*ri as f64),
+                    BinOpType::Div => ls.value.into_inner() / (*ri as f64),
+                    _ => ls.value.into_inner(),
+                };
+                return SymExpr::Scalar(ScalarStruct {
+                    dimension: *target_dim,
+                    value: common_data_types::Float::new(value).unwrap(),
+                });
+            }
+            if let (SymExpr::Integer(li), SymExpr::Scalar(rs)) = (left.as_ref(), right.as_ref()) {
+                let value: f64 = match op {
+                    BinOpType::Add => (*li as f64) + rs.value.into_inner(),
+                    BinOpType::Sub => (*li as f64) - rs.value.into_inner(),
+                    BinOpType::Mul => (*li as f64) * rs.value.into_inner(),
+                    BinOpType::Div => (*li as f64) / rs.value.into_inner(),
+                    _ => rs.value.into_inner(),
+                };
+                return SymExpr::Scalar(ScalarStruct {
+                    dimension: *target_dim,
+                    value: common_data_types::Float::new(value).unwrap(),
                 });
             }
         }
@@ -369,6 +478,7 @@ pub fn solve_cubic(
     c: &SymExpr,
     d: &SymExpr,
     _context: &crate::execution::ExecutionContext,
+    _result_dim: Option<&Dimension>,
 ) -> crate::execution::errors::ExecutionResult<SymExpr> {
     // Depress the cubic: substitute x = t - b/(3a)
     // p = (3ac - b²) / (3a²)
