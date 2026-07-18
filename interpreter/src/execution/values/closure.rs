@@ -41,7 +41,7 @@ use crate::{
     },
 };
 
-use super::{Object, StaticType, StaticTypeName, StructDefinition, ValueType};
+use super::{MissingAttributeError, Object, StaticType, StaticTypeName, StructDefinition, ValueType};
 use enum_downcast::IntoVariant;
 
 #[derive(Debug, Default)]
@@ -68,7 +68,10 @@ impl BuiltinCallableDatabase {
         super::transform::register_methods(&mut database);
         super::polygon::register_methods_and_functions(&mut database);
         crate::execution::export::register_methods_and_functions(&mut database);
+        register_closure_methods(&mut database);
         register_log_functions(&mut database);
+        super::implicit_surface::surface3d::register_surface3d_methods(&mut database);
+        super::implicit_surface::surface2d::register_surface2d_methods(&mut database);
 
         database
     }
@@ -175,6 +178,18 @@ pub struct UserClosure {
 }
 
 impl UserClosure {
+    pub fn signature(&self) -> &Arc<Signature> {
+        &self.data.signature
+    }
+
+    pub fn expression(&self) -> &std::sync::Arc<AstNode<Expression>> {
+        &self.data.expression
+    }
+
+    pub fn captured_values(&self) -> &IndexMap<ArgumentName, Value> {
+        &self.data.captured_values
+    }
+
     pub fn from_ast(
         context: &ExecutionContext,
         source: &AstNode<Box<ClosureDefinition>>,
@@ -235,11 +250,120 @@ impl UserClosure {
             }),
         })
     }
+
+    /// Convert this closure to a Fidget implicit surface shape.
+    ///
+    /// Validates:
+    /// - Closure takes exactly one parameter (Vector2 or Vector3)
+    /// - Closure returns Scalar
+    /// - Body contains only supported expression types
+    /// - All captured values are dimensionless
+    pub fn to_implicit(&self, context: &ExecutionContext<'_>) -> ExecutionResult<Value> {
+        use super::implicit_surface::{ast_to_shape, resolve_captured_values, ParamDim};
+
+        // 1. Validate signature
+        let members = &self.data.signature.argument_type.members;
+        if members.len() != 1 {
+            return Err(InvalidClosureSignatureError {
+                message: "Implicit surface closure must take exactly one parameter (Vector2 or Vector3)".into(),
+            }.to_error(context));
+        }
+
+        let (_param_name, param_type) = members.iter().next().unwrap();
+        let param_dim = match &param_type.ty {
+            ValueType::Vector2(Some(dim)) => {
+                if dim.length == 0 {
+                    return Err(InvalidClosureSignatureError {
+                        message: "Implicit surface closure parameter must have length dimension (e.g., std.vector.Vector2<std.scalar.Length>)".into(),
+                    }.to_error(context));
+                }
+                ParamDim::Vec2
+            }
+            ValueType::Vector3(Some(dim)) => {
+                if dim.length == 0 {
+                    return Err(InvalidClosureSignatureError {
+                        message: "Implicit surface closure parameter must have length dimension (e.g., std.vector.Vector3<std.scalar.Length>)".into(),
+                    }.to_error(context));
+                }
+                ParamDim::Vec3
+            }
+            ValueType::Vector2(None) => {
+                return Err(InvalidClosureSignatureError {
+                    message: "Implicit surface closure parameter must have length dimension (e.g., std.vector.Vector2<std.scalar.Length>)".into(),
+                }.to_error(context));
+            }
+            ValueType::Vector3(None) => {
+                return Err(InvalidClosureSignatureError {
+                    message: "Implicit surface closure parameter must have length dimension (e.g., std.vector.Vector3<std.scalar.Length>)".into(),
+                }.to_error(context));
+            }
+            _ => {
+                return Err(InvalidClosureSignatureError {
+                    message: format!(
+                        "Implicit surface closure parameter must be std.vector.Vector2 or std.vector.Vector3, got {}",
+                        param_type.ty
+                    ),
+                }.to_error(context));
+            }
+        };
+
+        // Check return type is Scalar with length dimension (SDF returns signed distance)
+        match &self.data.signature.return_type {
+            ValueType::Scalar(Some(dim)) if dim.length != 0 => {
+                // Has length dimension — valid SDF return type
+            }
+            ValueType::Scalar(_) => {
+                return Err(InvalidClosureSignatureError {
+                    message: "Implicit surface closure must return std.scalar.Length (signed distance), not dimensionless scalar".into(),
+                }.to_error(context));
+            }
+            _ => {
+                return Err(InvalidClosureSignatureError {
+                    message: "Implicit surface closure must return std.scalar.Length".into(),
+                }.to_error(context));
+            }
+        }
+
+        // 2. Resolve captured values from the current execution context
+        let (captured_map, closures_map) = resolve_captured_values(
+            &self.data.captured_values,
+            context,
+            &self.data.expression,
+        ).map_err(|e| {
+            ImplicitSurfaceError {
+                message: e.to_string(),
+            }.to_error(context)
+        })?;
+
+        // 3. Convert AST expression to ImplicitSurface
+        let shape = ast_to_shape(
+            &self.data.expression,
+            &captured_map,
+            &closures_map,
+            param_dim,
+        ).map_err(|e| {
+            ImplicitSurfaceError {
+                message: e.to_string(),
+            }.to_error(context)
+        })?;
+
+        Ok(shape)
+    }
 }
 
 impl Object for UserClosure {
     fn get_type(&self, _context: &ExecutionContext) -> ValueType {
         ValueType::Closure(self.data.signature.clone())
+    }
+
+    fn get_attribute(&self, _context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
+        match attribute {
+            "to_implicit" => Ok(BuiltinFunction::new::<methods::ToImplicit>().into()),
+            _ => Err(MissingAttributeError {
+                name: attribute.into(),
+            }
+            .to_error(_context))
+        }
     }
 
     fn format(
@@ -704,6 +828,22 @@ impl StaticTypeName for BuiltinFunction {
 pub struct LogInfo;
 pub struct LogWarn;
 
+mod methods {
+    pub struct ToImplicit;
+}
+
+pub fn register_closure_methods(database: &mut BuiltinCallableDatabase) {
+    build_method!(
+        database,
+        methods::ToImplicit, "UserClosure::to_implicit", (
+            context: &ExecutionContext,
+            this: UserClosure) -> Value
+        {
+            this.to_implicit(context)
+        }
+    );
+}
+
 pub fn register_log_functions(database: &mut BuiltinCallableDatabase) {
     build_function!(
         database,
@@ -762,6 +902,34 @@ pub fn register_log_functions(database: &mut BuiltinCallableDatabase) {
             Ok(expression)
         }
     );
+}
+
+/// Error indicating a closure has an invalid signature for implicit surface conversion.
+#[derive(Debug, Clone)]
+pub struct InvalidClosureSignatureError {
+    pub message: String,
+}
+
+impl std::error::Error for InvalidClosureSignatureError {}
+
+impl Display for InvalidClosureSignatureError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid closure signature: {}", self.message)
+    }
+}
+
+/// Error indicating a problem during implicit surface conversion.
+#[derive(Debug, Clone)]
+pub struct ImplicitSurfaceError {
+    pub message: String,
+}
+
+impl std::error::Error for ImplicitSurfaceError {}
+
+impl Display for ImplicitSurfaceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Implicit surface error: {}", self.message)
+    }
 }
 
 #[cfg(test)]

@@ -39,6 +39,7 @@ thiserror = "2.0.18"
 geo = { version = "0.32", default-features = false, features = ["serde", "earcutr", "spade"] }
 svg = "0.18"
 ciborium = "0.2.2"
+fidget = { version = "0.4.3", default-features = false, features = ["jit", "mesh"] }
 
 [build-dependencies]
 type-sitter-gen = "0.8"

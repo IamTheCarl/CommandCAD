@@ -73,6 +73,8 @@ pub enum ValueType {
     LineString,
     Polygon,
     PolygonSet,
+    ImplicitSurface2D,
+    ImplicitSurface3D,
 }
 
 impl From<StructDefinition> for ValueType {
@@ -112,6 +114,8 @@ impl ValueType {
             Self::LineString => "LineString".into(),
             Self::Polygon => "Polygon".into(),
             Self::PolygonSet => "PolygonSet".into(),
+            Self::ImplicitSurface2D => "ImplicitSurface2D".into(),
+            Self::ImplicitSurface3D => "ImplicitSurface3D".into(),
             Self::ValueType => "ValueType".into(),
             _ => format!("{}", self).into(),
         }
@@ -177,6 +181,8 @@ impl ValueType {
                 }
             }
             (Self::ManifoldMesh3D, Self::ManifoldMesh3D) => Ok(()),
+            (Self::ImplicitSurface2D, Self::ImplicitSurface2D) => Ok(()),
+            (Self::ImplicitSurface3D, Self::ImplicitSurface3D) => Ok(()),
             (Self::Any, _) => Ok(()),
             (expected, got) => {
                 if expected == got {

@@ -354,8 +354,13 @@ fn job_executor(
             Err(error) => Err(JobError::Execution(error)),
         };
 
-        let files = files.into_inner().expect("File hashmap was poisoned");
-        let files_to_watch: HashSet<Arc<PathBuf>> = files.keys().cloned().collect();
+        let files_to_watch: HashSet<Arc<PathBuf>> = match files.into_inner() {
+            Ok(files) => files.keys().cloned().collect(),
+            Err(_poisoned) => {
+                eprintln!("File hashmap was poisoned (interpreter panicked). Returning empty file watch list.");
+                HashSet::new()
+            }
+        };
 
         drop(log);
         let log_messages = log_rx.try_iter().collect();
@@ -414,9 +419,10 @@ impl JobBridge {
             shutdown_signal,
         };
 
-        self.expression_tx
-            .send(job)
-            .expect("Runtime thread terminated early");
+        if self.expression_tx.send(job).is_err() {
+            eprintln!("Runtime thread terminated early. Job not sent.");
+            return;
+        }
         self.active_job = Some(pending_job);
     }
 

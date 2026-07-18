@@ -66,6 +66,7 @@ in
 - **2D & 3D visualization** — Pan, zoom, fit-to-screen, wireframe toggle, axis snap buttons, and adaptive grid overlay.
 - **Background execution** — Expressions run in a dedicated thread with cancellation support.
 - **Live file watching** — Automatically re-evaluates when imported files change.
+- **Implicit surface modeling** — Build implicit surfaces from closures and convert to meshes using `to_manifold()` or polygons using `to_polygon()`. Powered by [fidget](https://crates.io/crates/fidget).
 
 ### Constraint Solving *(experimental)*
 
@@ -74,7 +75,6 @@ Define equation systems with the `<<<variables: lhs == rhs>>>` syntax. Supports 
 ## Planned Features
 
 - **Constraint solving stabilization** — Bringing the constraint/equation solver to a stable, production-ready state.
-- **Implicit surface modeling** — Using [fidget](https://crates.io/crates/fidget) for SDF-based implicit surface operations.
 - **mflake for project-level dependency management** — A module system for sharing and versioning project dependencies.
 
 ## Getting Started

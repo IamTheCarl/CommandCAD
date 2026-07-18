@@ -35,7 +35,7 @@ use crate::{
     },
     new_parser,
     values::{
-        constraint_set::find_all_captured_variables_in_constraint_set, ConstraintSet, IString,
+        constraint_set::find_all_captured_variables_in_constraint_set, ConstraintSet, IString, Scalar,
     },
     SourceReference,
 };
@@ -703,6 +703,8 @@ pub fn run_file(context: &ExecutionContext, file: impl Into<PathBuf>) -> Executi
 
 pub mod functions {
     pub struct Import;
+    pub struct Min;
+    pub struct Max;
 }
 
 pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
@@ -715,6 +717,34 @@ pub fn register_methods_and_functions(database: &mut BuiltinCallableDatabase) {
         {
             let file = PathBuf::from(path.0.as_str());
             run_file(context, file)
+        }
+    );
+    build_function!(
+        database,
+        functions::Min, "std::min", (
+            context: &ExecutionContext,
+            a: Scalar,
+            b: Scalar
+        ) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: a.dimension,
+                value: a.value.min(b.value)
+            })
+        }
+    );
+    build_function!(
+        database,
+        functions::Max, "std::max", (
+            context: &ExecutionContext,
+            a: Scalar,
+            b: Scalar
+        ) -> Scalar
+        {
+            Ok(Scalar {
+                dimension: a.dimension,
+                value: a.value.max(b.value)
+            })
         }
     );
 }
