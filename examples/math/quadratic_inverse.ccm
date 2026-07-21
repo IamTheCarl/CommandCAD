@@ -10,19 +10,19 @@
   # Given: result = 25 m^2
   # Inverse: x = sqrt(25 m^2) = 5m
   let f = (x: std.scalar.Length) -> std.scalar.Area: x * x; in
-    f::inverse(wanted_output = "x")(25'm^2'),
+    f::inverse(wanted_output = "x")(original_result=25'm^2'),
 
   # Squaring with offset: f(x) = x*x + 4m^2
   # Given: result = 13 m^2
   # Inverse: x = sqrt(13 - 4) = sqrt(9) = 3m
   let g = (x: std.scalar.Length) -> std.scalar.Area: x * x + 4'm^2'; in
-    g::inverse(wanted_output = "x")(13'm^2'),
+    g::inverse(wanted_output = "x")(original_result=13'm^2'),
 
   # Full quadratic: f(x) = x*x + 2*x + 1 (i.e., (x+1)^2)
   # Given: result = 9 m^2
   # Inverse: x = (-2 + sqrt(4 - 4*1*(1-9))) / 2 = (-2 + sqrt(36)) / 2 = 4m
   let h = (x: std.scalar.Length) -> std.scalar.Area: x * x + 2 * x + 1; in
-    h::inverse(wanted_output = "x")(9'm^2'),
+    h::inverse(wanted_output = "x")(original_result=9'm^2'),
 
   # Two-parameter quadratic: f(x, y) = x*x + y*y (Pythagorean theorem)
   # Given: result = 25 m^2, y = 3m
@@ -40,5 +40,5 @@
   # Given: result = 9 m^2
   # Inverse: x = sqrt(9 + 16) = sqrt(25) = 5m
   let k = (x: std.scalar.Length) -> std.scalar.Area: x * x - 16'm^2'; in
-    k::inverse(wanted_output = "x")(9'm^2'),
+    k::inverse(wanted_output = "x")(original_result=9'm^2'),
 ]

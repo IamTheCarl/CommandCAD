@@ -1,5 +1,6 @@
 use super::{BinOp as BinOpType, Scalar as ScalarStruct, SymExpr, UnaryOp, sym_expr_contains_var};
 use common_data_types::Dimension;
+use crate::execution::errors::Raise;
 
 /// Represents a polynomial: poly[i] = coefficient of x^i
 #[derive(Debug, Clone)]
@@ -477,117 +478,32 @@ pub fn solve_cubic(
     b: &SymExpr,
     c: &SymExpr,
     d: &SymExpr,
-    _context: &crate::execution::ExecutionContext,
+    context: &crate::execution::ExecutionContext,
     _result_dim: Option<&Dimension>,
 ) -> crate::execution::errors::ExecutionResult<SymExpr> {
-    // Depress the cubic: substitute x = t - b/(3a)
-    // p = (3ac - b²) / (3a²)
-    // q = (2b³ - 9abc + 27a²d) / (27a³)
+    // Special case: pure cube x³ = -d/a → x = cbrt(-d/a)
+    // Cardano's formula has dimensional issues with mixed-term cubics
+    // (coefficients have incompatible dimensions when variable is dimensioned).
+    if is_zero_expr(b) && is_zero_expr(c) {
+        let neg_d = SymExpr::UnaryOp(UnaryOp::Neg, Box::new(d.clone()));
+        let ratio = SymExpr::BinOp(BinOpType::Div, Box::new(neg_d), Box::new(a.clone()));
+        return Ok(SymExpr::MethodCall {
+            method_name: "cbrt".into(),
+            self_expr: Box::new(ratio),
+            args: vec![],
+            args_names: vec![],
+        });
+    }
 
-    let three = SymExpr::Scalar(ScalarStruct {
-        dimension: Dimension::zero(),
-        value: common_data_types::Float::new(3.0).unwrap(),
-    });
-    let two = SymExpr::Scalar(ScalarStruct {
-        dimension: Dimension::zero(),
-        value: common_data_types::Float::new(2.0).unwrap(),
-    });
-    let nine = SymExpr::Scalar(ScalarStruct {
-        dimension: Dimension::zero(),
-        value: common_data_types::Float::new(9.0).unwrap(),
-    });
-    let twentyseven = SymExpr::Scalar(ScalarStruct {
-        dimension: Dimension::zero(),
-        value: common_data_types::Float::new(27.0).unwrap(),
-    });
-
-    // p = (3ac - b²) / (3a²)
-    let a_c = SymExpr::BinOp(BinOpType::Mul, Box::new(a.clone()), Box::new(c.clone()));
-    let three_ac = SymExpr::BinOp(BinOpType::Mul, Box::new(three.clone()), Box::new(a_c));
-    let b_squared = SymExpr::BinOp(BinOpType::Mul, Box::new(b.clone()), Box::new(b.clone()));
-    let p_numerator = SymExpr::BinOp(BinOpType::Sub, Box::new(three_ac), Box::new(b_squared));
-    let a_squared = SymExpr::BinOp(BinOpType::Mul, Box::new(a.clone()), Box::new(a.clone()));
-    let p_denominator = SymExpr::BinOp(BinOpType::Mul, Box::new(three.clone()), Box::new(a_squared.clone()));
-    let p = SymExpr::BinOp(BinOpType::Div, Box::new(p_numerator), Box::new(p_denominator));
-
-    // q = (2b³ - 9abc + 27a²d) / (27a³)
-    let b_sq = SymExpr::BinOp(BinOpType::Mul, Box::new(b.clone()), Box::new(b.clone()));
-    let b_cubed = SymExpr::BinOp(BinOpType::Mul, Box::new(b_sq), Box::new(b.clone()));
-    let two_b_cubed = SymExpr::BinOp(BinOpType::Mul, Box::new(two.clone()), Box::new(b_cubed));
-    let a_b = SymExpr::BinOp(BinOpType::Mul, Box::new(a.clone()), Box::new(b.clone()));
-    let a_b_c = SymExpr::BinOp(BinOpType::Mul, Box::new(a_b), Box::new(c.clone()));
-    let nine_abc = SymExpr::BinOp(BinOpType::Mul, Box::new(nine.clone()), Box::new(a_b_c));
-    let a_sq_d = SymExpr::BinOp(BinOpType::Mul, Box::new(a_squared.clone()), Box::new(d.clone()));
-    let twentyseven_a_sq_d = SymExpr::BinOp(BinOpType::Mul, Box::new(twentyseven.clone()), Box::new(a_sq_d));
-    let q_numerator = SymExpr::BinOp(BinOpType::Add, Box::new(SymExpr::BinOp(BinOpType::Sub, Box::new(two_b_cubed), Box::new(nine_abc))), Box::new(twentyseven_a_sq_d));
-    let a_cubed = SymExpr::BinOp(BinOpType::Mul, Box::new(a_squared.clone()), Box::new(a.clone()));
-    let q_denominator = SymExpr::BinOp(BinOpType::Mul, Box::new(twentyseven.clone()), Box::new(a_cubed));
-    let q = SymExpr::BinOp(BinOpType::Div, Box::new(q_numerator), Box::new(q_denominator));
-
-    // Discriminant: Δ = q²/4 + p³/27
-    let q_squared = SymExpr::BinOp(BinOpType::Mul, Box::new(q.clone()), Box::new(q.clone()));
-    let four = SymExpr::Scalar(ScalarStruct {
-        dimension: Dimension::zero(),
-        value: common_data_types::Float::new(4.0).unwrap(),
-    });
-    let q_squared_over_4 = SymExpr::BinOp(BinOpType::Div, Box::new(q_squared), Box::new(four));
-    let p_sq = SymExpr::BinOp(BinOpType::Mul, Box::new(p.clone()), Box::new(p.clone()));
-    let p_cubed = SymExpr::BinOp(BinOpType::Mul, Box::new(p_sq), Box::new(p.clone()));
-    let p_cubed_over_27 = SymExpr::BinOp(BinOpType::Div, Box::new(p_cubed), Box::new(twentyseven.clone()));
-    let delta = SymExpr::BinOp(BinOpType::Add, Box::new(q_squared_over_4), Box::new(p_cubed_over_27));
-
-    // Try Δ ≥ 0 case first (one real root)
-    // u = cbrt(-q/2 + sqrt(Δ))
-    // v = cbrt(-q/2 - sqrt(Δ))
-    // t = u + v
-    // x = t - b/(3a)
-
-    let two = SymExpr::Scalar(ScalarStruct {
-        dimension: Dimension::zero(),
-        value: common_data_types::Float::new(2.0).unwrap(),
-    });
-    let neg_q_over_2 = SymExpr::UnaryOp(UnaryOp::Neg, Box::new(SymExpr::BinOp(BinOpType::Div, Box::new(q.clone()), Box::new(two))));
-
-    let sqrt_delta = SymExpr::MethodCall {
-        method_name: "sqrt".into(),
-        self_expr: Box::new(delta),
-        args: vec![],
-        args_names: vec![],
-    };
-
-    let u_arg = SymExpr::BinOp(BinOpType::Add, Box::new(SymExpr::UnaryOp(UnaryOp::Neg, Box::new(neg_q_over_2.clone()))), Box::new(sqrt_delta.clone()));
-    let v_arg = SymExpr::BinOp(BinOpType::Sub, Box::new(SymExpr::UnaryOp(UnaryOp::Neg, Box::new(neg_q_over_2))), Box::new(sqrt_delta));
-
-    let u = SymExpr::MethodCall {
-        method_name: "cbrt".into(),
-        self_expr: Box::new(u_arg),
-        args: vec![],
-        args_names: vec![],
-    };
-
-    let v = SymExpr::MethodCall {
-        method_name: "cbrt".into(),
-        self_expr: Box::new(v_arg),
-        args: vec![],
-        args_names: vec![],
-    };
-
-    let t = SymExpr::BinOp(BinOpType::Add, Box::new(u), Box::new(v));
-
-    // x = t - b/(3a)
-    let three = SymExpr::Scalar(ScalarStruct {
-        dimension: Dimension::zero(),
-        value: common_data_types::Float::new(3.0).unwrap(),
-    });
-    let b_over_3a = SymExpr::BinOp(
-        BinOpType::Div,
-        Box::new(b.clone()),
-        Box::new(SymExpr::BinOp(BinOpType::Mul, Box::new(three), Box::new(a.clone()))),
-    );
-
-    let x = SymExpr::BinOp(BinOpType::Sub, Box::new(t), Box::new(b_over_3a));
-
-    Ok(x)
+    // Mixed-term cubics with dimensioned variables don't work with Cardano's formula
+    // because intermediate values (p, q, delta) have incompatible dimensions.
+    Err(super::algorithm::SolveError::NoSolution {
+        operation: "cubic with mixed terms requires dimensioned coefficients (e.g., 3*1m*x*x instead of 3*x*x)".into(),
+        source: crate::compile::SourceReference {
+            file: std::sync::Arc::new(std::path::PathBuf::from("solve")),
+            range: tree_sitter::Range { start_byte: 0, end_byte: 0, start_point: tree_sitter::Point { row: 0, column: 0 }, end_point: tree_sitter::Point { row: 0, column: 0 } },
+        },
+    }.to_error(context))
 }
 
 #[cfg(test)]

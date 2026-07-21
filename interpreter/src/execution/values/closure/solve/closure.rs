@@ -85,9 +85,10 @@ impl SolveResult {
         // Build the body expression from SymExpr
         let body_expr = sym_expr_to_expression(&self.body, context)?;
 
-        // The return type of the inverse closure is the type of the target variable being solved for.
-        // When solving f(x) = y for x, the inverse is g(y) = x, so the return type is x's type.
-        let return_type = self.return_type.clone().unwrap_or_else(|| infer_sym_expr_type(&self.body));
+        // The return type of the inverse closure is inferred from the solved body expression.
+        // This correctly handles cases where the original parameter type doesn't match
+        // the dimension of the inverse expression (e.g., log(x) returns dimensionless even if x: Length).
+        let return_type = infer_sym_expr_type(&self.body);
 
         let signature = Arc::new(Signature {
             argument_type,
