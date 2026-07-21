@@ -3,6 +3,7 @@ use std::sync::Arc;
 use fidget::context::Context;
 use fidget::context::Tree;
 use fidget::mesh::{Octree, Settings};
+use fidget::render::ThreadPool;
 use fidget::render::CancelToken;
 use fidget::shape::Shape;
 
@@ -10,7 +11,7 @@ use crate::execution::errors::{Raise, StrError};
 use crate::execution::ExecutionContext;
 use crate::execution::values::{
     closure::{BuiltinCallableDatabase, BuiltinFunction},
-    Length, Object, Scalar, StaticType, StaticTypeName, Style, Value, ValueNone, ValueType,
+    Length, Object, Scalar, StaticType, StaticTypeName, Style, UnsignedInteger, Value, ValueNone, ValueType,
 };
 
 fn unpack_radius(
@@ -58,6 +59,12 @@ impl Surface3D {
         }
     }
 
+    /// Create a copy of this surface with a custom meshing depth.
+    pub fn with_depth(mut self, depth: u8) -> Self {
+        self.settings.depth = depth;
+        self
+    }
+
     /// Generate a 3D manifold mesh from the implicit surface using Manifold Dual Contouring.
     ///
     /// Returns `ManifoldMesh3D` (wrapping `Arc<Manifold>` from boolmesh).
@@ -88,7 +95,7 @@ impl Surface3D {
         let settings = Settings {
             depth: self.settings.depth,
             world_to_model: nalgebra::Matrix4::identity(),
-            threads: None,
+            threads: Some(&ThreadPool::Global),
             cancel: CancelToken::new(),
         };
 
@@ -299,10 +306,16 @@ pub fn register_surface3d_methods(database: &mut BuiltinCallableDatabase) {
         database,
         methods::ToMesh, "Surface3D::to_mesh", (
             context: &ExecutionContext,
-            this: Surface3D
+            this: Surface3D,
+            depth: Option<UnsignedInteger> = ValueNone.into()
         ) -> Value
         {
-            let mesh = this.to_manifold()
+            let surface = if let Some(d) = depth {
+                this.with_depth(d.0 as u8)
+            } else {
+                this
+            };
+            let mesh = surface.to_manifold()
                 .map_err(|e| StringError(e.to_string()).to_error(context))?;
             Ok(mesh.into())
         }
@@ -669,6 +682,11 @@ mod surface3d_tests {
         assert!(matches!(value, Value::ManifoldMesh3D(_)));
 
         let result = test_run("std.implicits.sphere(diameter = 10.0m)::to_mesh()");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::ManifoldMesh3D(_)));
+
+        let result = test_run("std.implicits.sphere(radius = 5.0m)::to_mesh(depth = 4u)");
         assert!(result.is_ok());
         let value = result.unwrap();
         assert!(matches!(value, Value::ManifoldMesh3D(_)));
