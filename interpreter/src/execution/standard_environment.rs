@@ -91,6 +91,7 @@ fn build_std(context: &ExecutionContext) -> Dictionary {
             build_dimension_types(context, ValueType::Vector4).into(),
         ),
         ("consts".into(), build_consts(context).into()),
+        ("implicits".into(), build_implicits(context).into()),
         ("mesh".into(), build_mesh_3d(context).into()),
         ("line_string".into(), build_line_string(context).into()),
         ("polygon".into(), build_polygon(context).into()),
@@ -263,6 +264,19 @@ fn build_export(context: &ExecutionContext) -> Dictionary {
         BuiltinFunction::new::<crate::execution::export::ExportSvg>().into(),
     )]);
     Dictionary::new(context, export)
+}
+
+fn build_implicits(context: &ExecutionContext) -> Dictionary {
+    use crate::execution::values::implicit_surface::surface3d::implicits::*;
+
+    let implicits: HashMap<ImString, Value> = HashMap::from_iter([
+        ("sphere".into(), BuiltinFunction::new::<Sphere>().into()),
+        ("cube".into(), BuiltinFunction::new::<Cube>().into()),
+        ("cylinder".into(), BuiltinFunction::new::<Cylinder>().into()),
+        ("cone".into(), BuiltinFunction::new::<Cone>().into()),
+        ("torus".into(), BuiltinFunction::new::<Torus>().into()),
+    ]);
+    Dictionary::new(context, implicits)
 }
 
 fn build_log(context: &ExecutionContext) -> Dictionary {

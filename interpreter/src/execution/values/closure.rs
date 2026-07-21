@@ -71,8 +71,10 @@ impl BuiltinCallableDatabase {
         register_closure_methods(&mut database);
         register_log_functions(&mut database);
         super::implicit_surface::surface3d::register_surface3d_methods(&mut database);
-        super::implicit_surface::surface2d::register_surface2d_methods(&mut database);
 
+        super::implicit_surface::surface3d::register_implicits(&mut database);
+
+        super::implicit_surface::surface2d::register_surface2d_methods(&mut database);
         database
     }
 

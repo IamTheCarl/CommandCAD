@@ -44,6 +44,30 @@ impl Surface2D {
         Self { tree, settings }
     }
 
+    /// Boolean union: min(a, b) — inside either shape.
+    pub fn union(&self, other: &Surface2D) -> Self {
+        Self::new(self.tree.clone().min(other.tree.clone()))
+    }
+
+    /// Boolean intersection: max(a, b) — inside both shapes.
+    pub fn intersection(&self, other: &Surface2D) -> Self {
+        Self::new(self.tree.clone().max(other.tree.clone()))
+    }
+
+    /// Boolean difference: max(a, -b) — inside a but not b.
+    pub fn difference(&self, other: &Surface2D) -> Self {
+        Self::new(self.tree.clone().max(-other.tree.clone()))
+    }
+
+    /// Boolean symmetric difference: min(max(a, -b), max(b, -a)) — XOR.
+    pub fn symmetric_difference(&self, other: &Surface2D) -> Self {
+        let a = &self.tree;
+        let b = &other.tree;
+        let a_minus_b = a.clone().max(-b.clone());
+        let b_minus_a = b.clone().max(-a.clone());
+        Self::new(a_minus_b.min(b_minus_a))
+    }
+
     /// Generate a 2D polygon set from the implicit curve using marching squares.
     ///
     /// Returns `PolygonSet` (wrapping `Arc<geo::MultiPolygon>`).
@@ -404,6 +428,10 @@ impl Object for Surface2D {
         use crate::execution::values::{BuiltinFunction, MissingAttributeError};
         match attribute {
             "to_polygon" => Ok(BuiltinFunction::new::<methods::ToPolygon>().into()),
+            "union" => Ok(BuiltinFunction::new::<methods::Union>().into()),
+            "intersection" => Ok(BuiltinFunction::new::<methods::Intersection>().into()),
+            "difference" => Ok(BuiltinFunction::new::<methods::Difference>().into()),
+            "symmetric_difference" => Ok(BuiltinFunction::new::<methods::SymmetricDifference>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }.to_error(_context)),
@@ -423,6 +451,10 @@ impl Object for Surface2D {
 
 pub mod methods {
     pub struct ToPolygon;
+    pub struct Union;
+    pub struct Intersection;
+    pub struct Difference;
+    pub struct SymmetricDifference;
 }
 
 pub fn register_surface2d_methods(database: &mut BuiltinCallableDatabase) {
@@ -439,6 +471,54 @@ pub fn register_surface2d_methods(database: &mut BuiltinCallableDatabase) {
             let polygon = this.to_polygon()
                 .map_err(|e| StringError(e.to_string()).to_error(context))?;
             Ok(polygon.into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::Union, "Surface2D::union", (
+            _context: &ExecutionContext,
+            this: Surface2D,
+            other: Surface2D
+        ) -> Value
+        {
+            Ok(this.union(&other).into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::Intersection, "Surface2D::intersection", (
+            _context: &ExecutionContext,
+            this: Surface2D,
+            other: Surface2D
+        ) -> Value
+        {
+            Ok(this.intersection(&other).into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::Difference, "Surface2D::difference", (
+            _context: &ExecutionContext,
+            this: Surface2D,
+            other: Surface2D
+        ) -> Value
+        {
+            Ok(this.difference(&other).into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::SymmetricDifference, "Surface2D::symmetric_difference", (
+            _context: &ExecutionContext,
+            this: Surface2D,
+            other: Surface2D
+        ) -> Value
+        {
+            Ok(this.symmetric_difference(&other).into())
         }
     );
 }
@@ -752,6 +832,70 @@ mod integration_tests {
         );
         if let Err(ref e) = result {
             eprintln!("to_polygon error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::PolygonSet(_)));
+    }
+
+    #[test]
+    fn integration_boolean_union() {
+        let result = test_run(
+            "let a = (p: std.vector2.Length) -> std.scalar.Length: (p.x * p.x + p.y * p.y)::sqrt() - 1.0m; \
+             b = (p: std.vector2.Length) -> std.scalar.Length: ((p.x - 1.0m) * (p.x - 1.0m) + p.y * p.y)::sqrt() - 0.5m; \
+             combined = a::to_implicit()::union(b::to_implicit()); \
+             in combined::to_polygon()"
+        );
+        if let Err(ref e) = result {
+            eprintln!("boolean union error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::PolygonSet(_)));
+    }
+
+    #[test]
+    fn integration_boolean_intersection() {
+        let result = test_run(
+            "let a = (p: std.vector2.Length) -> std.scalar.Length: (p.x * p.x + p.y * p.y)::sqrt() - 1.0m; \
+             b = (p: std.vector2.Length) -> std.scalar.Length: ((p.x - 1.0m) * (p.x - 1.0m) + p.y * p.y)::sqrt() - 0.5m; \
+             combined = a::to_implicit()::intersection(b::to_implicit()); \
+             in combined::to_polygon()"
+        );
+        if let Err(ref e) = result {
+            eprintln!("boolean intersection error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::PolygonSet(_)));
+    }
+
+    #[test]
+    fn integration_boolean_difference() {
+        let result = test_run(
+            "let a = (p: std.vector2.Length) -> std.scalar.Length: (p.x * p.x + p.y * p.y)::sqrt() - 1.0m; \
+             b = (p: std.vector2.Length) -> std.scalar.Length: ((p.x - 1.0m) * (p.x - 1.0m) + p.y * p.y)::sqrt() - 0.5m; \
+             combined = a::to_implicit()::difference(b::to_implicit()); \
+             in combined::to_polygon()"
+        );
+        if let Err(ref e) = result {
+            eprintln!("boolean difference error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::PolygonSet(_)));
+    }
+
+    #[test]
+    fn integration_boolean_symmetric_difference() {
+        let result = test_run(
+            "let a = (p: std.vector2.Length) -> std.scalar.Length: (p.x * p.x + p.y * p.y)::sqrt() - 1.0m; \
+             b = (p: std.vector2.Length) -> std.scalar.Length: ((p.x - 1.0m) * (p.x - 1.0m) + p.y * p.y)::sqrt() - 0.5m; \
+             combined = a::to_implicit()::symmetric_difference(b::to_implicit()); \
+             in combined::to_polygon()"
+        );
+        if let Err(ref e) = result {
+            eprintln!("boolean symmetric_difference error: {:?}", e);
         }
         assert!(result.is_ok());
         let value = result.unwrap();

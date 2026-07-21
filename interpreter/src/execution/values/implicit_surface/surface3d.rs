@@ -6,11 +6,25 @@ use fidget::mesh::{Octree, Settings};
 use fidget::render::CancelToken;
 use fidget::shape::Shape;
 
+use crate::execution::errors::{Raise, StrError};
 use crate::execution::ExecutionContext;
 use crate::execution::values::{
     closure::{BuiltinCallableDatabase, BuiltinFunction},
-    Object, Scalar, StaticType, StaticTypeName, Style, Value, ValueType,
+    Length, Object, Scalar, StaticType, StaticTypeName, Style, Value, ValueNone, ValueType,
 };
+
+fn unpack_radius(
+    context: &ExecutionContext,
+    radius: Option<Length>,
+    diameter: Option<Length>,
+) -> Result<common_data_types::RawFloat, crate::execution::errors::Error> {
+    match (radius, diameter) {
+        (Some(r), None) => Ok(*r.value),
+        (None, Some(d)) => Ok(*d.value / 2.0),
+        (Some(_), Some(_)) => Err(StrError("Both radius and diameter provided").to_error(context)),
+        (None, None) => Err(StrError("Either radius or diameter must be provided").to_error(context)),
+    }
+}
 
 use super::MeshSettings;
 use super::MeshingError;
@@ -113,6 +127,36 @@ impl Surface3D {
         let surface_2d = Surface2D::with_settings(sliced_tree, self.settings.clone());
         surface_2d.to_polygon()
     }
+
+    /// Boolean union: points inside either surface.
+    /// SDF: min(self, other)
+    pub fn union(&self, other: &Surface3D) -> Self {
+        Self::new(self.tree.clone().min(other.tree.clone()))
+    }
+
+    /// Boolean intersection: points inside both surfaces.
+    /// SDF: max(self, other)
+    pub fn intersection(&self, other: &Surface3D) -> Self {
+        Self::new(self.tree.clone().max(other.tree.clone()))
+    }
+
+    /// Boolean difference: points in self but not in other.
+    /// SDF: max(self, -other)
+    pub fn difference(&self, other: &Surface3D) -> Self {
+        Self::new(self.tree.clone().max(-other.tree.clone()))
+    }
+
+    /// Boolean symmetric difference (XOR): points in exactly one surface.
+    /// SDF: min(max(self, other), 0) + min(-self, -other)
+    /// Approximated as: max(min(self, other), min(-self, -other))
+    pub fn symmetric_difference(&self, other: &Surface3D) -> Self {
+        let a = &self.tree;
+        let b = &other.tree;
+        // Points in A\B or B\A but not both
+        let a_minus_b = a.clone().max(-b.clone());
+        let b_minus_a = b.clone().max(-a.clone());
+        Self::new(a_minus_b.min(b_minus_a))
+    }
 }
 
 /// Converts a Fidget mesh (vertices + triangles) to a boolmesh Manifold.
@@ -173,6 +217,10 @@ impl Object for Surface3D {
             "slice_y" => Ok(BuiltinFunction::new::<methods::SliceY>().into()),
             "slice_z" => Ok(BuiltinFunction::new::<methods::SliceZ>().into()),
             "to_mesh" => Ok(BuiltinFunction::new::<methods::ToMesh>().into()),
+            "union" => Ok(BuiltinFunction::new::<methods::Union>().into()),
+            "intersection" => Ok(BuiltinFunction::new::<methods::Intersection>().into()),
+            "difference" => Ok(BuiltinFunction::new::<methods::Difference>().into()),
+            "symmetric_difference" => Ok(BuiltinFunction::new::<methods::SymmetricDifference>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }.to_error(_context)),
@@ -195,6 +243,10 @@ pub mod methods {
     pub struct SliceY;
     pub struct SliceZ;
     pub struct ToMesh;
+    pub struct Union;
+    pub struct Intersection;
+    pub struct Difference;
+    pub struct SymmetricDifference;
 }
 
 pub fn register_surface3d_methods(database: &mut BuiltinCallableDatabase) {
@@ -255,6 +307,192 @@ pub fn register_surface3d_methods(database: &mut BuiltinCallableDatabase) {
             Ok(mesh.into())
         }
     );
+
+    build_method!(
+        database,
+        methods::Union, "Surface3D::union", (
+            context: &ExecutionContext,
+            this: Surface3D,
+            other: Surface3D
+        ) -> Value
+        {
+            let result = this.union(&other);
+            Ok(result.into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::Intersection, "Surface3D::intersection", (
+            context: &ExecutionContext,
+            this: Surface3D,
+            other: Surface3D
+        ) -> Value
+        {
+            let result = this.intersection(&other);
+            Ok(result.into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::Difference, "Surface3D::difference", (
+            context: &ExecutionContext,
+            this: Surface3D,
+            other: Surface3D
+        ) -> Value
+        {
+            let result = this.difference(&other);
+            Ok(result.into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::SymmetricDifference, "Surface3D::symmetric_difference", (
+            context: &ExecutionContext,
+            this: Surface3D,
+            other: Surface3D
+        ) -> Value
+        {
+            let result = this.symmetric_difference(&other);
+            Ok(result.into())
+        }
+    );
+}
+
+/// Builtin implicit shape generators.
+pub mod implicits {
+    pub struct Sphere;
+    pub struct Cube;
+    pub struct Cylinder;
+    pub struct Cone;
+    pub struct Torus;
+}
+
+/// Register builtin implicit shape functions.
+pub fn register_implicits(database: &mut BuiltinCallableDatabase) {
+    use crate::build_function;
+    use fidget::context::Tree;
+    build_function!(
+        database,
+        implicits::Sphere, "std.implicits.sphere", (
+            context: &ExecutionContext,
+            radius: Option<Length> = ValueNone.into(),
+            diameter: Option<Length> = ValueNone.into()
+        ) -> Value
+        {
+            let r = unpack_radius(context, radius, diameter)?;
+            // SDF: sqrt(x² + y² + z²) - r
+            let x = Tree::x();
+            let y = Tree::y();
+            let z = Tree::z();
+            let dist = (x.clone() * x.clone() + y.clone() * y.clone() + z.clone() * z.clone()).sqrt();
+            let tree = dist - Tree::constant(r);
+            Ok(Surface3D::new(tree).into())
+        }
+    );
+
+    build_function!(
+        database,
+        implicits::Cube, "std.implicits.cube", (
+            context: &ExecutionContext,
+            size: Scalar
+        ) -> Value
+        {
+            let s = size.value.into_inner();
+            let half = s / 2.0;
+            // SDF: max(|x|, |y|, |z|) - half
+            let x = Tree::x().abs();
+            let y = Tree::y().abs();
+            let z = Tree::z().abs();
+            let tree = x.max(y).max(z) - Tree::constant(half);
+            Ok(Surface3D::new(tree).into())
+        }
+    );
+
+    build_function!(
+        database,
+        implicits::Cylinder, "std.implicits.cylinder", (
+            context: &ExecutionContext,
+            radius: Option<Length> = ValueNone.into(),
+            diameter: Option<Length> = ValueNone.into(),
+            height: Length
+        ) -> Value
+        {
+            let r = unpack_radius(context, radius, diameter)?;
+            let h = height.value.into_inner();
+            // SDF for cylinder along Z axis: max(sqrt(x²+y²)-r, |z|-h/2)
+            let x = Tree::x();
+            let y = Tree::y();
+            let z = Tree::z().abs();
+            let radial = (x.clone() * x.clone() + y.clone() * y.clone()).sqrt() - Tree::constant(r);
+            let axial = z - Tree::constant(h / 2.0);
+            let tree = radial.max(axial);
+            Ok(Surface3D::new(tree).into())
+        }
+    );
+
+    build_function!(
+        database,
+        implicits::Cone, "std.implicits.cone", (
+            context: &ExecutionContext,
+            radius: Option<Length> = ValueNone.into(),
+            diameter: Option<Length> = ValueNone.into(),
+            height: Length
+        ) -> Value
+        {
+            let r = unpack_radius(context, radius, diameter)?;
+            let h = height.value.into_inner();
+            // Finite cone SDF, centered at origin like the cylinder.
+            // Apex at (0, 0, -h/2), base center at (0, 0, h/2), base radius r.
+            // Based on fidget's reference cone formula (fidget-mesh/src/octree.rs).
+            let (x, y, z) = (Tree::x(), Tree::y(), Tree::z());
+            let half_h = Tree::constant(h / 2.0);
+            let r_tree = Tree::constant(r);
+            // Shift z so apex is at -h/2 and base is at +h/2.
+            // Distance along axis from apex: a = z + h/2 (ranges from 0 to h).
+            let a = z.clone() + half_h.clone();
+            // Perpendicular distance from point to its projection on the cone axis.
+            // Axis point at parameter a is (0, 0, -h/2 + a) = (0, 0, z).
+            // So the perpendicular offset is just (x, y, 0).
+            // But we need the full 3D distance to the axis projection point.
+            // For a vertical cone, the axis projection of (x, y, z) is (0, 0, z).
+            // Distance from (x, y, z) to (0, 0, z) is sqrt(x² + y²).
+            let b = (x.clone() * x.clone() + y.clone() * y.clone()).sqrt();
+            // Cone radius at height a: r * (a / h), where a ranges from 0 (apex) to h (base).
+            // SDF: b - r * (a / h) = perpendicular_distance - local_radius
+            let cone_sdf = b - r_tree.clone() * a.clone() / Tree::constant(h);
+            // Cap at base: z - h/2 is positive above the base.
+            let base_cap = z.clone() - half_h.clone();
+            // Cap at apex: -z - h/2 is positive below the apex.
+            let apex_cap = -z - half_h;
+            // Finite cone: max of cone SDF and both caps.
+            let tree = cone_sdf.max(base_cap).max(apex_cap);
+            Ok(Surface3D::new(tree).into())
+        }
+    );
+
+    build_function!(
+        database,
+        implicits::Torus, "std.implicits.torus", (
+            context: &ExecutionContext,
+            major_radius: Scalar,
+            minor_radius: Scalar
+        ) -> Value
+        {
+            let major = major_radius.value.into_inner();
+            let minor = minor_radius.value.into_inner();
+            // SDF: sqrt((sqrt(x²+y²)-major)² + z²) - minor
+            let x = Tree::x();
+            let y = Tree::y();
+            let z = Tree::z();
+            let radial = (x.clone() * x.clone() + y.clone() * y.clone()).sqrt();
+            let diff = radial - Tree::constant(major);
+            let tree = (diff.clone() * diff.clone() + z.clone() * z.clone()).sqrt() - Tree::constant(minor);
+            Ok(Surface3D::new(tree).into())
+        }
+    );
 }
 
 #[cfg(test)]
@@ -262,10 +500,7 @@ mod surface3d_tests {
     use crate::execution::test_run;
     use crate::execution::values::Value;
     use super::Surface3D;
-    use fidget::context::{Context, Tree};
-    use fidget::mesh::{Octree, Settings};
-    use fidget::shape::Shape;
-    use fidget::render::CancelToken;
+    use fidget::context::Tree;
 
     #[test]
     fn integration_slice_z_sphere() {
@@ -334,16 +569,16 @@ mod surface3d_tests {
         let x = Tree::x();
         let y = Tree::y();
         let z = Tree::z();
-        let R = Tree::constant(5.0);
-        let r = Tree::constant(1.5);
-        let R2 = R.clone() * R;
-        let r2 = r.clone() * r;
+        let major = Tree::constant(5.0);
+        let minor = Tree::constant(1.5);
+        let major_sq = major.clone() * major.clone();
+        let minor_sq = minor.clone() * minor;
         let x2 = x.clone() * x;
         let y2 = y.clone() * y;
         let xy_sq = x2.clone() + y2.clone();
         let dist_sq = x2 + y2 + z.clone() * z;
-        let inner = dist_sq.clone() + R2.clone() - r2;
-        let torus = inner.clone() * inner - Tree::constant(4.0) * R2 * xy_sq;
+        let inner = dist_sq.clone() + major_sq.clone() - minor_sq;
+        let torus = inner.clone() * inner - Tree::constant(4.0) * major_sq * xy_sq;
         let surface = Surface3D::new(torus);
 
         let result = surface.to_manifold();
@@ -351,5 +586,145 @@ mod surface3d_tests {
             eprintln!("to_manifold torus error: {:?}", e);
         }
         assert!(result.is_ok(), "torus to_manifold should succeed: {:?}", result);
+    }
+
+    #[test]
+    fn integration_std_implicits_sphere() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.sphere(radius = 5.0m)");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+
+        let result = test_run("std.implicits.sphere(diameter = 10.0m)");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_cube() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.cube(size = 4.0m)");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_cylinder() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.cylinder(radius = 2.0m, height = 6.0m)");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+
+        let result = test_run("std.implicits.cylinder(diameter = 4.0m, height = 6.0m)");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_cone() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.cone(radius = 2.0m, height = 6.0m)");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+
+        let result = test_run("std.implicits.cone(diameter = 4.0m, height = 6.0m)");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_torus() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.torus(major_radius = 4.0m, minor_radius = 1.5m)");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_sphere_to_mesh() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.sphere(radius = 5.0m)::to_mesh()");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::ManifoldMesh3D(_)));
+
+        let result = test_run("std.implicits.sphere(diameter = 10.0m)::to_mesh()");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::ManifoldMesh3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_cube_to_mesh() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.cube(size = 4.0m)::to_mesh()");
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::ManifoldMesh3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_cone_to_mesh() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.cone(radius = 3.0m, height = 6.0m)::to_mesh()");
+        if let Err(ref e) = result {
+            eprintln!("cone to_mesh error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::ManifoldMesh3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_cylinder_to_mesh() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.cylinder(radius = 2.0m, height = 6.0m)::to_mesh()");
+        if let Err(ref e) = result {
+            eprintln!("cylinder to_mesh error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::ManifoldMesh3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_union() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "let a = std.implicits.sphere(radius = 3.0m); \
+             b = std.implicits.cube(size = 4.0m); \
+             in a::union(b)"
+        );
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
     }
 }

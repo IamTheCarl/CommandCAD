@@ -1,0 +1,4 @@
+let
+  home_made_sphere = (p: std.vector3.Length) -> std.scalar.Length: (p.x::pow(2) + p.y::pow(2) + p.z::pow(2))::sqrt() - 1.0m;
+in
+  home_made_sphere::to_implicit()
