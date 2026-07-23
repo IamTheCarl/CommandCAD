@@ -41,7 +41,6 @@ pub fn draw_grid(
     let pixels_per_meter = view_state.pixels_per_meter();
     let pixels_per_cell = world_step * pixels_per_meter;
 
-    // Skip if cells are too small to be useful
     if pixels_per_cell < 3.0 {
         return;
     }
@@ -52,7 +51,6 @@ pub fn draw_grid(
     let center_offset = draw_area.center().to_vec2();
     let view_offset = Vec2::new(view_state.offset().x, view_state.offset().y);
 
-    // Calculate the world position of the edges of the draw area
     let left_world = (draw_area.left() - center_offset.x) / pixels_per_meter - view_offset.x;
     let right_world = (draw_area.right() - center_offset.x) / pixels_per_meter - view_offset.x;
     let top_world = (draw_area.top() - center_offset.y) / pixels_per_meter - view_offset.y;
@@ -61,7 +59,6 @@ pub fn draw_grid(
     let screen_top = draw_area.top();
     let screen_bottom = draw_area.bottom();
 
-    // Draw vertical lines — compute position directly from index to avoid floating point drift
     let first_line_idx = (left_world / world_step).floor();
     let last_line_idx = (right_world / world_step).floor();
     for i in (first_line_idx as i32)..=(last_line_idx as i32) {
@@ -73,7 +70,6 @@ pub fn draw_grid(
         );
     }
 
-    // Draw horizontal lines — compute position directly from index
     let first_line_idx = (top_world / world_step).floor();
     let last_line_idx = (bottom_world / world_step).floor();
     for i in (first_line_idx as i32)..=(last_line_idx as i32) {
@@ -109,7 +105,6 @@ impl Default for ViewState2d {
 }
 
 impl ViewState2d {
-    // Percentage of scale per scale factor unit.
     const SCALE_FACTOR: f32 = 1.01;
 
     pub fn track_movement(&mut self, input_state: &egui::InputState, draw_area: egui::Rect) {
@@ -245,19 +240,16 @@ pub fn paint_polygon(
         translation: center_offset + view_offset * pixels_per_meter,
     };
 
-    // Render fill
     let mut shape = Shape::Mesh(mesh);
     shape.transform(transform);
     painter.add(shape);
 
-    // Render exterior
     painter.add(paint_linestring(
         &transform,
         StrokeKind::Inside,
         polygon.exterior(),
     ));
 
-    // Render interior.
     for interior in polygon.interiors() {
         painter.add(paint_linestring(&transform, StrokeKind::Outside, interior));
     }

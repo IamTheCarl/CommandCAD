@@ -4,10 +4,10 @@ use std::sync::Arc;
 use fidget::context::Context;
 use geo::{Coord, LineString, MultiPolygon, Polygon};
 
-use crate::execution::ExecutionContext;
 use crate::execution::values::{
     BuiltinCallableDatabase, Object, StaticType, StaticTypeName, Style, Value, ValueType,
 };
+use crate::execution::ExecutionContext;
 
 use super::MeshSettings;
 use super::MeshingError;
@@ -83,13 +83,21 @@ impl Surface2D {
             for ix in 0..grid_width {
                 let x = origin_x + ix as f32 * cell_size;
                 let y = origin_y + iy as f32 * cell_size;
-                let val = eval_ctx.eval_xyz(node, x as f64, y as f64, 0.0_f64)
+                let val = eval_ctx
+                    .eval_xyz(node, x as f64, y as f64, 0.0_f64)
                     .map_err(|e| MeshingError(format!("SDF evaluation failed: {e}")))?;
                 grid[iy * grid_width + ix] = val as f32;
             }
         }
 
-        let segments = marching_squares(&grid, grid_width, grid_height, origin_x, origin_y, cell_size);
+        let segments = marching_squares(
+            &grid,
+            grid_width,
+            grid_height,
+            origin_x,
+            origin_y,
+            cell_size,
+        );
         let loops = connect_segments_into_loops(segments, cell_size);
 
         // Find the loop with the largest absolute area as the exterior contour.
@@ -142,14 +150,20 @@ impl Surface2D {
             .ok_or_else(|| MeshingError("No outer contour found".into()))?;
         let exterior_f64: Vec<geo::Coord<f64>> = exterior
             .into_iter()
-            .map(|c| geo::Coord { x: c.x as f64, y: c.y as f64 })
+            .map(|c| geo::Coord {
+                x: c.x as f64,
+                y: c.y as f64,
+            })
             .collect();
         let interiors_f64: Vec<LineString<f64>> = interior_coords
             .into_iter()
             .map(|coords| {
                 let coords_f64: Vec<geo::Coord<f64>> = coords
                     .into_iter()
-                    .map(|c| geo::Coord { x: c.x as f64, y: c.y as f64 })
+                    .map(|c| geo::Coord {
+                        x: c.x as f64,
+                        y: c.y as f64,
+                    })
                     .collect();
                 LineString(coords_f64)
             })
@@ -233,24 +247,38 @@ fn marching_squares(
             let v_tl = grid[(iy + 1) * width + ix];
 
             let case = if v_bl < 0.0 { 1 } else { 0 }
-                       | if v_br < 0.0 { 2 } else { 0 }
-                       | if v_tr < 0.0 { 4 } else { 0 }
-                       | if v_tl < 0.0 { 8 } else { 0 };
+                | if v_br < 0.0 { 2 } else { 0 }
+                | if v_tr < 0.0 { 4 } else { 0 }
+                | if v_tl < 0.0 { 8 } else { 0 };
 
             // Handle saddle cases separately with correct segment pairing
             if case == 5 || case == 10 {
                 let pts: Vec<[f32; 2]> = (0..4)
-                    .filter_map(|e| interpolate_edge(ix, iy, e, grid, width, origin_x, origin_y, cell_size))
+                    .filter_map(|e| {
+                        interpolate_edge(ix, iy, e, grid, width, origin_x, origin_y, cell_size)
+                    })
                     .collect();
                 if pts.len() == 4 {
                     // Case 5 (BL+TR neg): pair (bottom, left) and (right, top)
                     // Case 10 (BR+TL neg): pair (bottom, right) and (top, left)
                     if case == 5 {
-                        segments.push(Segment { start: pts[0], end: pts[3] });
-                        segments.push(Segment { start: pts[1], end: pts[2] });
+                        segments.push(Segment {
+                            start: pts[0],
+                            end: pts[3],
+                        });
+                        segments.push(Segment {
+                            start: pts[1],
+                            end: pts[2],
+                        });
                     } else {
-                        segments.push(Segment { start: pts[0], end: pts[1] });
-                        segments.push(Segment { start: pts[2], end: pts[3] });
+                        segments.push(Segment {
+                            start: pts[0],
+                            end: pts[1],
+                        });
+                        segments.push(Segment {
+                            start: pts[2],
+                            end: pts[3],
+                        });
                     }
                 }
                 continue;
@@ -261,14 +289,19 @@ fn marching_squares(
             let mut points = Vec::new();
             for &edge in edges.iter() {
                 if edge != (0, 0) {
-                    if let Some(pt) = interpolate_edge(ix, iy, edge.0, grid, width, origin_x, origin_y, cell_size) {
+                    if let Some(pt) =
+                        interpolate_edge(ix, iy, edge.0, grid, width, origin_x, origin_y, cell_size)
+                    {
                         points.push(pt);
                     }
                 }
             }
 
             if points.len() == 2 {
-                segments.push(Segment { start: points[0], end: points[1] });
+                segments.push(Segment {
+                    start: points[0],
+                    end: points[1],
+                });
             }
         }
     }
@@ -298,12 +331,26 @@ fn interpolate_edge(
         1 => {
             let v0 = grid[iy * width + ix + 1];
             let v1 = grid[(iy + 1) * width + ix + 1];
-            (v0, v1, (ix + 1) as f32, (ix + 1) as f32, iy as f32, (iy + 1) as f32)
+            (
+                v0,
+                v1,
+                (ix + 1) as f32,
+                (ix + 1) as f32,
+                iy as f32,
+                (iy + 1) as f32,
+            )
         }
         2 => {
             let v0 = grid[(iy + 1) * width + ix];
             let v1 = grid[(iy + 1) * width + ix + 1];
-            (v0, v1, ix as f32, (ix + 1) as f32, (iy + 1) as f32, (iy + 1) as f32)
+            (
+                v0,
+                v1,
+                ix as f32,
+                (ix + 1) as f32,
+                (iy + 1) as f32,
+                (iy + 1) as f32,
+            )
         }
         3 => {
             let v0 = grid[iy * width + ix];
@@ -331,7 +378,10 @@ fn connect_segments_into_loops(segments: Vec<Segment>, cell_size: f32) -> Vec<Ve
     // (from shared edges between adjacent cells), not geometrically distinct points.
     let snap_tol = cell_size * 0.01;
     let snap_key = |pt: &[f32; 2]| -> (i32, i32) {
-        ((pt[0] / snap_tol).round() as i32, (pt[1] / snap_tol).round() as i32)
+        (
+            (pt[0] / snap_tol).round() as i32,
+            (pt[1] / snap_tol).round() as i32,
+        )
     };
 
     let mut adj: HashMap<(i32, i32), Vec<(i32, i32)>> = HashMap::new();
@@ -351,7 +401,8 @@ fn connect_segments_into_loops(segments: Vec<Segment>, cell_size: f32) -> Vec<Ve
 
     // Collect all keys with non-empty adjacency lists, sorted for determinism
     loop {
-        let start_key = remaining_edges.keys()
+        let start_key = remaining_edges
+            .keys()
             .filter(|k| remaining_edges.get(*k).is_some_and(|v| !v.is_empty()))
             .min() // deterministic: pick smallest key
             .cloned();
@@ -423,7 +474,11 @@ impl Object for Surface2D {
         ValueType::ImplicitSurface2D
     }
 
-    fn get_attribute(&self, _context: &ExecutionContext, attribute: &str) -> crate::execution::ExecutionResult<Value> {
+    fn get_attribute(
+        &self,
+        _context: &ExecutionContext,
+        attribute: &str,
+    ) -> crate::execution::ExecutionResult<Value> {
         use crate::execution::errors::Raise as _;
         use crate::execution::values::{BuiltinFunction, MissingAttributeError};
         match attribute {
@@ -431,10 +486,13 @@ impl Object for Surface2D {
             "union" => Ok(BuiltinFunction::new::<methods::Union>().into()),
             "intersection" => Ok(BuiltinFunction::new::<methods::Intersection>().into()),
             "difference" => Ok(BuiltinFunction::new::<methods::Difference>().into()),
-            "symmetric_difference" => Ok(BuiltinFunction::new::<methods::SymmetricDifference>().into()),
+            "symmetric_difference" => {
+                Ok(BuiltinFunction::new::<methods::SymmetricDifference>().into())
+            }
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
-            }.to_error(_context)),
+            }
+            .to_error(_context)),
         }
     }
 
@@ -556,7 +614,14 @@ mod tests {
 
     // --- marching_squares ---
 
-    fn sdf_circle_grid(cx: f32, cy: f32, r: f32, size: usize, origin: f32, cell_size: f32) -> Vec<f32> {
+    fn sdf_circle_grid(
+        cx: f32,
+        cy: f32,
+        r: f32,
+        size: usize,
+        origin: f32,
+        cell_size: f32,
+    ) -> Vec<f32> {
         let mut grid = vec![0.0f32; size * size];
         for iy in 0..size {
             for ix in 0..size {
@@ -582,24 +647,31 @@ mod tests {
     fn marching_squares_all_positive() {
         let grid = vec![1.0f32; 16 * 16];
         let segments = marching_squares(&grid, 16, 16, 0.0, 0.0, 1.0);
-        assert!(segments.is_empty(), "all positive should produce no segments");
+        assert!(
+            segments.is_empty(),
+            "all positive should produce no segments"
+        );
     }
 
     #[test]
     fn marching_squares_all_negative() {
         let grid = vec![-1.0f32; 16 * 16];
         let segments = marching_squares(&grid, 16, 16, 0.0, 0.0, 1.0);
-        assert!(segments.is_empty(), "all negative should produce no segments");
+        assert!(
+            segments.is_empty(),
+            "all negative should produce no segments"
+        );
     }
 
     #[test]
     fn marching_squares_single_cell_crossing() {
-        let grid = vec![
-            -1.0, -1.0,
-             1.0,  1.0,
-        ];
+        let grid = vec![-1.0, -1.0, 1.0, 1.0];
         let segments = marching_squares(&grid, 2, 2, 0.0, 0.0, 1.0);
-        assert_eq!(segments.len(), 1, "single crossing should produce one segment");
+        assert_eq!(
+            segments.len(),
+            1,
+            "single crossing should produce one segment"
+        );
     }
 
     // --- connect_segments_into_loops ---
@@ -607,10 +679,22 @@ mod tests {
     #[test]
     fn connect_segments_square_loop() {
         let segments = vec![
-            Segment { start: [0.0, 0.0], end: [1.0, 0.0] },
-            Segment { start: [1.0, 0.0], end: [1.0, 1.0] },
-            Segment { start: [1.0, 1.0], end: [0.0, 1.0] },
-            Segment { start: [0.0, 1.0], end: [0.0, 0.0] },
+            Segment {
+                start: [0.0, 0.0],
+                end: [1.0, 0.0],
+            },
+            Segment {
+                start: [1.0, 0.0],
+                end: [1.0, 1.0],
+            },
+            Segment {
+                start: [1.0, 1.0],
+                end: [0.0, 1.0],
+            },
+            Segment {
+                start: [0.0, 1.0],
+                end: [0.0, 0.0],
+            },
         ];
         let loops = connect_segments_into_loops(segments, 1.0);
         assert_eq!(loops.len(), 1, "should form one loop");
@@ -620,14 +704,38 @@ mod tests {
     #[test]
     fn connect_segments_disconnected() {
         let segments = vec![
-            Segment { start: [0.0, 0.0], end: [1.0, 0.0] },
-            Segment { start: [1.0, 0.0], end: [1.0, 1.0] },
-            Segment { start: [1.0, 1.0], end: [0.0, 1.0] },
-            Segment { start: [0.0, 1.0], end: [0.0, 0.0] },
-            Segment { start: [5.0, 5.0], end: [6.0, 5.0] },
-            Segment { start: [6.0, 5.0], end: [6.0, 6.0] },
-            Segment { start: [6.0, 6.0], end: [5.0, 6.0] },
-            Segment { start: [5.0, 6.0], end: [5.0, 5.0] },
+            Segment {
+                start: [0.0, 0.0],
+                end: [1.0, 0.0],
+            },
+            Segment {
+                start: [1.0, 0.0],
+                end: [1.0, 1.0],
+            },
+            Segment {
+                start: [1.0, 1.0],
+                end: [0.0, 1.0],
+            },
+            Segment {
+                start: [0.0, 1.0],
+                end: [0.0, 0.0],
+            },
+            Segment {
+                start: [5.0, 5.0],
+                end: [6.0, 5.0],
+            },
+            Segment {
+                start: [6.0, 5.0],
+                end: [6.0, 6.0],
+            },
+            Segment {
+                start: [6.0, 6.0],
+                end: [5.0, 6.0],
+            },
+            Segment {
+                start: [5.0, 6.0],
+                end: [5.0, 5.0],
+            },
         ];
         let loops = connect_segments_into_loops(segments, 1.0);
         assert_eq!(loops.len(), 2, "should form two separate loops");
@@ -679,7 +787,11 @@ mod tests {
     fn to_polygon_circle_basic() {
         let surface = make_circle_surface(1.0);
         let result = surface.to_polygon();
-        assert!(result.is_ok(), "circle should produce a polygon: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "circle should produce a polygon: {:?}",
+            result
+        );
         let poly = result.unwrap();
         let mp = &*poly.0;
         assert_eq!(mp.0.len(), 1, "should have one polygon");
@@ -698,9 +810,14 @@ mod tests {
         // Debug: print some coordinates
         let exterior = mp.0[0].exterior();
         let coords: Vec<_> = exterior.coords().collect();
-        eprintln!("polygon area: {}, num vertices: {}, first few coords: {:?}", area, coords.len(), &coords[..4.min(coords.len())]);
+        eprintln!(
+            "polygon area: {}, num vertices: {}, first few coords: {:?}",
+            area,
+            coords.len(),
+            &coords[..4.min(coords.len())]
+        );
         if coords.len() > 4 {
-            eprintln!("last few coords: {:?}", &coords[coords.len()-4..]);
+            eprintln!("last few coords: {:?}", &coords[coords.len() - 4..]);
         }
         assert!(
             (area - expected).abs() / expected < 0.15,
@@ -714,14 +831,21 @@ mod tests {
     fn to_polygon_no_contour() {
         let surface = Surface2D::new(Tree::constant(100.0));
         let result = surface.to_polygon();
-        assert!(result.is_err(), "positive constant should produce no contour");
+        assert!(
+            result.is_err(),
+            "positive constant should produce no contour"
+        );
     }
 
     #[test]
     fn to_polygon_small_circle() {
         let surface = make_circle_surface(0.5);
         let result = surface.to_polygon();
-        assert!(result.is_ok(), "small circle should produce a polygon: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "small circle should produce a polygon: {:?}",
+            result
+        );
     }
 
     #[test]
@@ -729,7 +853,11 @@ mod tests {
         // Use depth=10 for finer grid (1024x1024 over [-10,10]², cell_size ~ 0.02)
         let surface = make_circle_surface_with_depth(5.0, 10);
         let result = surface.to_polygon();
-        assert!(result.is_ok(), "large circle should produce a polygon: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "large circle should produce a polygon: {:?}",
+            result
+        );
         let poly = result.unwrap();
         let mp = &*poly.0;
         let area = polygon_area(&mp.0[0]);
@@ -769,7 +897,8 @@ mod tests {
         use fidget::context::Context;
 
         let surface = make_circle_surface(1.0);
-        let (origin_x, origin_y, cell_size, grid_width, grid_height) = surface.compute_grid_params();
+        let (origin_x, origin_y, cell_size, grid_width, grid_height) =
+            surface.compute_grid_params();
 
         let mut eval_ctx = Context::new();
         let node = eval_ctx.import(&surface.tree);
@@ -779,7 +908,9 @@ mod tests {
             for ix in 0..grid_width {
                 let x = origin_x + ix as f32 * cell_size;
                 let y = origin_y + iy as f32 * cell_size;
-                let val = eval_ctx.eval_xyz(node, x as f64, y as f64, 0.0_f64).unwrap();
+                let val = eval_ctx
+                    .eval_xyz(node, x as f64, y as f64, 0.0_f64)
+                    .unwrap();
                 grid[iy * grid_width + ix] = val as f32;
             }
         }
@@ -787,26 +918,53 @@ mod tests {
         // Check that we have some negative values (inside circle) and positive values (outside)
         let neg_count = grid.iter().filter(|&&v| v < 0.0).count();
         let pos_count = grid.iter().filter(|&&v| v > 0.0).count();
-        eprintln!("Grid: {}x{}, cell_size={:.4}, neg={}, pos={}",
-            grid_width, grid_height, cell_size, neg_count, pos_count);
+        eprintln!(
+            "Grid: {}x{}, cell_size={:.4}, neg={}, pos={}",
+            grid_width, grid_height, cell_size, neg_count, pos_count
+        );
 
         // Check a few cells near center
         let mid = (grid_width / 2) as usize;
         let mid_y = (grid_height / 2) as usize;
-        eprintln!("Center cell [{}][{}] = {:.4}", mid_y, mid, grid[mid_y * grid_width + mid]);
-        eprintln!("Cell [{}][{}] = {:.4}", mid_y, mid + 1, grid[mid_y * grid_width + mid + 1]);
+        eprintln!(
+            "Center cell [{}][{}] = {:.4}",
+            mid_y,
+            mid,
+            grid[mid_y * grid_width + mid]
+        );
+        eprintln!(
+            "Cell [{}][{}] = {:.4}",
+            mid_y,
+            mid + 1,
+            grid[mid_y * grid_width + mid + 1]
+        );
 
-        let segments = marching_squares(&grid, grid_width, grid_height, origin_x, origin_y, cell_size);
+        let segments = marching_squares(
+            &grid,
+            grid_width,
+            grid_height,
+            origin_x,
+            origin_y,
+            cell_size,
+        );
         eprintln!("Segments: {}", segments.len());
         for (i, seg) in segments.iter().enumerate() {
-            eprintln!("  Seg {}: [{:.3}, {:.3}] -> [{:.3}, {:.3}]", i, seg.start[0], seg.start[1], seg.end[0], seg.end[1]);
+            eprintln!(
+                "  Seg {}: [{:.3}, {:.3}] -> [{:.3}, {:.3}]",
+                i, seg.start[0], seg.start[1], seg.end[0], seg.end[1]
+            );
         }
 
         let loops = connect_segments_into_loops(segments.clone(), cell_size);
         eprintln!("Loops: {}", loops.len());
         for (i, loop_v) in loops.iter().enumerate() {
             let area = signed_area_2d(loop_v);
-            eprintln!("  Loop {}: {} vertices, signed_area={:.4}", i, loop_v.len(), area);
+            eprintln!(
+                "  Loop {}: {} vertices, signed_area={:.4}",
+                i,
+                loop_v.len(),
+                area
+            );
             for (j, pt) in loop_v.iter().enumerate() {
                 eprintln!("    Vertex {}: [{:.3}, {:.3}]", j, pt[0], pt[1]);
             }

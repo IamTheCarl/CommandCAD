@@ -35,7 +35,8 @@ use crate::{
     },
     new_parser,
     values::{
-        constraint_set::find_all_captured_variables_in_constraint_set, ConstraintSet, IString, Scalar,
+        constraint_set::find_all_captured_variables_in_constraint_set, ConstraintSet, IString,
+        Scalar,
     },
     SourceReference,
 };

@@ -72,7 +72,9 @@ pub mod polygon;
 pub use polygon::{LineString, Polygon, PolygonSet};
 
 pub mod implicit_surface;
-pub use implicit_surface::{ast_to_fidget, resolve_captured_values, ParamDim, Surface2D, Surface3D};
+pub use implicit_surface::{
+    ast_to_fidget, resolve_captured_values, ParamDim, Surface2D, Surface3D,
+};
 
 mod value_type;
 pub use value_type::{StructDefinition, StructMember, ValueType};

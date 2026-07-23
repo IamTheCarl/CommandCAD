@@ -41,7 +41,9 @@ use crate::{
     },
 };
 
-use super::{MissingAttributeError, Object, StaticType, StaticTypeName, StructDefinition, ValueType};
+use super::{
+    MissingAttributeError, Object, StaticType, StaticTypeName, StructDefinition, ValueType,
+};
 use enum_downcast::IntoVariant;
 
 #[derive(Debug, Default)]
@@ -267,8 +269,11 @@ impl UserClosure {
         let members = &self.data.signature.argument_type.members;
         if members.len() != 1 {
             return Err(InvalidClosureSignatureError {
-                message: "Implicit surface closure must take exactly one parameter (Vector2 or Vector3)".into(),
-            }.to_error(context));
+                message:
+                    "Implicit surface closure must take exactly one parameter (Vector2 or Vector3)"
+                        .into(),
+            }
+            .to_error(context));
         }
 
         let (_param_name, param_type) = members.iter().next().unwrap();
@@ -322,20 +327,20 @@ impl UserClosure {
             _ => {
                 return Err(InvalidClosureSignatureError {
                     message: "Implicit surface closure must return std.scalar.Length".into(),
-                }.to_error(context));
+                }
+                .to_error(context));
             }
         }
 
         // 2. Resolve captured values from the current execution context
-        let (captured_map, closures_map) = resolve_captured_values(
-            &self.data.captured_values,
-            context,
-            &self.data.expression,
-        ).map_err(|e| {
-            ImplicitSurfaceError {
-                message: e.to_string(),
-            }.to_error(context)
-        })?;
+        let (captured_map, closures_map) =
+            resolve_captured_values(&self.data.captured_values, context, &self.data.expression)
+                .map_err(|e| {
+                    ImplicitSurfaceError {
+                        message: e.to_string(),
+                    }
+                    .to_error(context)
+                })?;
 
         // 3. Convert AST expression to ImplicitSurface
         let shape = ast_to_shape(
@@ -343,10 +348,12 @@ impl UserClosure {
             &captured_map,
             &closures_map,
             param_dim,
-        ).map_err(|e| {
+        )
+        .map_err(|e| {
             ImplicitSurfaceError {
                 message: e.to_string(),
-            }.to_error(context)
+            }
+            .to_error(context)
         })?;
 
         Ok(shape)
@@ -358,13 +365,17 @@ impl Object for UserClosure {
         ValueType::Closure(self.data.signature.clone())
     }
 
-    fn get_attribute(&self, _context: &ExecutionContext, attribute: &str) -> ExecutionResult<Value> {
+    fn get_attribute(
+        &self,
+        _context: &ExecutionContext,
+        attribute: &str,
+    ) -> ExecutionResult<Value> {
         match attribute {
             "to_implicit" => Ok(BuiltinFunction::new::<methods::ToImplicit>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
-            .to_error(_context))
+            .to_error(_context)),
         }
     }
 

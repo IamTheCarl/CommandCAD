@@ -87,18 +87,24 @@ pub fn ast_to_fidget(
             handle_function_call(&func_call.node, captured_values, closures, param_dim)
         }
         Expression::BinaryExpression(bin) => {
-            let (left, left_dim) = ast_to_fidget(&bin.node.a, captured_values, closures, param_dim)?;
-            let (right, right_dim) = ast_to_fidget(&bin.node.b, captured_values, closures, param_dim)?;
+            let (left, left_dim) =
+                ast_to_fidget(&bin.node.a, captured_values, closures, param_dim)?;
+            let (right, right_dim) =
+                ast_to_fidget(&bin.node.b, captured_values, closures, param_dim)?;
             match &bin.node.operation.node {
                 crate::compile::BinaryExpressionOperation::Add => {
                     if left_dim != right_dim {
-                        return Err(FidgetConversionError::DimensionalIncompatible(left_dim, right_dim));
+                        return Err(FidgetConversionError::DimensionalIncompatible(
+                            left_dim, right_dim,
+                        ));
                     }
                     Ok((left + right, left_dim))
                 }
                 crate::compile::BinaryExpressionOperation::Sub => {
                     if left_dim != right_dim {
-                        return Err(FidgetConversionError::DimensionalIncompatible(left_dim, right_dim));
+                        return Err(FidgetConversionError::DimensionalIncompatible(
+                            left_dim, right_dim,
+                        ));
                     }
                     Ok((left - right, left_dim))
                 }
@@ -118,20 +124,21 @@ pub fn ast_to_fidget(
         }
 
         Expression::UnaryExpression(unary) => {
-            let (operand, dim) = ast_to_fidget(&unary.node.expression, captured_values, closures, param_dim)?;
+            let (operand, dim) =
+                ast_to_fidget(&unary.node.expression, captured_values, closures, param_dim)?;
             match &unary.node.operation.node {
                 crate::compile::UnaryExpressionOperation::Sub => Ok((-operand, dim)),
                 crate::compile::UnaryExpressionOperation::Add => Ok((operand, dim)),
-                crate::compile::UnaryExpressionOperation::Not => Err(FidgetConversionError::UnsupportedExpression(
-                    "operator".into(),
-                    "Not".into(),
-                )),
+                crate::compile::UnaryExpressionOperation::Not => Err(
+                    FidgetConversionError::UnsupportedExpression("operator".into(), "Not".into()),
+                ),
             }
         }
 
-        Expression::Scalar(scalar) => {
-            Ok((Tree::constant(scalar.node.value.into_inner()), scalar.node.dimension))
-        }
+        Expression::Scalar(scalar) => Ok((
+            Tree::constant(scalar.node.value.into_inner()),
+            scalar.node.dimension,
+        )),
 
         Expression::SignedInteger(int_val) => {
             Ok((Tree::constant(int_val.node as f64), Dimension::zero()))
@@ -143,12 +150,16 @@ pub fn ast_to_fidget(
 
         Expression::Boolean(bool_val) => {
             // Booleans are not valid in SDF expressions, but we can convert to 0.0/1.0
-            Ok((Tree::constant(if bool_val.node { 1.0 } else { 0.0 }), Dimension::zero()))
+            Ok((
+                Tree::constant(if bool_val.node { 1.0 } else { 0.0 }),
+                Dimension::zero(),
+            ))
         }
 
         Expression::MemberAccess(member_box) => {
             let member_access = &**member_box;
-            let base_is_identifier = matches!(&member_access.node.base.node, Expression::Identifier(_));
+            let base_is_identifier =
+                matches!(&member_access.node.base.node, Expression::Identifier(_));
 
             if base_is_identifier {
                 if let Expression::Identifier(ident) = &member_access.node.base.node {
@@ -163,13 +174,11 @@ pub fn ast_to_fidget(
                         "y" => Ok((Tree::y(), Dimension::length())),
                         "z" => match param_dim {
                             ParamDim::Vec3 => Ok((Tree::z(), Dimension::length())),
-                            ParamDim::Vec2 => Err(FidgetConversionError::InvalidMemberAccess(
-                                "z".into(), 2,
-                            )),
+                            ParamDim::Vec2 => {
+                                Err(FidgetConversionError::InvalidMemberAccess("z".into(), 2))
+                            }
                         },
-                        other => {
-                            Err(FidgetConversionError::UnknownCapturedVariable(other.into()))
-                        }
+                        other => Err(FidgetConversionError::UnknownCapturedVariable(other.into())),
                     }
                 } else {
                     Err(FidgetConversionError::UnsupportedExpression(
@@ -195,7 +204,9 @@ pub fn ast_to_fidget(
             }
         }
 
-        Expression::Parenthesis(inner) => ast_to_fidget(inner, captured_values, closures, param_dim),
+        Expression::Parenthesis(inner) => {
+            ast_to_fidget(inner, captured_values, closures, param_dim)
+        }
 
         // Unsupported expression types
         Expression::ClosureDefinition(_)
@@ -210,12 +221,10 @@ pub fn ast_to_fidget(
         | Expression::StructDefinition(_)
         | Expression::LetIn(_)
         | Expression::ConstraintSet(_)
-        | Expression::Malformed(_) => {
-            Err(FidgetConversionError::UnsupportedExpression(
-                "expression".into(),
-                format!("{:?}", node.node),
-            ))
-        }
+        | Expression::Malformed(_) => Err(FidgetConversionError::UnsupportedExpression(
+            "expression".into(),
+            format!("{:?}", node.node),
+        )),
     }
 }
 
@@ -234,7 +243,8 @@ fn handle_method_call(
     if method_name == "min" || method_name == "max" {
         let assignments = &args_dict.assignments;
         if assignments.len() == 2 {
-            let self_is_std = matches!(&self_ast.node, Expression::Identifier(id) if id.node == "std");
+            let self_is_std =
+                matches!(&self_ast.node, Expression::Identifier(id) if id.node == "std");
             if self_is_std {
                 let arg1 = &assignments[0].node.assignment;
                 let arg2 = &assignments[1].node.assignment;
@@ -275,7 +285,10 @@ fn handle_method_call(
         "trunc" => Ok((self_tree.floor(), self_dim)),
         "cbrt" => {
             // cbrt(x) = x^(1/3) — dimension / 3
-            Ok(((self_tree.clone().ln() / Tree::constant(3.0)).exp(), self_dim / 3))
+            Ok((
+                (self_tree.clone().ln() / Tree::constant(3.0)).exp(),
+                self_dim / 3,
+            ))
         }
         "signum" => {
             // signum(x) = x / abs(x) — dimensionless
@@ -308,7 +321,9 @@ fn handle_method_call(
             let arg = extract_single_arg(args_dict, method_name)?;
             let (arg_tree, arg_dim) = ast_to_fidget(arg, captured_values, closures, param_dim)?;
             if self_dim != arg_dim {
-                return Err(FidgetConversionError::DimensionalIncompatible(self_dim, arg_dim));
+                return Err(FidgetConversionError::DimensionalIncompatible(
+                    self_dim, arg_dim,
+                ));
             }
             Ok((self_tree.min(arg_tree), self_dim))
         }
@@ -316,7 +331,9 @@ fn handle_method_call(
             let arg = extract_single_arg(args_dict, method_name)?;
             let (arg_tree, arg_dim) = ast_to_fidget(arg, captured_values, closures, param_dim)?;
             if self_dim != arg_dim {
-                return Err(FidgetConversionError::DimensionalIncompatible(self_dim, arg_dim));
+                return Err(FidgetConversionError::DimensionalIncompatible(
+                    self_dim, arg_dim,
+                ));
             }
             Ok((self_tree.max(arg_tree), self_dim))
         }
@@ -343,7 +360,9 @@ fn handle_method_call(
             let arg = extract_single_arg(args_dict, method_name)?;
             let (arg_tree, arg_dim) = ast_to_fidget(arg, captured_values, closures, param_dim)?;
             if self_dim != arg_dim {
-                return Err(FidgetConversionError::DimensionalIncompatible(self_dim, arg_dim));
+                return Err(FidgetConversionError::DimensionalIncompatible(
+                    self_dim, arg_dim,
+                ));
             }
             let sum_sq = self_tree.clone() * self_tree + arg_tree.clone() * arg_tree;
             Ok((sum_sq.sqrt(), self_dim))
@@ -356,7 +375,9 @@ fn handle_method_call(
             let (min_tree, min_dim) = ast_to_fidget(min_arg, captured_values, closures, param_dim)?;
             let (max_tree, max_dim) = ast_to_fidget(max_arg, captured_values, closures, param_dim)?;
             if self_dim != min_dim || self_dim != max_dim {
-                return Err(FidgetConversionError::DimensionalIncompatible(self_dim, min_dim));
+                return Err(FidgetConversionError::DimensionalIncompatible(
+                    self_dim, min_dim,
+                ));
             }
             // clamp(x, min, max) = max(min, min(x, max))
             let clamped = self_tree.clone().min(max_tree);
@@ -433,7 +454,8 @@ fn handle_function_call(
                 if assignments.len() != 1 {
                     return Err(FidgetConversionError::ClosureCallError(format!(
                         "Closure '{}' expects 1 argument, got {}",
-                        callee_name, assignments.len()
+                        callee_name,
+                        assignments.len()
                     )));
                 }
 
@@ -446,7 +468,12 @@ fn handle_function_call(
 
                 if arg_is_param {
                     // Direct inlining: a(p) means use the closure's body with p as-is
-                    return ast_to_fidget(&closure.body, captured_values, closures, closure.param_dim);
+                    return ast_to_fidget(
+                        &closure.body,
+                        captured_values,
+                        closures,
+                        closure.param_dim,
+                    );
                 }
 
                 // For other cases, we need to evaluate the argument first
@@ -456,7 +483,13 @@ fn handle_function_call(
                     callee_name
                 )))
             } else {
-                handle_std_function_call(callee_name, func_call, captured_values, closures, param_dim)
+                handle_std_function_call(
+                    callee_name,
+                    func_call,
+                    captured_values,
+                    closures,
+                    param_dim,
+                )
             }
         }
         Expression::MemberAccess(member) => {
@@ -468,7 +501,10 @@ fn handle_function_call(
                 if base_name == "std" {
                     return handle_std_function_call(
                         &format!("std::{}", method_name),
-                        func_call, captured_values, closures, param_dim
+                        func_call,
+                        captured_values,
+                        closures,
+                        param_dim,
                     );
                 }
             }
@@ -476,11 +512,9 @@ fn handle_function_call(
                 "Function callee must be an identifier or std::function".into(),
             ))
         }
-        _ => {
-            Err(FidgetConversionError::ClosureCallError(
-                "Function callee must be an identifier".into(),
-            ))
-        }
+        _ => Err(FidgetConversionError::ClosureCallError(
+            "Function callee must be an identifier".into(),
+        )),
     }
 }
 
@@ -568,15 +602,25 @@ pub fn resolve_captured_values(
                     // Extract closure info for inlining
                     let members = &closure.signature().argument_type.members;
                     if members.len() != 1 {
-                        return Err(ClosureCaptureError("closure has multiple parameters".into()).to_error(context));
+                        return Err(
+                            ClosureCaptureError("closure has multiple parameters".into())
+                                .to_error(context),
+                        );
                     }
 
                     let (_param_name, param_type) = members.iter().next().unwrap();
                     let param_dim = match &param_type.ty {
-                        super::super::ValueType::Vector2(Some(dim)) if dim.length == 1 => ParamDim::Vec2,
-                        super::super::ValueType::Vector3(Some(dim)) if dim.length == 1 => ParamDim::Vec3,
+                        super::super::ValueType::Vector2(Some(dim)) if dim.length == 1 => {
+                            ParamDim::Vec2
+                        }
+                        super::super::ValueType::Vector3(Some(dim)) if dim.length == 1 => {
+                            ParamDim::Vec3
+                        }
                         _ => {
-                            return Err(ClosureCaptureError("closure parameter must have length dimension".into()).to_error(context));
+                            return Err(ClosureCaptureError(
+                                "closure parameter must have length dimension".into(),
+                            )
+                            .to_error(context));
                         }
                     };
 
@@ -657,7 +701,9 @@ mod fidget_conversion_tests {
         let shape = JitShape::new(&ctx, node).expect("Shape creation failed");
         let tape = shape.ez_point_tape();
         let mut eval = JitShape::new_point_eval();
-        let (result, _) = eval.eval(&tape, x as f32, y as f32, z as f32).expect("Evaluation failed");
+        let (result, _) = eval
+            .eval(&tape, x as f32, y as f32, z as f32)
+            .expect("Evaluation failed");
         result as f64
     }
 
@@ -1672,7 +1718,7 @@ mod fidget_conversion_tests {
         let result = test_run(
             "let s3d = (p: std.vector3.Length) -> std.scalar.Length: \
              (p.x::pow(2.0) + p.y::pow(2.0) + p.z::pow(2.0))::sqrt() - 1.0m; \
-             in s3d::to_implicit()::to_mesh()"
+             in s3d::to_implicit()::to_mesh()",
         );
         if let Err(ref e) = result {
             eprintln!("sphere pow positional error: {:?}", e);

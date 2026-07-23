@@ -30,34 +30,60 @@ use bevy::{
 };
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 use bevy_mod_outline::OutlinePlugin;
+use clap::Parser;
 use egui::{Color32, Mesh, RichText, StrokeKind, TextEdit, emath::TSTransform};
 use interpreter::{
     ExecutionContext, FsStore, LogLevel, LogMessage, RuntimeLog, SourceReference, StackScope,
     StackTrace, Store, build_prelude, compile, execute_expression, new_parser,
     values::{
-        BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Value,
+        BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Surface3D, Value,
         manifold_mesh::ManifoldMesh3D,
     },
 };
 use notify::{EventKind, RecommendedWatcher, Watcher, recommended_watcher};
 use tempfile::TempDir;
 
+/// Command CAD GUI
+#[derive(Parser, Debug)]
+#[command(version, about = "Command CAD GUI")]
+struct CliArgs {
+    /// Evaluate a file on startup
+    #[arg(short, long)]
+    file: Option<PathBuf>,
+}
+
 use crate::{
     grid::GridSettings,
-    visualize2d::{
-        ViewState2d, build_fill_mesh_from_polygon, draw_grid, paint_linestring, paint_polygon,
-    },
-    visualize3d::{
-        ViewState3d, orbit_camera, orbit_light, setup_3d, spawn_meshes, sync_wireframe_visibility,
-        update_3d_camera, update_grid,
+    visualizers::{
+        Implicit3dPlugin, ViewState2d, ViewState3d, build_fill_mesh_from_polygon, draw_grid,
+        orbit_camera, orbit_light, paint_linestring, paint_polygon, setup_3d, spawn_meshes,
+        sync_wireframe_visibility, update_3d_camera, update_grid,
     },
 };
 
 mod grid;
-mod visualize2d;
-mod visualize3d;
+mod tree_to_wgsl;
+mod visualizers;
 
 fn main() {
+    let args = CliArgs::parse();
+
+    let initial_expression = if let Some(path) = args.file {
+        if !path.exists() {
+            eprintln!("Error: file '{}' does not exist", path.display());
+            std::process::exit(1);
+        }
+        match std::fs::read_to_string(&path) {
+            Ok(content) => Some(content),
+            Err(e) => {
+                eprintln!("Error reading '{}': {}", path.display(), e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        None
+    };
+
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
@@ -72,9 +98,16 @@ fn main() {
     .add_plugins(EguiPlugin::default())
     .add_plugins(OutlinePlugin)
     .add_plugins(WireframePlugin::default())
+    .add_plugins(Implicit3dPlugin)
+    .insert_resource(InitialExpression(initial_expression))
     .add_systems(
         Startup,
-        (setup, setup_3d.after(setup), apply_display_scaling),
+        (
+            setup,
+            run_initial_expression.after(setup),
+            setup_3d.after(setup),
+            apply_display_scaling,
+        ),
     )
     .add_systems(
         Update,
@@ -90,6 +123,22 @@ fn main() {
     )
     .add_systems(EguiPrimaryContextPass, render_ui);
     app.run();
+}
+
+#[derive(Resource)]
+struct InitialExpression(Option<String>);
+
+fn run_initial_expression(
+    mut commands: Commands,
+    initial: Res<InitialExpression>,
+    mut bridge: ResMut<JobBridge>,
+    mut field: ResMut<ExpressionField>,
+) {
+    if let Some(expr) = &initial.0 {
+        field.expression = expr.clone();
+        bridge.spawn_job(expr);
+    }
+    commands.remove_resource::<InitialExpression>();
 }
 
 fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
@@ -149,6 +198,9 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
         watched_files: HashSet::new(),
         file_watcher,
         file_updates_rx,
+        implicit_textures: None,
+        implicit_texture_size: None,
+        implicit_shader: None,
     });
 
     commands.insert_resource(ViewState2d::default());
@@ -230,6 +282,7 @@ enum JobOutput {
         meshes: Vec<Arc<Mesh>>,
     },
     ManifoldMesh(ManifoldMeshState),
+    Surface3D(Surface3D),
 }
 
 struct ManifoldMeshState {
@@ -237,6 +290,7 @@ struct ManifoldMeshState {
     uploaded_to_gpu: bool,
 }
 
+#[derive(Debug)]
 enum JobError {
     Execution(interpreter::Error),
     Parse(String),
@@ -345,6 +399,7 @@ fn job_executor(
                 manifold,
                 uploaded_to_gpu: false,
             })),
+            Ok(Value::Surface3D(surface)) => Ok(JobOutput::Surface3D(surface)),
             Ok(value) => {
                 let mut text = String::new();
                 value.format(&context, &mut text, Style::Default, None).ok();
@@ -357,7 +412,9 @@ fn job_executor(
         let files_to_watch: HashSet<Arc<PathBuf>> = match files.into_inner() {
             Ok(files) => files.keys().cloned().collect(),
             Err(_poisoned) => {
-                eprintln!("File hashmap was poisoned (interpreter panicked). Returning empty file watch list.");
+                eprintln!(
+                    "File hashmap was poisoned (interpreter panicked). Returning empty file watch list."
+                );
                 HashSet::new()
             }
         };
@@ -394,6 +451,12 @@ struct JobBridge {
     watched_files: HashSet<Arc<PathBuf>>,
     file_watcher: Result<RecommendedWatcher, notify::Error>,
     file_updates_rx: Mutex<mpsc::Receiver<Result<notify::Event, notify::Error>>>,
+    /// Cached intermediate texture handles (only recreated when Surface3D changes).
+    implicit_textures: Option<(Handle<Image>, Handle<Image>)>,
+    /// Cached texture size to detect viewport resize.
+    implicit_texture_size: Option<UVec2>,
+    /// Cached main shader handle (only recreated when Surface3D changes).
+    implicit_shader: Option<Handle<Shader>>,
 }
 
 impl JobBridge {
@@ -444,9 +507,30 @@ fn check_job(mut command_cad: ResMut<JobBridge>) {
         // This could fail by the thread being closed, but that shouldn't happen and won't
         // cause us to panic.
         if let Ok(output) = active_job.response.get_mut().unwrap().try_recv() {
+            let result_type = match &output.result {
+                Ok(JobOutput::Surface3D(_)) => "Surface3D".to_string(),
+                Ok(JobOutput::ManifoldMesh(_)) => "ManifoldMesh".to_string(),
+                Ok(JobOutput::Polygon { .. }) => "Polygon".to_string(),
+                Ok(JobOutput::PolygonSet { .. }) => "PolygonSet".to_string(),
+                Ok(JobOutput::LineString(_)) => "LineString".to_string(),
+                Ok(JobOutput::TextValue(t)) => format!("TextValue ({})", t),
+                Err(e) => format!("ERROR: {:?}", e),
+            };
+
             command_cad.last_result = Some(output.result);
             command_cad.log_messages = output.log_messages;
             command_cad.active_job = None;
+
+            // Invalidate implicit surface cache when a new job completes
+            command_cad.implicit_textures = None;
+            command_cad.implicit_texture_size = None;
+            command_cad.implicit_shader = None;
+
+            if result_type.starts_with("ERROR") {
+                error!("Job completed: {}", result_type);
+            } else {
+                info!("Job completed: {}", result_type);
+            }
 
             // Collect a list of files to watch.
             if let Ok(watcher) = &mut command_cad.file_watcher {
@@ -510,17 +594,23 @@ fn render_ui(
 
             view_state_2d.draw_interface(ui, &job_bridge.last_result);
 
-            if let Some(cam) = &camera_transform
-                && let Some(Ok(JobOutput::ManifoldMesh(_state))) = &job_bridge.last_result
-            {
-                #[allow(clippy::collapsible_if)]
-                if ui.button("Fit to screen").clicked() {
-                    view_state_3d.fit_to_screen(
-                        draw_area,
-                        cam,
-                        toolbar_height,
-                        &_state.manifold,
-                    );
+            if let Some(cam) = &camera_transform {
+                let has_3d_result = matches!(
+                    &job_bridge.last_result,
+                    Some(Ok(JobOutput::ManifoldMesh(_))) | Some(Ok(JobOutput::Surface3D(_)))
+                );
+                if has_3d_result {
+                    #[allow(clippy::collapsible_if)]
+                    if ui.button("Fit to screen").clicked() {
+                        if let Some(Ok(JobOutput::ManifoldMesh(ms))) = &job_bridge.last_result {
+                            view_state_3d.fit_to_screen(
+                                draw_area,
+                                cam,
+                                toolbar_height,
+                                &ms.manifold,
+                            );
+                        }
+                    }
                 }
             }
 
@@ -664,7 +754,7 @@ fn render_ui(
                 view_state_2d.track_movement(state, draw_area);
             });
         }
-        Some(Ok(JobOutput::ManifoldMesh(_manifold_state))) => {
+        Some(Ok(JobOutput::ManifoldMesh(_))) | Some(Ok(JobOutput::Surface3D(_))) => {
             if let Some(camera_transform) = cameras.iter().next() {
                 ctx.input(|state| {
                     view_state_3d.track_movement(camera_transform, state, draw_area);

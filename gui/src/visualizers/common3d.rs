@@ -15,6 +15,8 @@
  * You should have received a copy of the GNU Affero General Public License along with this
  * program. If not, see <https://www.gnu.org/licenses/>.
  */
+use crate::JobOutput;
+use crate::grid::GridSettings;
 use bevy::{
     anti_alias::smaa::Smaa,
     asset::RenderAssetUsages,
@@ -24,14 +26,10 @@ use bevy::{
     prelude::*,
     {ecs::system::Query, mesh::PrimitiveTopology},
 };
-use bevy_mod_outline::{OutlineMode, OutlineVolume};
-
-use crate::grid::GridSettings;
-use crate::{JobBridge, JobOutput};
 use interpreter::values::manifold_mesh::ManifoldMesh3D;
 
 const GRID_MAX_EXTENT: f32 = 10.0;
-const GRID_LINE_SCREEN_WIDTH: f32 = 1.0; // target line width in screen pixels
+const GRID_LINE_SCREEN_WIDTH: f32 = 1.0;
 
 #[derive(Component)]
 pub struct GridEntity;
@@ -78,7 +76,6 @@ impl ViewState3d {
 }
 
 impl ViewState3d {
-    // Percentage of scale per scale factor unit.
     const SCALE_FACTOR: f32 = 1.01;
     const POINTER_SCALE: f32 = 0.007;
 
@@ -159,7 +156,10 @@ impl ViewState3d {
         ui: &mut egui::Ui,
         last_result: &Option<Result<JobOutput, crate::JobError>>,
     ) {
-        if let Some(Ok(JobOutput::ManifoldMesh(_state))) = last_result {
+        if matches!(
+            last_result,
+            Some(Ok(JobOutput::ManifoldMesh(_))) | Some(Ok(JobOutput::Surface3D(_)))
+        ) {
             ui.checkbox(&mut self.show_wireframe, "Show Wireframe");
 
             ui.separator();
@@ -214,8 +214,6 @@ impl ViewState3d {
         } else if input_state.pointer.secondary_down() {
             let drag_delta = input_state.pointer.delta();
 
-            // TODO These probably need to be scaled differently on a 4k display.
-            // It would be best to base the rotation factor based off the viewport size.
             self.rotation_x += drag_delta.y * Self::POINTER_SCALE;
             self.rotation_y += drag_delta.x * Self::POINTER_SCALE;
 
@@ -243,11 +241,9 @@ fn build_grid_mesh(world_step: f32, line_half_thickness: f32, grid_extent: f32) 
     for i in first_line_idx..=last_line_idx {
         let pos = (i as f32) * world_step;
 
-        // Vertical lines (along local Y axis) — thin quad centered at x = pos
         let t = line_half_thickness;
         let e = grid_extent;
 
-        // Front face (CCW from +Z, normals +Z)
         positions.push([pos - t, -e, 0.0]);
         positions.push([pos + t, -e, 0.0]);
         positions.push([pos - t, e, 0.0]);
@@ -255,7 +251,6 @@ fn build_grid_mesh(world_step: f32, line_half_thickness: f32, grid_extent: f32) 
         positions.push([pos + t, -e, 0.0]);
         positions.push([pos + t, e, 0.0]);
 
-        // Back face (CCW from -Z, normals -Z)
         positions.push([pos - t, -e, 0.0]);
         positions.push([pos - t, e, 0.0]);
         positions.push([pos + t, -e, 0.0]);
@@ -263,8 +258,6 @@ fn build_grid_mesh(world_step: f32, line_half_thickness: f32, grid_extent: f32) 
         positions.push([pos - t, e, 0.0]);
         positions.push([pos + t, e, 0.0]);
 
-        // Horizontal lines (along local X axis) — thin quad centered at y = pos
-        // Front face (CCW from +Z, normals +Z)
         positions.push([-e, pos - t, 0.0]);
         positions.push([e, pos - t, 0.0]);
         positions.push([-e, pos + t, 0.0]);
@@ -272,7 +265,6 @@ fn build_grid_mesh(world_step: f32, line_half_thickness: f32, grid_extent: f32) 
         positions.push([e, pos - t, 0.0]);
         positions.push([e, pos + t, 0.0]);
 
-        // Back face (CCW from -Z, normals -Z)
         positions.push([-e, pos - t, 0.0]);
         positions.push([-e, pos + t, 0.0]);
         positions.push([e, pos - t, 0.0]);
@@ -486,87 +478,5 @@ pub fn sync_wireframe_visibility(
                 },
             ));
         }
-    }
-}
-
-pub fn spawn_meshes(
-    mut commands: Commands,
-    mut command_cad: ResMut<JobBridge>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mesh_models: Query<(Entity, &Mesh3d), With<MeshModel>>,
-) {
-    if let Some(Ok(JobOutput::ManifoldMesh(manifold_state))) = &mut command_cad.last_result
-        && !manifold_state.uploaded_to_gpu
-    {
-        manifold_state.uploaded_to_gpu = true;
-
-        // Start by removing the old model.
-        for (entity, mesh) in mesh_models.iter() {
-            meshes.remove(mesh.id());
-            commands.entity(entity).try_despawn();
-        }
-
-        // Now build our  mesh.
-        let mut m = Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::default(),
-        );
-        let mut pos = vec![];
-        let mut vns = vec![];
-        for tri in manifold_state.manifold.0.triangles() {
-            let [p0, p1, p2] = tri.positions;
-            pos.push([p0.x as f32, p0.y as f32, p0.z as f32]);
-            pos.push([p1.x as f32, p1.y as f32, p1.z as f32]);
-            pos.push([p2.x as f32, p2.y as f32, p2.z as f32]);
-            vns.push([
-                tri.normal.x as f32,
-                tri.normal.y as f32,
-                tri.normal.z as f32,
-            ]);
-            vns.push([
-                tri.normal.x as f32,
-                tri.normal.y as f32,
-                tri.normal.z as f32,
-            ]);
-            vns.push([
-                tri.normal.x as f32,
-                tri.normal.y as f32,
-                tri.normal.z as f32,
-            ]);
-        }
-        m.insert_attribute(Mesh::ATTRIBUTE_POSITION, pos);
-        m.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vns);
-
-        let fill_color = egui::Color32::GRAY;
-        let wireframe_color = egui::Color32::WHITE;
-
-        commands.spawn((
-            Mesh3d(meshes.add(m).clone()),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::Srgba(Srgba::rgb(
-                    fill_color.r() as f32 / 255.0,
-                    fill_color.g() as f32 / 255.0,
-                    fill_color.b() as f32 / 255.0,
-                )),
-                ..default()
-            })),
-            Transform::default(),
-            OutlineVolume {
-                visible: true,
-                width: 2.0,
-                colour: Color::Srgba(Srgba::rgb(
-                    wireframe_color.r() as f32 / 255.0,
-                    wireframe_color.g() as f32 / 255.0,
-                    wireframe_color.b() as f32 / 255.0,
-                )),
-            },
-            OutlineMode::FloodFlatDoubleSided,
-            Wireframe,
-            WireframeColor {
-                color: bevy::color::palettes::css::BLACK.into(),
-            },
-            MeshModel,
-        ));
     }
 }
