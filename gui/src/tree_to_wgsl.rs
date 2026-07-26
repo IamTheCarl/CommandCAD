@@ -114,12 +114,12 @@ fn fs(@location(0) uv: vec2<f32>) -> MainOutput {{
     // Hit distance from camera (for depth)
     let hit_dist = length(p - ray_origin);
 
-    // Finite-difference normal
-    let e = 0.002;
-    let nx = sdf(vec3<f32>(p.x + e, p.y, p.z)) - sdf(vec3<f32>(p.x - e, p.y, p.z));
-    let ny = sdf(vec3<f32>(p.x, p.y + e, p.z)) - sdf(vec3<f32>(p.x, p.y - e, p.z));
-    let nz = sdf(vec3<f32>(p.x, p.y, p.z + e)) - sdf(vec3<f32>(p.x, p.y, p.z - e));
-    let normal = normalize(vec3<f32>(nx, ny, nz) / (2.0 * e));
+    // Finite-difference normal: epsilon scales with zoom for sharp corners at any scale
+    let normal_eps = 0.5 * world_units_per_pixel;
+    let nx = sdf(vec3<f32>(p.x + normal_eps, p.y, p.z)) - sdf(vec3<f32>(p.x - normal_eps, p.y, p.z));
+    let ny = sdf(vec3<f32>(p.x, p.y + normal_eps, p.z)) - sdf(vec3<f32>(p.x, p.y - normal_eps, p.z));
+    let nz = sdf(vec3<f32>(p.x, p.y, p.z + normal_eps)) - sdf(vec3<f32>(p.x, p.y, p.z - normal_eps));
+    let normal = normalize(vec3<f32>(nx, ny, nz) / (2.0 * normal_eps));
 
     // Lighting matching Bevy PBR: directional light orbits camera and looks
     // at origin, so light rays travel opposite to camera view direction.
