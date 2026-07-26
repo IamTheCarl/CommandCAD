@@ -85,3 +85,68 @@ Grammar is in `grammar.js`. Test fixtures are in `test/corpus/`.
   light query both read `Transform` — use
   `(With<Camera3d>, Without<DirectionalLight>)` and
   `(With<DirectionalLight>, Without<Camera3d>)`.
+
+## Implicit surface rendering
+
+Ray-marched 3D implicit surfaces, rendered via GPU shaders generated from
+fidget `Tree` SDF expressions. Two-pass architecture:
+
+1. **Main pass** (`ImplicitMainPassNode`): fullscreen fragment shader that
+   ray-marches the SDF per-pixel, writes color + depth to intermediate
+   `Rgba16Float` textures. Includes SDF Near-Miss outline detection in the
+   same pass (no extra sampling needed).
+2. **Writeback pass** (`ImplicitWritebackNode`): composites intermediate
+   results onto main render target with depth testing, inserted between
+   `MainOpaquePass` and `MainTransmissivePass` in the render graph.
+
+### Key files
+
+| File | Role |
+|---|---|
+| `gui/src/visualizers/implicit3d.rs` | Full render pipeline: plugin, nodes, resources, shader generation (~825 lines) |
+| `gui/src/tree_to_wgsl.rs` | WGSL codegen: `tree_to_wgsl_main_from_sdf()`, `tree_to_wgsl_writeback()`, `emit_sdf_body()` |
+| `interpreter/src/execution/values/implicit_surface/surface3d.rs` | `Surface3D` type, SDF construction for built-in shapes (cone, cylinder, sphere, torus) |
+
+### Shader generation flow
+
+1. `update_implicit_shader` runs on main world after `check_job`, triggered when
+   `JobBridge.last_result` is `Ok(JobOutput::Surface3D(...))`.
+2. Calls `emit_sdf_body(surface.tree())` to convert fidget `Tree` → WGSL expression.
+3. Wraps in `tree_to_wgsl_main_from_sdf()` to produce full fragment shader.
+4. Registers with Bevy as `Shader::from_wgsl(...)`, caches handle in
+   `JobBridge.implicit_shader` and `ImplicitFragmentShader` resource.
+5. Increments `ImplicitShaderVersion` so render world re-specializes pipelines.
+
+### Uniform buffer (`ImplicitUniform`)
+
+Layout in `visualizers/implicit3d.rs` must match WGSL struct in
+`tree_to_wgsl.rs` (`MAIN_UNIFORM_HEADER`). Fields: camera position, right/up/forward
+axes, ortho half-width/height, and `viewport_size` (pixel dimensions). The
+`viewport_size` is used to compute `world_units_per_pixel` for zoom-scaled epsilon
+and outline threshold.
+
+### SDF Near-Miss outline
+
+Single-pass outline algorithm (no 2D screen-space edge detection). During
+raymarching, tracks minimum SDF value (`nearest`) and ray distance at near-miss
+(`nearest_t`). On miss, computes outline intensity:
+`1.0 - pow(clamp(nearest / threshold, 0, 1), 8)`. Threshold = `2.0 * world_units_per_pixel`
+(~2-pixel screen width). Outline color is white. Depth = `-(nearest_t + nearest)`
+for proper compositing.
+
+### Ray-marching epsilon
+
+Scales with zoom: `epsilon = 0.5 * world_units_per_pixel`. Maintains sub-pixel
+precision at any zoom level. Computed once before the raymarching loop.
+
+### Lighting
+
+Camera-following directional light: `-camera_forward` as light direction, matching
+Bevy's orbiting `DirectionalLight`. Base color 0.502 (gray) with PBR-style
+ambient + diffuse: `base_color * (0.05 + 0.95 * max(dot(n, light_dir), 0))`.
+
+### SDF normalization
+
+All built-in SDFs use normalized formulas where |grad| = 1 everywhere, ensuring
+correct finite-difference normals and lighting. Cone uses `(b*h - r*a) / sqrt(h²+r²)`
+where `a = z + h/2` (height from apex), `b = sqrt(x²+y²)` (radial distance).
