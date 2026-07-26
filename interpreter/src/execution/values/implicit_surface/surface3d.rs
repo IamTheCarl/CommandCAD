@@ -17,31 +17,47 @@ use crate::execution::values::{
 };
 use crate::execution::ExecutionContext;
 
-fn unpack_vector_for_arithmetic(
+enum ArithmeticInput {
+    Vector(Vector3),
+    Surface(Surface3D),
+}
+
+fn unpack_arithmetic_input(
     context: &ExecutionContext,
     input: Value,
-) -> Result<Vector3, crate::execution::errors::Error> {
+) -> Result<ArithmeticInput, crate::execution::errors::Error> {
     let value = match input {
         Value::Vector2(v) => {
             let raw = v.raw_value();
-            Vector3::new_raw(context, v.dimension(), [raw.x, raw.y, 0.0].into())?
+            let vec = Vector3::new_raw(context, v.dimension(), [raw.x, raw.y, 0.0].into())?;
+            if vec.dimension() != Dimension::length() {
+                return Err(DowncastError {
+                    expected: "Vector2 or Vector3 of lengths, or another implicit surface".into(),
+                    got: vec.get_type(context).name(),
+                }
+                .to_error(context));
+            }
+            ArithmeticInput::Vector(vec)
         }
-        Value::Vector3(v) => v,
+        Value::Vector3(v) => {
+            if v.dimension() != Dimension::length() {
+                return Err(DowncastError {
+                    expected: "Vector2 or Vector3 of lengths, or another implicit surface".into(),
+                    got: v.get_type(context).name(),
+                }
+                .to_error(context));
+            }
+            ArithmeticInput::Vector(v)
+        }
+        Value::Surface3D(s) => ArithmeticInput::Surface(s),
         value => {
             return Err(DowncastError {
-                expected: "Vector2 or Vector3 of lengths".into(),
+                expected: "Vector2 or Vector3 of lengths, or another implicit surface".into(),
                 got: value.get_type(context).name(),
             }
             .to_error(context));
         }
     };
-    if value.dimension() != Dimension::length() {
-        return Err(DowncastError {
-            expected: "Vector2 or Vector3 of lengths".into(),
-            got: value.get_type(context).name(),
-        }
-        .to_error(context));
-    }
     Ok(value)
 }
 
@@ -301,17 +317,25 @@ impl Object for Surface3D {
     }
 
     fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let vector = unpack_vector_for_arithmetic(context, rhs)?;
-        let raw = vector.raw_value();
-        let translation = nalgebra::Translation3::from([raw.x, raw.y, raw.z]);
-        Ok(self.transform(&translation.to_homogeneous()).into())
+        match unpack_arithmetic_input(context, rhs)? {
+            ArithmeticInput::Vector(vector) => {
+                let raw = vector.raw_value();
+                let translation = nalgebra::Translation3::from([raw.x, raw.y, raw.z]);
+                Ok(self.transform(&translation.to_homogeneous()).into())
+            }
+            ArithmeticInput::Surface(other) => Ok(self.union(&other).into()),
+        }
     }
 
     fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
-        let vector = unpack_vector_for_arithmetic(context, rhs)?;
-        let raw = vector.raw_value();
-        let translation = nalgebra::Translation3::from([-raw.x, -raw.y, -raw.z]);
-        Ok(self.transform(&translation.to_homogeneous()).into())
+        match unpack_arithmetic_input(context, rhs)? {
+            ArithmeticInput::Vector(vector) => {
+                let raw = vector.raw_value();
+                let translation = nalgebra::Translation3::from([-raw.x, -raw.y, -raw.z]);
+                Ok(self.transform(&translation.to_homogeneous()).into())
+            }
+            ArithmeticInput::Surface(other) => Ok(self.difference(&other).into()),
+        }
     }
 
     fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
@@ -319,6 +343,21 @@ impl Object for Surface3D {
         let vector = input.raw_value();
         let scaling = nalgebra::Matrix4::new_nonuniform_scaling(&vector);
         Ok(self.transform(&scaling).into())
+    }
+
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let other = rhs.downcast::<Surface3D>(context)?;
+        Ok(self.union(&other).into())
+    }
+
+    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let other = rhs.downcast::<Surface3D>(context)?;
+        Ok(self.intersection(&other).into())
+    }
+
+    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let other = rhs.downcast::<Surface3D>(context)?;
+        Ok(self.symmetric_difference(&other).into())
     }
 
     fn get_attribute(
@@ -995,6 +1034,86 @@ mod surface3d_tests {
         );
         if let Err(ref e) = result {
             eprintln!("arithmetic add vector2 error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_add_surface() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m) + std.implicits.cube(size = 3.0m)",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic add surface error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_subtract_surface() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m) - std.implicits.cube(size = 3.0m)",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic subtract surface error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_bit_or() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m) | std.implicits.cube(size = 3.0m)",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic bit_or error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_bit_and() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m) & std.implicits.cube(size = 3.0m)",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic bit_and error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_bit_xor() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m) ^ std.implicits.cube(size = 3.0m)",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic bit_xor error: {:?}", e);
         }
         assert!(result.is_ok());
         let value = result.unwrap();
