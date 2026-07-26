@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use common_data_types::Dimension;
 use fidget::context::Context;
 use fidget::context::Tree;
 use fidget::mesh::{Octree, Settings};
@@ -7,13 +8,42 @@ use fidget::render::CancelToken;
 use fidget::render::ThreadPool;
 use fidget::shape::Shape;
 
-use crate::execution::errors::{Raise, StrError};
+use crate::execution::errors::{ExecutionResult, Raise, StrError};
 use crate::execution::values::{
     closure::{BuiltinCallableDatabase, BuiltinFunction},
-    Length, Object, Scalar, StaticType, StaticTypeName, Style, UnsignedInteger, Value, ValueNone,
-    ValueType,
+    vector::Zero3,
+    Length, Object, Scalar, StaticType, StaticTypeName, Style, Transform3d, UnsignedInteger, Value,
+    ValueNone, ValueType, Vector3, DowncastError,
 };
 use crate::execution::ExecutionContext;
+
+fn unpack_vector_for_arithmetic(
+    context: &ExecutionContext,
+    input: Value,
+) -> Result<Vector3, crate::execution::errors::Error> {
+    let value = match input {
+        Value::Vector2(v) => {
+            let raw = v.raw_value();
+            Vector3::new_raw(context, v.dimension(), [raw.x, raw.y, 0.0].into())?
+        }
+        Value::Vector3(v) => v,
+        value => {
+            return Err(DowncastError {
+                expected: "Vector2 or Vector3 of lengths".into(),
+                got: value.get_type(context).name(),
+            }
+            .to_error(context));
+        }
+    };
+    if value.dimension() != Dimension::length() {
+        return Err(DowncastError {
+            expected: "Vector2 or Vector3 of lengths".into(),
+            got: value.get_type(context).name(),
+        }
+        .to_error(context));
+    }
+    Ok(value)
+}
 
 fn unpack_radius(
     context: &ExecutionContext,
@@ -184,6 +214,28 @@ impl Surface3D {
         let b_minus_a = b.clone().max(-a.clone());
         Self::new(a_minus_b.min(b_minus_a))
     }
+
+    /// Apply an affine transform to the implicit surface.
+    /// The transform is applied by remapping SDF coordinates: sdf'(p) = sdf(T^-1 * p).
+    pub fn transform(&self, t: &nalgebra::Matrix4<f64>) -> Self {
+        let inv = t.try_inverse().expect("Transform matrix must be invertible");
+        // Express new coordinates as linear combinations of original x, y, z using inverse matrix.
+        // new_coord = inv[row][0]*x + inv[row][1]*y + inv[row][2]*z + inv[row][3]
+        let (x, y, z) = (Tree::x(), Tree::y(), Tree::z());
+        let new_x = x.clone() * Tree::constant(inv[(0, 0)])
+            + y.clone() * Tree::constant(inv[(0, 1)])
+            + z.clone() * Tree::constant(inv[(0, 2)])
+            + Tree::constant(inv[(0, 3)]);
+        let new_y = x.clone() * Tree::constant(inv[(1, 0)])
+            + y.clone() * Tree::constant(inv[(1, 1)])
+            + z.clone() * Tree::constant(inv[(1, 2)])
+            + Tree::constant(inv[(1, 3)]);
+        let new_z = x * Tree::constant(inv[(2, 0)])
+            + y * Tree::constant(inv[(2, 1)])
+            + z * Tree::constant(inv[(2, 2)])
+            + Tree::constant(inv[(2, 3)]);
+        Self::new(self.tree.remap_xyz(new_x, new_y, new_z))
+    }
 }
 
 /// Converts a Fidget mesh (vertices + triangles) to a boolmesh Manifold.
@@ -248,6 +300,27 @@ impl Object for Surface3D {
         ValueType::ImplicitSurface3D
     }
 
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let vector = unpack_vector_for_arithmetic(context, rhs)?;
+        let raw = vector.raw_value();
+        let translation = nalgebra::Translation3::from([raw.x, raw.y, raw.z]);
+        Ok(self.transform(&translation.to_homogeneous()).into())
+    }
+
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let vector = unpack_vector_for_arithmetic(context, rhs)?;
+        let raw = vector.raw_value();
+        let translation = nalgebra::Translation3::from([-raw.x, -raw.y, -raw.z]);
+        Ok(self.transform(&translation.to_homogeneous()).into())
+    }
+
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> ExecutionResult<Value> {
+        let input = rhs.downcast::<Zero3>(context)?;
+        let vector = input.raw_value();
+        let scaling = nalgebra::Matrix4::new_nonuniform_scaling(&vector);
+        Ok(self.transform(&scaling).into())
+    }
+
     fn get_attribute(
         &self,
         _context: &ExecutionContext,
@@ -266,6 +339,7 @@ impl Object for Surface3D {
             "symmetric_difference" => {
                 Ok(BuiltinFunction::new::<methods::SymmetricDifference>().into())
             }
+            "transform" => Ok(BuiltinFunction::new::<methods::Transform>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -293,6 +367,7 @@ pub mod methods {
     pub struct Intersection;
     pub struct Difference;
     pub struct SymmetricDifference;
+    pub struct Transform;
 }
 
 pub fn register_surface3d_methods(database: &mut BuiltinCallableDatabase) {
@@ -408,6 +483,19 @@ pub fn register_surface3d_methods(database: &mut BuiltinCallableDatabase) {
         ) -> Value
         {
             let result = this.symmetric_difference(&other);
+            Ok(result.into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::Transform, "Surface3D::transform", (
+            context: &ExecutionContext,
+            this: Surface3D,
+            t: Transform3d
+        ) -> Value
+        {
+            let result = this.transform(&t.0);
             Ok(result.into())
         }
     );
@@ -780,6 +868,134 @@ mod surface3d_tests {
              b = std.implicits.cube(size = 4.0m); \
              in a::union(b)",
         );
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_transform_translate() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m)::transform(std.consts.Transform3d::translate({3m, 0m, 0m}))",
+        );
+        if let Err(ref e) = result {
+            eprintln!("transform translate error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_transform_scale() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m)::transform(std.consts.Transform3d::scale({2, 1, 0.5}))",
+        );
+        if let Err(ref e) = result {
+            eprintln!("transform scale error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_transform_rotate() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.cube(size = 2.0m)::transform(std.consts.Transform3d::rotate({0, 0, 1}, 45deg))",
+        );
+        if let Err(ref e) = result {
+            eprintln!("transform rotate error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_transform_to_mesh() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m)::transform(std.consts.Transform3d::translate({5m, 0m, 0m}))::to_mesh()",
+        );
+        if let Err(ref e) = result {
+            eprintln!("transform to_mesh error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::ManifoldMesh3D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_add_vector() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m) + {3m, 0m, 0m}",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic add vector error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_subtract_vector() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m) - {1m, 2m, 3m}",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic subtract vector error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_multiply_scale() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m) * {2, 1, 0.5}",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic multiply scale error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_add_vector2() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run(
+            "std.implicits.sphere(radius = 2.0m) + {3m, 0m}",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic add vector2 error: {:?}", e);
+        }
         assert!(result.is_ok());
         let value = result.unwrap();
         assert!(matches!(value, Value::Surface3D(_)));
