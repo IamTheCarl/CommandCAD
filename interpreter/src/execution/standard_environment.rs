@@ -268,13 +268,21 @@ fn build_export(context: &ExecutionContext) -> Dictionary {
 
 fn build_implicits(context: &ExecutionContext) -> Dictionary {
     use crate::execution::values::implicit_surface::surface3d::implicits::*;
+    use crate::execution::values::implicit_surface::surface2d::implicits::*;
 
     let implicits: HashMap<ImString, Value> = HashMap::from_iter([
+        // 3D shapes
         ("sphere".into(), BuiltinFunction::new::<Sphere>().into()),
         ("cube".into(), BuiltinFunction::new::<Cube>().into()),
+        ("box".into(), BuiltinFunction::new::<Box>().into()),
         ("cylinder".into(), BuiltinFunction::new::<Cylinder>().into()),
         ("cone".into(), BuiltinFunction::new::<Cone>().into()),
         ("torus".into(), BuiltinFunction::new::<Torus>().into()),
+        ("rounded_cube".into(), BuiltinFunction::new::<RoundedCube>().into()),
+        // 2D shapes
+        ("circle".into(), BuiltinFunction::new::<Circle>().into()),
+        ("rectangle".into(), BuiltinFunction::new::<Rectangle>().into()),
+        ("square".into(), BuiltinFunction::new::<Square>().into()),
     ]);
     Dictionary::new(context, implicits)
 }

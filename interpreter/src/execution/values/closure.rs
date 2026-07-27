@@ -76,6 +76,7 @@ impl BuiltinCallableDatabase {
 
         super::implicit_surface::surface3d::register_implicits(&mut database);
 
+        super::implicit_surface::surface2d::register_implicits(&mut database);
         super::implicit_surface::surface2d::register_surface2d_methods(&mut database);
         database
     }

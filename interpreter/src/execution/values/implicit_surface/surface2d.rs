@@ -3,9 +3,11 @@ use std::sync::Arc;
 
 use fidget::context::Context;
 use geo::{Coord, LineString, MultiPolygon, Polygon};
+use nalgebra;
 
 use crate::execution::values::{
-    BuiltinCallableDatabase, Object, StaticType, StaticTypeName, Style, Value, ValueType,
+    closure::BuiltinCallableDatabase,
+    Length, Object, Scalar, StaticType, StaticTypeName, Style, Value, ValueNone, ValueType,
 };
 use crate::execution::ExecutionContext;
 
@@ -68,8 +70,10 @@ impl Surface2D {
         Self::new(a_minus_b.min(b_minus_a))
     }
 
-    /// Generate a 2D polygon set from the implicit curve using marching squares.
+    /// Generate a 2D polygon set from the implicit curve using dual contouring.
     ///
+    /// Each crossing cell produces a single vertex via QEF optimization,
+    /// which snaps to sharp features (corners, edges) instead of rounding them.
     /// Returns `PolygonSet` (wrapping `Arc<geo::MultiPolygon>`).
     pub fn to_polygon(&self) -> Result<PolygonSet, MeshingError> {
         let (origin_x, origin_y, cell_size, grid_width, grid_height) = self.compute_grid_params();
@@ -77,8 +81,8 @@ impl Surface2D {
         let mut eval_ctx = Context::new();
         let node = eval_ctx.import(&self.tree);
 
+        // Evaluate SDF at all grid points
         let mut grid = vec![0.0f32; grid_width * grid_height];
-
         for iy in 0..grid_height {
             for ix in 0..grid_width {
                 let x = origin_x + ix as f32 * cell_size;
@@ -90,7 +94,8 @@ impl Surface2D {
             }
         }
 
-        let segments = marching_squares(
+        // Dual contouring: compute QEF vertex for each crossing cell, then assemble segments
+        let segments = dual_contour_segments(
             &grid,
             grid_width,
             grid_height,
@@ -176,7 +181,10 @@ impl Surface2D {
 
     fn compute_grid_params(&self) -> (f32, f32, f32, usize, usize) {
         let extent = 10.0;
-        let depth = self.settings.depth as u32;
+        // Dual contouring needs finer resolution than marching squares since it
+        // produces one vertex per crossing cell (not per edge crossing).
+        // Depth 9 (512x512) balances speed and quality.
+        let depth = (self.settings.depth as u32).max(9);
         let cell_size = (extent * 2.0 / (1u64 << depth) as f32).max(0.001);
         let grid_size = (extent * 2.0 / cell_size) as usize;
         (-extent, -extent, cell_size, grid_size, grid_size)
@@ -191,6 +199,7 @@ struct Segment {
 }
 
 /// Run marching squares on a 2D SDF grid to extract zero-contour segments.
+#[allow(dead_code)]
 fn marching_squares(
     grid: &[f32],
     width: usize,
@@ -309,9 +318,279 @@ fn marching_squares(
     segments
 }
 
+// ─── 2D Dual Contouring with QEF ─────────────────────────────────────
+
+/// 2D Quadratic Error Function solver (mirrors fidget's QuadraticErrorSolver).
+///
+/// Collects edge crossings with their gradients, then solves for a vertex
+/// position that minimizes weighted distance to all crossings. Rank detection
+/// via eigenvalue cutoff handles sharp features: rank-2 for corners,
+/// rank-1 for planar edges.
+#[derive(Copy, Clone, Debug, Default)]
+struct Qef2D {
+    ata: nalgebra::Matrix2<f32>,
+    atb: nalgebra::Vector2<f32>,
+    btb: f32,
+    mass_point: nalgebra::Vector3<f32>, // (x, y, w) for averaging
+}
+
+impl Qef2D {
+    fn add_intersection(&mut self, pos: [f32; 2], grad: [f32; 2]) {
+        self.mass_point.x += pos[0];
+        self.mass_point.y += pos[1];
+        self.mass_point.z += 1.0;
+        let norm = (grad[0] * grad[0] + grad[1] * grad[1]).sqrt();
+        if norm < 1e-10 {
+            return;
+        }
+        let nx = grad[0] / norm;
+        let ny = grad[1] / norm;
+        self.ata[(0, 0)] += nx * nx;
+        self.ata[(0, 1)] += nx * ny;
+        self.ata[(1, 0)] += nx * ny;
+        self.ata[(1, 1)] += ny * ny;
+        let d = nx * pos[0] + ny * pos[1];
+        self.atb.x += nx * d;
+        self.atb.y += ny * d;
+        self.btb += d * d;
+    }
+
+    fn solve(&self) -> [f32; 2] {
+        let center = [
+            self.mass_point.x / self.mass_point.z,
+            self.mass_point.y / self.mass_point.z,
+        ];
+        let atb = self.atb - self.ata * nalgebra::Vector2::new(center[0], center[1]);
+        let det = self.ata.determinant();
+        // Eigenvalue cutoff: if determinant is tiny relative to trace, use rank-1
+        let trace = self.ata[(0, 0)] + self.ata[(1, 1)];
+        let cutoff = trace.abs() * 1e-3;
+        if det.abs() > cutoff {
+            // Rank-2: solve via Cramer's rule (avoid nalgebra linalg dependency)
+            let x = (atb.x * self.ata[(1, 1)] - atb.y * self.ata[(1, 0)]) / det;
+            let y = (self.ata[(0, 0)] * atb.y - self.ata[(0, 1)] * atb.x) / det;
+            [x + center[0], y + center[1]]
+        } else {
+            // Rank-1: project onto dominant axis (larger diagonal)
+            if self.ata[(0, 0)].abs() > self.ata[(1, 1)].abs() {
+                let x = if self.ata[(0, 0)].abs() > 1e-10 {
+                    atb.x / self.ata[(0, 0)]
+                } else {
+                    center[0]
+                };
+                [x + center[0], center[1]]
+            } else {
+                let y = if self.ata[(1, 1)].abs() > 1e-10 {
+                    atb.y / self.ata[(1, 1)]
+                } else {
+                    center[1]
+                };
+                [center[0], y + center[1]]
+            }
+        }
+    }
+}
+
+/// Run dual contouring on a 2D SDF grid to extract zero-contour segments.
+///
+/// Each crossing cell produces one vertex via QEF optimization. Segments connect
+/// vertices of adjacent crossing cells that share an edge with a sign change.
+fn dual_contour_segments(
+    grid: &[f32],
+    width: usize,
+    height: usize,
+    origin_x: f32,
+    origin_y: f32,
+    cell_size: f32,
+) -> Vec<Segment> {
+    // Per-cell vertex: None if cell is uniform (all inside or all outside)
+    let mut cell_verts: Vec<Option<[f32; 2]>> = vec![None; width * height];
+
+    // Process each cell
+    for iy in 0..height.saturating_sub(1) {
+        for ix in 0..width.saturating_sub(1) {
+            let idx = iy * width + ix;
+            let v_bl = grid[idx];
+            let v_br = grid[idx + 1];
+            let v_tr = grid[(iy + 1) * width + ix + 1];
+            let v_tl = grid[(iy + 1) * width + ix];
+
+            // Check if cell has sign changes (not all same sign)
+            let neg = [v_bl < 0.0, v_br < 0.0, v_tr < 0.0, v_tl < 0.0];
+            if neg.iter().all(|&b| b) || neg.iter().all(|&b| !b) {
+                continue; // uniform cell, no crossing
+            }
+
+            // Find edge crossings and their gradients
+            let mut qef = Qef2D::default();
+            let cell_origin_x = origin_x + ix as f32 * cell_size;
+            let cell_origin_y = origin_y + iy as f32 * cell_size;
+
+            // Edge 0: bottom (BL→BR), parametric along x
+            if v_bl * v_br < 0.0 {
+                let crossing = find_edge_crossing_2d(
+                    cell_origin_x, cell_origin_y, cell_size,
+                    0.0, 0.0, 1.0, 0.0, v_bl, v_br,
+                );
+                let grad = compute_gradient_2d(
+                    grid, width, crossing[0], crossing[1],
+                    origin_x, origin_y, cell_size,
+                );
+                qef.add_intersection(crossing, grad);
+            }
+            // Edge 1: right (BR→TR), parametric along y
+            if v_br * v_tr < 0.0 {
+                let crossing = find_edge_crossing_2d(
+                    cell_origin_x, cell_origin_y, cell_size,
+                    1.0, 0.0, 1.0, 1.0, v_br, v_tr,
+                );
+                let grad = compute_gradient_2d(
+                    grid, width, crossing[0], crossing[1],
+                    origin_x, origin_y, cell_size,
+                );
+                qef.add_intersection(crossing, grad);
+            }
+            // Edge 2: top (TL→TR), parametric along x (reversed for consistent winding)
+            if v_tl * v_tr < 0.0 {
+                let crossing = find_edge_crossing_2d(
+                    cell_origin_x, cell_origin_y, cell_size,
+                    0.0, 1.0, 1.0, 1.0, v_tl, v_tr,
+                );
+                let grad = compute_gradient_2d(
+                    grid, width, crossing[0], crossing[1],
+                    origin_x, origin_y, cell_size,
+                );
+                qef.add_intersection(crossing, grad);
+            }
+            // Edge 3: left (BL→TL), parametric along y
+            if v_bl * v_tl < 0.0 {
+                let crossing = find_edge_crossing_2d(
+                    cell_origin_x, cell_origin_y, cell_size,
+                    0.0, 0.0, 0.0, 1.0, v_bl, v_tl,
+                );
+                let grad = compute_gradient_2d(
+                    grid, width, crossing[0], crossing[1],
+                    origin_x, origin_y, cell_size,
+                );
+                qef.add_intersection(crossing, grad);
+            }
+
+            // Solve QEF for vertex position
+            cell_verts[idx] = Some(qef.solve());
+        }
+    }
+
+    // Assemble segments: connect adjacent crossing cells when their shared edge
+    // has a sign change (the two corners of the shared edge have different signs).
+    let mut segments = Vec::new();
+
+    // Vertical shared edges (between col ix and ix+1, same row iy)
+    for iy in 0..height.saturating_sub(1) {
+        for ix in 0..width.saturating_sub(1) {
+            let left_idx = iy * width + ix;
+            let right_idx = iy * width + ix + 1;
+            if cell_verts[left_idx].is_some() && cell_verts[right_idx].is_some() {
+                // Shared edge is vertical, corners at top and bottom
+                let top = grid[iy * width + ix + 1];
+                let bottom = grid[(iy + 1) * width + ix + 1];
+                if (top < 0.0) != (bottom < 0.0) {
+                    segments.push(Segment {
+                        start: cell_verts[left_idx].unwrap(),
+                        end: cell_verts[right_idx].unwrap(),
+                    });
+                }
+            }
+        }
+    }
+
+    // Horizontal shared edges (between row iy and iy+1, same col ix)
+    for iy in 0..height.saturating_sub(1) {
+        for ix in 0..width.saturating_sub(1) {
+            let top_idx = iy * width + ix;
+            let bot_idx = (iy + 1) * width + ix;
+            if cell_verts[top_idx].is_some() && cell_verts[bot_idx].is_some() {
+                // Shared edge is horizontal, corners at left and right
+                let left = grid[(iy + 1) * width + ix];
+                let right = grid[(iy + 1) * width + ix + 1];
+                if (left < 0.0) != (right < 0.0) {
+                    segments.push(Segment {
+                        start: cell_verts[top_idx].unwrap(),
+                        end: cell_verts[bot_idx].unwrap(),
+                    });
+                }
+            }
+        }
+    }
+
+    segments
+}
+
+/// Find the zero-crossing position along a parametric edge within a cell.
+/// `p0` and `p1` are local cell coordinates (0..1), `v0` and `v1` are SDF values.
+#[allow(clippy::too_many_arguments)]
+fn find_edge_crossing_2d(
+    cell_origin_x: f32,
+    cell_origin_y: f32,
+    cell_size: f32,
+    px0: f32,
+    py0: f32,
+    px1: f32,
+    py1: f32,
+    v0: f32,
+    v1: f32,
+) -> [f32; 2] {
+    let t = if (v1 - v0).abs() < f32::EPSILON {
+        0.5
+    } else {
+        (-v0 / (v1 - v0)).clamp(0.0, 1.0)
+    };
+    let lx = px0 + t * (px1 - px0);
+    let ly = py0 + t * (py1 - py0);
+    [
+        cell_origin_x + lx * cell_size,
+        cell_origin_y + ly * cell_size,
+    ]
+}
+
+/// Compute gradient at a world-space position using central finite differences.
+fn compute_gradient_2d(
+    grid: &[f32],
+    width: usize,
+    wx: f32,
+    wy: f32,
+    origin_x: f32,
+    origin_y: f32,
+    cell_size: f32,
+) -> [f32; 2] {
+    // Convert world coords to grid coords (floating point)
+    let gx = (wx - origin_x) / cell_size;
+    let gy = (wy - origin_y) / cell_size;
+    // Bilinear interpolation of gradient: compute gradient at each of 4 surrounding
+    // grid cells and interpolate. But for simplicity, use central differences on
+    // the interpolated grid values.
+    let eps = 0.5 * cell_size; // step size for finite difference
+    let interp = |gx: f32, gy: f32| -> f32 {
+        let ix = gx.floor() as i32;
+        let iy = gy.floor() as i32;
+        let fx = gx - ix as f32;
+        let fy = gy - iy as f32;
+        // Clamp to grid bounds
+        let ix = ix.max(0).min((width - 2) as i32) as usize;
+        let iy = iy.max(0).min((width - 2) as i32) as usize;
+        let v00 = grid[iy * width + ix];
+        let v10 = grid[iy * width + ix + 1];
+        let v01 = grid[(iy + 1) * width + ix];
+        let v11 = grid[(iy + 1) * width + ix + 1];
+        v00 * (1.0 - fx) * (1.0 - fy) + v10 * fx * (1.0 - fy) + v01 * (1.0 - fx) * fy + v11 * fx * fy
+    };
+    let dx = (interp(gx + eps / cell_size, gy) - interp(gx - eps / cell_size, gy)) / (2.0 * eps);
+    let dy = (interp(gx, gy + eps / cell_size) - interp(gx, gy - eps / cell_size)) / (2.0 * eps);
+    [dx, dy]
+}
+
 /// Interpolate the zero-crossing point on a cell edge.
 /// Edge indices: 0=bottom, 1=right, 2=top, 3=left
-#[allow(clippy::too_many_arguments)]
+#[allow(dead_code, clippy::too_many_arguments)]
 fn interpolate_edge(
     ix: usize,
     iy: usize,
@@ -374,9 +653,10 @@ fn interpolate_edge(
 
 /// Connect line segments into closed loops.
 fn connect_segments_into_loops(segments: Vec<Segment>, cell_size: f32) -> Vec<Vec<[f32; 2]>> {
-    // Use a small snap tolerance to only merge points that are numerically close
-    // (from shared edges between adjacent cells), not geometrically distinct points.
-    let snap_tol = cell_size * 0.01;
+    // Snap tolerance for merging nearby vertices. Dual contouring QEF places
+    // vertices near sharp features (corners) that should be merged into a single
+    // point. Use ~0.25 cell_size to snap corner vertices while preserving smooth curves.
+    let snap_tol = cell_size * 0.25;
     let snap_key = |pt: &[f32; 2]| -> (i32, i32) {
         (
             (pt[0] / snap_tol).round() as i32,
@@ -505,6 +785,82 @@ impl Object for Surface2D {
     ) -> std::fmt::Result {
         write!(f, "Implicit 2D shape")
     }
+}
+
+/// Builtin 2D implicit shape generators.
+pub mod implicits {
+    pub struct Circle;
+    pub struct Rectangle;
+    pub struct Square;
+}
+
+/// Register builtin 2D implicit shape functions.
+pub fn register_implicits(database: &mut BuiltinCallableDatabase) {
+    use crate::build_function;
+    use fidget::context::Tree;
+
+    build_function!(
+        database,
+        implicits::Circle, "std.implicits.circle", (
+            context: &ExecutionContext,
+            radius: Option<Length> = ValueNone.into(),
+            diameter: Option<Length> = ValueNone.into()
+        ) -> Value
+        {
+            let r = match (radius, diameter) {
+                (Some(r), None) => *r.value,
+                (None, Some(d)) => *d.value / 2.0,
+                (Some(_), Some(_)) => {
+                    return Err(crate::execution::errors::StrError("Both radius and diameter provided").to_error(context));
+                }
+                (None, None) => {
+                    return Err(crate::execution::errors::StrError("Either radius or diameter must be provided").to_error(context));
+                }
+            };
+            // SDF: sqrt(x² + y²) - r
+            let x = Tree::x();
+            let y = Tree::y();
+            let dist = (x.clone() * x.clone() + y.clone() * y.clone()).sqrt();
+            let tree = dist - Tree::constant(r);
+            Ok(Surface2D::new(tree).into())
+        }
+    );
+
+    build_function!(
+        database,
+        implicits::Rectangle, "std.implicits.rectangle", (
+            context: &ExecutionContext,
+            size: crate::execution::values::vector::Length2
+        ) -> Value
+        {
+            let s = size.0.raw_value();
+            let half_x = s.x / 2.0;
+            let half_y = s.y / 2.0;
+            // SDF: max(|x| - half_x, |y| - half_y)
+            let x = Tree::x().abs();
+            let y = Tree::y().abs();
+            let tree = x.clone() - Tree::constant(half_x);
+            let tree = tree.max(y.clone() - Tree::constant(half_y));
+            Ok(Surface2D::new(tree).into())
+        }
+    );
+
+    build_function!(
+        database,
+        implicits::Square, "std.implicits.square", (
+            context: &ExecutionContext,
+            size: Scalar
+        ) -> Value
+        {
+            let s = size.value.into_inner();
+            let half = s / 2.0;
+            // SDF: max(|x|, |y|) - half
+            let x = Tree::x().abs();
+            let y = Tree::y().abs();
+            let tree = x.max(y) - Tree::constant(half);
+            Ok(Surface2D::new(tree).into())
+        }
+    );
 }
 
 pub mod methods {
@@ -870,6 +1226,108 @@ mod tests {
         );
     }
 
+    // --- Sharp corner tests (dual contouring vs marching squares) ---
+
+    fn make_square_surface(size: f64, depth: u8) -> Surface2D {
+        let half = size / 2.0;
+        let x = Tree::x().abs();
+        let y = Tree::y().abs();
+        let tree = x.max(y) - Tree::constant(half);
+        Surface2D::with_settings(
+            tree,
+            super::super::MeshSettings {
+                depth,
+                ..Default::default()
+            },
+        )
+    }
+
+    #[test]
+    fn to_polygon_square_sharp_corners() {
+        // Use depth=10 for fine grid to test corner sharpness
+        let surface = make_square_surface(2.0, 10);
+        let result = surface.to_polygon();
+        assert!(result.is_ok(), "square should produce a polygon: {:?}", result);
+        let poly = result.unwrap();
+        let mp = &*poly.0;
+        let exterior = mp.0[0].exterior();
+        let coords: Vec<_> = exterior.coords().collect();
+
+        // Expected corners of a 2x2 square centered at origin: (-1,-1), (1,-1), (1,1), (-1,1)
+        let expected_corners = [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
+
+        // Find the closest polygon vertex to each expected corner
+        for &exp in &expected_corners {
+            let min_dist = coords
+                .iter()
+                .map(|c| {
+                    let dx = c.x - exp[0];
+                    let dy = c.y - exp[1];
+                    (dx * dx + dy * dy).sqrt()
+                })
+                .fold(f64::INFINITY, f64::min);
+            // With dual contouring QEF, corners should be sharp (within a few cell sizes)
+            // cell_size at depth=10 is ~0.02, so corners should be within ~0.05
+            assert!(
+                min_dist < 0.05,
+                "Expected corner ({}, {}) not found: closest vertex is {:.4} away. \
+                 Dual contouring should produce sharp corners.",
+                exp[0],
+                exp[1],
+                min_dist
+            );
+        }
+    }
+
+    #[test]
+    fn to_polygon_rectangle_sharp_corners() {
+        // Rectangle with different x/y sizes to test non-square corners
+        let half_x = 1.5;
+        let half_y = 0.5;
+        let x = Tree::x().abs();
+        let y = Tree::y().abs();
+        let tree = x.clone() - Tree::constant(half_x);
+        let tree = tree.max(y.clone() - Tree::constant(half_y));
+        let surface = Surface2D::with_settings(
+            tree,
+            super::super::MeshSettings {
+                depth: 10,
+                ..Default::default()
+            },
+        );
+        let result = surface.to_polygon();
+        assert!(result.is_ok(), "rectangle should produce a polygon");
+        let poly = result.unwrap();
+        let mp = &*poly.0;
+        let exterior = mp.0[0].exterior();
+        let coords: Vec<_> = exterior.coords().collect();
+
+        let expected_corners = [
+            [-half_x, -half_y],
+            [half_x, -half_y],
+            [half_x, half_y],
+            [-half_x, half_y],
+        ];
+
+        for &exp in &expected_corners {
+            let min_dist = coords
+                .iter()
+                .map(|c| {
+                    let dx = c.x - exp[0];
+                    let dy = c.y - exp[1];
+                    (dx * dx + dy * dy).sqrt()
+                })
+                .fold(f64::INFINITY, f64::min);
+            assert!(
+                min_dist < 0.05,
+                "Expected corner ({}, {}) not found: closest is {:.4} away",
+                exp[0],
+                exp[1],
+                min_dist
+            );
+        }
+    }
+
     // --- compute_grid_params ---
 
     #[test]
@@ -878,7 +1336,8 @@ mod tests {
         let (ox, oy, cs, w, h) = surface.compute_grid_params();
         assert_eq!(ox, -10.0);
         assert_eq!(oy, -10.0);
-        assert!(cs > 0.0 && cs <= 0.315);
+        // Dual contouring uses min depth 9: cell_size = 20/512 ≈ 0.039
+        assert!(cs > 0.0 && cs <= 0.04);
         assert_eq!(w, h);
     }
 

@@ -105,7 +105,8 @@ fidget `Tree` SDF expressions. Two-pass architecture:
 |---|---|
 | `gui/src/visualizers/implicit3d.rs` | Full render pipeline: plugin, nodes, resources, shader generation (~825 lines) |
 | `gui/src/tree_to_wgsl.rs` | WGSL codegen: `tree_to_wgsl_main_from_sdf()`, `tree_to_wgsl_writeback()`, `emit_sdf_body()` |
-| `interpreter/src/execution/values/implicit_surface/surface3d.rs` | `Surface3D` type, SDF construction for built-in shapes (cone, cylinder, sphere, torus) |
+| `interpreter/src/execution/values/implicit_surface/surface3d.rs` | `Surface3D` type, 3D SDF construction (sphere, cube, box, cylinder, cone, torus, etc.) |
+| `interpreter/src/execution/values/implicit_surface/surface2d.rs` | `Surface2D` type, 2D SDF construction (circle, rectangle, square) |
 
 ### Shader generation flow
 
@@ -150,3 +151,30 @@ ambient + diffuse: `base_color * (0.05 + 0.95 * max(dot(n, light_dir), 0))`.
 All built-in SDFs use normalized formulas where |grad| = 1 everywhere, ensuring
 correct finite-difference normals and lighting. Cone uses `(b*h - r*a) / sqrt(h²+r²)`
 where `a = z + h/2` (height from apex), `b = sqrt(x²+y²)` (radial distance).
+
+### Built-in implicit shapes
+
+**3D shapes** (`surface3d.rs::implicits`): sphere, cube, box, cylinder, cone, torus,
+rounded_cube.
+
+**2D shapes** (`surface2d.rs::implicits`): circle, rectangle, square.
+
+When adding new implicit shapes:
+1. Add struct to `implicits` module in appropriate file
+2. Add `build_function!` in `register_implicits()`
+3. Register in `standard_environment.rs` `build_implicits()` function
+4. **Critical**: Both `surface3d::register_implicits` AND `surface2d::register_implicits`
+   must be called from `BuiltinCallableDatabase::new()` in `closure.rs`. Missing either
+   causes "Forward callable was not present" panic at test runtime.
+5. Add integration test
+
+### Implicit surface methods
+
+- `Surface3D::transform(t: Transform3d)` — applies inverse transform to SDF coordinates
+  via `tree.remap_xyz()`. Arithmetic operators (`+`, `-`, `*`) also support transforms
+  with vectors (translate) and Zero3 (scale).
+- `Surface3D::union()`, `intersection()`, `difference()`, `symmetric_difference()` —
+  boolean ops via SDF algebra (`min`/`max`). Also available as arithmetic operators
+  (`+`, `-`, `|`, `&`, `^` with another Surface3D).
+- `Surface3D::slice_x/y/z(x)` — slice at constant coordinate, returns `PolygonSet`.
+- `Surface2D::to_polygon()` — marching squares contour extraction.

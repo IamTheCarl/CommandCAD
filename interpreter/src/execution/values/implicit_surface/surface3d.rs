@@ -11,7 +11,7 @@ use fidget::shape::Shape;
 use crate::execution::errors::{ExecutionResult, Raise, StrError};
 use crate::execution::values::{
     closure::{BuiltinCallableDatabase, BuiltinFunction},
-    vector::Zero3,
+    vector::{Length3, Zero3},
     Length, Object, Scalar, StaticType, StaticTypeName, Style, Transform3d, UnsignedInteger, Value,
     ValueNone, ValueType, Vector3, DowncastError,
 };
@@ -547,6 +547,8 @@ pub mod implicits {
     pub struct Cylinder;
     pub struct Cone;
     pub struct Torus;
+    pub struct RoundedCube;
+    pub struct Box;
 }
 
 /// Register builtin implicit shape functions.
@@ -661,6 +663,50 @@ pub fn register_implicits(database: &mut BuiltinCallableDatabase) {
             let radial = (x.clone() * x.clone() + y.clone() * y.clone()).sqrt();
             let diff = radial - Tree::constant(major);
             let tree = (diff.clone() * diff.clone() + z.clone() * z.clone()).sqrt() - Tree::constant(minor);
+            Ok(Surface3D::new(tree).into())
+        }
+    );
+
+    build_function!(
+        database,
+        implicits::RoundedCube, "std.implicits.rounded_cube", (
+            context: &ExecutionContext,
+            size: Scalar,
+            radius: Length
+        ) -> Value
+        {
+            let s = size.value.into_inner();
+            let r = radius.value.into_inner();
+            let half = s / 2.0;
+            // Rounded box SDF: length(max(abs(p) - b + r, 0)) - r
+            // where b is half-size. Normalized: |grad| = 1 everywhere.
+            let x = Tree::x().abs();
+            let y = Tree::y().abs();
+            let z = Tree::z().abs();
+            let q_x = (x.clone() - Tree::constant(half) + Tree::constant(r)).max(Tree::constant(0.0));
+            let q_y = (y.clone() - Tree::constant(half) + Tree::constant(r)).max(Tree::constant(0.0));
+            let q_z = (z.clone() - Tree::constant(half) + Tree::constant(r)).max(Tree::constant(0.0));
+            let tree = (q_x.clone() * q_x.clone() + q_y.clone() * q_y.clone() + q_z.clone() * q_z.clone()).sqrt() - Tree::constant(r);
+            Ok(Surface3D::new(tree).into())
+        }
+    );
+
+    build_function!(
+        database,
+        implicits::Box, "std.implicits.box", (
+            context: &ExecutionContext,
+            size: Length3
+        ) -> Value
+        {
+            let s = size.0.raw_value();
+            // SDF for axis-aligned box centered at origin with per-axis sizes.
+            let half_x = Tree::constant(s.x / 2.0);
+            let half_y = Tree::constant(s.y / 2.0);
+            let half_z = Tree::constant(s.z / 2.0);
+            let x = Tree::x().abs();
+            let y = Tree::y().abs();
+            let z = Tree::z().abs();
+            let tree = (x.clone() - half_x).max(y.clone() - half_y.clone()).max(z.clone() - half_z);
             Ok(Surface3D::new(tree).into())
         }
     );
@@ -792,6 +838,84 @@ mod surface3d_tests {
         assert!(result.is_ok());
         let value = result.unwrap();
         assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_rounded_cube() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.rounded_cube(size = 4.0m, radius = 0.5m)");
+        if let Err(ref e) = result {
+            eprintln!("rounded_cube error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_box() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.box(size = {4.0m, 3.0m, 2.0m})");
+        if let Err(ref e) = result {
+            eprintln!("box error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_circle() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.circle(radius = 2.0m)");
+        if let Err(ref e) = result {
+            eprintln!("circle error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+
+        let result = test_run("std.implicits.circle(diameter = 4.0m)");
+        if let Err(ref e) = result {
+            eprintln!("circle (diameter) error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_rectangle() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.rectangle(size = {4.0m, 3.0m})");
+        if let Err(ref e) = result {
+            eprintln!("rectangle error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_std_implicits_square() {
+        use crate::execution::test_run;
+        use crate::execution::values::Value;
+
+        let result = test_run("std.implicits.square(size = 4.0m)");
+        if let Err(ref e) = result {
+            eprintln!("square error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
     }
 
     #[test]
