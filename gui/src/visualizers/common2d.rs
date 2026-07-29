@@ -143,6 +143,10 @@ impl ViewState2d {
         self.offset
     }
 
+    pub fn set_offset(&mut self, offset: egui::Vec2) {
+        self.offset = offset;
+    }
+
     pub fn fit_to_screen(&mut self, value: &JobOutput, draw_area: Rect) {
         let bounds = match value {
             JobOutput::LineString(line_string) => line_string.0.bounding_rect(),

@@ -46,6 +46,88 @@ impl Surface2D {
         Self { tree, settings }
     }
 
+    /// Access the underlying fidget Tree.
+    pub fn tree(&self) -> &fidget::context::Tree {
+        &self.tree
+    }
+
+    /// Estimate the bounding box by sampling SDF along axes.
+    /// Returns (min_x, min_y, max_x, max_y) in the shape's coordinate system.
+    pub fn bounding_box_estimate(&self) -> (f64, f64, f64, f64) {
+        let mut ctx = fidget::context::Context::new();
+        let node = ctx.import(&self.tree);
+
+        let sample = |x: f64, y: f64| -> f64 {
+            ctx.eval_xyz(node, x, y, 0.0).unwrap_or(0.0)
+        };
+
+        // Binary search for extent along +x axis
+        let mut lo = 0.0_f64;
+        let mut hi = 1.0_f64;
+        while sample(hi, 0.0) < 0.0 && hi < 100.0 {
+            hi *= 2.0;
+        }
+        for _ in 0..30 {
+            let mid = (lo + hi) / 2.0;
+            if sample(mid, 0.0) < 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let x_max = hi.min(100.0);
+
+        // Binary search for extent along -x axis
+        lo = 0.0;
+        hi = 1.0;
+        while sample(-hi, 0.0) < 0.0 && hi < 100.0 {
+            hi *= 2.0;
+        }
+        for _ in 0..30 {
+            let mid = (lo + hi) / 2.0;
+            if sample(-mid, 0.0) < 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let x_min = -hi.min(100.0);
+
+        // Binary search for extent along +y axis
+        lo = 0.0;
+        hi = 1.0;
+        while sample(0.0, hi) < 0.0 && hi < 100.0 {
+            hi *= 2.0;
+        }
+        for _ in 0..30 {
+            let mid = (lo + hi) / 2.0;
+            if sample(0.0, mid) < 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let y_max = hi.min(100.0);
+
+        // Binary search for extent along -y axis
+        lo = 0.0;
+        hi = 1.0;
+        while sample(0.0, -hi) < 0.0 && hi < 100.0 {
+            hi *= 2.0;
+        }
+        for _ in 0..30 {
+            let mid = (lo + hi) / 2.0;
+            if sample(0.0, -mid) < 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let y_min = -hi.min(100.0);
+
+        (x_min, y_min, x_max, y_max)
+    }
+
     /// Boolean union: min(a, b) — inside either shape.
     pub fn union(&self, other: &Surface2D) -> Self {
         Self::new(self.tree.clone().min(other.tree.clone()))
@@ -81,7 +163,7 @@ impl Surface2D {
         let mut eval_ctx = Context::new();
         let node = eval_ctx.import(&self.tree);
 
-        // Evaluate SDF at all grid points
+        // Evaluate SDF at all grid points (for cell occupancy)
         let mut grid = vec![0.0f32; grid_width * grid_height];
         for iy in 0..grid_height {
             for ix in 0..grid_width {
@@ -94,14 +176,17 @@ impl Surface2D {
             }
         }
 
-        // Dual contouring: compute QEF vertex for each crossing cell, then assemble segments
-        let segments = dual_contour_segments(
+        // Dual contouring: compute QEF vertex for each crossing cell, then assemble segments.
+        // Pass the JIT evaluator for accurate gradient computation at crossing points.
+        let segments = dual_contour_segments_jit(
             &grid,
             grid_width,
             grid_height,
             origin_x,
             origin_y,
             cell_size,
+            &eval_ctx,
+            node,
         );
         let loops = connect_segments_into_loops(segments, cell_size);
 
@@ -180,12 +265,49 @@ impl Surface2D {
     }
 
     fn compute_grid_params(&self) -> (f32, f32, f32, usize, usize) {
-        let extent = 10.0;
-        // Dual contouring needs finer resolution than marching squares since it
-        // produces one vertex per crossing cell (not per edge crossing).
-        // Depth 9 (512x512) balances speed and quality.
-        let depth = (self.settings.depth as u32).max(9);
-        let cell_size = (extent * 2.0 / (1u64 << depth) as f32).max(0.001);
+        // Estimate shape bounds by sampling SDF along axes.
+        // This ensures the grid adapts to the shape size (e.g., 1cm circle).
+        let mut eval_ctx = Context::new();
+        let node = eval_ctx.import(&self.tree);
+
+        let sample_xy = |x: f64, y: f64| -> f32 {
+            eval_ctx.eval_xyz(node, x, y, 0.0).unwrap_or(0.0) as f32
+        };
+        let sample_x = |x: f32| sample_xy(x as f64, 0.0);
+        let sample_y = |y: f32| sample_xy(0.0, y as f64);
+
+        // Binary search for zero-crossing along an axis direction.
+        let find_boundary = |mut lo: f32, mut hi: f32, sample: &dyn Fn(f32) -> f32| -> f32 {
+            while sample(hi) < 0.0 && hi < 100.0 {
+                hi *= 2.0;
+            }
+            if hi >= 100.0 {
+                return 10.0;
+            }
+            for _ in 0..20 {
+                let mid = (lo + hi) / 2.0;
+                if sample(mid) < 0.0 {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            hi
+        };
+
+        let origin_inside = sample_xy(0.0, 0.0) < 0.0;
+
+        let extent = if origin_inside {
+            let sx = find_boundary(0.0, 1.0, &sample_x);
+            let sy = find_boundary(0.0, 1.0, &sample_y);
+            sx.max(sy).max(0.001) * 1.5
+        } else {
+            10.0
+        };
+
+        let extent = extent.min(20.0);
+        let depth = (self.settings.depth as u32).max(10);
+        let cell_size = (extent * 2.0 / (1u64 << depth) as f32).max(0.0001);
         let grid_size = (extent * 2.0 / cell_size) as usize;
         (-extent, -extent, cell_size, grid_size, grid_size)
     }
@@ -356,36 +478,39 @@ impl Qef2D {
     }
 
     fn solve(&self) -> [f32; 2] {
-        let center = [
+        // Mean crossing position (mass point): good default for underconstrained directions
+        let mean = [
             self.mass_point.x / self.mass_point.z,
             self.mass_point.y / self.mass_point.z,
         ];
-        let atb = self.atb - self.ata * nalgebra::Vector2::new(center[0], center[1]);
+        let atb_shifted = self.atb - self.ata * nalgebra::Vector2::new(mean[0], mean[1]);
         let det = self.ata.determinant();
         // Eigenvalue cutoff: if determinant is tiny relative to trace, use rank-1
         let trace = self.ata[(0, 0)] + self.ata[(1, 1)];
         let cutoff = trace.abs() * 1e-3;
         if det.abs() > cutoff {
-            // Rank-2: solve via Cramer's rule (avoid nalgebra linalg dependency)
-            let x = (atb.x * self.ata[(1, 1)] - atb.y * self.ata[(1, 0)]) / det;
-            let y = (self.ata[(0, 0)] * atb.y - self.ata[(0, 1)] * atb.x) / det;
-            [x + center[0], y + center[1]]
+            // Rank-2: solve via Cramer's rule
+            let x = (atb_shifted.x * self.ata[(1, 1)] - atb_shifted.y * self.ata[(1, 0)]) / det;
+            let y = (self.ata[(0, 0)] * atb_shifted.y - self.ata[(0, 1)] * atb_shifted.x) / det;
+            [x + mean[0], y + mean[1]]
         } else {
-            // Rank-1: project onto dominant axis (larger diagonal)
+            // Rank-1: solve along dominant axis, use mean crossing for unconstrained direction.
+            // This preserves sharp corners (QEF snaps constrained direction) while keeping
+            // smooth curves (mean crossing position for the free direction).
             if self.ata[(0, 0)].abs() > self.ata[(1, 1)].abs() {
                 let x = if self.ata[(0, 0)].abs() > 1e-10 {
-                    atb.x / self.ata[(0, 0)]
+                    atb_shifted.x / self.ata[(0, 0)]
                 } else {
-                    center[0]
+                    0.0
                 };
-                [x + center[0], center[1]]
+                [x + mean[0], mean[1]]
             } else {
                 let y = if self.ata[(1, 1)].abs() > 1e-10 {
-                    atb.y / self.ata[(1, 1)]
+                    atb_shifted.y / self.ata[(1, 1)]
                 } else {
-                    center[1]
+                    0.0
                 };
-                [center[0], y + center[1]]
+                [mean[0], y + mean[1]]
             }
         }
     }
@@ -395,13 +520,17 @@ impl Qef2D {
 ///
 /// Each crossing cell produces one vertex via QEF optimization. Segments connect
 /// vertices of adjacent crossing cells that share an edge with a sign change.
-fn dual_contour_segments(
+/// Uses JIT-evaluated gradients for accurate corner detection.
+#[allow(clippy::too_many_arguments)]
+fn dual_contour_segments_jit(
     grid: &[f32],
     width: usize,
     height: usize,
     origin_x: f32,
     origin_y: f32,
     cell_size: f32,
+    ctx: &Context,
+    node: fidget::context::Node,
 ) -> Vec<Segment> {
     // Per-cell vertex: None if cell is uniform (all inside or all outside)
     let mut cell_verts: Vec<Option<[f32; 2]>> = vec![None; width * height];
@@ -421,57 +550,45 @@ fn dual_contour_segments(
                 continue; // uniform cell, no crossing
             }
 
-            // Find edge crossings and their gradients
+            // Find edge crossings and their gradients (JIT-evaluated)
             let mut qef = Qef2D::default();
             let cell_origin_x = origin_x + ix as f32 * cell_size;
             let cell_origin_y = origin_y + iy as f32 * cell_size;
 
-            // Edge 0: bottom (BL→BR), parametric along x
+            // Edge 0: bottom (BL→BR)
             if v_bl * v_br < 0.0 {
                 let crossing = find_edge_crossing_2d(
                     cell_origin_x, cell_origin_y, cell_size,
                     0.0, 0.0, 1.0, 0.0, v_bl, v_br,
                 );
-                let grad = compute_gradient_2d(
-                    grid, width, crossing[0], crossing[1],
-                    origin_x, origin_y, cell_size,
-                );
+                let grad = compute_gradient_jit(ctx, node, crossing[0] as f64, crossing[1] as f64);
                 qef.add_intersection(crossing, grad);
             }
-            // Edge 1: right (BR→TR), parametric along y
+            // Edge 1: right (BR→TR)
             if v_br * v_tr < 0.0 {
                 let crossing = find_edge_crossing_2d(
                     cell_origin_x, cell_origin_y, cell_size,
                     1.0, 0.0, 1.0, 1.0, v_br, v_tr,
                 );
-                let grad = compute_gradient_2d(
-                    grid, width, crossing[0], crossing[1],
-                    origin_x, origin_y, cell_size,
-                );
+                let grad = compute_gradient_jit(ctx, node, crossing[0] as f64, crossing[1] as f64);
                 qef.add_intersection(crossing, grad);
             }
-            // Edge 2: top (TL→TR), parametric along x (reversed for consistent winding)
+            // Edge 2: top (TL→TR)
             if v_tl * v_tr < 0.0 {
                 let crossing = find_edge_crossing_2d(
                     cell_origin_x, cell_origin_y, cell_size,
                     0.0, 1.0, 1.0, 1.0, v_tl, v_tr,
                 );
-                let grad = compute_gradient_2d(
-                    grid, width, crossing[0], crossing[1],
-                    origin_x, origin_y, cell_size,
-                );
+                let grad = compute_gradient_jit(ctx, node, crossing[0] as f64, crossing[1] as f64);
                 qef.add_intersection(crossing, grad);
             }
-            // Edge 3: left (BL→TL), parametric along y
+            // Edge 3: left (BL→TL)
             if v_bl * v_tl < 0.0 {
                 let crossing = find_edge_crossing_2d(
                     cell_origin_x, cell_origin_y, cell_size,
                     0.0, 0.0, 0.0, 1.0, v_bl, v_tl,
                 );
-                let grad = compute_gradient_2d(
-                    grid, width, crossing[0], crossing[1],
-                    origin_x, origin_y, cell_size,
-                );
+                let grad = compute_gradient_jit(ctx, node, crossing[0] as f64, crossing[1] as f64);
                 qef.add_intersection(crossing, grad);
             }
 
@@ -552,7 +669,9 @@ fn find_edge_crossing_2d(
     ]
 }
 
-/// Compute gradient at a world-space position using central finite differences.
+/// Compute gradient at a world-space position using central finite differences
+/// on bilinear-interpolated grid values (kept for reference, not used by JIT path).
+#[allow(dead_code)]
 fn compute_gradient_2d(
     grid: &[f32],
     width: usize,
@@ -586,6 +705,27 @@ fn compute_gradient_2d(
     let dx = (interp(gx + eps / cell_size, gy) - interp(gx - eps / cell_size, gy)) / (2.0 * eps);
     let dy = (interp(gx, gy + eps / cell_size) - interp(gx, gy - eps / cell_size)) / (2.0 * eps);
     [dx, dy]
+}
+
+/// Compute gradient at a world-space position using JIT-evaluated SDF.
+///
+/// Uses central finite differences with a tiny step size (1e-5) for accurate
+/// gradients. Unlike grid-based gradients, this evaluates the true SDF (not
+/// a bilinear approximation), giving exact normals even at sharp features.
+fn compute_gradient_jit(
+    ctx: &Context,
+    node: fidget::context::Node,
+    x: f64,
+    y: f64,
+) -> [f32; 2] {
+    let eps = 1e-5;
+    let dx = (ctx.eval_xyz(node, x + eps, y, 0.0).unwrap_or(0.0)
+        - ctx.eval_xyz(node, x - eps, y, 0.0).unwrap_or(0.0))
+        / (2.0 * eps);
+    let dy = (ctx.eval_xyz(node, x, y + eps, 0.0).unwrap_or(0.0)
+        - ctx.eval_xyz(node, x, y - eps, 0.0).unwrap_or(0.0))
+        / (2.0 * eps);
+    [dx as f32, dy as f32]
 }
 
 /// Interpolate the zero-crossing point on a cell edge.
@@ -1226,6 +1366,113 @@ mod tests {
         );
     }
 
+    // --- Debug test for JIT gradients and QEF vertices ---
+
+    #[test]
+    fn debug_circle_final_polygon() {
+        let surface = make_circle_surface(1.0);
+        let result = surface.to_polygon().unwrap();
+        let mp = &*result.0;
+        let exterior = mp.0[0].exterior();
+        let coords: Vec<_> = exterior.coords().collect();
+        let area = polygon_area(&mp.0[0]);
+        eprintln!("Circle: {} vertices, area={:.4}", coords.len(), area);
+        // Print every Nth vertex to see distribution
+        let step = coords.len() / 16;
+        for i in (0..coords.len()).step_by(step.max(1)) {
+            let c = &coords[i];
+            let r = (c.x * c.x + c.y * c.y).sqrt();
+            eprintln!("  V{:3}: ({:+.4}, {:+.4}) r={:.4}", i, c.x, c.y, r);
+        }
+        assert!(coords.len() > 100);
+    }
+
+    #[test]
+    fn debug_circle_jit_gradients() {
+        use fidget::context::Context;
+
+        let surface = make_circle_surface(1.0);
+        let (origin_x, origin_y, cell_size, grid_width, grid_height) =
+            surface.compute_grid_params();
+
+        let mut eval_ctx = Context::new();
+        let node = eval_ctx.import(&surface.tree);
+
+        // Evaluate grid
+        let mut grid = vec![0.0f32; grid_width * grid_height];
+        for iy in 0..grid_height {
+            for ix in 0..grid_width {
+                let x = origin_x + ix as f32 * cell_size;
+                let y = origin_y + iy as f32 * cell_size;
+                let val = eval_ctx.eval_xyz(node, x as f64, y as f64, 0.0_f64).unwrap();
+                grid[iy * grid_width + ix] = val as f32;
+            }
+        }
+
+        // Print some QEF vertices
+        eprintln!("Debug: cell_size={:.4}, grid={}x{}", cell_size, grid_width, grid_height);
+        let mut count = 0usize;
+        for iy in 0..grid_height.saturating_sub(1) {
+            for ix in 0..grid_width.saturating_sub(1) {
+                let idx = iy * grid_width + ix;
+                let v_bl = grid[idx];
+                let v_br = grid[idx + 1];
+                let v_tr = grid[(iy + 1) * grid_width + ix + 1];
+                let v_tl = grid[(iy + 1) * grid_width + ix];
+                let neg = [v_bl < 0.0, v_br < 0.0, v_tr < 0.0, v_tl < 0.0];
+                if neg.iter().all(|&b| b) || neg.iter().all(|&b| !b) {
+                    continue;
+                }
+
+                let cell_x = origin_x + (ix as f32 + 0.5) * cell_size;
+                let cell_y = origin_y + (iy as f32 + 0.5) * cell_size;
+                let dist_from_origin = (cell_x * cell_x + cell_y * cell_y).sqrt();
+                if (dist_from_origin - 1.0).abs() > cell_size * 3.0 {
+                    continue;
+                }
+
+                // Compute QEF vertex for this cell
+                let mut qef = Qef2D::default();
+                let co_x = origin_x + ix as f32 * cell_size;
+                let co_y = origin_y + iy as f32 * cell_size;
+
+                if v_bl * v_br < 0.0 {
+                    let c = find_edge_crossing_2d(co_x, co_y, cell_size, 0.0, 0.0, 1.0, 0.0, v_bl, v_br);
+                    let g = compute_gradient_jit(&eval_ctx, node, c[0] as f64, c[1] as f64);
+                    qef.add_intersection(c, g);
+                }
+                if v_br * v_tr < 0.0 {
+                    let c = find_edge_crossing_2d(co_x, co_y, cell_size, 1.0, 0.0, 1.0, 1.0, v_br, v_tr);
+                    let g = compute_gradient_jit(&eval_ctx, node, c[0] as f64, c[1] as f64);
+                    qef.add_intersection(c, g);
+                }
+                if v_tl * v_tr < 0.0 {
+                    let c = find_edge_crossing_2d(co_x, co_y, cell_size, 0.0, 1.0, 1.0, 1.0, v_tl, v_tr);
+                    let g = compute_gradient_jit(&eval_ctx, node, c[0] as f64, c[1] as f64);
+                    qef.add_intersection(c, g);
+                }
+                if v_bl * v_tl < 0.0 {
+                    let c = find_edge_crossing_2d(co_x, co_y, cell_size, 0.0, 0.0, 0.0, 1.0, v_bl, v_tl);
+                    let g = compute_gradient_jit(&eval_ctx, node, c[0] as f64, c[1] as f64);
+                    qef.add_intersection(c, g);
+                }
+
+                let vert = qef.solve();
+                let vert_dist = (vert[0] * vert[0] + vert[1] * vert[1]).sqrt();
+
+                if count < 30 {
+                    eprintln!(
+                        "  [{:4},{:4}] cell=({:+.3},{:+.3}) QEF=({:+.4},{:+.4}) |v|={:.4}",
+                        ix, iy, cell_x, cell_y, vert[0], vert[1], vert_dist
+                    );
+                }
+                count += 1;
+            }
+        }
+        eprintln!("  Total crossing cells sampled: {}", count);
+        assert!(count > 0);
+    }
+
     // --- Sharp corner tests (dual contouring vs marching squares) ---
 
     fn make_square_surface(size: f64, depth: u8) -> Surface2D {
@@ -1332,12 +1579,24 @@ mod tests {
 
     #[test]
     fn compute_grid_params_default_depth() {
+        // Tree::constant(0.0) has origin on boundary (not inside), falls back to extent=10
         let surface = Surface2D::new(Tree::constant(0.0));
         let (ox, oy, cs, w, h) = surface.compute_grid_params();
         assert_eq!(ox, -10.0);
         assert_eq!(oy, -10.0);
-        // Dual contouring uses min depth 9: cell_size = 20/512 ≈ 0.039
-        assert!(cs > 0.0 && cs <= 0.04);
+        // Dual contouring uses min depth 10: cell_size = 20/1024 ≈ 0.0195
+        assert!(cs > 0.0 && cs <= 0.02);
+        assert_eq!(w, h);
+    }
+
+    #[test]
+    fn compute_grid_params_adaptive_small_circle() {
+        // Small circle (r=0.01 = 1cm) should get adaptive bounds
+        let surface = make_circle_surface(0.01);
+        let (ox, oy, cs, w, h) = surface.compute_grid_params();
+        // Bounds should be much smaller than default [-10, 10]
+        assert!(ox.abs() < 1.0, "adaptive extent should be small for 1cm circle, got {:.2}", ox.abs());
+        assert!(cs > 0.0 && cs < 0.001, "cell_size should be tiny: {:.6}", cs);
         assert_eq!(w, h);
     }
 
@@ -1346,7 +1605,7 @@ mod tests {
         let mut surface = Surface2D::new(Tree::constant(0.0));
         surface.settings.depth = 20;
         let (_ox, _oy, cs, _w, _h) = surface.compute_grid_params();
-        assert!(cs >= 0.001, "cell size should not go below 0.001");
+        assert!(cs >= 0.0001, "cell size should not go below 0.0001, got {:.6}", cs);
     }
 
     // --- Debug test for full pipeline ---

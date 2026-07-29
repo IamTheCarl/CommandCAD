@@ -18,6 +18,7 @@
 
 mod common2d;
 mod common3d;
+mod implicit2d;
 mod implicit3d;
 mod mesh;
 
@@ -28,5 +29,6 @@ pub use common3d::{
     ViewState3d, orbit_camera, orbit_light, setup_3d, sync_wireframe_visibility, update_3d_camera,
     update_grid,
 };
+pub use implicit2d::Implicit2dPlugin;
 pub use implicit3d::Implicit3dPlugin;
 pub use mesh::spawn_meshes;

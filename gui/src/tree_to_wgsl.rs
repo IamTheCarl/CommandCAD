@@ -171,6 +171,71 @@ fn fs(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     )
 }
 
+/// Converts a fidget `Tree` into the 2D main-pass WGSL shader.
+///
+/// This fragment shader evaluates the SDF directly at each pixel's world
+/// coordinate (no ray-marching needed for 2D). Handles anti-aliased edges,
+/// near-miss outlines, and gradient-based lighting.
+pub fn tree_to_wgsl_2d_main_from_sdf(sdf_body: &str) -> String {
+    format!(
+        r#"{header}
+
+fn sdf(pos: vec2<f32>) -> f32 {{
+    return {sdf_body};
+}}
+
+@fragment
+fn fs(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {{
+    // Pixel position in world coordinates (centered viewport)
+    let pixel_x = uv.x * u.viewport_size_and_pad.x;
+    let pixel_y = (1.0 - uv.y) * u.viewport_size_and_pad.y;
+    let world_pos = u.origin_and_scale.xy + vec2<f32>(pixel_x, -pixel_y) * u.origin_and_scale.z;
+
+    let dist = sdf(world_pos);
+
+    // Anti-aliased edge threshold: 1 pixel width
+    let aa_threshold = u.origin_and_scale.z;
+
+    // Outline threshold: ~3 pixel width for near-miss detection
+    let outline_threshold = 3.0 * u.origin_and_scale.z;
+
+    if (dist > outline_threshold) {{
+        // Far outside — transparent
+        return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    }}
+
+    if (dist > aa_threshold) {{
+        // Near-miss outline: smooth falloff from edge
+        let t_norm = clamp((dist - aa_threshold) / (outline_threshold - aa_threshold), 0.0, 1.0);
+        let outline = 1.0 - pow(t_norm, 4.0);
+        return vec4<f32>(1.0, 1.0, 1.0, outline * 0.8);
+    }}
+
+    // Inside or at edge — flat color (tuned to match egui polygon fill)
+    let color: f32 = 0.35;
+
+    // Smooth anti-aliased edge
+    let alpha = smoothstep(-aa_threshold, aa_threshold, -dist);
+
+    return vec4<f32>(color, color, color, alpha);
+}}
+"#,
+        header = MAIN_2D_UNIFORM_HEADER,
+        sdf_body = sdf_body,
+    )
+}
+
+const MAIN_2D_UNIFORM_HEADER: &str = r#"@group(0) @binding(0)
+var<uniform> u: Implicit2dUniform;
+
+struct Implicit2dUniform {
+    /// xy = world origin, z = world_units_per_pixel
+    origin_and_scale: vec4<f32>,
+    /// xy = viewport size in pixels
+    viewport_size_and_pad: vec4<f32>,
+}
+"#;
+
 const MAIN_UNIFORM_HEADER: &str = r#"@group(0) @binding(0)
 var<uniform> u: ImplicitUniform;
 

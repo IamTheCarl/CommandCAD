@@ -28,16 +28,16 @@ use bevy::{
     prelude::*,
     winit::{EventLoopProxy, EventLoopProxyWrapper, WinitSettings, WinitUserEvent},
 };
-use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
+use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, EguiTextureHandle, EguiUserTextures};
 use bevy_mod_outline::OutlinePlugin;
 use clap::Parser;
-use egui::{Color32, Mesh, RichText, StrokeKind, TextEdit, emath::TSTransform};
+use egui::{Color32, Mesh, Painter, RichText, StrokeKind, TextEdit, emath::TSTransform};
 use interpreter::{
     ExecutionContext, FsStore, LogLevel, LogMessage, RuntimeLog, SourceReference, StackScope,
     StackTrace, Store, build_prelude, compile, execute_expression, new_parser,
     values::{
-        BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Surface3D, Value,
-        manifold_mesh::ManifoldMesh3D,
+        BuiltinCallableDatabase, LineString, Object, Polygon, PolygonSet, Style, Surface2D,
+        Surface3D, Value, manifold_mesh::ManifoldMesh3D,
     },
 };
 use notify::{EventKind, RecommendedWatcher, Watcher, recommended_watcher};
@@ -55,9 +55,10 @@ struct CliArgs {
 use crate::{
     grid::GridSettings,
     visualizers::{
-        Implicit3dPlugin, ViewState2d, ViewState3d, build_fill_mesh_from_polygon, draw_grid,
-        orbit_camera, orbit_light, paint_linestring, paint_polygon, setup_3d, spawn_meshes,
-        sync_wireframe_visibility, update_3d_camera, update_grid,
+        Implicit2dPlugin, Implicit3dPlugin, ViewState2d, ViewState3d,
+        build_fill_mesh_from_polygon, draw_grid, orbit_camera, orbit_light, paint_linestring,
+        paint_polygon, setup_3d, spawn_meshes, sync_wireframe_visibility, update_3d_camera,
+        update_grid,
     },
 };
 
@@ -98,6 +99,7 @@ fn main() {
     .add_plugins(EguiPlugin::default())
     .add_plugins(OutlinePlugin)
     .add_plugins(WireframePlugin::default())
+    .add_plugins(Implicit2dPlugin)
     .add_plugins(Implicit3dPlugin)
     .insert_resource(InitialExpression(initial_expression))
     .add_systems(
@@ -119,6 +121,7 @@ fn main() {
             orbit_camera.after(spawn_meshes),
             orbit_light.after(orbit_camera),
             update_grid.after(orbit_light),
+            register_implicit2d_egui_texture,
         ),
     )
     .add_systems(EguiPrimaryContextPass, render_ui);
@@ -201,6 +204,11 @@ fn setup(mut commands: Commands, event_loop_proxy: Res<EventLoopProxyWrapper>) {
         implicit_textures: None,
         implicit_texture_size: None,
         implicit_shader: None,
+        implicit2d_texture: None,
+        implicit2d_shader: None,
+        implicit2d_texture_size: None,
+        implicit2d_egui_texture: None,
+        implicit2d_draw_area_size: None,
     });
 
     commands.insert_resource(ViewState2d::default());
@@ -282,6 +290,7 @@ enum JobOutput {
         meshes: Vec<Arc<Mesh>>,
     },
     ManifoldMesh(ManifoldMeshState),
+    Surface2D(Surface2D),
     Surface3D(Surface3D),
 }
 
@@ -399,6 +408,7 @@ fn job_executor(
                 manifold,
                 uploaded_to_gpu: false,
             })),
+            Ok(Value::Surface2D(surface)) => Ok(JobOutput::Surface2D(surface)),
             Ok(Value::Surface3D(surface)) => Ok(JobOutput::Surface3D(surface)),
             Ok(value) => {
                 let mut text = String::new();
@@ -457,6 +467,16 @@ struct JobBridge {
     implicit_texture_size: Option<UVec2>,
     /// Cached main shader handle (only recreated when Surface3D changes).
     implicit_shader: Option<Handle<Shader>>,
+    /// Cached 2D implicit render texture handle.
+    implicit2d_texture: Option<Handle<Image>>,
+    /// Cached 2D implicit shader handle.
+    implicit2d_shader: Option<Handle<Shader>>,
+    /// Cached 2D implicit texture size to detect resize.
+    implicit2d_texture_size: Option<UVec2>,
+    /// Egui texture ID for displaying the 2D implicit surface.
+    implicit2d_egui_texture: Option<egui::TextureId>,
+    /// Draw area size from egui pass (one-frame lag), used to size the texture and compute uniform.
+    implicit2d_draw_area_size: Option<UVec2>,
 }
 
 impl JobBridge {
@@ -509,6 +529,7 @@ fn check_job(mut command_cad: ResMut<JobBridge>) {
         if let Ok(output) = active_job.response.get_mut().unwrap().try_recv() {
             let result_type = match &output.result {
                 Ok(JobOutput::Surface3D(_)) => "Surface3D".to_string(),
+                Ok(JobOutput::Surface2D(_)) => "Surface2D".to_string(),
                 Ok(JobOutput::ManifoldMesh(_)) => "ManifoldMesh".to_string(),
                 Ok(JobOutput::Polygon { .. }) => "Polygon".to_string(),
                 Ok(JobOutput::PolygonSet { .. }) => "PolygonSet".to_string(),
@@ -525,6 +546,11 @@ fn check_job(mut command_cad: ResMut<JobBridge>) {
             command_cad.implicit_textures = None;
             command_cad.implicit_texture_size = None;
             command_cad.implicit_shader = None;
+            command_cad.implicit2d_texture = None;
+            command_cad.implicit2d_shader = None;
+            command_cad.implicit2d_texture_size = None;
+            command_cad.implicit2d_egui_texture = None;
+            command_cad.implicit2d_draw_area_size = None;
 
             if result_type.starts_with("ERROR") {
                 error!("Job completed: {}", result_type);
@@ -551,6 +577,21 @@ fn check_job(mut command_cad: ResMut<JobBridge>) {
             }
 
             command_cad.watched_files = output.files_to_watch;
+        }
+    }
+}
+
+/// Register the 2D implicit texture with egui so it can be displayed.
+fn register_implicit2d_egui_texture(
+    mut job_bridge: ResMut<JobBridge>,
+    mut egui_user_textures: ResMut<EguiUserTextures>,
+) {
+    if let Some(texture_handle) = &job_bridge.implicit2d_texture {
+        if job_bridge.implicit2d_egui_texture.is_none() {
+            let tex_id = egui_user_textures.add_image(EguiTextureHandle::Weak(
+                texture_handle.id(),
+            ));
+            job_bridge.implicit2d_egui_texture = Some(tex_id);
         }
     }
 }
@@ -666,7 +707,7 @@ fn render_ui(
         response.response.rect
     }
 
-    match &mut job_bridge.last_result {
+    match &job_bridge.last_result {
         None => {}
         Some(Ok(JobOutput::TextValue(text))) => {
             draw_thing(ctx, |ui, _draw_area| {
@@ -748,6 +789,38 @@ fn render_ui(
                 for (polygon, mesh) in polygon_set.0.iter().zip(meshes.iter()) {
                     paint_polygon(&painter, draw_area, &view_state_2d, polygon, mesh.clone());
                 }
+                draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
+            });
+            ctx.input(|state| {
+                view_state_2d.track_movement(state, draw_area);
+            });
+        }
+        Some(Ok(JobOutput::Surface2D(_))) => {
+            let tex_id = job_bridge.implicit2d_egui_texture;
+            let tex_size = job_bridge.implicit2d_texture_size;
+
+            let draw_area = draw_thing(ctx, |ui, draw_area| {
+                // Store draw area size for next frame's texture/uniform computation
+                job_bridge.implicit2d_draw_area_size = Some(UVec2::new(
+                    draw_area.width() as u32,
+                    draw_area.height() as u32,
+                ));
+                if view_state_2d.fit_to_screen_requested {
+                    view_state_2d.fit_to_screen_requested = false;
+                }
+
+                // Draw the GPU-rendered implicit surface
+                if let Some(tex_id) = tex_id
+                    && let Some(size) = tex_size {
+                        let sized = egui::load::SizedTexture::new(
+                            tex_id,
+                            egui::Vec2::new(size.x as f32, size.y as f32),
+                        );
+                        ui.image(sized);
+                    }
+
+                // Grid overlay (painter created directly with known draw_area so it works after image)
+                let painter = Painter::new(ui.ctx().clone(), ui.layer_id(), draw_area);
                 draw_grid(&painter, draw_area, &view_state_2d, &grid_settings);
             });
             ctx.input(|state| {
