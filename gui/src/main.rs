@@ -650,6 +650,13 @@ fn render_ui(
                                 toolbar_height,
                                 &ms.manifold,
                             );
+                        } else if let Some(Ok(JobOutput::Surface3D(surface))) = &job_bridge.last_result {
+                            view_state_3d.fit_to_screen_implicit(
+                                draw_area,
+                                cam,
+                                toolbar_height,
+                                surface,
+                            );
                         }
                     }
                 }
@@ -795,9 +802,10 @@ fn render_ui(
                 view_state_2d.track_movement(state, draw_area);
             });
         }
-        Some(Ok(JobOutput::Surface2D(_))) => {
+        Some(Ok(JobOutput::Surface2D(surface))) => {
             let tex_id = job_bridge.implicit2d_egui_texture;
             let tex_size = job_bridge.implicit2d_texture_size;
+            let bounds = surface.bounding_box_estimate();
 
             let draw_area = draw_thing(ctx, |ui, draw_area| {
                 // Store draw area size for next frame's texture/uniform computation
@@ -806,6 +814,7 @@ fn render_ui(
                     draw_area.height() as u32,
                 ));
                 if view_state_2d.fit_to_screen_requested {
+                    view_state_2d.fit_to_screen_implicit_from_bounds(bounds, draw_area);
                     view_state_2d.fit_to_screen_requested = false;
                 }
 

@@ -122,6 +122,46 @@ impl ViewState3d {
             + camera_rotation * Vec3::new(0.0, toolbar_offset / pixels_per_meter / 2.0, 0.0);
     }
 
+    pub fn fit_to_screen_implicit(
+        &mut self,
+        draw_area: egui::Rect,
+        camera_transform: &Transform,
+        toolbar_offset: f32,
+        surface: &interpreter::values::Surface3D,
+    ) {
+        let (min_x, min_y, min_z, max_x, max_y, max_z) = surface.bounding_box_estimate();
+        let camera_rotation = camera_transform.rotation;
+        let camera_inverse = camera_rotation.inverse();
+
+        let corners = [
+            Vec3::new(min_x as f32, min_y as f32, min_z as f32),
+            Vec3::new(max_x as f32, min_y as f32, min_z as f32),
+            Vec3::new(min_x as f32, max_y as f32, min_z as f32),
+            Vec3::new(max_x as f32, max_y as f32, min_z as f32),
+            Vec3::new(min_x as f32, min_y as f32, max_z as f32),
+            Vec3::new(max_x as f32, min_y as f32, max_z as f32),
+            Vec3::new(min_x as f32, max_y as f32, max_z as f32),
+            Vec3::new(max_x as f32, max_y as f32, max_z as f32),
+        ];
+
+        let mut min = Vec3::MAX;
+        let mut max = Vec3::MIN;
+        for corner in corners {
+            let p_local = camera_inverse * corner;
+            min = min.min(p_local);
+            max = max.max(p_local);
+        }
+
+        let size = max - min;
+        let dx = draw_area.x_range().span() / size.x;
+        let dy = draw_area.y_range().span() / size.y;
+        let pixels_per_meter = dx.min(dy);
+        self.set_pixels_per_meter(pixels_per_meter);
+
+        self.offset = camera_rotation * ((min + max) / 2.0)
+            + camera_rotation * Vec3::new(0.0, toolbar_offset / pixels_per_meter / 2.0, 0.0);
+    }
+
     pub fn snap_to_axis_view(&mut self, axis: AxisView) {
         match axis {
             AxisView::XPlus => {

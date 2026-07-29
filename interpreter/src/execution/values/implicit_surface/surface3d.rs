@@ -119,6 +119,103 @@ impl Surface3D {
         &self.tree
     }
 
+    /// Estimate the bounding box by sampling SDF along axes.
+    /// Returns (min_x, min_y, min_z, max_x, max_y, max_z).
+    pub fn bounding_box_estimate(&self) -> (f64, f64, f64, f64, f64, f64) {
+        let mut ctx = Context::new();
+        let node = ctx.import(&self.tree);
+
+        let sample = |x: f64, y: f64, z: f64| -> f64 {
+            ctx.eval_xyz(node, x, y, z).unwrap_or(0.0)
+        };
+
+        let search_axis = |pos_fn: fn(f64) -> f64| -> f64 {
+            let mut lo = 0.0_f64;
+            let mut hi = 1.0_f64;
+            while sample(pos_fn(hi), 0.0, 0.0) < 0.0 && hi < 100.0 {
+                hi *= 2.0;
+            }
+            for _ in 0..30 {
+                let mid = (lo + hi) / 2.0;
+                if sample(pos_fn(mid), 0.0, 0.0) < 0.0 {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            hi.min(100.0)
+        };
+
+        let x_max = search_axis(|v| v);
+        let x_min = -search_axis(|v| -v);
+        let y_max = {
+            let mut lo = 0.0_f64;
+            let mut hi = 1.0_f64;
+            while sample(0.0, hi, 0.0) < 0.0 && hi < 100.0 {
+                hi *= 2.0;
+            }
+            for _ in 0..30 {
+                let mid = (lo + hi) / 2.0;
+                if sample(0.0, mid, 0.0) < 0.0 {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            hi.min(100.0)
+        };
+        let y_min = {
+            let mut lo = 0.0_f64;
+            let mut hi = 1.0_f64;
+            while sample(0.0, -hi, 0.0) < 0.0 && hi < 100.0 {
+                hi *= 2.0;
+            }
+            for _ in 0..30 {
+                let mid = (lo + hi) / 2.0;
+                if sample(0.0, -mid, 0.0) < 0.0 {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            -hi.min(100.0)
+        };
+        let z_max = {
+            let mut lo = 0.0_f64;
+            let mut hi = 1.0_f64;
+            while sample(0.0, 0.0, hi) < 0.0 && hi < 100.0 {
+                hi *= 2.0;
+            }
+            for _ in 0..30 {
+                let mid = (lo + hi) / 2.0;
+                if sample(0.0, 0.0, mid) < 0.0 {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            hi.min(100.0)
+        };
+        let z_min = {
+            let mut lo = 0.0_f64;
+            let mut hi = 1.0_f64;
+            while sample(0.0, 0.0, -hi) < 0.0 && hi < 100.0 {
+                hi *= 2.0;
+            }
+            for _ in 0..30 {
+                let mid = (lo + hi) / 2.0;
+                if sample(0.0, 0.0, -mid) < 0.0 {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            -hi.min(100.0)
+        };
+
+        (x_min, y_min, z_min, x_max, y_max, z_max)
+    }
+
     /// Generate a 3D manifold mesh from the implicit surface using Manifold Dual Contouring.
     ///
     /// Returns `ManifoldMesh3D` (wrapping `Arc<Manifold>` from boolmesh).

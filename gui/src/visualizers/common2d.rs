@@ -169,6 +169,23 @@ impl ViewState2d {
         }
     }
 
+    pub fn fit_to_screen_implicit_from_bounds(
+        &mut self,
+        bounds: (f64, f64, f64, f64),
+        draw_area: Rect,
+    ) {
+        let (min_x, min_y, max_x, max_y) = bounds;
+        let center_x = (min_x + max_x) / 2.0;
+        let center_y = (min_y + max_y) / 2.0;
+        let size_x = max_x - min_x;
+        let size_y = max_y - min_y;
+        let dx = draw_area.x_range().span() / size_x as f32;
+        let dy = draw_area.y_range().span() / size_y as f32;
+        let pixels_per_meter = dx.min(dy);
+        self.set_pixels_per_meter(pixels_per_meter);
+        self.offset = egui::Vec2::new(-center_x as f32, center_y as f32);
+    }
+
     pub fn draw_interface(
         &mut self,
         ui: &mut Ui,
@@ -178,6 +195,7 @@ impl ViewState2d {
             && matches!(
                 value,
                 JobOutput::LineString(_) | JobOutput::Polygon { .. } | JobOutput::PolygonSet { .. }
+                    | JobOutput::Surface2D(_)
             )
             && ui.button("Fit to screen").clicked()
         {
