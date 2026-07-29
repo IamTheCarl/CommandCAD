@@ -5,9 +5,12 @@ use fidget::context::Context;
 use geo::{Coord, LineString, MultiPolygon, Polygon};
 use nalgebra;
 
+use crate::execution::errors::Raise;
 use crate::execution::values::{
     closure::BuiltinCallableDatabase,
-    Length, Object, Scalar, StaticType, StaticTypeName, Style, Value, ValueNone, ValueType,
+    vector::Zero2,
+    DowncastError, Length, Object, Scalar, StaticType, StaticTypeName, Style, Transform2d, Value,
+    ValueNone, ValueType, Vector2,
 };
 use crate::execution::ExecutionContext;
 
@@ -15,6 +18,38 @@ use super::MeshSettings;
 use super::MeshingError;
 
 use super::super::polygon::PolygonSet;
+
+enum ArithmeticInput {
+    Vector(Vector2),
+    Surface(Surface2D),
+}
+
+fn unpack_arithmetic_input(
+    context: &ExecutionContext,
+    input: Value,
+) -> Result<ArithmeticInput, crate::execution::errors::Error> {
+    let value = match input {
+        Value::Vector2(v) => {
+            if v.dimension() != common_data_types::Dimension::length() {
+                return Err(DowncastError {
+                    expected: "Vector2 of lengths or another implicit surface".into(),
+                    got: v.get_type(context).name(),
+                }
+                .to_error(context));
+            }
+            ArithmeticInput::Vector(v)
+        }
+        Value::Surface2D(s) => ArithmeticInput::Surface(s),
+        value => {
+            return Err(DowncastError {
+                expected: "Vector2 of lengths or another implicit surface".into(),
+                got: value.get_type(context).name(),
+            }
+            .to_error(context));
+        }
+    };
+    Ok(value)
+}
 
 /// 2D implicit surface wrapping a Fidget Shape.
 ///
@@ -150,6 +185,23 @@ impl Surface2D {
         let a_minus_b = a.clone().max(-b.clone());
         let b_minus_a = b.clone().max(-a.clone());
         Self::new(a_minus_b.min(b_minus_a))
+    }
+
+    /// Apply an affine transform to the implicit surface.
+    /// The transform is applied by remapping SDF coordinates: sdf'(p) = sdf(T^-1 * p).
+    pub fn transform(&self, t: &nalgebra::Matrix3<f64>) -> Self {
+        let inv = t.try_inverse().expect("Transform matrix must be invertible");
+        // Express new coordinates as linear combinations of original x, y using inverse matrix.
+        // new_x = inv[0][0]*x + inv[0][1]*y + inv[0][2]
+        // new_y = inv[1][0]*x + inv[1][1]*y + inv[1][2]
+        let (x, y) = (fidget::context::Tree::x(), fidget::context::Tree::y());
+        let new_x = x.clone() * fidget::context::Tree::constant(inv[(0, 0)])
+            + y.clone() * fidget::context::Tree::constant(inv[(0, 1)])
+            + fidget::context::Tree::constant(inv[(0, 2)]);
+        let new_y = x * fidget::context::Tree::constant(inv[(1, 0)])
+            + y * fidget::context::Tree::constant(inv[(1, 1)])
+            + fidget::context::Tree::constant(inv[(1, 2)]);
+        Self::new(self.tree.remap_xyz(new_x, new_y, fidget::context::Tree::z()))
     }
 
     /// Generate a 2D polygon set from the implicit curve using dual contouring.
@@ -894,6 +946,50 @@ impl Object for Surface2D {
         ValueType::ImplicitSurface2D
     }
 
+    fn addition(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+        match unpack_arithmetic_input(context, rhs)? {
+            ArithmeticInput::Vector(vector) => {
+                let raw = vector.raw_value();
+                let translation = nalgebra::Translation2::from([raw.x, raw.y]);
+                Ok(self.transform(&translation.to_homogeneous()).into())
+            }
+            ArithmeticInput::Surface(other) => Ok(self.union(&other).into()),
+        }
+    }
+
+    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+        match unpack_arithmetic_input(context, rhs)? {
+            ArithmeticInput::Vector(vector) => {
+                let raw = vector.raw_value();
+                let translation = nalgebra::Translation2::from([-raw.x, -raw.y]);
+                Ok(self.transform(&translation.to_homogeneous()).into())
+            }
+            ArithmeticInput::Surface(other) => Ok(self.difference(&other).into()),
+        }
+    }
+
+    fn multiply(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+        let input = rhs.downcast::<Zero2>(context)?;
+        let vector = input.raw_value();
+        let scaling = nalgebra::Matrix3::new_nonuniform_scaling(&nalgebra::Vector2::new(vector.x, vector.y));
+        Ok(self.transform(&scaling).into())
+    }
+
+    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+        let other = rhs.downcast::<Surface2D>(context)?;
+        Ok(self.union(&other).into())
+    }
+
+    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+        let other = rhs.downcast::<Surface2D>(context)?;
+        Ok(self.intersection(&other).into())
+    }
+
+    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+        let other = rhs.downcast::<Surface2D>(context)?;
+        Ok(self.symmetric_difference(&other).into())
+    }
+
     fn get_attribute(
         &self,
         _context: &ExecutionContext,
@@ -909,6 +1005,7 @@ impl Object for Surface2D {
             "symmetric_difference" => {
                 Ok(BuiltinFunction::new::<methods::SymmetricDifference>().into())
             }
+            "transform" => Ok(BuiltinFunction::new::<methods::Transform>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -1009,6 +1106,7 @@ pub mod methods {
     pub struct Intersection;
     pub struct Difference;
     pub struct SymmetricDifference;
+    pub struct Transform;
 }
 
 pub fn register_surface2d_methods(database: &mut BuiltinCallableDatabase) {
@@ -1073,6 +1171,19 @@ pub fn register_surface2d_methods(database: &mut BuiltinCallableDatabase) {
         ) -> Value
         {
             Ok(this.symmetric_difference(&other).into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::Transform, "Surface2D::transform", (
+            context: &ExecutionContext,
+            this: Surface2D,
+            t: Transform2d
+        ) -> Value
+        {
+            let result = this.transform(&t.0);
+            Ok(result.into())
         }
     );
 }
@@ -1776,5 +1887,161 @@ mod integration_tests {
         assert!(result.is_ok());
         let value = result.unwrap();
         assert!(matches!(value, Value::PolygonSet(_)));
+    }
+
+    #[test]
+    fn integration_transform_translate() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m)::transform(std.consts.Transform2d::translate(offset = {3m, 0m}))",
+        );
+        if let Err(ref e) = result {
+            eprintln!("transform translate error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_transform_scale() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m)::transform(std.consts.Transform2d::scale(scale = {2, 1}))",
+        );
+        if let Err(ref e) = result {
+            eprintln!("transform scale error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_transform_rotate() {
+        let result = test_run(
+            "std.implicits.square(size = 2.0m)::transform(std.consts.Transform2d::rotate(angle = 45deg))",
+        );
+        if let Err(ref e) = result {
+            eprintln!("transform rotate error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_transform_to_polygon() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m)::transform(std.consts.Transform2d::translate(offset = {5m, 0m}))::to_polygon()",
+        );
+        if let Err(ref e) = result {
+            eprintln!("transform to_polygon error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::PolygonSet(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_add_vector() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m) + {3m, 0m}",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic add vector error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_subtract_vector() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m) - {1m, 2m}",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic subtract vector error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_multiply_scale() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m) * {2, 1}",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic multiply scale error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_add_surface() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m) + std.implicits.square(size = 3.0m)",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic add surface error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_subtract_surface() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m) - std.implicits.square(size = 3.0m)",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic subtract surface error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_bit_or() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m) | std.implicits.square(size = 3.0m)",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic bit_or error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_bit_and() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m) & std.implicits.square(size = 3.0m)",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic bit_and error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_arithmetic_bit_xor() {
+        let result = test_run(
+            "std.implicits.circle(radius = 2.0m) ^ std.implicits.square(size = 3.0m)",
+        );
+        if let Err(ref e) = result {
+            eprintln!("arithmetic bit_xor error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
     }
 }
