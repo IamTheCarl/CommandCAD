@@ -7,15 +7,14 @@ use nalgebra;
 
 use crate::execution::errors::Raise;
 use crate::execution::values::{
-    closure::BuiltinCallableDatabase,
-    vector::Zero2,
-    DowncastError, Length, Object, Scalar, StaticType, StaticTypeName, Style, Transform2d, Value,
-    ValueNone, ValueType, Vector2,
+    closure::BuiltinCallableDatabase, scalar::Angle, vector::Zero2, DowncastError, Length, Object,
+    Scalar, StaticType, StaticTypeName, Style, Transform2d, Value, ValueNone, ValueType, Vector2,
 };
 use crate::execution::ExecutionContext;
 
 use super::MeshSettings;
 use super::MeshingError;
+use super::Surface3D;
 
 use super::super::polygon::PolygonSet;
 
@@ -92,9 +91,7 @@ impl Surface2D {
         let mut ctx = fidget::context::Context::new();
         let node = ctx.import(&self.tree);
 
-        let sample = |x: f64, y: f64| -> f64 {
-            ctx.eval_xyz(node, x, y, 0.0).unwrap_or(0.0)
-        };
+        let sample = |x: f64, y: f64| -> f64 { ctx.eval_xyz(node, x, y, 0.0).unwrap_or(0.0) };
 
         // Binary search for extent along +x axis
         let mut lo = 0.0_f64;
@@ -190,7 +187,9 @@ impl Surface2D {
     /// Apply an affine transform to the implicit surface.
     /// The transform is applied by remapping SDF coordinates: sdf'(p) = sdf(T^-1 * p).
     pub fn transform(&self, t: &nalgebra::Matrix3<f64>) -> Self {
-        let inv = t.try_inverse().expect("Transform matrix must be invertible");
+        let inv = t
+            .try_inverse()
+            .expect("Transform matrix must be invertible");
         // Express new coordinates as linear combinations of original x, y using inverse matrix.
         // new_x = inv[0][0]*x + inv[0][1]*y + inv[0][2]
         // new_y = inv[1][0]*x + inv[1][1]*y + inv[1][2]
@@ -201,7 +200,50 @@ impl Surface2D {
         let new_y = x * fidget::context::Tree::constant(inv[(1, 0)])
             + y * fidget::context::Tree::constant(inv[(1, 1)])
             + fidget::context::Tree::constant(inv[(1, 2)]);
-        Self::new(self.tree.remap_xyz(new_x, new_y, fidget::context::Tree::z()))
+        Self::new(
+            self.tree
+                .remap_xyz(new_x, new_y, fidget::context::Tree::z()),
+        )
+    }
+
+    /// Extrude the 2D profile along the Z axis to create a 3D solid.
+    ///
+    /// SDF: max(sdf_2d(x, y), -z, z - height)
+    /// The solid extends from z=0 to z=height.
+    pub fn extrude_z(&self, height: f64) -> Surface3D {
+        use fidget::context::Tree;
+        let z = Tree::z();
+        let sdf_2d = self.tree.clone();
+        let bottom_cap = -z.clone();
+        let top_cap = z - Tree::constant(height);
+        let tree = sdf_2d.clone().max(bottom_cap).max(top_cap);
+        Surface3D::new(tree)
+    }
+
+    /// Revolve the 2D profile about the Y axis to create a 3D solid.
+    ///
+    /// The profile is interpreted in (r, y) coordinates where r = sqrt(x^2 + z^2).
+    /// For full revolution: sdf_3d(x, y, z) = sdf_2d(r, y).
+    /// For partial angle: additionally clamped by angular sweep from x>0 toward +z.
+    pub fn revolve_y(&self, angle: f64) -> Surface3D {
+        use fidget::context::Tree;
+        let (x, y, z) = (Tree::x(), Tree::y(), Tree::z());
+        let r = (x.clone() * x.clone() + z.clone() * z.clone()).sqrt();
+        let tree = self.tree.remap_xyz(r.clone(), y, Tree::z());
+        if (angle - 2.0 * std::f64::consts::PI).abs() < 1e-10 {
+            return Surface3D::new(tree);
+        }
+        // Partial angle: clamp by angular sweep using Euclidean distance to cap planes.
+        // The sweep is from -ha to +ha, centered at theta=0 (positive X axis).
+        // Upper cap (theta = ha): distance = -sin(ha)*x + cos(ha)*z
+        // Lower cap (theta = -ha): distance = -sin(ha)*x - cos(ha)*z
+        // Both must be negative (inside) for the point to be within the sweep.
+        let half_angle = angle / 2.0;
+        let sin_ha = Tree::constant(half_angle.sin());
+        let cos_ha = Tree::constant(half_angle.cos());
+        let angular_sdf_upper = -x.clone() * sin_ha.clone() + z.clone() * cos_ha.clone();
+        let angular_sdf_lower = -x * sin_ha - z * cos_ha;
+        Surface3D::new(tree.max(angular_sdf_upper).max(angular_sdf_lower))
     }
 
     /// Generate a 2D polygon set from the implicit curve using dual contouring.
@@ -322,9 +364,8 @@ impl Surface2D {
         let mut eval_ctx = Context::new();
         let node = eval_ctx.import(&self.tree);
 
-        let sample_xy = |x: f64, y: f64| -> f32 {
-            eval_ctx.eval_xyz(node, x, y, 0.0).unwrap_or(0.0) as f32
-        };
+        let sample_xy =
+            |x: f64, y: f64| -> f32 { eval_ctx.eval_xyz(node, x, y, 0.0).unwrap_or(0.0) as f32 };
         let sample_x = |x: f32| sample_xy(x as f64, 0.0);
         let sample_y = |y: f32| sample_xy(0.0, y as f64);
 
@@ -610,8 +651,15 @@ fn dual_contour_segments_jit(
             // Edge 0: bottom (BL→BR)
             if v_bl * v_br < 0.0 {
                 let crossing = find_edge_crossing_2d(
-                    cell_origin_x, cell_origin_y, cell_size,
-                    0.0, 0.0, 1.0, 0.0, v_bl, v_br,
+                    cell_origin_x,
+                    cell_origin_y,
+                    cell_size,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0,
+                    v_bl,
+                    v_br,
                 );
                 let grad = compute_gradient_jit(ctx, node, crossing[0] as f64, crossing[1] as f64);
                 qef.add_intersection(crossing, grad);
@@ -619,8 +667,15 @@ fn dual_contour_segments_jit(
             // Edge 1: right (BR→TR)
             if v_br * v_tr < 0.0 {
                 let crossing = find_edge_crossing_2d(
-                    cell_origin_x, cell_origin_y, cell_size,
-                    1.0, 0.0, 1.0, 1.0, v_br, v_tr,
+                    cell_origin_x,
+                    cell_origin_y,
+                    cell_size,
+                    1.0,
+                    0.0,
+                    1.0,
+                    1.0,
+                    v_br,
+                    v_tr,
                 );
                 let grad = compute_gradient_jit(ctx, node, crossing[0] as f64, crossing[1] as f64);
                 qef.add_intersection(crossing, grad);
@@ -628,8 +683,15 @@ fn dual_contour_segments_jit(
             // Edge 2: top (TL→TR)
             if v_tl * v_tr < 0.0 {
                 let crossing = find_edge_crossing_2d(
-                    cell_origin_x, cell_origin_y, cell_size,
-                    0.0, 1.0, 1.0, 1.0, v_tl, v_tr,
+                    cell_origin_x,
+                    cell_origin_y,
+                    cell_size,
+                    0.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    v_tl,
+                    v_tr,
                 );
                 let grad = compute_gradient_jit(ctx, node, crossing[0] as f64, crossing[1] as f64);
                 qef.add_intersection(crossing, grad);
@@ -637,8 +699,15 @@ fn dual_contour_segments_jit(
             // Edge 3: left (BL→TL)
             if v_bl * v_tl < 0.0 {
                 let crossing = find_edge_crossing_2d(
-                    cell_origin_x, cell_origin_y, cell_size,
-                    0.0, 0.0, 0.0, 1.0, v_bl, v_tl,
+                    cell_origin_x,
+                    cell_origin_y,
+                    cell_size,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    v_bl,
+                    v_tl,
                 );
                 let grad = compute_gradient_jit(ctx, node, crossing[0] as f64, crossing[1] as f64);
                 qef.add_intersection(crossing, grad);
@@ -752,7 +821,10 @@ fn compute_gradient_2d(
         let v10 = grid[iy * width + ix + 1];
         let v01 = grid[(iy + 1) * width + ix];
         let v11 = grid[(iy + 1) * width + ix + 1];
-        v00 * (1.0 - fx) * (1.0 - fy) + v10 * fx * (1.0 - fy) + v01 * (1.0 - fx) * fy + v11 * fx * fy
+        v00 * (1.0 - fx) * (1.0 - fy)
+            + v10 * fx * (1.0 - fy)
+            + v01 * (1.0 - fx) * fy
+            + v11 * fx * fy
     };
     let dx = (interp(gx + eps / cell_size, gy) - interp(gx - eps / cell_size, gy)) / (2.0 * eps);
     let dy = (interp(gx, gy + eps / cell_size) - interp(gx, gy - eps / cell_size)) / (2.0 * eps);
@@ -764,12 +836,7 @@ fn compute_gradient_2d(
 /// Uses central finite differences with a tiny step size (1e-5) for accurate
 /// gradients. Unlike grid-based gradients, this evaluates the true SDF (not
 /// a bilinear approximation), giving exact normals even at sharp features.
-fn compute_gradient_jit(
-    ctx: &Context,
-    node: fidget::context::Node,
-    x: f64,
-    y: f64,
-) -> [f32; 2] {
+fn compute_gradient_jit(ctx: &Context, node: fidget::context::Node, x: f64, y: f64) -> [f32; 2] {
     let eps = 1e-5;
     let dx = (ctx.eval_xyz(node, x + eps, y, 0.0).unwrap_or(0.0)
         - ctx.eval_xyz(node, x - eps, y, 0.0).unwrap_or(0.0))
@@ -946,7 +1013,11 @@ impl Object for Surface2D {
         ValueType::ImplicitSurface2D
     }
 
-    fn addition(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+    fn addition(
+        self,
+        context: &ExecutionContext,
+        rhs: Value,
+    ) -> crate::execution::ExecutionResult<Value> {
         match unpack_arithmetic_input(context, rhs)? {
             ArithmeticInput::Vector(vector) => {
                 let raw = vector.raw_value();
@@ -957,7 +1028,11 @@ impl Object for Surface2D {
         }
     }
 
-    fn subtraction(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+    fn subtraction(
+        self,
+        context: &ExecutionContext,
+        rhs: Value,
+    ) -> crate::execution::ExecutionResult<Value> {
         match unpack_arithmetic_input(context, rhs)? {
             ArithmeticInput::Vector(vector) => {
                 let raw = vector.raw_value();
@@ -968,24 +1043,41 @@ impl Object for Surface2D {
         }
     }
 
-    fn multiply(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+    fn multiply(
+        self,
+        context: &ExecutionContext,
+        rhs: Value,
+    ) -> crate::execution::ExecutionResult<Value> {
         let input = rhs.downcast::<Zero2>(context)?;
         let vector = input.raw_value();
-        let scaling = nalgebra::Matrix3::new_nonuniform_scaling(&nalgebra::Vector2::new(vector.x, vector.y));
+        let scaling =
+            nalgebra::Matrix3::new_nonuniform_scaling(&nalgebra::Vector2::new(vector.x, vector.y));
         Ok(self.transform(&scaling).into())
     }
 
-    fn bit_or(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+    fn bit_or(
+        self,
+        context: &ExecutionContext,
+        rhs: Value,
+    ) -> crate::execution::ExecutionResult<Value> {
         let other = rhs.downcast::<Surface2D>(context)?;
         Ok(self.union(&other).into())
     }
 
-    fn bit_and(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+    fn bit_and(
+        self,
+        context: &ExecutionContext,
+        rhs: Value,
+    ) -> crate::execution::ExecutionResult<Value> {
         let other = rhs.downcast::<Surface2D>(context)?;
         Ok(self.intersection(&other).into())
     }
 
-    fn bit_xor(self, context: &ExecutionContext, rhs: Value) -> crate::execution::ExecutionResult<Value> {
+    fn bit_xor(
+        self,
+        context: &ExecutionContext,
+        rhs: Value,
+    ) -> crate::execution::ExecutionResult<Value> {
         let other = rhs.downcast::<Surface2D>(context)?;
         Ok(self.symmetric_difference(&other).into())
     }
@@ -1006,6 +1098,8 @@ impl Object for Surface2D {
                 Ok(BuiltinFunction::new::<methods::SymmetricDifference>().into())
             }
             "transform" => Ok(BuiltinFunction::new::<methods::Transform>().into()),
+            "extrude_z" => Ok(BuiltinFunction::new::<methods::ExtrudeZ>().into()),
+            "revolve_y" => Ok(BuiltinFunction::new::<methods::RevolveY>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -1107,6 +1201,8 @@ pub mod methods {
     pub struct Difference;
     pub struct SymmetricDifference;
     pub struct Transform;
+    pub struct ExtrudeZ;
+    pub struct RevolveY;
 }
 
 pub fn register_surface2d_methods(database: &mut BuiltinCallableDatabase) {
@@ -1183,6 +1279,32 @@ pub fn register_surface2d_methods(database: &mut BuiltinCallableDatabase) {
         ) -> Value
         {
             let result = this.transform(&t.0);
+            Ok(result.into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::ExtrudeZ, "Surface2D::extrude_z", (
+            _context: &ExecutionContext,
+            this: Surface2D,
+            height: Length
+        ) -> Value
+        {
+            let result = this.extrude_z(*height.value);
+            Ok(result.into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::RevolveY, "Surface2D::revolve_y", (
+            _context: &ExecutionContext,
+            this: Surface2D,
+            angle: Angle = Scalar { dimension: common_data_types::Dimension::angle(), value: common_data_types::Float::new(std::f64::consts::PI * 2.0).unwrap() }.into()
+        ) -> Value
+        {
+            let result = this.revolve_y(*angle.value);
             Ok(result.into())
         }
     );
@@ -1515,13 +1637,18 @@ mod tests {
             for ix in 0..grid_width {
                 let x = origin_x + ix as f32 * cell_size;
                 let y = origin_y + iy as f32 * cell_size;
-                let val = eval_ctx.eval_xyz(node, x as f64, y as f64, 0.0_f64).unwrap();
+                let val = eval_ctx
+                    .eval_xyz(node, x as f64, y as f64, 0.0_f64)
+                    .unwrap();
                 grid[iy * grid_width + ix] = val as f32;
             }
         }
 
         // Print some QEF vertices
-        eprintln!("Debug: cell_size={:.4}, grid={}x{}", cell_size, grid_width, grid_height);
+        eprintln!(
+            "Debug: cell_size={:.4}, grid={}x{}",
+            cell_size, grid_width, grid_height
+        );
         let mut count = 0usize;
         for iy in 0..grid_height.saturating_sub(1) {
             for ix in 0..grid_width.saturating_sub(1) {
@@ -1548,22 +1675,30 @@ mod tests {
                 let co_y = origin_y + iy as f32 * cell_size;
 
                 if v_bl * v_br < 0.0 {
-                    let c = find_edge_crossing_2d(co_x, co_y, cell_size, 0.0, 0.0, 1.0, 0.0, v_bl, v_br);
+                    let c = find_edge_crossing_2d(
+                        co_x, co_y, cell_size, 0.0, 0.0, 1.0, 0.0, v_bl, v_br,
+                    );
                     let g = compute_gradient_jit(&eval_ctx, node, c[0] as f64, c[1] as f64);
                     qef.add_intersection(c, g);
                 }
                 if v_br * v_tr < 0.0 {
-                    let c = find_edge_crossing_2d(co_x, co_y, cell_size, 1.0, 0.0, 1.0, 1.0, v_br, v_tr);
+                    let c = find_edge_crossing_2d(
+                        co_x, co_y, cell_size, 1.0, 0.0, 1.0, 1.0, v_br, v_tr,
+                    );
                     let g = compute_gradient_jit(&eval_ctx, node, c[0] as f64, c[1] as f64);
                     qef.add_intersection(c, g);
                 }
                 if v_tl * v_tr < 0.0 {
-                    let c = find_edge_crossing_2d(co_x, co_y, cell_size, 0.0, 1.0, 1.0, 1.0, v_tl, v_tr);
+                    let c = find_edge_crossing_2d(
+                        co_x, co_y, cell_size, 0.0, 1.0, 1.0, 1.0, v_tl, v_tr,
+                    );
                     let g = compute_gradient_jit(&eval_ctx, node, c[0] as f64, c[1] as f64);
                     qef.add_intersection(c, g);
                 }
                 if v_bl * v_tl < 0.0 {
-                    let c = find_edge_crossing_2d(co_x, co_y, cell_size, 0.0, 0.0, 0.0, 1.0, v_bl, v_tl);
+                    let c = find_edge_crossing_2d(
+                        co_x, co_y, cell_size, 0.0, 0.0, 0.0, 1.0, v_bl, v_tl,
+                    );
                     let g = compute_gradient_jit(&eval_ctx, node, c[0] as f64, c[1] as f64);
                     qef.add_intersection(c, g);
                 }
@@ -1605,7 +1740,11 @@ mod tests {
         // Use depth=10 for fine grid to test corner sharpness
         let surface = make_square_surface(2.0, 10);
         let result = surface.to_polygon();
-        assert!(result.is_ok(), "square should produce a polygon: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "square should produce a polygon: {:?}",
+            result
+        );
         let poly = result.unwrap();
         let mp = &*poly.0;
         let exterior = mp.0[0].exterior();
@@ -1706,8 +1845,16 @@ mod tests {
         let surface = make_circle_surface(0.01);
         let (ox, oy, cs, w, h) = surface.compute_grid_params();
         // Bounds should be much smaller than default [-10, 10]
-        assert!(ox.abs() < 1.0, "adaptive extent should be small for 1cm circle, got {:.2}", ox.abs());
-        assert!(cs > 0.0 && cs < 0.001, "cell_size should be tiny: {:.6}", cs);
+        assert!(
+            ox.abs() < 1.0,
+            "adaptive extent should be small for 1cm circle, got {:.2}",
+            ox.abs()
+        );
+        assert!(
+            cs > 0.0 && cs < 0.001,
+            "cell_size should be tiny: {:.6}",
+            cs
+        );
         assert_eq!(w, h);
     }
 
@@ -1716,7 +1863,11 @@ mod tests {
         let mut surface = Surface2D::new(Tree::constant(0.0));
         surface.settings.depth = 20;
         let (_ox, _oy, cs, _w, _h) = surface.compute_grid_params();
-        assert!(cs >= 0.0001, "cell size should not go below 0.0001, got {:.6}", cs);
+        assert!(
+            cs >= 0.0001,
+            "cell size should not go below 0.0001, got {:.6}",
+            cs
+        );
     }
 
     // --- Debug test for full pipeline ---
@@ -1943,9 +2094,7 @@ mod integration_tests {
 
     #[test]
     fn integration_arithmetic_add_vector() {
-        let result = test_run(
-            "std.implicits.circle(radius = 2.0m) + {3m, 0m}",
-        );
+        let result = test_run("std.implicits.circle(radius = 2.0m) + {3m, 0m}");
         if let Err(ref e) = result {
             eprintln!("arithmetic add vector error: {:?}", e);
         }
@@ -1956,9 +2105,7 @@ mod integration_tests {
 
     #[test]
     fn integration_arithmetic_subtract_vector() {
-        let result = test_run(
-            "std.implicits.circle(radius = 2.0m) - {1m, 2m}",
-        );
+        let result = test_run("std.implicits.circle(radius = 2.0m) - {1m, 2m}");
         if let Err(ref e) = result {
             eprintln!("arithmetic subtract vector error: {:?}", e);
         }
@@ -1969,9 +2116,7 @@ mod integration_tests {
 
     #[test]
     fn integration_arithmetic_multiply_scale() {
-        let result = test_run(
-            "std.implicits.circle(radius = 2.0m) * {2, 1}",
-        );
+        let result = test_run("std.implicits.circle(radius = 2.0m) * {2, 1}");
         if let Err(ref e) = result {
             eprintln!("arithmetic multiply scale error: {:?}", e);
         }
@@ -1982,9 +2127,8 @@ mod integration_tests {
 
     #[test]
     fn integration_arithmetic_add_surface() {
-        let result = test_run(
-            "std.implicits.circle(radius = 2.0m) + std.implicits.square(size = 3.0m)",
-        );
+        let result =
+            test_run("std.implicits.circle(radius = 2.0m) + std.implicits.square(size = 3.0m)");
         if let Err(ref e) = result {
             eprintln!("arithmetic add surface error: {:?}", e);
         }
@@ -1995,9 +2139,8 @@ mod integration_tests {
 
     #[test]
     fn integration_arithmetic_subtract_surface() {
-        let result = test_run(
-            "std.implicits.circle(radius = 2.0m) - std.implicits.square(size = 3.0m)",
-        );
+        let result =
+            test_run("std.implicits.circle(radius = 2.0m) - std.implicits.square(size = 3.0m)");
         if let Err(ref e) = result {
             eprintln!("arithmetic subtract surface error: {:?}", e);
         }
@@ -2008,9 +2151,8 @@ mod integration_tests {
 
     #[test]
     fn integration_arithmetic_bit_or() {
-        let result = test_run(
-            "std.implicits.circle(radius = 2.0m) | std.implicits.square(size = 3.0m)",
-        );
+        let result =
+            test_run("std.implicits.circle(radius = 2.0m) | std.implicits.square(size = 3.0m)");
         if let Err(ref e) = result {
             eprintln!("arithmetic bit_or error: {:?}", e);
         }
@@ -2021,9 +2163,8 @@ mod integration_tests {
 
     #[test]
     fn integration_arithmetic_bit_and() {
-        let result = test_run(
-            "std.implicits.circle(radius = 2.0m) & std.implicits.square(size = 3.0m)",
-        );
+        let result =
+            test_run("std.implicits.circle(radius = 2.0m) & std.implicits.square(size = 3.0m)");
         if let Err(ref e) = result {
             eprintln!("arithmetic bit_and error: {:?}", e);
         }
@@ -2034,14 +2175,69 @@ mod integration_tests {
 
     #[test]
     fn integration_arithmetic_bit_xor() {
-        let result = test_run(
-            "std.implicits.circle(radius = 2.0m) ^ std.implicits.square(size = 3.0m)",
-        );
+        let result =
+            test_run("std.implicits.circle(radius = 2.0m) ^ std.implicits.square(size = 3.0m)");
         if let Err(ref e) = result {
             eprintln!("arithmetic bit_xor error: {:?}", e);
         }
         assert!(result.is_ok());
         let value = result.unwrap();
         assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_extrude_z() {
+        let result = test_run("std.implicits.circle(radius = 2.0m)::extrude_z(height = 5.0m)");
+        if let Err(ref e) = result {
+            eprintln!("extrude_z error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_extrude_z_to_mesh() {
+        let result =
+            test_run("std.implicits.circle(radius = 2.0m)::extrude_z(height = 5.0m)::to_mesh()");
+        if let Err(ref e) = result {
+            eprintln!("extrude_z to_mesh error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::ManifoldMesh3D(_)));
+    }
+
+    #[test]
+    fn integration_revolve_y_full() {
+        let result = test_run("std.implicits.circle(radius = 1.0m)::revolve_y()");
+        if let Err(ref e) = result {
+            eprintln!("revolve_y full error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_revolve_y_partial() {
+        let result = test_run("std.implicits.circle(radius = 1.0m)::revolve_y(angle = 90deg)");
+        if let Err(ref e) = result {
+            eprintln!("revolve_y partial error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_revolve_y_full_to_mesh() {
+        let result = test_run("std.implicits.circle(radius = 1.0m)::revolve_y()::to_mesh()");
+        if let Err(ref e) = result {
+            eprintln!("revolve_y full to_mesh error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::ManifoldMesh3D(_)));
     }
 }

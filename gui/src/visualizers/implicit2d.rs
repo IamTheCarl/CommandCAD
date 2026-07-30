@@ -39,9 +39,9 @@ use bevy::render::{
     render_resource::{
         BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource,
         BindingType, BufferBinding, BufferBindingType, BufferInitDescriptor, BufferUsages,
-        CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState, LoadOp,
-        Operations, PipelineCache, PrimitiveState, RenderPassColorAttachment,
-        RenderPassDescriptor, RenderPipelineDescriptor, ShaderStages, SpecializedRenderPipeline,
+        CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState, LoadOp, Operations,
+        PipelineCache, PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor,
+        RenderPipelineDescriptor, ShaderStages, SpecializedRenderPipeline,
         SpecializedRenderPipelines, StoreOp, TextureFormat,
     },
     renderer::RenderContext,
@@ -52,10 +52,7 @@ use bevy_encase_derive::ShaderType;
 use bevy_shader::Shader;
 use bytemuck::{Pod, Zeroable};
 
-use crate::{
-    JobBridge, JobOutput, ViewState2d,
-    tree_to_wgsl::tree_to_wgsl_2d_main_from_sdf,
-};
+use crate::{JobBridge, JobOutput, ViewState2d, tree_to_wgsl::tree_to_wgsl_2d_main_from_sdf};
 
 // ─── Uniform buffer ─────────────────────────────────────────────────────────────────
 
@@ -214,13 +211,14 @@ impl ViewNode for Implicit2dMainPassNode {
             .map(|u| u.uniform)
             .unwrap_or_default();
 
-        let uniform_buffer = render_context.render_device().create_buffer_with_data(
-            &BufferInitDescriptor {
-                label: Some("implicit_2d_uniform"),
-                contents: bytemuck::cast_slice(&[uniform]),
-                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            },
-        );
+        let uniform_buffer =
+            render_context
+                .render_device()
+                .create_buffer_with_data(&BufferInitDescriptor {
+                    label: Some("implicit_2d_uniform"),
+                    contents: bytemuck::cast_slice(&[uniform]),
+                    usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+                });
 
         let bind_group = render_context.render_device().create_bind_group(
             "implicit_2d_main_bind_group",
@@ -282,7 +280,7 @@ impl Plugin for Implicit2dPlugin {
                     update_implicit2d_uniform,
                     prepare_implicit2d_textures,
                 )
-                .after(crate::check_job),
+                    .after(crate::check_job),
             );
     }
 
@@ -295,10 +293,12 @@ impl Plugin for Implicit2dPlugin {
             .init_resource::<SpecializedRenderPipelines<Implicit2dMainPipeline>>()
             .init_resource::<Implicit2dLastShaderVersion>()
             .init_resource::<Implicit2dUniformRender>()
-
             .add_systems(RenderStartup, setup_implicit2d_main_pipeline)
             .add_systems(bevy::render::ExtractSchedule, extract_implicit2d_shader)
-            .add_systems(bevy::render::ExtractSchedule, extract_implicit2d_shader_version)
+            .add_systems(
+                bevy::render::ExtractSchedule,
+                extract_implicit2d_shader_version,
+            )
             .add_systems(bevy::render::ExtractSchedule, extract_implicit2d_uniform)
             .add_systems(
                 Render,
@@ -324,12 +324,15 @@ fn setup_implicit2d_camera(mut commands: Commands) {
             order: -1,
             ..Default::default()
         },
-        Camera2d::default(),
+        Camera2d,
         Implicit2dCamera,
     ));
 }
 
-fn setup_implicit2d_main_pipeline(mut commands: Commands, fullscreen_shader: Res<FullscreenShader>) {
+fn setup_implicit2d_main_pipeline(
+    mut commands: Commands,
+    fullscreen_shader: Res<FullscreenShader>,
+) {
     let bind_group_layout_descriptor = BindGroupLayoutDescriptor {
         label: Cow::Borrowed("implicit_2d_main_bind_group_layout"),
         entries: vec![BindGroupLayoutEntry {
@@ -352,7 +355,10 @@ fn setup_implicit2d_main_pipeline(mut commands: Commands, fullscreen_shader: Res
 }
 
 /// Extract the current shader handle from the main world to the render world.
-fn extract_implicit2d_shader(main_world: Res<MainWorld>, main_pipeline: Res<Implicit2dMainPipeline>) {
+fn extract_implicit2d_shader(
+    main_world: Res<MainWorld>,
+    main_pipeline: Res<Implicit2dMainPipeline>,
+) {
     let shader_handle = main_world
         .get_resource::<Implicit2dFragmentShader>()
         .and_then(|s| s.0.clone());
@@ -418,14 +424,21 @@ fn prepare_implicit2d_pipelines(
     }
 
     if has_shader {
-        let shader = main_pipeline.fragment_shader.lock().unwrap().clone().unwrap();
+        let shader = main_pipeline
+            .fragment_shader
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap();
         for entity in &views_without {
             let main_key = Implicit2dMainPipelineKey {
                 format: TextureFormat::Rgba16Float,
                 shader: shader.clone(),
             };
             let main_id = main_pipelines.specialize(&pipeline_cache, &main_pipeline, main_key);
-            commands.entity(entity).insert((Implicit2dMainPipelineId(main_id), Implicit2dRenderActive));
+            commands
+                .entity(entity)
+                .insert((Implicit2dMainPipelineId(main_id), Implicit2dRenderActive));
         }
     } else {
         for (entity, _) in &views_with {
@@ -485,17 +498,23 @@ fn prepare_implicit2d_textures(
             command_cad.implicit2d_texture_size = Some(size);
             command_cad.implicit2d_egui_texture = None; // force re-register with egui
 
-            commands.entity(camera_entity).remove::<(Implicit2dMainPipelineId, Implicit2dRenderActive)>();
+            commands
+                .entity(camera_entity)
+                .remove::<(Implicit2dMainPipelineId, Implicit2dRenderActive)>();
         }
 
         if let Some(color) = &command_cad.implicit2d_texture {
-            commands.entity(camera_entity).insert(Implicit2dIntermediateTexture {
-                color: color.clone(),
-            });
+            commands
+                .entity(camera_entity)
+                .insert(Implicit2dIntermediateTexture {
+                    color: color.clone(),
+                });
         }
     } else {
         for entity in &cameras {
-            commands.entity(entity).remove::<Implicit2dIntermediateTexture>();
+            commands
+                .entity(entity)
+                .remove::<Implicit2dIntermediateTexture>();
         }
         if let Some(old) = command_cad.implicit2d_texture.take() {
             images.remove(&old);

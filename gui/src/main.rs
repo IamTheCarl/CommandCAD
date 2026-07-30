@@ -28,7 +28,9 @@ use bevy::{
     prelude::*,
     winit::{EventLoopProxy, EventLoopProxyWrapper, WinitSettings, WinitUserEvent},
 };
-use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, EguiTextureHandle, EguiUserTextures};
+use bevy_egui::{
+    EguiContexts, EguiPlugin, EguiPrimaryContextPass, EguiTextureHandle, EguiUserTextures,
+};
 use bevy_mod_outline::OutlinePlugin;
 use clap::Parser;
 use egui::{Color32, Mesh, Painter, RichText, StrokeKind, TextEdit, emath::TSTransform};
@@ -55,10 +57,9 @@ struct CliArgs {
 use crate::{
     grid::GridSettings,
     visualizers::{
-        Implicit2dPlugin, Implicit3dPlugin, ViewState2d, ViewState3d,
-        build_fill_mesh_from_polygon, draw_grid, orbit_camera, orbit_light, paint_linestring,
-        paint_polygon, setup_3d, spawn_meshes, sync_wireframe_visibility, update_3d_camera,
-        update_grid,
+        Implicit2dPlugin, Implicit3dPlugin, ViewState2d, ViewState3d, build_fill_mesh_from_polygon,
+        draw_grid, orbit_camera, orbit_light, paint_linestring, paint_polygon, setup_3d,
+        spawn_meshes, sync_wireframe_visibility, update_3d_camera, update_grid,
     },
 };
 
@@ -586,13 +587,11 @@ fn register_implicit2d_egui_texture(
     mut job_bridge: ResMut<JobBridge>,
     mut egui_user_textures: ResMut<EguiUserTextures>,
 ) {
-    if let Some(texture_handle) = &job_bridge.implicit2d_texture {
-        if job_bridge.implicit2d_egui_texture.is_none() {
-            let tex_id = egui_user_textures.add_image(EguiTextureHandle::Weak(
-                texture_handle.id(),
-            ));
-            job_bridge.implicit2d_egui_texture = Some(tex_id);
-        }
+    if let Some(texture_handle) = &job_bridge.implicit2d_texture
+        && job_bridge.implicit2d_egui_texture.is_none()
+    {
+        let tex_id = egui_user_textures.add_image(EguiTextureHandle::Weak(texture_handle.id()));
+        job_bridge.implicit2d_egui_texture = Some(tex_id);
     }
 }
 
@@ -820,13 +819,14 @@ fn render_ui(
 
                 // Draw the GPU-rendered implicit surface
                 if let Some(tex_id) = tex_id
-                    && let Some(size) = tex_size {
-                        let sized = egui::load::SizedTexture::new(
-                            tex_id,
-                            egui::Vec2::new(size.x as f32, size.y as f32),
-                        );
-                        ui.image(sized);
-                    }
+                    && let Some(size) = tex_size
+                {
+                    let sized = egui::load::SizedTexture::new(
+                        tex_id,
+                        egui::Vec2::new(size.x as f32, size.y as f32),
+                    );
+                    ui.image(sized);
+                }
 
                 // Grid overlay (painter created directly with known draw_area so it works after image)
                 let painter = Painter::new(ui.ctx().clone(), ui.layer_id(), draw_area);

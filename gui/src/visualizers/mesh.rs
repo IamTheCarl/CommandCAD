@@ -34,7 +34,10 @@ pub fn spawn_meshes(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mesh_models: Query<(Entity, &Mesh3d), With<MeshModel>>,
 ) {
-    let is_mesh = matches!(&command_cad.last_result, Some(Ok(JobOutput::ManifoldMesh(_))));
+    let is_mesh = matches!(
+        &command_cad.last_result,
+        Some(Ok(JobOutput::ManifoldMesh(_)))
+    );
 
     // Remove old meshes when switching away from mesh results
     if !is_mesh && !mesh_models.is_empty() {

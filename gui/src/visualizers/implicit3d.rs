@@ -444,7 +444,7 @@ pub struct Implicit3dPlugin;
 
 impl Plugin for Implicit3dPlugin {
     fn build(&self, app: &mut App) {
-        app            .init_resource::<ImplicitFragmentShader>()
+        app.init_resource::<ImplicitFragmentShader>()
             .init_resource::<ImplicitShaderVersion>()
             .add_plugins(bevy::render::extract_component::ExtractComponentPlugin::<
                 ImplicitIntermediateTextures,

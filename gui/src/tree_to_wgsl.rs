@@ -250,7 +250,6 @@ struct ImplicitUniform {
 }
 "#;
 
-
 /// Recursively converts a fidget TreeOp into a WGSL expression string.
 fn emit_expr(tree_op: &fidget::context::TreeOp, var_map: &mut HashMap<Var, String>) -> String {
     match tree_op {
@@ -331,7 +330,7 @@ fn emit_binary(op: &BinaryOpcode, lhs: &str, rhs: &str) -> String {
         BinaryOpcode::Mod => format!("mod({lhs}, {rhs})"),
         BinaryOpcode::Min | BinaryOpcode::And => format!("min({lhs}, {rhs})"),
         BinaryOpcode::Max | BinaryOpcode::Or => format!("max({lhs}, {rhs})"),
-        BinaryOpcode::Atan => format!("atan({lhs}, {rhs})"),
+        BinaryOpcode::Atan => format!("atan2({lhs}, {rhs})"),
         BinaryOpcode::Compare => {
             format!("select(-1.0, 1.0, {lhs} > {rhs})")
         }

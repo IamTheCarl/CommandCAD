@@ -143,10 +143,6 @@ impl ViewState2d {
         self.offset
     }
 
-    pub fn set_offset(&mut self, offset: egui::Vec2) {
-        self.offset = offset;
-    }
-
     pub fn fit_to_screen(&mut self, value: &JobOutput, draw_area: Rect) {
         let bounds = match value {
             JobOutput::LineString(line_string) => line_string.0.bounding_rect(),
@@ -194,7 +190,9 @@ impl ViewState2d {
         if let Some(Ok(value)) = last_result
             && matches!(
                 value,
-                JobOutput::LineString(_) | JobOutput::Polygon { .. } | JobOutput::PolygonSet { .. }
+                JobOutput::LineString(_)
+                    | JobOutput::Polygon { .. }
+                    | JobOutput::PolygonSet { .. }
                     | JobOutput::Surface2D(_)
             )
             && ui.button("Fit to screen").clicked()

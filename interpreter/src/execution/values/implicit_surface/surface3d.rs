@@ -12,8 +12,8 @@ use crate::execution::errors::{ExecutionResult, Raise, StrError};
 use crate::execution::values::{
     closure::{BuiltinCallableDatabase, BuiltinFunction},
     vector::{Length3, Zero3},
-    Length, Object, Scalar, StaticType, StaticTypeName, Style, Transform3d, UnsignedInteger, Value,
-    ValueNone, ValueType, Vector3, DowncastError,
+    DowncastError, Length, Object, Scalar, StaticType, StaticTypeName, Style, Transform3d,
+    UnsignedInteger, Value, ValueNone, ValueType, Vector3,
 };
 use crate::execution::ExecutionContext;
 
@@ -121,97 +121,71 @@ impl Surface3D {
 
     /// Estimate the bounding box by sampling SDF along axes.
     /// Returns (min_x, min_y, min_z, max_x, max_y, max_z).
+    ///
+    /// Handles shapes that don't contain the origin by scanning for inside
+    /// points before binary-searching the boundary.
     pub fn bounding_box_estimate(&self) -> (f64, f64, f64, f64, f64, f64) {
         let mut ctx = Context::new();
         let node = ctx.import(&self.tree);
 
         let sample = |x: f64, y: f64, z: f64| -> f64 {
-            ctx.eval_xyz(node, x, y, z).unwrap_or(0.0)
+            ctx.eval_xyz(node, x, y, z).unwrap_or(f64::INFINITY)
         };
 
-        let search_axis = |pos_fn: fn(f64) -> f64| -> f64 {
-            let mut lo = 0.0_f64;
-            let mut hi = 1.0_f64;
-            while sample(pos_fn(hi), 0.0, 0.0) < 0.0 && hi < 100.0 {
-                hi *= 2.0;
-            }
-            for _ in 0..30 {
-                let mid = (lo + hi) / 2.0;
-                if sample(pos_fn(mid), 0.0, 0.0) < 0.0 {
-                    lo = mid;
-                } else {
-                    hi = mid;
+        // Search along one axis for the positive boundary.
+        // Scans at exponentially-spaced distances to find inside points,
+        // then binary-searches from the furthest inside point outward.
+        let search_positive =
+            |fn_x: fn(f64) -> f64, fn_y: fn(f64) -> f64, fn_z: fn(f64) -> f64| -> f64 {
+                // Exponential scan: find all inside points up to 100 units
+                let mut max_inside = None;
+                let mut d = 0.001_f64;
+                while d <= 100.0 {
+                    let x = fn_x(d);
+                    let y = fn_y(d);
+                    let z = fn_z(d);
+                    if sample(x, y, z) < 0.0 {
+                        max_inside = Some(d);
+                    }
+                    d *= 2.0;
                 }
-            }
-            hi.min(100.0)
-        };
 
-        let x_max = search_axis(|v| v);
-        let x_min = -search_axis(|v| -v);
-        let y_max = {
-            let mut lo = 0.0_f64;
-            let mut hi = 1.0_f64;
-            while sample(0.0, hi, 0.0) < 0.0 && hi < 100.0 {
-                hi *= 2.0;
-            }
-            for _ in 0..30 {
-                let mid = (lo + hi) / 2.0;
-                if sample(0.0, mid, 0.0) < 0.0 {
-                    lo = mid;
-                } else {
-                    hi = mid;
+                match max_inside {
+                    Some(max_d) => {
+                        // Binary search between max_d and next power of 2
+                        let mut lo = max_d;
+                        let mut hi = (max_d * 2.0).min(100.0);
+                        // Make sure hi is actually outside
+                        while hi < 100.0 && sample(fn_x(hi), fn_y(hi), fn_z(hi)) < 0.0 {
+                            lo = hi;
+                            hi = (hi * 2.0).min(100.0);
+                        }
+                        for _ in 0..30 {
+                            let mid = (lo + hi) / 2.0;
+                            if sample(fn_x(mid), fn_y(mid), fn_z(mid)) < 0.0 {
+                                lo = mid;
+                            } else {
+                                hi = mid;
+                            }
+                        }
+                        hi
+                    }
+                    None => 10.0, // fallback: origin outside on this axis
                 }
-            }
-            hi.min(100.0)
-        };
-        let y_min = {
-            let mut lo = 0.0_f64;
-            let mut hi = 1.0_f64;
-            while sample(0.0, -hi, 0.0) < 0.0 && hi < 100.0 {
-                hi *= 2.0;
-            }
-            for _ in 0..30 {
-                let mid = (lo + hi) / 2.0;
-                if sample(0.0, -mid, 0.0) < 0.0 {
-                    lo = mid;
-                } else {
-                    hi = mid;
-                }
-            }
-            -hi.min(100.0)
-        };
-        let z_max = {
-            let mut lo = 0.0_f64;
-            let mut hi = 1.0_f64;
-            while sample(0.0, 0.0, hi) < 0.0 && hi < 100.0 {
-                hi *= 2.0;
-            }
-            for _ in 0..30 {
-                let mid = (lo + hi) / 2.0;
-                if sample(0.0, 0.0, mid) < 0.0 {
-                    lo = mid;
-                } else {
-                    hi = mid;
-                }
-            }
-            hi.min(100.0)
-        };
-        let z_min = {
-            let mut lo = 0.0_f64;
-            let mut hi = 1.0_f64;
-            while sample(0.0, 0.0, -hi) < 0.0 && hi < 100.0 {
-                hi *= 2.0;
-            }
-            for _ in 0..30 {
-                let mid = (lo + hi) / 2.0;
-                if sample(0.0, 0.0, -mid) < 0.0 {
-                    lo = mid;
-                } else {
-                    hi = mid;
-                }
-            }
-            -hi.min(100.0)
-        };
+            };
+
+        let x_max = search_positive(|v| v, |_| 0.0, |_| 0.0);
+        let x_min = -search_positive(|v| -v, |_| 0.0, |_| 0.0);
+        let y_max = search_positive(|_| 0.0, |v| v, |_| 0.0);
+        let y_min = -search_positive(|_| 0.0, |v| -v, |_| 0.0);
+        let z_max = search_positive(|_| 0.0, |_| 0.0, |v| v);
+        let z_min = -search_positive(|_| 0.0, |_| 0.0, |v| -v);
+
+        // Ensure minimum extent to avoid degenerate bounding boxes
+        let min_extent = 0.01_f64;
+        let x_max = x_max.max(x_min + min_extent);
+        let y_max = y_max.max(y_min + min_extent);
+        let z_max = z_max.max(z_min + min_extent);
 
         (x_min, y_min, z_min, x_max, y_max, z_max)
     }
@@ -331,7 +305,9 @@ impl Surface3D {
     /// Apply an affine transform to the implicit surface.
     /// The transform is applied by remapping SDF coordinates: sdf'(p) = sdf(T^-1 * p).
     pub fn transform(&self, t: &nalgebra::Matrix4<f64>) -> Self {
-        let inv = t.try_inverse().expect("Transform matrix must be invertible");
+        let inv = t
+            .try_inverse()
+            .expect("Transform matrix must be invertible");
         // Express new coordinates as linear combinations of original x, y, z using inverse matrix.
         // new_coord = inv[row][0]*x + inv[row][1]*y + inv[row][2]*z + inv[row][3]
         let (x, y, z) = (Tree::x(), Tree::y(), Tree::z());
@@ -1202,9 +1178,7 @@ mod surface3d_tests {
         use crate::execution::test_run;
         use crate::execution::values::Value;
 
-        let result = test_run(
-            "std.implicits.sphere(radius = 2.0m) + {3m, 0m, 0m}",
-        );
+        let result = test_run("std.implicits.sphere(radius = 2.0m) + {3m, 0m, 0m}");
         if let Err(ref e) = result {
             eprintln!("arithmetic add vector error: {:?}", e);
         }
@@ -1218,9 +1192,7 @@ mod surface3d_tests {
         use crate::execution::test_run;
         use crate::execution::values::Value;
 
-        let result = test_run(
-            "std.implicits.sphere(radius = 2.0m) - {1m, 2m, 3m}",
-        );
+        let result = test_run("std.implicits.sphere(radius = 2.0m) - {1m, 2m, 3m}");
         if let Err(ref e) = result {
             eprintln!("arithmetic subtract vector error: {:?}", e);
         }
@@ -1234,9 +1206,7 @@ mod surface3d_tests {
         use crate::execution::test_run;
         use crate::execution::values::Value;
 
-        let result = test_run(
-            "std.implicits.sphere(radius = 2.0m) * {2, 1, 0.5}",
-        );
+        let result = test_run("std.implicits.sphere(radius = 2.0m) * {2, 1, 0.5}");
         if let Err(ref e) = result {
             eprintln!("arithmetic multiply scale error: {:?}", e);
         }
@@ -1250,9 +1220,7 @@ mod surface3d_tests {
         use crate::execution::test_run;
         use crate::execution::values::Value;
 
-        let result = test_run(
-            "std.implicits.sphere(radius = 2.0m) + {3m, 0m}",
-        );
+        let result = test_run("std.implicits.sphere(radius = 2.0m) + {3m, 0m}");
         if let Err(ref e) = result {
             eprintln!("arithmetic add vector2 error: {:?}", e);
         }
@@ -1266,9 +1234,8 @@ mod surface3d_tests {
         use crate::execution::test_run;
         use crate::execution::values::Value;
 
-        let result = test_run(
-            "std.implicits.sphere(radius = 2.0m) + std.implicits.cube(size = 3.0m)",
-        );
+        let result =
+            test_run("std.implicits.sphere(radius = 2.0m) + std.implicits.cube(size = 3.0m)");
         if let Err(ref e) = result {
             eprintln!("arithmetic add surface error: {:?}", e);
         }
@@ -1282,9 +1249,8 @@ mod surface3d_tests {
         use crate::execution::test_run;
         use crate::execution::values::Value;
 
-        let result = test_run(
-            "std.implicits.sphere(radius = 2.0m) - std.implicits.cube(size = 3.0m)",
-        );
+        let result =
+            test_run("std.implicits.sphere(radius = 2.0m) - std.implicits.cube(size = 3.0m)");
         if let Err(ref e) = result {
             eprintln!("arithmetic subtract surface error: {:?}", e);
         }
@@ -1298,9 +1264,8 @@ mod surface3d_tests {
         use crate::execution::test_run;
         use crate::execution::values::Value;
 
-        let result = test_run(
-            "std.implicits.sphere(radius = 2.0m) | std.implicits.cube(size = 3.0m)",
-        );
+        let result =
+            test_run("std.implicits.sphere(radius = 2.0m) | std.implicits.cube(size = 3.0m)");
         if let Err(ref e) = result {
             eprintln!("arithmetic bit_or error: {:?}", e);
         }
@@ -1314,9 +1279,8 @@ mod surface3d_tests {
         use crate::execution::test_run;
         use crate::execution::values::Value;
 
-        let result = test_run(
-            "std.implicits.sphere(radius = 2.0m) & std.implicits.cube(size = 3.0m)",
-        );
+        let result =
+            test_run("std.implicits.sphere(radius = 2.0m) & std.implicits.cube(size = 3.0m)");
         if let Err(ref e) = result {
             eprintln!("arithmetic bit_and error: {:?}", e);
         }
@@ -1330,9 +1294,8 @@ mod surface3d_tests {
         use crate::execution::test_run;
         use crate::execution::values::Value;
 
-        let result = test_run(
-            "std.implicits.sphere(radius = 2.0m) ^ std.implicits.cube(size = 3.0m)",
-        );
+        let result =
+            test_run("std.implicits.sphere(radius = 2.0m) ^ std.implicits.cube(size = 3.0m)");
         if let Err(ref e) = result {
             eprintln!("arithmetic bit_xor error: {:?}", e);
         }
