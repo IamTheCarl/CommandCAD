@@ -2,6 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use fidget::context::Context;
+use fidget::jit::JitFunction;
+use fidget::shape::{EzShape, Shape};
+use fidget::types::Interval;
 use geo::{Coord, LineString, MultiPolygon, Polygon};
 use nalgebra;
 
@@ -85,77 +88,99 @@ impl Surface2D {
         &self.tree
     }
 
-    /// Estimate the bounding box by sampling SDF along axes.
+    /// Estimate the bounding box using interval arithmetic.
     /// Returns (min_x, min_y, max_x, max_y) in the shape's coordinate system.
+    ///
+    /// Uses fidget's interval evaluator to conservatively determine whether
+    /// a region contains the zero contour. If the interval result's lower bound
+    /// is positive, the region is provably outside the shape.
     pub fn bounding_box_estimate(&self) -> (f64, f64, f64, f64) {
-        let mut ctx = fidget::context::Context::new();
-        let node = ctx.import(&self.tree);
+        let shape = Shape::<JitFunction>::from(self.tree.clone());
+        let mut eval = Shape::<JitFunction>::new_interval_eval();
+        let tape = shape.ez_interval_tape();
 
-        let sample = |x: f64, y: f64| -> f64 { ctx.eval_xyz(node, x, y, 0.0).unwrap_or(0.0) };
+        let mut eval_region = |x_lo: f32, x_hi: f32, y_lo: f32, y_hi: f32| -> Interval {
+            eval.eval(&tape, [x_lo, x_hi], [y_lo, y_hi], [0.0_f32, 0.0_f32])
+                .map(|(result, _)| result)
+                .unwrap_or_else(|_| Interval::new(f32::NAN, f32::NAN))
+        };
 
-        // Binary search for extent along +x axis
-        let mut lo = 0.0_f64;
-        let mut hi = 1.0_f64;
-        while sample(hi, 0.0) < 0.0 && hi < 100.0 {
-            hi *= 2.0;
+        // Large initial search region
+        let search_limit = 100.0_f32;
+
+        // Check if the shape exists at all in the search region
+        let full = eval_region(-search_limit, search_limit, -search_limit, search_limit);
+        if full.lower() > 0.0 || full.has_nan() {
+            return (0.0, 0.0, 0.01, 0.01);
         }
-        for _ in 0..30 {
-            let mid = (lo + hi) / 2.0;
-            if sample(mid, 0.0) < 0.0 {
-                lo = mid;
+
+        // Binary search for x_min: find smallest x where shape exists.
+        // Evaluate [x_lo, mid] × [-R, R]. If no shape in left half, x_min > mid.
+        let mut x_lo = -search_limit;
+        let mut x_hi = search_limit;
+        for _ in 0..20 {
+            let mid = (x_lo + x_hi) / 2.0;
+            let result = eval_region(x_lo, mid, -search_limit, search_limit);
+            if result.lower() > 0.0 || result.has_nan() {
+                x_lo = mid;
             } else {
-                hi = mid;
+                x_hi = mid;
             }
         }
-        let x_max = hi.min(100.0);
+        let x_min = x_hi;
 
-        // Binary search for extent along -x axis
-        lo = 0.0;
-        hi = 1.0;
-        while sample(-hi, 0.0) < 0.0 && hi < 100.0 {
-            hi *= 2.0;
-        }
-        for _ in 0..30 {
-            let mid = (lo + hi) / 2.0;
-            if sample(-mid, 0.0) < 0.0 {
-                lo = mid;
+        // Binary search for x_max: find largest x where shape exists.
+        // Evaluate [mid, x_hi] × [-R, R]. If no shape in right half, x_max < mid.
+        let mut x_lo = x_min;
+        let mut x_hi = search_limit;
+        for _ in 0..20 {
+            let mid = (x_lo + x_hi) / 2.0;
+            let result = eval_region(mid, x_hi, -search_limit, search_limit);
+            if result.lower() > 0.0 || result.has_nan() {
+                x_hi = mid;
             } else {
-                hi = mid;
+                x_lo = mid;
             }
         }
-        let x_min = -hi.min(100.0);
+        let x_max = x_lo;
 
-        // Binary search for extent along +y axis
-        lo = 0.0;
-        hi = 1.0;
-        while sample(0.0, hi) < 0.0 && hi < 100.0 {
-            hi *= 2.0;
-        }
-        for _ in 0..30 {
-            let mid = (lo + hi) / 2.0;
-            if sample(0.0, mid) < 0.0 {
-                lo = mid;
+        // Binary search for y_min
+        let mut y_lo = -search_limit;
+        let mut y_hi = search_limit;
+        for _ in 0..20 {
+            let mid = (y_lo + y_hi) / 2.0;
+            let result = eval_region(x_min, x_max, y_lo, mid);
+            if result.lower() > 0.0 || result.has_nan() {
+                y_lo = mid;
             } else {
-                hi = mid;
+                y_hi = mid;
             }
         }
-        let y_max = hi.min(100.0);
+        let y_min = y_hi;
 
-        // Binary search for extent along -y axis
-        lo = 0.0;
-        hi = 1.0;
-        while sample(0.0, -hi) < 0.0 && hi < 100.0 {
-            hi *= 2.0;
-        }
-        for _ in 0..30 {
-            let mid = (lo + hi) / 2.0;
-            if sample(0.0, -mid) < 0.0 {
-                lo = mid;
+        // Binary search for y_max
+        let mut y_lo = y_min;
+        let mut y_hi = search_limit;
+        for _ in 0..20 {
+            let mid = (y_lo + y_hi) / 2.0;
+            let result = eval_region(x_min, x_max, mid, y_hi);
+            if result.lower() > 0.0 || result.has_nan() {
+                y_hi = mid;
             } else {
-                hi = mid;
+                y_lo = mid;
             }
         }
-        let y_min = -hi.min(100.0);
+        let y_max = y_lo;
+
+        let x_min = x_min as f64;
+        let y_min = y_min as f64;
+        let x_max = x_max as f64;
+        let y_max = y_max as f64;
+
+        // Ensure minimum extent to avoid degenerate bounding boxes
+        let min_extent = 0.01_f64;
+        let x_max = x_max.max(x_min + min_extent);
+        let y_max = y_max.max(y_min + min_extent);
 
         (x_min, y_min, x_max, y_max)
     }
@@ -1954,6 +1979,85 @@ mod tests {
         assert!(pos_count > 0, "should have positive values outside circle");
         assert!(!segments.is_empty(), "should have segments");
         assert!(!loops.is_empty(), "should have loops");
+    }
+
+    // --- bounding_box_estimate tests ---
+
+    #[test]
+    fn bounding_box_origin_circle() {
+        let surface = make_circle_surface(1.0);
+        let (xmin, ymin, xmax, ymax) = surface.bounding_box_estimate();
+        let tol = 0.1;
+        assert!((xmin - (-1.0)).abs() < tol, "xmin: expected ~-1.0, got {:.4}", xmin);
+        assert!((ymin - (-1.0)).abs() < tol, "ymin: expected ~-1.0, got {:.4}", ymin);
+        assert!((xmax - 1.0).abs() < tol, "xmax: expected ~1.0, got {:.4}", xmax);
+        assert!((ymax - 1.0).abs() < tol, "ymax: expected ~1.0, got {:.4}", ymax);
+    }
+
+    #[test]
+    fn bounding_box_off_axis_circle() {
+        // Circle centered at (5, 3) with radius 1
+        let x = Tree::x();
+        let y = Tree::y();
+        let tree = ((x.clone() - Tree::constant(5.0_f64)).clone() * (x.clone() - Tree::constant(5.0_f64))
+            + (y.clone() - Tree::constant(3.0_f64)) * (y.clone() - Tree::constant(3.0_f64)))
+            .sqrt()
+            - Tree::constant(1.0_f64);
+        let surface = Surface2D::new(tree);
+        let (xmin, ymin, xmax, ymax) = surface.bounding_box_estimate();
+        let tol = 0.15;
+        assert!((xmin - 4.0).abs() < tol, "xmin: expected ~4.0, got {:.4}", xmin);
+        assert!((ymin - 2.0).abs() < tol, "ymin: expected ~2.0, got {:.4}", ymin);
+        assert!((xmax - 6.0).abs() < tol, "xmax: expected ~6.0, got {:.4}", xmax);
+        assert!((ymax - 4.0).abs() < tol, "ymax: expected ~4.0, got {:.4}", ymax);
+    }
+
+    #[test]
+    fn bounding_box_union_distant_circles() {
+        // Two circles at (-10, 0) and (10, 0), radius 1 each
+        let x = Tree::x();
+        let y = Tree::y();
+        let c1 = ((x.clone() + Tree::constant(10.0_f64)) * (x.clone() + Tree::constant(10.0_f64))
+            + y.clone() * y.clone())
+            .sqrt()
+            - Tree::constant(1.0_f64);
+        let c2 = ((x.clone() - Tree::constant(10.0_f64)) * (x.clone() - Tree::constant(10.0_f64))
+            + y.clone() * y.clone())
+            .sqrt()
+            - Tree::constant(1.0_f64);
+        let tree = c1.min(c2);
+        let surface = Surface2D::new(tree);
+        let (xmin, ymin, xmax, ymax) = surface.bounding_box_estimate();
+        let tol = 0.15;
+        assert!((xmin - (-11.0)).abs() < tol, "xmin: expected ~-11.0, got {:.4}", xmin);
+        assert!((ymin - (-1.0)).abs() < tol, "ymin: expected ~-1.0, got {:.4}", ymin);
+        assert!((xmax - 11.0).abs() < tol, "xmax: expected ~11.0, got {:.4}", xmax);
+        assert!((ymax - 1.0).abs() < tol, "ymax: expected ~1.0, got {:.4}", ymax);
+    }
+
+    #[test]
+    fn bounding_box_empty_shape() {
+        // Constant positive SDF — no zero contour anywhere
+        let surface = Surface2D::new(Tree::constant(5.0_f64));
+        let (xmin, ymin, xmax, ymax) = surface.bounding_box_estimate();
+        assert_eq!(xmin, 0.0);
+        assert_eq!(ymin, 0.0);
+        assert_eq!(xmax, 0.01);
+        assert_eq!(ymax, 0.01);
+    }
+
+    #[test]
+    fn bounding_box_transformed_circle() {
+        // Circle at origin translated to (5, 3) via transform matrix
+        let surface = make_circle_surface(1.0);
+        let t = nalgebra::Matrix3::<f64>::new_translation(&nalgebra::Vector2::new(5.0, 3.0));
+        let translated = surface.transform(&t);
+        let (xmin, ymin, xmax, ymax) = translated.bounding_box_estimate();
+        let tol = 0.15;
+        assert!((xmin - 4.0).abs() < tol, "xmin: expected ~4.0, got {:.4}", xmin);
+        assert!((ymin - 2.0).abs() < tol, "ymin: expected ~2.0, got {:.4}", ymin);
+        assert!((xmax - 6.0).abs() < tol, "xmax: expected ~6.0, got {:.4}", xmax);
+        assert!((ymax - 4.0).abs() < tol, "ymax: expected ~4.0, got {:.4}", ymax);
     }
 }
 
