@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
 use common_data_types::Dimension;
+use fidget::context::BinaryOpcode;
 use fidget::context::Context;
 use fidget::context::Tree;
+use fidget::context::TreeOp;
 use fidget::mesh::{Octree, Settings};
 use fidget::render::CancelToken;
 use fidget::render::ThreadPool;
 use fidget::shape::Shape;
+use geo::{Area, LineString, MultiPolygon, Polygon};
 
 use crate::execution::errors::{ExecutionResult, Raise, StrError};
 use crate::execution::values::{
@@ -90,6 +93,32 @@ use super::super::polygon::PolygonSet;
 pub struct Surface3D {
     tree: fidget::context::Tree,
     settings: MeshSettings,
+}
+
+/// Result of `Surface3D::project()`, indicating which code path was used.
+pub enum ProjectResult {
+    /// Symbolic min_z distribution succeeded.
+    Symbolic(Surface2D),
+    /// Symbolic path failed; sampling-based fallback was used.
+    Sampling(Surface2D),
+}
+
+impl ProjectResult {
+    pub fn into_surface(self) -> Surface2D {
+        match self {
+            ProjectResult::Symbolic(s) | ProjectResult::Sampling(s) => s,
+        }
+    }
+
+    pub fn used_sampling(&self) -> bool {
+        matches!(self, ProjectResult::Sampling(_))
+    }
+
+    pub fn is_degenerate(&self) -> bool {
+        match self {
+            ProjectResult::Symbolic(s) | ProjectResult::Sampling(s) => s.is_degenerate_projection(),
+        }
+    }
 }
 
 impl std::fmt::Debug for Surface3D {
@@ -325,9 +354,1085 @@ impl Surface3D {
             + Tree::constant(inv[(2, 3)]);
         Self::new(self.tree.remap_xyz(new_x, new_y, new_z))
     }
+
+    /// Check if the shape is bounded along the z-axis.
+    /// Returns false if the SDF remains negative at extreme z values,
+    /// indicating the shape extends infinitely in z (projection will be degenerate).
+    pub fn is_bounded_along_z(&self) -> bool {
+        let mut ctx = Context::new();
+        let node = ctx.import(&self.tree);
+
+        // Test at multiple large z values with x=0, y=0 (and a few other xy positions)
+        let test_points = [
+            (0.0, 0.0, 1e6),
+            (0.0, 0.0, -1e6),
+            (1.0, 0.0, 1e6),
+            (0.0, 1.0, 1e6),
+            (1.0, 1.0, 1e6),
+        ];
+
+        for &(x, y, z) in &test_points {
+            match ctx.eval_xyz(node, x, y, z) {
+                Ok(val) if val < -0.1 => return false,
+                _ => {}
+            }
+        }
+        true
+    }
+
+    /// Check if the shape is closed (finite extent in all directions).
+    /// Returns false if the SDF is negative at large distance along any axis,
+    /// meaning the shape is unbounded (e.g., a plane or infinite cylinder).
+    pub fn is_bounded(&self) -> bool {
+        let mut ctx = Context::new();
+        let node = ctx.import(&self.tree);
+
+        // Test far along each axis direction
+        let d = 1e6_f64;
+        let test_points = [
+            (d, 0.0, 0.0),
+            (-d, 0.0, 0.0),
+            (0.0, d, 0.0),
+            (0.0, -d, 0.0),
+            (0.0, 0.0, d),
+            (0.0, 0.0, -d),
+        ];
+
+        for &(x, y, z) in &test_points {
+            match ctx.eval_xyz(node, x, y, z) {
+                Ok(val) if val < -0.1 => return false,
+                _ => {}
+            }
+        }
+        true
+    }
+
+    /// Project the 3D implicit surface to 2D by computing min_z(f(x,y,z)).
+    ///
+    /// Uses symbolic min distribution through min/max operations. Falls back
+    /// to sampling-based contour extraction for shapes where z is mixed in
+    /// arithmetic (cone, torus, rounded_cube).
+    pub fn project(&self) -> Result<ProjectResult, MeshingError> {
+        // Try symbolic min_z first
+        match min_z_tree(&self.tree) {
+            Ok(result_tree) => {
+                Ok(ProjectResult::Symbolic(Surface2D::with_settings(result_tree, self.settings.clone())))
+            }
+            Err(()) => {
+                // Symbolic path failed; fall back to sampling
+                let surface = self.project_by_sampling()?;
+                Ok(ProjectResult::Sampling(surface))
+            }
+        }
+    }
+
+    /// Sampling-based projection fallback.
+    ///
+    /// Evaluates min_z(f(x,y,z)) on a grid, extracts zero contour via marching
+    /// squares (through Surface2D::to_polygon), then converts the polygon back
+    /// to an approximate SDF.
+    fn project_by_sampling(&self) -> Result<Surface2D, MeshingError> {
+        let bb = self.bounding_box_estimate();
+        let (_x_min, _y_min, z_min, _x_max, _y_max, z_max) = bb;
+
+        // For projection, we need the full xy extent across ALL z values.
+        // The default bounding_box_estimate scans at z=0 only, which misses
+        // shapes that are wider at other z (e.g., cone base at z=h/2).
+        // Compute silhouette extent by finding where min_z < 0 along each axis.
+        let mut ctx = Context::new();
+        let node = ctx.import(&self.tree);
+
+        // Binary search for silhouette extent along each axis
+        let mut x_min_all = _x_min;
+        let mut x_max_all = _x_max;
+        let mut y_min_all = _y_min;
+        let mut y_max_all = _y_max;
+
+        // Expand search: find where min_z < 0 along +x, -x, +y, -y
+        // Use higher z resolution for more accurate min_z estimation
+        let z_samples_for_min = 128u32;
+        let z_step_fine = (z_max - z_min) / z_samples_for_min as f64;
+
+        let estimate_min_z = |px: f64, py: f64| -> f64 {
+            let mut min_val = f64::INFINITY;
+            for i in 0..=z_samples_for_min {
+                let z = z_min + i as f64 * z_step_fine;
+                let val = ctx.eval_xyz(node, px, py, z).unwrap_or(f64::INFINITY);
+                if val < min_val {
+                    min_val = val;
+                }
+            }
+            min_val
+        };
+
+        for &(axis, dir) in &[(0, 1.0), (0, -1.0), (1, 1.0), (1, -1.0)] {
+            let mut lo = 0.0_f64;
+            let mut hi = 0.1_f64;
+            // Exponential scan to find inside point
+            while hi <= 100.0 {
+                let (x, y) = if axis == 0 { (hi * dir, 0.0) } else { (0.0, hi * dir) };
+                if estimate_min_z(x, y) < 0.0 {
+                    lo = hi;
+                    hi *= 2.0;
+                } else {
+                    break;
+                }
+            }
+            // Binary search between lo and hi
+            if lo > 0.0 {
+                for _ in 0..10 {
+                    let mid = (lo + hi) / 2.0;
+                    let (x, y) = if axis == 0 { (mid * dir, 0.0) } else { (0.0, mid * dir) };
+                    if estimate_min_z(x, y) < 0.0 {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                let extent = lo;
+                if axis == 0 {
+                    if dir > 0.0 {
+                        x_max_all = x_max_all.max(extent);
+                    } else {
+                        x_min_all = x_min_all.min(-extent);
+                    }
+                } else if dir > 0.0 {
+                    y_max_all = y_max_all.max(extent);
+                } else {
+                    y_min_all = y_min_all.min(-extent);
+                }
+            }
+        }
+
+        let (x_min, y_min, x_max, y_max) = (x_min_all, y_min_all, x_max_all, y_max_all);
+
+        // Expand bounding box slightly for safety margin
+        let margin = 1.0;
+        let x_range = x_min - margin..x_max + margin;
+        let y_range = y_min - margin..y_max + margin;
+        let z_range = z_min - margin..z_max + margin;
+
+        // Guard against degenerate ranges
+        if x_range.end <= x_range.start || y_range.end <= y_range.start {
+            return Err(MeshingError(
+                "Degenerate X/Y bounding box for projection".into(),
+            ));
+        }
+        if z_range.end <= z_range.start {
+            return Err(MeshingError(
+                "Degenerate Z bounding box for projection".into(),
+            ));
+        }
+
+        // Grid resolution (lower = faster, coarser)
+        let grid_size = 64u32;
+
+        // Import tree into context for JIT evaluation
+        let mut ctx = Context::new();
+        let node = ctx.import(&self.tree);
+
+        // Sample min_z at each grid point
+        let dx = (x_range.end - x_range.start) / grid_size as f64;
+        let dy = (y_range.end - y_range.start) / grid_size as f64;
+        let dz_step = (z_range.end - z_range.start) / (grid_size) as f64;
+
+        let mut min_z_grid: Vec<f64> =
+            Vec::with_capacity(((grid_size + 1) * (grid_size + 1)) as usize);
+
+        for iy in 0..=grid_size {
+            for ix in 0..=grid_size {
+                let px = x_range.start + ix as f64 * dx;
+                let py = y_range.start + iy as f64 * dy;
+
+                let mut min_val = f64::INFINITY;
+                let mut z = z_range.start;
+                while z <= z_range.end + dz_step * 0.5 {
+                    let val = ctx.eval_xyz(node, px, py, z).unwrap_or(f64::INFINITY);
+                    if val < min_val {
+                        min_val = val;
+                    }
+                    z += dz_step;
+                }
+                min_z_grid.push(min_val);
+            }
+        }
+
+        // Build a 2D SDF tree from the sampled grid using polygon approximation.
+        // Extract zero contour by creating a synthetic surface and using to_polygon().
+        // Then convert polygon edges to an approximate SDF.
+        let polygon = extract_contour_from_grid(
+            &min_z_grid,
+            grid_size,
+            x_range.start,
+            y_range.start,
+            dx,
+            dy,
+        )?;
+
+        // Convert polygon to approximate SDF tree
+        polygon_to_sdf_tree(&polygon)
+    }
 }
 
-/// Converts a Fidget mesh (vertices + triangles) to a boolmesh Manifold.
+/* ── Symbolic min_z projection ── */
+
+fn contains_z_in_op(tree_op: &TreeOp) -> bool {
+    match tree_op {
+        TreeOp::Input(fidget::var::Var::Z) => true,
+        TreeOp::Input(_) | TreeOp::Const(_) => false,
+        TreeOp::Binary(_, a, b) => contains_z_in_op(a.as_ref()) || contains_z_in_op(b.as_ref()),
+        TreeOp::Unary(_, c) => contains_z_in_op(c.as_ref()),
+        TreeOp::RemapAxes { target, x, y, z } => {
+            contains_z_in_op(x.as_ref())
+                || contains_z_in_op(y.as_ref())
+                || contains_z_in_op(z.as_ref())
+                || contains_z_in_op(target.as_ref())
+        }
+        TreeOp::RemapAffine { target, .. } => contains_z_in_op(target.as_ref()),
+    }
+}
+
+/// Check if a tree contains x or y (but not necessarily z).
+/// Used to determine if a z-remap is a pure function of z alone.
+#[allow(dead_code)]
+fn contains_xy_in_op(tree_op: &TreeOp) -> bool {
+    match tree_op {
+        TreeOp::Input(fidget::var::Var::X | fidget::var::Var::Y) => true,
+        TreeOp::Input(_) | TreeOp::Const(_) => false,
+        TreeOp::Binary(_, a, b) => contains_xy_in_op(a.as_ref()) || contains_xy_in_op(b.as_ref()),
+        TreeOp::Unary(_, c) => contains_xy_in_op(c.as_ref()),
+        TreeOp::RemapAxes { target, x, y, z } => {
+            contains_xy_in_op(x.as_ref())
+                || contains_xy_in_op(y.as_ref())
+                || contains_xy_in_op(z.as_ref())
+                || contains_xy_in_op(target.as_ref())
+        }
+        TreeOp::RemapAffine { target, .. } => contains_xy_in_op(target.as_ref()),
+    }
+}
+
+/// Extract an expression as `coeff * z + offset` where coeff and offset don't contain z.
+/// Returns None if the expression is not linear in z or doesn't contain z at all.
+/// Check if an affine expression (built from matrix row) semantically depends on x or y.
+/// Handles the case where x*0 + y*0 + z*1 + c still contains Input(X) syntactically
+/// but doesn't depend on x/y semantically.
+fn affine_depends_on_xy(tree_op: &TreeOp) -> bool {
+    let mut depends = false;
+    collect_additive_terms(tree_op, &mut |term| {
+        if let TreeOp::Binary(BinaryOpcode::Mul, v, c) = term {
+            let var = matches!(&**v, TreeOp::Input(fidget::var::Var::X | fidget::var::Var::Y));
+            let coeff_nonzero = match &**c {
+                TreeOp::Const(c) => *c != 0.0,
+                _ => true,
+            };
+            if var && coeff_nonzero {
+                depends = true;
+            }
+        }
+        if let TreeOp::Binary(BinaryOpcode::Mul, c, v) = term {
+            let var = matches!(&**v, TreeOp::Input(fidget::var::Var::X | fidget::var::Var::Y));
+            let coeff_nonzero = match &**c {
+                TreeOp::Const(c) => *c != 0.0,
+                _ => true,
+            };
+            if var && coeff_nonzero {
+                depends = true;
+            }
+        }
+    });
+    depends
+}
+
+/// Check if an affine expression semantically depends on z.
+/// Handles the case where x*0 + y*0 + z*0 + c still contains Input(Z) syntactically
+/// but doesn't depend on z semantically.
+fn affine_depends_on_z(tree_op: &TreeOp) -> bool {
+    let mut depends = false;
+    collect_additive_terms(tree_op, &mut |term| {
+        if let TreeOp::Binary(BinaryOpcode::Mul, v, c) = term {
+            let var = matches!(&**v, TreeOp::Input(fidget::var::Var::Z));
+            let coeff_nonzero = match &**c {
+                TreeOp::Const(c) => *c != 0.0,
+                _ => true,
+            };
+            if var && coeff_nonzero {
+                depends = true;
+            }
+        }
+        if let TreeOp::Binary(BinaryOpcode::Mul, c, v) = term {
+            let var = matches!(&**v, TreeOp::Input(fidget::var::Var::Z));
+            let coeff_nonzero = match &**c {
+                TreeOp::Const(c) => *c != 0.0,
+                _ => true,
+            };
+            if var && coeff_nonzero {
+                depends = true;
+            }
+        }
+    });
+    depends
+}
+
+/// Collect all additive terms from an expression (walks through Add chains).
+fn collect_additive_terms<F>(tree_op: &TreeOp, f: &mut F)
+where
+    F: FnMut(&TreeOp),
+{
+    match tree_op {
+        TreeOp::Binary(BinaryOpcode::Add, a, b) => {
+            collect_additive_terms(a.as_ref(), f);
+            collect_additive_terms(b.as_ref(), f);
+        }
+        _ => f(tree_op),
+    }
+}
+
+/// Compute min_z(f(x, y, z)) symbolically by distributing min through the tree.
+///
+/// Returns Ok(Tree) with the resulting 2D SDF, or Err(()) if the tree contains
+/// patterns that can't be handled symbolically (z mixed in arithmetic within min/max).
+fn min_z_tree(tree: &Tree) -> Result<Tree, ()> {
+    min_z_tree_op(tree)
+}
+
+/// Convert a TreeOp to a standalone Tree by recursively rebuilding it.
+fn treeop_to_tree(tree_op: &TreeOp) -> Result<Tree, ()> {
+    use fidget::context::{BinaryOpcode, TreeOp, UnaryOpcode};
+
+    match tree_op {
+        TreeOp::Input(var) => Ok(Tree::from(*var)),
+        TreeOp::Const(c) => Ok(Tree::constant(*c)),
+        TreeOp::Binary(op, a, b) => {
+            let a_tree = treeop_to_tree(a.as_ref())?;
+            let b_tree = treeop_to_tree(b.as_ref())?;
+            match op {
+                BinaryOpcode::Add => Ok(a_tree + b_tree),
+                BinaryOpcode::Sub => Ok(a_tree - b_tree),
+                BinaryOpcode::Mul => Ok(a_tree * b_tree),
+                BinaryOpcode::Div => Ok(a_tree.clone() / b_tree.clone()),
+                BinaryOpcode::Min => Ok(a_tree.min(b_tree)),
+                BinaryOpcode::Max => Ok(a_tree.max(b_tree)),
+                BinaryOpcode::Atan => Ok(a_tree.atan2(b_tree)),
+                BinaryOpcode::Compare => Ok(a_tree.compare(b_tree)),
+                BinaryOpcode::Mod => Ok(a_tree.modulo(b_tree)),
+                BinaryOpcode::And => Ok(a_tree.and(b_tree)),
+                BinaryOpcode::Or => Ok(a_tree.or(b_tree)),
+            }
+        }
+        TreeOp::Unary(op, c) => {
+            let c_tree = treeop_to_tree(c.as_ref())?;
+            match op {
+                UnaryOpcode::Neg => Ok(-c_tree),
+                UnaryOpcode::Abs => Ok(c_tree.abs()),
+                UnaryOpcode::Recip => Ok(c_tree.recip()),
+                UnaryOpcode::Sqrt => Ok(c_tree.sqrt()),
+                UnaryOpcode::Square => Ok(c_tree.square()),
+                UnaryOpcode::Floor => Ok(c_tree.floor()),
+                UnaryOpcode::Ceil => Ok(c_tree.ceil()),
+                UnaryOpcode::Round => Ok(c_tree.round()),
+                UnaryOpcode::Sin => Ok(c_tree.sin()),
+                UnaryOpcode::Cos => Ok(c_tree.cos()),
+                UnaryOpcode::Tan => Ok(c_tree.tan()),
+                UnaryOpcode::Asin => Ok(c_tree.asin()),
+                UnaryOpcode::Acos => Ok(c_tree.acos()),
+                UnaryOpcode::Atan => Ok(c_tree.atan()),
+                UnaryOpcode::Exp => Ok(c_tree.exp()),
+                UnaryOpcode::Ln => Ok(c_tree.ln()),
+                UnaryOpcode::Not => Ok(c_tree.not()),
+            }
+        }
+        // Can't easily rebuild RemapAxes/RemapAffine without Arc<TreeOp> access
+        TreeOp::RemapAxes { .. } | TreeOp::RemapAffine { .. } => Err(()),
+    }
+}
+
+fn min_z_tree_op(tree_op: &TreeOp) -> Result<Tree, ()> {
+    use fidget::context::{BinaryOpcode, TreeOp, UnaryOpcode};
+
+    match tree_op {
+        // Base cases: X and Y pass through, Z is eliminated (min over all z = -inf)
+        TreeOp::Input(fidget::var::Var::X) => Ok(Tree::x()),
+        TreeOp::Input(fidget::var::Var::Y) => Ok(Tree::y()),
+        TreeOp::Input(fidget::var::Var::Z) => Ok(Tree::constant(f64::NEG_INFINITY)),
+        TreeOp::Input(var) => Ok(Tree::from(*var)),
+
+        // Constants pass through unchanged
+        TreeOp::Const(c) => Ok(Tree::constant(*c)),
+
+        // min/max distribute: min_z(min(a,b)) = min(min_z(a), min_z(b))
+        TreeOp::Binary(BinaryOpcode::Min | BinaryOpcode::Max, a, b) => {
+            let opcode = match tree_op {
+                TreeOp::Binary(op, ..) => *op,
+                _ => unreachable!(),
+            };
+            let a_min = min_z_tree_op(a.as_ref())?;
+            let b_min = min_z_tree_op(b.as_ref())?;
+            if opcode == BinaryOpcode::Min {
+                Ok(a_min.min(b_min))
+            } else {
+                Ok(a_min.max(b_min))
+            }
+        }
+
+        // Arithmetic: only distribute if one side is z-independent
+        TreeOp::Binary(BinaryOpcode::Add | BinaryOpcode::Sub | BinaryOpcode::Mul, _, _) => {
+            let tree = match tree_op {
+                TreeOp::Binary(_, a, b) => (a, b),
+                _ => unreachable!(),
+            };
+            let a = tree.0.as_ref();
+            let b = tree.1.as_ref();
+            let a_has_z = contains_z_in_op(a);
+            let b_has_z = contains_z_in_op(b);
+            if !a_has_z && !b_has_z {
+                // Neither contains z, just pass through
+                let a_tree = treeop_to_tree(a)?;
+                let b_tree = treeop_to_tree(b)?;
+                let opcode = match tree_op {
+                    TreeOp::Binary(op, ..) => *op,
+                    _ => unreachable!(),
+                };
+                apply_binary(opcode, a_tree, b_tree)
+            } else if !a_has_z {
+                // a is z-independent: min_z(a op b) = a op min_z(b)
+                let a_tree = treeop_to_tree(a)?;
+                let b_min = min_z_tree_op(b)?;
+                let opcode = match tree_op {
+                    TreeOp::Binary(op, ..) => *op,
+                    _ => unreachable!(),
+                };
+                apply_binary(opcode, a_tree, b_min)
+            } else if !b_has_z {
+                // b is z-independent: min_z(a op b) = min_z(a) op b
+                let a_min = min_z_tree_op(a)?;
+                let b_tree = treeop_to_tree(b)?;
+                let opcode = match tree_op {
+                    TreeOp::Binary(op, ..) => *op,
+                    _ => unreachable!(),
+                };
+                // For Sub, order matters: a - b -> min_z(a) - b
+                // For Mul, order doesn't matter for commutative ops
+                apply_binary(opcode, a_min, b_tree)
+            } else {
+                // Both sides contain z mixed in arithmetic.
+                // Special case: f(z) * f(z) = f(z)², min over z is 0 (at f(z)=0).
+                if let BinaryOpcode::Mul = match tree_op {
+                    TreeOp::Binary(op, ..) => *op,
+                    _ => unreachable!(),
+                } {
+                    // Arc pointer equality means shared sub-expression (deduped by fidget)
+                    if Arc::ptr_eq(tree.0, tree.1) {
+                        return Ok(Tree::constant(0.0));
+                    }
+                }
+                Err(())
+            }
+        }
+
+        // Division: distribute when denominator is z-independent and numerator is z-independent
+        TreeOp::Binary(BinaryOpcode::Div, a, b) => {
+            let a_has_z = contains_z_in_op(a.as_ref());
+            let b_has_z = contains_z_in_op(b.as_ref());
+            if !a_has_z && !b_has_z {
+                let a_tree = treeop_to_tree(a.as_ref())?;
+                let b_tree = treeop_to_tree(b.as_ref())?;
+                Ok(a_tree / b_tree)
+            } else {
+                // Can't distribute min_z through division when z is involved.
+                // For linear-in-z numerators, the zero-crossing approach gives wrong results
+                // when combined with other branches in max/min (e.g., cone silhouette).
+                // Sampling fallback handles these cases correctly.
+                Err(())
+            }
+        }
+
+        // Other binary ops (Atan, Compare, Mod, And, Or) -- can't distribute
+        TreeOp::Binary(_, _, _) => Err(()),
+
+        // Unary: push through for monotonic non-decreasing operations
+        TreeOp::Unary(op, child) => {
+            let child_has_z = contains_z_in_op(child.as_ref());
+            match op {
+                UnaryOpcode::Neg => {
+                    let child_min = min_z_tree_op(child.as_ref())?;
+                    Ok(-child_min)
+                }
+                UnaryOpcode::Abs => {
+                    // abs is NOT monotonically non-decreasing.
+                    // min_z(abs(f(z))) != abs(min_z(f(z))) in general.
+                    // If child contains z, min of |child| over all z is 0
+                    // (assuming child can reach 0 for some z, which holds for most cases).
+                    if child_has_z {
+                        Ok(Tree::constant(0.0))
+                    } else {
+                        let child_tree = treeop_to_tree(child.as_ref())?;
+                        Ok(child_tree.abs())
+                    }
+                }
+                UnaryOpcode::Square => {
+                    // square is NOT monotonic over all reals.
+                    // min_z(f(z)^2) = 0 if f contains z (f can reach 0 for some z).
+                    if child_has_z {
+                        Ok(Tree::constant(0.0))
+                    } else {
+                        let child_tree = treeop_to_tree(child.as_ref())?;
+                        Ok(child_tree.square())
+                    }
+                }
+                UnaryOpcode::Sqrt => {
+                    // sqrt is monotonically non-decreasing for non-negative inputs.
+                    // But if child contains z, min_z(sqrt(f(z))) = sqrt(min_z(f(z))).
+                    // If min_z(f) is -inf, sqrt(-inf) is NaN. Handle gracefully.
+                    let child_min = min_z_tree_op(child.as_ref())?;
+                    Ok(child_min.sqrt())
+                }
+                _ => {
+                    let child_min = min_z_tree_op(child.as_ref())?;
+                    match op {
+                        UnaryOpcode::Recip => Ok(child_min.recip()),
+                        UnaryOpcode::Exp => Ok(child_min.exp()),
+                        UnaryOpcode::Sin => Ok(child_min.sin()),
+                        UnaryOpcode::Cos => Ok(child_min.cos()),
+                        UnaryOpcode::Tan => Ok(child_min.tan()),
+                        UnaryOpcode::Asin => Ok(child_min.asin()),
+                        UnaryOpcode::Acos => Ok(child_min.acos()),
+                        UnaryOpcode::Atan => Ok(child_min.atan()),
+                        UnaryOpcode::Ln => Ok(child_min.ln()),
+                        UnaryOpcode::Floor => Ok(child_min.floor()),
+                        UnaryOpcode::Ceil => Ok(child_min.ceil()),
+                        UnaryOpcode::Round => Ok(child_min.round()),
+                        UnaryOpcode::Not => Ok(child_min.not()),
+                        // Already handled: Neg, Abs, Sqrt, Square
+                        _ => unreachable!(),
+                    }
+                }
+            }
+        }
+
+        // RemapAxes: if z-remap is a pure constant, substitute it
+        TreeOp::RemapAxes { target, x, y, z } => {
+            // If the z remap is a constant, substitute it into target and recurse
+            if let TreeOp::Const(zc) = &**z {
+                let substituted = substitute_z(target.as_ref(), *zc);
+                return min_z_tree_op(&substituted);
+            }
+            // If x and y remaps don't contain Z, and z remap is a pure function of z alone
+            // (no x or y), we can recurse on target with the remapped axes.
+            // min over all z of f(x_rem, y_rem, z_rem(z)) = min over all z' of f(x_rem, y_rem, z')
+            // because z_rem(z) is bijective when it only depends on z.
+            if !affine_depends_on_z(x.as_ref())
+                && !affine_depends_on_z(y.as_ref())
+                && !affine_depends_on_xy(z.as_ref())
+            {
+                let target_min = min_z_tree_op(target.as_ref())?;
+                // Rebuild with the same x, y remaps but z eliminated
+                let x_tree = treeop_to_tree(x.as_ref())?;
+                let y_tree = treeop_to_tree(y.as_ref())?;
+                Ok(target_min.remap_xyz(x_tree, y_tree, Tree::constant(0.0)))
+            } else {
+                Err(())
+            }
+        }
+
+        // RemapAffine: convert to RemapAxes and process
+        TreeOp::RemapAffine { target, mat } => {
+            let m = mat.to_homogeneous();
+            let x_rem = build_affine_expr(&m, 0);
+            let y_rem = build_affine_expr(&m, 1);
+            let z_rem = build_affine_expr(&m, 2);
+
+            // If z-remap is constant, substitute and recurse
+            if let Some(zc) = extract_constant(&z_rem) {
+                let substituted = substitute_z(target.as_ref(), zc);
+                return min_z_tree_op(&substituted);
+            }
+
+            // If x,y remaps don't contain Z, and z-remap is pure function of z alone, recurse
+            if !affine_depends_on_z(&x_rem)
+                && !affine_depends_on_z(&y_rem)
+                && !affine_depends_on_xy(&z_rem)
+            {
+                let target_min = min_z_tree_op(target.as_ref())?;
+                let x_tree = treeop_to_tree(&x_rem)?;
+                let y_tree = treeop_to_tree(&y_rem)?;
+                return Ok(target_min.remap_xyz(x_tree, y_tree, Tree::constant(0.0)));
+            }
+
+            Err(())
+        }
+    }
+}
+
+/// Check if a tree contains infinity constants (from degenerate min_z results).
+/// This catches cases like `max(circle, +inf)` where the projection is empty.
+/// Build a TreeOp for one row of an affine matrix: m[row][0]*x + m[row][1]*y + m[row][2]*z + m[row][3]
+fn build_affine_expr(m: &nalgebra::Matrix4<f64>, row: usize) -> TreeOp {
+    use fidget::context::TreeOp;
+    let mut result = TreeOp::Const(0.0);
+    for col in 0..3 {
+        let coeff = m[(row, col)];
+        if (coeff - 1.0).abs() < 1e-12 {
+            // coeff == 1: just add the variable
+            let var = TreeOp::Input(match col {
+                0 => fidget::var::Var::X,
+                1 => fidget::var::Var::Y,
+                _ => fidget::var::Var::Z,
+            });
+            result = TreeOp::Binary(
+                fidget::context::BinaryOpcode::Add,
+                Arc::new(result),
+                Arc::new(var),
+            );
+        } else if (coeff + 1.0).abs() < 1e-12 {
+            // coeff == -1: subtract the variable
+            let var = TreeOp::Input(match col {
+                0 => fidget::var::Var::X,
+                1 => fidget::var::Var::Y,
+                _ => fidget::var::Var::Z,
+            });
+            result = TreeOp::Binary(
+                fidget::context::BinaryOpcode::Sub,
+                Arc::new(result),
+                Arc::new(var),
+            );
+        } else if coeff.abs() > 1e-12 {
+            // General case: multiply variable by coefficient
+            let var = TreeOp::Input(match col {
+                0 => fidget::var::Var::X,
+                1 => fidget::var::Var::Y,
+                _ => fidget::var::Var::Z,
+            });
+            let prod = TreeOp::Binary(
+                fidget::context::BinaryOpcode::Mul,
+                Arc::new(TreeOp::Const(coeff)),
+                Arc::new(var),
+            );
+            result = TreeOp::Binary(
+                fidget::context::BinaryOpcode::Add,
+                Arc::new(result),
+                Arc::new(prod),
+            );
+        }
+    }
+    // Add translation component
+    let trans = m[(row, 3)];
+    if trans.abs() > 1e-12 {
+        result = TreeOp::Binary(
+            fidget::context::BinaryOpcode::Add,
+            Arc::new(result),
+            Arc::new(TreeOp::Const(trans)),
+        );
+    }
+    result
+}
+
+/// Extract a constant value from a TreeOp if it's a pure constant.
+fn extract_constant(tree_op: &TreeOp) -> Option<f64> {
+    match tree_op {
+        TreeOp::Const(c) => Some(*c),
+        _ => None,
+    }
+}
+
+/// Apply a binary opcode to two trees, returning the result tree.
+fn apply_binary(opcode: BinaryOpcode, a: Tree, b: Tree) -> Result<Tree, ()> {
+    use fidget::context::BinaryOpcode;
+    match opcode {
+        BinaryOpcode::Add => Ok(a + b),
+        BinaryOpcode::Sub => Ok(a - b),
+        BinaryOpcode::Mul => Ok(a * b),
+        _ => Err(()),
+    }
+}
+
+/// Substitute Z with a constant value in a tree, returning a new tree.
+fn substitute_z(tree_op: &TreeOp, z_const: f64) -> TreeOp {
+    use fidget::context::TreeOp;
+    match tree_op {
+        TreeOp::Input(fidget::var::Var::Z) => TreeOp::Const(z_const),
+        TreeOp::Input(v) => TreeOp::Input(*v),
+        TreeOp::Const(c) => TreeOp::Const(*c),
+        TreeOp::Binary(op, a, b) => {
+            let new_a = substitute_z_op(a.as_ref(), z_const);
+            let new_b = substitute_z_op(b.as_ref(), z_const);
+            TreeOp::Binary(*op, new_a, new_b)
+        }
+        TreeOp::Unary(op, c) => {
+            let new_c = substitute_z_op(c.as_ref(), z_const);
+            TreeOp::Unary(*op, new_c)
+        }
+        TreeOp::RemapAxes { target, x, y, z } => {
+            let new_target = substitute_z_op(target.as_ref(), z_const);
+            let new_x = substitute_z_op(x.as_ref(), z_const);
+            let new_y = substitute_z_op(y.as_ref(), z_const);
+            let new_z = substitute_z_op(z.as_ref(), z_const);
+            TreeOp::RemapAxes {
+                target: new_target,
+                x: new_x,
+                y: new_y,
+                z: new_z,
+            }
+        }
+        TreeOp::RemapAffine { target, mat } => {
+            let new_target = substitute_z_op(target.as_ref(), z_const);
+            TreeOp::RemapAffine {
+                target: new_target,
+                mat: *mat,
+            }
+        }
+    }
+}
+
+fn substitute_z_op(tree_op: &TreeOp, z_const: f64) -> std::sync::Arc<TreeOp> {
+    std::sync::Arc::new(substitute_z(tree_op, z_const))
+}
+
+/* ── Sampling-based projection helpers ── */
+
+type Segment = ((f64, f64), (f64, f64));
+
+/// Extract a zero-contour polygon from a 2D grid of min_z values using marching squares.
+fn extract_contour_from_grid(
+    grid: &[f64],
+    grid_size: u32,
+    origin_x: f64,
+    origin_y: f64,
+    cell_size_x: f64,
+    cell_size_y: f64,
+) -> Result<PolygonSet, MeshingError> {
+    use geo::coord;
+
+    let n = (grid_size + 1) as usize;
+    if grid.len() != n * n {
+        return Err(MeshingError("Grid size mismatch".into()));
+    }
+
+    // Simple marching squares to extract zero contour
+    let mut segments: Vec<Segment> = Vec::new();
+
+    for iy in 0..grid_size as usize {
+        for ix in 0..grid_size as usize {
+            let idx = iy * n + ix;
+            let v00 = grid[idx];
+            let v10 = grid[idx + 1];
+            let v01 = grid[idx + n];
+            let v11 = grid[idx + n + 1];
+
+            // Determine cell occupancy (negative = inside)
+            let mut mask: u8 = 0;
+            if v00 < 0.0 {
+                mask |= 1;
+            }
+            if v10 < 0.0 {
+                mask |= 2;
+            }
+            if v11 < 0.0 {
+                mask |= 4;
+            }
+            if v01 < 0.0 {
+                mask |= 8;
+            }
+
+            if mask == 0 || mask == 15 {
+                continue; // All outside or all inside
+            }
+
+            let px = origin_x + ix as f64 * cell_size_x;
+            let py = origin_y + iy as f64 * cell_size_y;
+
+            // Interpolate edge crossings
+            let top = lerp_crossing(
+                px,
+                py + cell_size_y,
+                px + cell_size_x,
+                py + cell_size_y,
+                v01,
+                v11,
+            );
+            let bottom = lerp_crossing(px, py, px + cell_size_x, py, v00, v10);
+            let left = lerp_crossing(px, py, px, py + cell_size_y, v00, v01);
+            let right = lerp_crossing(
+                px + cell_size_x,
+                py,
+                px + cell_size_x,
+                py + cell_size_y,
+                v10,
+                v11,
+            );
+
+            // Add segments based on mask
+            match mask {
+                1 | 14 => segments.push((bottom, left)),
+                2 | 13 => segments.push((bottom, right)),
+                3 | 12 => segments.push((left, right)),
+                4 | 11 => segments.push((right, top)),
+                5 | 10 => {
+                    segments.push((bottom, top));
+                    segments.push((left, right));
+                }
+                6 | 9 => segments.push((bottom, top)),
+                7 | 8 => segments.push((left, top)),
+                _ => {}
+            }
+        }
+    }
+
+    // Connect segments into loops
+    let loops = connect_segments_into_loops(&segments, (cell_size_x + cell_size_y) * 0.25);
+
+    if loops.is_empty() {
+        return Err(MeshingError("No contour found in projection".into()));
+    }
+
+    // Build polygons from loops
+    let mut polygons: Vec<Polygon<f64>> = Vec::new();
+    for loop_coords in loops {
+        if loop_coords.len() < 3 {
+            continue;
+        }
+        let line_string = LineString::from(
+            loop_coords
+                .iter()
+                .map(|(x, y)| coord! { x: *x, y: *y })
+                .collect::<Vec<_>>(),
+        );
+        polygons.push(Polygon::new(line_string, Vec::new()));
+    }
+
+    if polygons.is_empty() {
+        return Err(MeshingError("No valid polygons from contour".into()));
+    }
+
+    // Find the largest polygon as exterior, rest are holes
+    let exterior_idx = (0..polygons.len())
+        .max_by(|a, b| {
+            polygons[*a]
+                .signed_area()
+                .abs()
+                .partial_cmp(&polygons[*b].signed_area().abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .unwrap();
+
+    let exterior = polygons.remove(exterior_idx);
+    // Build exterior LineString with correct winding (CCW)
+    let exterior_ls = {
+        let mut coords: Vec<geo::Coord<f64>> = exterior.exterior().coords().cloned().collect();
+        if exterior.signed_area() < 0.0 {
+            coords.reverse();
+        }
+        LineString::from(coords)
+    };
+
+    // Build holes with correct winding (CW)
+    let mut holes: Vec<LineString<f64>> = Vec::new();
+    for hole in polygons {
+        let mut coords: Vec<geo::Coord<f64>> = hole.exterior().coords().cloned().collect();
+        if hole.signed_area() > 0.0 {
+            coords.reverse();
+        }
+        holes.push(LineString::from(coords));
+    }
+
+    // Build final polygon
+    let final_poly = Polygon::new(exterior_ls, holes);
+
+    Ok(PolygonSet(Arc::new(MultiPolygon::new(vec![final_poly]))))
+}
+
+/// Linear interpolation to find zero crossing between two points.
+fn lerp_crossing(x0: f64, y0: f64, x1: f64, y1: f64, v0: f64, v1: f64) -> (f64, f64) {
+    let denom = v1 - v0;
+    if denom.abs() < 1e-12 {
+        ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+    } else {
+        let t = -v0 / denom;
+        (x0 + t * (x1 - x0), y0 + t * (y1 - y0))
+    }
+}
+
+/// Connect line segments into closed loops by snapping nearby endpoints.
+fn connect_segments_into_loops(segments: &[Segment], snap_tol: f64) -> Vec<Vec<(f64, f64)>> {
+    if segments.is_empty() {
+        return Vec::new();
+    }
+
+    // Build adjacency: for each segment endpoint, find matching endpoints
+    let mut used = vec![false; segments.len()];
+    let mut loops: Vec<Vec<(f64, f64)>> = Vec::new();
+
+    for i in 0..segments.len() {
+        if used[i] {
+            continue;
+        }
+        used[i] = true;
+
+        let mut loop_coords = vec![segments[i].0, segments[i].1];
+
+        // Try to extend the loop forward from the last point
+        let mut changed = true;
+        while changed {
+            changed = false;
+            let last = loop_coords.last().unwrap();
+            for j in 0..segments.len() {
+                if used[j] {
+                    continue;
+                }
+                let (a, b) = segments[j];
+                if dist2(*last, a) < snap_tol * snap_tol {
+                    loop_coords.push(b);
+                    used[j] = true;
+                    changed = true;
+                    break;
+                } else if dist2(*last, b) < snap_tol * snap_tol {
+                    loop_coords.push(a);
+                    used[j] = true;
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        // Try to extend backward from the first point
+        changed = true;
+        while changed {
+            changed = false;
+            let first = loop_coords[0];
+            for j in 0..segments.len() {
+                if used[j] {
+                    continue;
+                }
+                let (a, b) = segments[j];
+                if dist2(first, b) < snap_tol * snap_tol {
+                    loop_coords.insert(0, a);
+                    used[j] = true;
+                    changed = true;
+                    break;
+                } else if dist2(first, a) < snap_tol * snap_tol {
+                    loop_coords.insert(0, b);
+                    used[j] = true;
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        loops.push(loop_coords);
+    }
+
+    loops
+}
+
+fn dist2(a: (f64, f64), b: (f64, f64)) -> f64 {
+    let dx = a.0 - b.0;
+    let dy = a.1 - b.1;
+    dx * dx + dy * dy
+}
+
+/// Convert a PolygonSet to an approximate SDF tree.
+///
+/// For convex polygons, uses max of edge half-plane distances (exact SDF).
+/// For non-convex or complex polygons, uses a product-based approximation.
+fn polygon_to_sdf_tree(polygon: &PolygonSet) -> Result<Surface2D, MeshingError> {
+    let mp = &polygon.0;
+    if mp.0.is_empty() {
+        return Err(MeshingError("Empty polygon".into()));
+    }
+
+    // For now, only handle the first polygon (exterior + holes)
+    let poly = &mp.0[0];
+    let exterior = poly.exterior();
+
+    // Build SDF as max of edge half-plane distances for convex polygon
+    let mut coords: Vec<(f64, f64)> = exterior.coords().map(|c| (c.x, c.y)).collect();
+    let n = coords.len();
+
+    if n < 3 {
+        return Err(MeshingError("Polygon has fewer than 3 vertices".into()));
+    }
+
+    // Ensure CCW winding (positive signed area) for correct inward normals
+    let ring_area = poly.signed_area();
+    if ring_area < 0.0 {
+        coords.reverse();
+    }
+
+    // Remove consecutive duplicate points (degenerate edges from marching squares)
+    let mut deduped: Vec<(f64, f64)> = Vec::with_capacity(coords.len());
+    for c in coords {
+        if let Some(last) = deduped.last() {
+            if (c.0 - last.0).abs() > 1e-9 || (c.1 - last.1).abs() > 1e-9 {
+                deduped.push(c);
+            }
+        } else {
+            deduped.push(c);
+        }
+    }
+    coords = deduped;
+
+    // Re-check we still have enough vertices after dedup
+    if coords.len() < 3 {
+        return Err(MeshingError(
+            "Polygon has fewer than 3 unique vertices".into(),
+        ));
+    }
+
+    // Close the loop: ensure first == last point
+    let first = coords[0];
+    let last = *coords.last().unwrap();
+    if (first.0 - last.0).abs() > 1e-9 || (first.1 - last.1).abs() > 1e-9 {
+        coords.push(first);
+    }
+
+    let n = coords.len();
+
+    // Build all edge half-plane SDFs
+    let edge_sdfs: Vec<fidget::context::Tree> = (0..n - 1)
+        .map(|i| edge_halfplane_sdf(&coords[i], &coords[i + 1]))
+        .collect();
+
+    // Combine into a balanced max-tree (O(log n) depth instead of O(n))
+    let sdf_tree = reduce_balanced(&edge_sdfs, |a, b| a.max(b));
+
+    Ok(Surface2D::new(sdf_tree))
+}
+
+/// Reduce a list of trees into a single tree using a binary combiner,
+/// building a balanced tree (O(log n) depth) instead of left-leaning (O(n)).
+fn reduce_balanced(items: &[Tree], combine: impl Fn(Tree, Tree) -> Tree + Copy) -> Tree {
+    if items.len() == 1 {
+        return items[0].clone();
+    }
+    let mid = items.len() / 2;
+    let left = reduce_balanced(&items[..mid], combine);
+    let right = reduce_balanced(&items[mid..], combine);
+    combine(left, right)
+}
+
+/// Compute the signed distance from a point (x,y) to the half-plane defined by edge a->b.
+/// For CCW polygon: negative inside, positive outside (standard SDF convention).
+/// Uses outward normal (right of directed edge for CCW polygon).
+fn edge_halfplane_sdf(a: &(f64, f64), b: &(f64, f64)) -> Tree {
+    let dx = b.0 - a.0;
+    let dy = b.1 - a.1;
+    let len = (dx * dx + dy * dy).sqrt();
+
+    if len < 1e-12 {
+        return Tree::constant(0.0);
+    }
+
+    // Outward normal (right of directed edge for CCW polygon)
+    let nx = dy / len;
+    let ny = -dx / len;
+
+    // Signed distance: (p - a) . n_out
+    // = x * nx + y * ny - (a.0 * nx + a.1 * ny)
+    let x = Tree::x();
+    let y = Tree::y();
+    let offset = -(a.0 * nx + a.1 * ny);
+
+    x * Tree::constant(nx) + y * Tree::constant(ny) + Tree::constant(offset)
+}
 /// Transforms vertices from model space back to world space using model_to_world matrix.
 fn convert_fidget_mesh_to_manifold(
     mesh: fidget::mesh::Mesh,
@@ -452,6 +1557,7 @@ impl Object for Surface3D {
                 Ok(BuiltinFunction::new::<methods::SymmetricDifference>().into())
             }
             "transform" => Ok(BuiltinFunction::new::<methods::Transform>().into()),
+            "project" => Ok(BuiltinFunction::new::<methods::Project>().into()),
             _ => Err(MissingAttributeError {
                 name: attribute.into(),
             }
@@ -480,6 +1586,7 @@ pub mod methods {
     pub struct Difference;
     pub struct SymmetricDifference;
     pub struct Transform;
+    pub struct Project;
 }
 
 pub fn register_surface3d_methods(database: &mut BuiltinCallableDatabase) {
@@ -609,6 +1716,42 @@ pub fn register_surface3d_methods(database: &mut BuiltinCallableDatabase) {
         {
             let result = this.transform(&t.0);
             Ok(result.into())
+        }
+    );
+
+    build_method!(
+        database,
+        methods::Project, "Surface3D::project", (
+            context: &ExecutionContext,
+            this: Surface3D
+        ) -> Value
+        {
+            // Pre-check: warn if shape is unbounded along z
+            if !this.is_bounded_along_z() {
+                context.log.push_message(crate::execution::LogMessage {
+                    origin: context.stack_trace.bottom().clone(),
+                    level: crate::execution::LogLevel::Warning,
+                    message: "Shape is unbounded along the projection axis (z); projection result will likely be empty or degenerate".into(),
+                });
+            }
+
+            let result = this.project()
+                .map_err(|e| StringError(e.to_string()).to_error(context))?;
+            if result.used_sampling() {
+                context.log.push_message(crate::execution::LogMessage {
+                    origin: context.stack_trace.bottom().clone(),
+                    level: crate::execution::LogLevel::Warning,
+                    message: "3D surface projection used sampling fallback (symbolic min_z failed); result is an approximate SDF".into(),
+                });
+            }
+            if result.is_degenerate() {
+                context.log.push_message(crate::execution::LogMessage {
+                    origin: context.stack_trace.bottom().clone(),
+                    level: crate::execution::LogLevel::Warning,
+                    message: "Projection contains infinity — the shape is unbounded along the projection axis (z), so the result is empty. Check for terms like `x - z` in max() that diverge as z varies.".into(),
+                });
+            }
+            Ok(result.into_surface().into())
         }
     );
 }
@@ -787,6 +1930,7 @@ pub fn register_implicits(database: &mut BuiltinCallableDatabase) {
 
 #[cfg(test)]
 mod surface3d_tests {
+    use super::min_z_tree;
     use super::Surface3D;
     use crate::execution::test_run;
     use crate::execution::values::Value;
@@ -1302,5 +2446,226 @@ mod surface3d_tests {
         assert!(result.is_ok());
         let value = result.unwrap();
         assert!(matches!(value, Value::Surface3D(_)));
+    }
+
+    #[test]
+    fn integration_project_sphere() {
+        // Project a sphere to 2D should give a circle
+        let result = test_run("std.implicits.sphere(radius = 5.0m)::project()");
+        if let Err(ref e) = result {
+            eprintln!("project sphere error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_project_cube() {
+        // Project a cube to 2D should give a square
+        let result = test_run("std.implicits.cube(size = 4.0m)::project()");
+        if let Err(ref e) = result {
+            eprintln!("project cube error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_project_box() {
+        // Project a box to 2D should give a rectangle
+        let result = test_run("std.implicits.box(size = {3.0m, 5.0m, 7.0m})::project()");
+        if let Err(ref e) = result {
+            eprintln!("project box error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_project_cylinder() {
+        // Project a cylinder to 2D should give a circle
+        let result = test_run("std.implicits.cylinder(radius = 3.0m, height = 10.0m)::project()");
+        if let Err(ref e) = result {
+            eprintln!("project cylinder error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_project_cone() {
+        // Project a cone to 2D should give a circle (uses sampling fallback)
+        let result = test_run("std.implicits.cone(radius = 3.0m, height = 5.0m)::project()");
+        if let Err(ref e) = result {
+            eprintln!("project cone error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_project_torus() {
+        // Project a torus to 2D should give an annulus (uses sampling fallback)
+        let result =
+            test_run("std.implicits.torus(major_radius = 5.0m, minor_radius = 2.0m)::project()");
+        if let Err(ref e) = result {
+            eprintln!("project torus error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_project_rounded_cube() {
+        // Project a rounded cube to 2D (uses sampling fallback)
+        let result = test_run("std.implicits.rounded_cube(size = 4.0m, radius = 1.0m)::project()");
+        if let Err(ref e) = result {
+            eprintln!("project rounded_cube error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn integration_project_composable() {
+        // Verify projected surface can be used in further operations
+        let result = test_run(
+            "let s = std.implicits.sphere(radius = 3.0m)::project(); \
+             in s::to_polygon()",
+        );
+        if let Err(ref e) = result {
+            eprintln!("project composable error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::PolygonSet(_)));
+    }
+
+    #[test]
+    fn integration_project_translated_union() {
+        // Union of sphere and translated cube should use symbolic path
+        // (translation creates RemapAxes with affine expressions like x*1+y*0+z*0-1)
+        let result = test_run(
+            "(std.implicits.sphere(radius = 1m) + (std.implicits.cube(size = 2m) + {1m, 0m, 0m}))::project()",
+        );
+        if let Err(ref e) = result {
+            eprintln!("project translated union error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+
+        // Verify symbolic path on the full union tree using actual Surface3D::transform
+        let sphere = Surface3D::new({
+            let (x, y, z) = Tree::axes();
+            (x.clone() * x.clone() + y.clone() * y.clone() + z.clone() * z.clone()).sqrt()
+                - Tree::constant(1.0)
+        });
+        let cube = Surface3D::new({
+            let x = Tree::x().abs();
+            let y = Tree::y().abs();
+            let z = Tree::z().abs();
+            x.max(y).max(z) - Tree::constant(1.0)
+        });
+        let translated_cube = cube.transform(
+            &nalgebra::Translation3::new(1.0, 0.0, 0.0).to_homogeneous(),
+        );
+        let union = sphere.union(&translated_cube);
+        assert!(
+            min_z_tree(&union.tree).is_ok(),
+            "Sphere+translated-cube union should use symbolic path (via RemapAxes)"
+        );
+    }
+
+    #[test]
+    fn integration_project_closure_sphere_with_linear_term() {
+        // Closure-based sphere with linear z term: max(sqrt(x^2+y^2+z^2) - 1, x - z)
+        // pow(2) now produces x*x (not (1*x)*x), so Arc::ptr_eq works for min_z_tree
+        let result = test_run(
+            "let \
+             sphere = (p: std.vector3.Length) -> std.scalar.Length: \
+               ((p.x::pow(2) + p.y::pow(2) + p.z::pow(2))::sqrt() - 1.0m)::max(p.x-p.z); \
+             in sphere::to_implicit()::project()",
+        );
+        if let Err(ref e) = result {
+            eprintln!("project closure sphere error: {:?}", e);
+        }
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert!(matches!(value, Value::Surface2D(_)));
+    }
+
+    #[test]
+    fn surface3d_is_bounded_along_z() {
+        use fidget::context::Tree;
+
+        // Bounded: sphere
+        let sphere = Surface3D::new(
+            (Tree::x().clone() * Tree::x().clone()
+                + Tree::y().clone() * Tree::y().clone()
+                + Tree::z().clone() * Tree::z().clone())
+            .sqrt()
+                - Tree::constant(1.0),
+        );
+        assert!(sphere.is_bounded_along_z());
+
+        // Unbounded: min(circle, x - z) - goes to -inf as z -> +inf
+        let unbounded = Surface3D::new(
+            ((Tree::x().clone() * Tree::x().clone() + Tree::y().clone() * Tree::y().clone())
+                .sqrt()
+                - Tree::constant(1.0))
+                .min(Tree::x().clone() - Tree::z()),
+        );
+        assert!(!unbounded.is_bounded_along_z());
+
+        // Bounded: cylinder capped at both ends (finite in z via max)
+        let cylinder = Surface3D::new(
+            ((Tree::x().clone() * Tree::x().clone() + Tree::y().clone() * Tree::y().clone())
+                .sqrt()
+                - Tree::constant(1.0))
+                .max(Tree::z().clone() - Tree::constant(2.0))
+                .max(-Tree::z().clone() - Tree::constant(1.0)),
+        );
+        assert!(cylinder.is_bounded_along_z());
+    }
+
+    #[test]
+    fn surface3d_is_bounded_general() {
+        use fidget::context::Tree;
+
+        // Bounded: sphere
+        let sphere = Surface3D::new(
+            (Tree::x().clone() * Tree::x().clone()
+                + Tree::y().clone() * Tree::y().clone()
+                + Tree::z().clone() * Tree::z().clone())
+            .sqrt()
+                - Tree::constant(1.0),
+        );
+        assert!(sphere.is_bounded());
+
+        // Unbounded: plane (-y) — infinite in x and z
+        let plane = Surface3D::new(-Tree::y());
+        assert!(!plane.is_bounded());
+
+        // Unbounded: infinite cylinder along z
+        let inf_cylinder = Surface3D::new(
+            (Tree::x().clone() * Tree::x().clone() + Tree::y().clone() * Tree::y().clone())
+                .sqrt()
+                - Tree::constant(1.0),
+        );
+        assert!(!inf_cylinder.is_bounded());
+
+        // Bounded: cube
+        let cube = Surface3D::new(
+            Tree::x().abs().max(Tree::y().abs()).max(Tree::z().abs()) - Tree::constant(1.0),
+        );
+        assert!(cube.is_bounded());
     }
 }

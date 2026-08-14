@@ -29,7 +29,37 @@ use fidget::var::Var;
 
 /// Extracts the SDF expression body from a fidget `Tree` as WGSL.
 pub fn emit_sdf_body(tree: &Tree) -> String {
+    let depth = tree_depth(tree);
+    eprintln!("[WGSL] Tree depth: {}", depth);
     emit_expr(tree, &mut HashMap::new())
+}
+
+/// Extracts the SDF expression body for 2D rendering.
+/// Maps Z to 0.0 since 2D shaders use vec2<f32> for position.
+pub fn emit_sdf_body_2d(tree: &Tree) -> String {
+    let depth = tree_depth(tree);
+    eprintln!("[WGSL 2D] Tree depth: {}", depth);
+    let mut var_map = HashMap::new();
+    var_map.insert(Var::Z, "0.0".to_string());
+    emit_expr(tree, &mut var_map)
+}
+
+/// Computes the maximum recursion depth of a tree (for debugging stack overflow).
+fn tree_depth(tree_op: &fidget::context::TreeOp) -> usize {
+    match tree_op {
+        fidget::context::TreeOp::Input(_) | fidget::context::TreeOp::Const(_) => 1,
+        fidget::context::TreeOp::Binary(_, lhs, rhs) => {
+            1 + tree_depth(lhs).max(tree_depth(rhs))
+        }
+        fidget::context::TreeOp::Unary(_, child) => 1 + tree_depth(child),
+        fidget::context::TreeOp::RemapAxes { target, x, y, z } => {
+            1 + [tree_depth(x), tree_depth(y), tree_depth(z), tree_depth(target)]
+                .into_iter()
+                .max()
+                .unwrap_or(0)
+        }
+        fidget::context::TreeOp::RemapAffine { target, .. } => 1 + tree_depth(target),
+    }
 }
 
 /// Converts a fidget `Tree` into the main-pass WGSL shader.
@@ -394,7 +424,18 @@ fn affine_component(
 
 fn f32_from(v: f64) -> String {
     let f = v as f32;
-    if f.fract() == 0.0 && f.abs() < 1000.0 {
+    if f.is_infinite() {
+        // WGSL has no infinity literal; use a large finite value.
+        // For SDF purposes, this is effectively infinite since shapes
+        // are typically within [-100, 100] range.
+        if f > 0.0 {
+            "999999.0".to_string()
+        } else {
+            "-999999.0".to_string()
+        }
+    } else if f.is_nan() {
+        "0.0".to_string()
+    } else if f.fract() == 0.0 && f.abs() < 1000.0 {
         format!("{:.1}", f)
     } else {
         format!("{}", f)
@@ -611,5 +652,96 @@ mod tests {
         );
         // Validate the full module parses and validates with naga
         validate_wgsl(&wgsl, "frag_depth main");
+    }
+
+    #[test]
+    fn test_projected_sphere_plus_cube_depth() {
+        // Reproduce the tree structure from:
+        // (std.implicits.sphere(1m) + (std.implicits.cube(2m) + {1m, 0m, 0m}))::project()
+
+        // min_z of sphere(r=1): sqrt(x² + y²) - 1
+        let x = Tree::x();
+        let y = Tree::y();
+        let min_z_sphere = (x.clone() * x.clone() + y.clone() * y.clone()).sqrt()
+            - Tree::constant(1.0);
+
+        // min_z of cube(s=2) translated by (1,0,0):
+        // RemapAxes(max(|x|-1, |y|-1), x-1, y, -inf)
+        let cx = Tree::x().abs();
+        let cy = Tree::y().abs();
+        let cube_sdf = cx.max(cy); // max(|x|-1, |y|-1) after min_z
+        let translated_cube = cube_sdf.remap_xyz(
+            Tree::x() - Tree::constant(1.0),
+            Tree::y(),
+            Tree::constant(f64::NEG_INFINITY),
+        );
+
+        // Union: min(min_z_sphere, min_z_cube)
+        let result = min_z_sphere.min(translated_cube);
+
+        let depth = tree_depth(&result);
+        eprintln!("[test] Projected sphere+cube tree depth: {}", depth);
+        assert!(
+            depth < 50,
+            "Tree depth {} is too deep for safe recursion",
+            depth
+        );
+
+        // Also verify emit_expr doesn't crash
+        let _wgsl = emit_sdf_body(&result);
+    }
+
+    #[test]
+    fn test_deep_balanced_max_tree_depth() {
+        // Simulate the sampling fallback path: balanced max-tree from many edges
+        let n_edges = 140;
+        let edge_sdfs: Vec<Tree> = (0..n_edges)
+            .map(|i| Tree::x() - Tree::constant(i as f64))
+            .collect();
+
+        // Build balanced max-tree using divide-and-conquer (same as reduce_balanced)
+        fn reduce_balanced(items: &[Tree], combine: impl Fn(Tree, Tree) -> Tree + Copy) -> Tree {
+            if items.len() == 1 {
+                return items[0].clone();
+            }
+            let mid = items.len() / 2;
+            let left = reduce_balanced(&items[..mid], combine);
+            let right = reduce_balanced(&items[mid..], combine);
+            combine(left, right)
+        }
+        let result = reduce_balanced(&edge_sdfs, |a, b| a.max(b));
+
+        let depth = tree_depth(&result);
+        eprintln!(
+            "[test] Balanced max-tree ({} edges) depth: {}",
+            n_edges, depth
+        );
+        assert!(
+            depth <= (n_edges as f64).log2().ceil() as usize + 2,
+            "Balanced tree depth {} should be O(log n), got {}",
+            depth,
+            (n_edges as f64).log2().ceil() as usize + 2
+        );
+
+        // Verify emit_expr handles it
+        let _wgsl = emit_sdf_body(&result);
+    }
+
+    #[test]
+    fn test_left_leaning_max_tree_depth() {
+        // Simulate the OLD left-leaning approach for comparison
+        let n_edges = 140;
+        let mut result = Tree::x() - Tree::constant(0.0);
+        for i in 1..n_edges {
+            result = result.max(Tree::x() - Tree::constant(i as f64));
+        }
+
+        let depth = tree_depth(&result);
+        eprintln!(
+            "[test] Left-leaning max-tree ({} edges) depth: {}",
+            n_edges, depth
+        );
+        // This should be O(n) depth
+        assert!(depth > 100, "Left-leaning tree should be deep: got {}", depth);
     }
 }

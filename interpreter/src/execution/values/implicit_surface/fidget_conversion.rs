@@ -345,8 +345,13 @@ fn handle_method_call(
                 let exp_val = s.node.value.into_inner();
                 if exp_val == exp_val.floor() && (0.0..100.0).contains(&exp_val) {
                     let n = exp_val as usize;
-                    let mut result = Tree::constant(1.0);
-                    for _ in 0..n {
+                    if n == 0 {
+                        return Ok((Tree::constant(1.0), Dimension::zero()));
+                    }
+                    // Start with self_tree (not 1.0) so pow(2) produces x*x, not (1*x)*x.
+                    // This preserves Arc pointer equality for min_z_tree's same-operand detection.
+                    let mut result = self_tree.clone();
+                    for _ in 1..n {
                         result *= self_tree.clone();
                     }
                     return Ok((result, self_dim * (n as i8)));

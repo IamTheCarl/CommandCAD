@@ -88,6 +88,32 @@ impl Surface2D {
         &self.tree
     }
 
+    /// Check if this surface contains infinity constants (from degenerate projections).
+    pub fn is_degenerate_projection(&self) -> bool {
+        super::tree_contains_infinity(&self.tree)
+    }
+
+    /// Check if the shape is closed (finite extent in all directions).
+    /// Returns false if the SDF is negative at large distance along any axis,
+    /// meaning the shape is unbounded (e.g., a half-plane or infinite strip).
+    pub fn is_bounded(&self) -> bool {
+        use fidget::context::Context;
+        let mut ctx = Context::new();
+        let node = ctx.import(&self.tree);
+
+        // Test far along each axis direction (Z not used for 2D, but passed as 0)
+        let d = 1e6_f64;
+        let test_points = [(d, 0.0), (-d, 0.0), (0.0, d), (0.0, -d)];
+
+        for &(x, y) in &test_points {
+            match ctx.eval_xyz(node, x, y, 0.0) {
+                Ok(val) if val < -0.1 => return false,
+                _ => {}
+            }
+        }
+        true
+    }
+
     /// Estimate the bounding box using interval arithmetic.
     /// Returns (min_x, min_y, max_x, max_y) in the shape's coordinate system.
     ///
@@ -1988,10 +2014,26 @@ mod tests {
         let surface = make_circle_surface(1.0);
         let (xmin, ymin, xmax, ymax) = surface.bounding_box_estimate();
         let tol = 0.1;
-        assert!((xmin - (-1.0)).abs() < tol, "xmin: expected ~-1.0, got {:.4}", xmin);
-        assert!((ymin - (-1.0)).abs() < tol, "ymin: expected ~-1.0, got {:.4}", ymin);
-        assert!((xmax - 1.0).abs() < tol, "xmax: expected ~1.0, got {:.4}", xmax);
-        assert!((ymax - 1.0).abs() < tol, "ymax: expected ~1.0, got {:.4}", ymax);
+        assert!(
+            (xmin - (-1.0)).abs() < tol,
+            "xmin: expected ~-1.0, got {:.4}",
+            xmin
+        );
+        assert!(
+            (ymin - (-1.0)).abs() < tol,
+            "ymin: expected ~-1.0, got {:.4}",
+            ymin
+        );
+        assert!(
+            (xmax - 1.0).abs() < tol,
+            "xmax: expected ~1.0, got {:.4}",
+            xmax
+        );
+        assert!(
+            (ymax - 1.0).abs() < tol,
+            "ymax: expected ~1.0, got {:.4}",
+            ymax
+        );
     }
 
     #[test]
@@ -1999,17 +2041,34 @@ mod tests {
         // Circle centered at (5, 3) with radius 1
         let x = Tree::x();
         let y = Tree::y();
-        let tree = ((x.clone() - Tree::constant(5.0_f64)).clone() * (x.clone() - Tree::constant(5.0_f64))
+        let tree = ((x.clone() - Tree::constant(5.0_f64)).clone()
+            * (x.clone() - Tree::constant(5.0_f64))
             + (y.clone() - Tree::constant(3.0_f64)) * (y.clone() - Tree::constant(3.0_f64)))
-            .sqrt()
+        .sqrt()
             - Tree::constant(1.0_f64);
         let surface = Surface2D::new(tree);
         let (xmin, ymin, xmax, ymax) = surface.bounding_box_estimate();
         let tol = 0.15;
-        assert!((xmin - 4.0).abs() < tol, "xmin: expected ~4.0, got {:.4}", xmin);
-        assert!((ymin - 2.0).abs() < tol, "ymin: expected ~2.0, got {:.4}", ymin);
-        assert!((xmax - 6.0).abs() < tol, "xmax: expected ~6.0, got {:.4}", xmax);
-        assert!((ymax - 4.0).abs() < tol, "ymax: expected ~4.0, got {:.4}", ymax);
+        assert!(
+            (xmin - 4.0).abs() < tol,
+            "xmin: expected ~4.0, got {:.4}",
+            xmin
+        );
+        assert!(
+            (ymin - 2.0).abs() < tol,
+            "ymin: expected ~2.0, got {:.4}",
+            ymin
+        );
+        assert!(
+            (xmax - 6.0).abs() < tol,
+            "xmax: expected ~6.0, got {:.4}",
+            xmax
+        );
+        assert!(
+            (ymax - 4.0).abs() < tol,
+            "ymax: expected ~4.0, got {:.4}",
+            ymax
+        );
     }
 
     #[test]
@@ -2019,20 +2078,36 @@ mod tests {
         let y = Tree::y();
         let c1 = ((x.clone() + Tree::constant(10.0_f64)) * (x.clone() + Tree::constant(10.0_f64))
             + y.clone() * y.clone())
-            .sqrt()
+        .sqrt()
             - Tree::constant(1.0_f64);
         let c2 = ((x.clone() - Tree::constant(10.0_f64)) * (x.clone() - Tree::constant(10.0_f64))
             + y.clone() * y.clone())
-            .sqrt()
+        .sqrt()
             - Tree::constant(1.0_f64);
         let tree = c1.min(c2);
         let surface = Surface2D::new(tree);
         let (xmin, ymin, xmax, ymax) = surface.bounding_box_estimate();
         let tol = 0.15;
-        assert!((xmin - (-11.0)).abs() < tol, "xmin: expected ~-11.0, got {:.4}", xmin);
-        assert!((ymin - (-1.0)).abs() < tol, "ymin: expected ~-1.0, got {:.4}", ymin);
-        assert!((xmax - 11.0).abs() < tol, "xmax: expected ~11.0, got {:.4}", xmax);
-        assert!((ymax - 1.0).abs() < tol, "ymax: expected ~1.0, got {:.4}", ymax);
+        assert!(
+            (xmin - (-11.0)).abs() < tol,
+            "xmin: expected ~-11.0, got {:.4}",
+            xmin
+        );
+        assert!(
+            (ymin - (-1.0)).abs() < tol,
+            "ymin: expected ~-1.0, got {:.4}",
+            ymin
+        );
+        assert!(
+            (xmax - 11.0).abs() < tol,
+            "xmax: expected ~11.0, got {:.4}",
+            xmax
+        );
+        assert!(
+            (ymax - 1.0).abs() < tol,
+            "ymax: expected ~1.0, got {:.4}",
+            ymax
+        );
     }
 
     #[test]
@@ -2054,10 +2129,51 @@ mod tests {
         let translated = surface.transform(&t);
         let (xmin, ymin, xmax, ymax) = translated.bounding_box_estimate();
         let tol = 0.15;
-        assert!((xmin - 4.0).abs() < tol, "xmin: expected ~4.0, got {:.4}", xmin);
-        assert!((ymin - 2.0).abs() < tol, "ymin: expected ~2.0, got {:.4}", ymin);
-        assert!((xmax - 6.0).abs() < tol, "xmax: expected ~6.0, got {:.4}", xmax);
-        assert!((ymax - 4.0).abs() < tol, "ymax: expected ~4.0, got {:.4}", ymax);
+        assert!(
+            (xmin - 4.0).abs() < tol,
+            "xmin: expected ~4.0, got {:.4}",
+            xmin
+        );
+        assert!(
+            (ymin - 2.0).abs() < tol,
+            "ymin: expected ~2.0, got {:.4}",
+            ymin
+        );
+        assert!(
+            (xmax - 6.0).abs() < tol,
+            "xmax: expected ~6.0, got {:.4}",
+            xmax
+        );
+        assert!(
+            (ymax - 4.0).abs() < tol,
+            "ymax: expected ~4.0, got {:.4}",
+            ymax
+        );
+    }
+
+    #[test]
+    fn surface2d_is_bounded() {
+        // Bounded: circle
+        let circle = Surface2D::new(
+            (Tree::x().clone() * Tree::x().clone() + Tree::y().clone() * Tree::y().clone())
+                .sqrt()
+                - Tree::constant(1.0),
+        );
+        assert!(circle.is_bounded());
+
+        // Unbounded: half-plane (-y) — infinite in x direction
+        let halfplane = Surface2D::new(-Tree::y());
+        assert!(!halfplane.is_bounded());
+
+        // Bounded: square
+        let square = Surface2D::new(
+            Tree::x().abs().max(Tree::y().abs()) - Tree::constant(1.0),
+        );
+        assert!(square.is_bounded());
+
+        // Unbounded: infinite strip (|y| < 1, infinite in x)
+        let strip = Surface2D::new(Tree::y().abs() - Tree::constant(1.0));
+        assert!(!strip.is_bounded());
     }
 }
 

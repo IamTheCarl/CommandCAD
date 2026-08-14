@@ -578,7 +578,7 @@ fn update_implicit2d_shader(
     };
 
     if command_cad.implicit2d_shader.is_none() {
-        let sdf_body = crate::tree_to_wgsl::emit_sdf_body(surface.tree());
+        let sdf_body = crate::tree_to_wgsl::emit_sdf_body_2d(surface.tree());
         let main_wgsl = tree_to_wgsl_2d_main_from_sdf(&sdf_body);
         let main_shader = Shader::from_wgsl(Cow::Owned(main_wgsl), "implicit_2d_main.wgsl");
         let main_handle = shaders.add(main_shader);

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use common_data_types::Dimension;
+use fidget::context::TreeOp;
 use thiserror::Error;
 
 use crate::compile::{AstNode, Expression};
@@ -13,6 +14,25 @@ pub use surface2d::Surface2D;
 
 pub mod surface3d;
 pub use surface3d::Surface3D;
+
+/// Check if a tree contains infinity constants (from degenerate min_z results).
+fn tree_contains_infinity(tree_op: &TreeOp) -> bool {
+    match tree_op {
+        TreeOp::Const(c) => c.is_infinite(),
+        TreeOp::Input(_) => false,
+        TreeOp::Binary(_, a, b) => {
+            tree_contains_infinity(a.as_ref()) || tree_contains_infinity(b.as_ref())
+        }
+        TreeOp::Unary(_, child) => tree_contains_infinity(child.as_ref()),
+        TreeOp::RemapAxes { target, x, y, z } => {
+            tree_contains_infinity(target.as_ref())
+                || tree_contains_infinity(x.as_ref())
+                || tree_contains_infinity(y.as_ref())
+                || tree_contains_infinity(z.as_ref())
+        }
+        TreeOp::RemapAffine { target, .. } => tree_contains_infinity(target.as_ref()),
+    }
+}
 
 /// Mesh generation settings for implicit surface conversion.
 #[derive(Debug, Clone)]

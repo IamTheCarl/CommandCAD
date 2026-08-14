@@ -42,7 +42,7 @@ use crate::{
 };
 
 use super::{
-    MissingAttributeError, Object, StaticType, StaticTypeName, StructDefinition, ValueType,
+    implicit_surface::{Surface2D, Surface3D}, MissingAttributeError, Object, StaticType, StaticTypeName, StructDefinition, ValueType,
 };
 use enum_downcast::IntoVariant;
 
@@ -853,7 +853,28 @@ pub fn register_closure_methods(database: &mut BuiltinCallableDatabase) {
             context: &ExecutionContext,
             this: UserClosure) -> Value
         {
-            this.to_implicit(context)
+            let result = this.to_implicit(context)?;
+
+            // Validate that implicit surfaces are closed (finite extent)
+            if let Ok(surface) = result.clone().downcast::<Surface3D>(context) {
+                if !surface.is_bounded() {
+                    context.log.push_message(crate::execution::LogMessage {
+                        origin: context.stack_trace.bottom().clone(),
+                        level: crate::execution::LogLevel::Warning,
+                        message: "Implicit surface is not closed (infinite extent in at least one direction). Shapes like planes or infinite cylinders may not mesh correctly.".into(),
+                    });
+                }
+            } else if let Ok(surface) = result.clone().downcast::<Surface2D>(context) {
+                if !surface.is_bounded() {
+                    context.log.push_message(crate::execution::LogMessage {
+                        origin: context.stack_trace.bottom().clone(),
+                        level: crate::execution::LogLevel::Warning,
+                        message: "Implicit surface is not closed (infinite extent in at least one direction). Shapes like half-planes or infinite strips may not mesh correctly.".into(),
+                    });
+                }
+            }
+
+            Ok(result)
         }
     );
 }
