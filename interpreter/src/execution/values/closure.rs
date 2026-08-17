@@ -42,7 +42,8 @@ use crate::{
 };
 
 use super::{
-    implicit_surface::{Surface2D, Surface3D}, MissingAttributeError, Object, StaticType, StaticTypeName, StructDefinition, ValueType,
+    implicit_surface::{Surface2D, Surface3D},
+    MissingAttributeError, Object, StaticType, StaticTypeName, StructDefinition, ValueType,
 };
 use enum_downcast::IntoVariant;
 

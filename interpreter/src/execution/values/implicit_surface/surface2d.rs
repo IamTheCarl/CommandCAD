@@ -2155,8 +2155,7 @@ mod tests {
     fn surface2d_is_bounded() {
         // Bounded: circle
         let circle = Surface2D::new(
-            (Tree::x().clone() * Tree::x().clone() + Tree::y().clone() * Tree::y().clone())
-                .sqrt()
+            (Tree::x().clone() * Tree::x().clone() + Tree::y().clone() * Tree::y().clone()).sqrt()
                 - Tree::constant(1.0),
         );
         assert!(circle.is_bounded());
@@ -2166,9 +2165,7 @@ mod tests {
         assert!(!halfplane.is_bounded());
 
         // Bounded: square
-        let square = Surface2D::new(
-            Tree::x().abs().max(Tree::y().abs()) - Tree::constant(1.0),
-        );
+        let square = Surface2D::new(Tree::x().abs().max(Tree::y().abs()) - Tree::constant(1.0));
         assert!(square.is_bounded());
 
         // Unbounded: infinite strip (|y| < 1, infinite in x)

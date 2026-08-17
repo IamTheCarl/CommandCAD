@@ -48,15 +48,18 @@ pub fn emit_sdf_body_2d(tree: &Tree) -> String {
 fn tree_depth(tree_op: &fidget::context::TreeOp) -> usize {
     match tree_op {
         fidget::context::TreeOp::Input(_) | fidget::context::TreeOp::Const(_) => 1,
-        fidget::context::TreeOp::Binary(_, lhs, rhs) => {
-            1 + tree_depth(lhs).max(tree_depth(rhs))
-        }
+        fidget::context::TreeOp::Binary(_, lhs, rhs) => 1 + tree_depth(lhs).max(tree_depth(rhs)),
         fidget::context::TreeOp::Unary(_, child) => 1 + tree_depth(child),
         fidget::context::TreeOp::RemapAxes { target, x, y, z } => {
-            1 + [tree_depth(x), tree_depth(y), tree_depth(z), tree_depth(target)]
-                .into_iter()
-                .max()
-                .unwrap_or(0)
+            1 + [
+                tree_depth(x),
+                tree_depth(y),
+                tree_depth(z),
+                tree_depth(target),
+            ]
+            .into_iter()
+            .max()
+            .unwrap_or(0)
         }
         fidget::context::TreeOp::RemapAffine { target, .. } => 1 + tree_depth(target),
     }
@@ -662,8 +665,8 @@ mod tests {
         // min_z of sphere(r=1): sqrt(x² + y²) - 1
         let x = Tree::x();
         let y = Tree::y();
-        let min_z_sphere = (x.clone() * x.clone() + y.clone() * y.clone()).sqrt()
-            - Tree::constant(1.0);
+        let min_z_sphere =
+            (x.clone() * x.clone() + y.clone() * y.clone()).sqrt() - Tree::constant(1.0);
 
         // min_z of cube(s=2) translated by (1,0,0):
         // RemapAxes(max(|x|-1, |y|-1), x-1, y, -inf)
@@ -742,6 +745,10 @@ mod tests {
             n_edges, depth
         );
         // This should be O(n) depth
-        assert!(depth > 100, "Left-leaning tree should be deep: got {}", depth);
+        assert!(
+            depth > 100,
+            "Left-leaning tree should be deep: got {}",
+            depth
+        );
     }
 }
