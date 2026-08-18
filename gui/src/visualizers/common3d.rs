@@ -27,6 +27,7 @@ use bevy::{
     {ecs::system::Query, mesh::PrimitiveTopology},
 };
 use interpreter::values::manifold_mesh::ManifoldMesh3D;
+use nalgebra::Matrix4;
 
 const GRID_MAX_EXTENT: f32 = 10.0;
 const GRID_LINE_SCREEN_WIDTH: f32 = 1.0;
@@ -129,37 +130,137 @@ impl ViewState3d {
         toolbar_offset: f32,
         surface: &interpreter::values::Surface3D,
     ) {
-        let (min_x, min_y, min_z, max_x, max_y, max_z) = surface.bounding_box_estimate();
         let camera_rotation = camera_transform.rotation;
         let camera_inverse = camera_rotation.inverse();
 
-        let corners = [
-            Vec3::new(min_x as f32, min_y as f32, min_z as f32),
-            Vec3::new(max_x as f32, min_y as f32, min_z as f32),
-            Vec3::new(min_x as f32, max_y as f32, min_z as f32),
-            Vec3::new(max_x as f32, max_y as f32, min_z as f32),
-            Vec3::new(min_x as f32, min_y as f32, max_z as f32),
-            Vec3::new(max_x as f32, min_y as f32, max_z as f32),
-            Vec3::new(min_x as f32, max_y as f32, max_z as f32),
-            Vec3::new(max_x as f32, max_y as f32, max_z as f32),
+        // Build rotation matrix: world → camera space (Z = view direction).
+        // After rotation, projecting along Z gives the silhouette in camera XY plane.
+        let right = camera_transform.right();
+        let up = camera_transform.up();
+        let forward = -camera_transform.forward();
+
+        let r = Matrix4::<f64>::new(
+            right.x as f64,
+            up.x as f64,
+            forward.x as f64,
+            0.0,
+            right.y as f64,
+            up.y as f64,
+            forward.y as f64,
+            0.0,
+            right.z as f64,
+            up.z as f64,
+            forward.z as f64,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        );
+
+        // Try projection-based fit for tight silhouette framing.
+        // Compute rotated AABB from original shape's bounding box corners so the
+        // octree in critical_z_values() has correct bounds (bounding_box_estimate
+        // fails for rotated shapes that don't contain the origin on sample axes).
+        let (orig_min_x, orig_min_y, orig_min_z, orig_max_x, orig_max_y, orig_max_z) =
+            surface.bounding_box_estimate();
+        let orig_corners = [
+            (orig_min_x, orig_min_y, orig_min_z),
+            (orig_max_x, orig_min_y, orig_min_z),
+            (orig_min_x, orig_max_y, orig_min_z),
+            (orig_max_x, orig_max_y, orig_min_z),
+            (orig_min_x, orig_min_y, orig_max_z),
+            (orig_max_x, orig_min_y, orig_max_z),
+            (orig_min_x, orig_max_y, orig_max_z),
+            (orig_max_x, orig_max_y, orig_max_z),
         ];
 
-        let mut min = Vec3::MAX;
-        let mut max = Vec3::MIN;
-        for corner in corners {
-            let p_local = camera_inverse * corner;
-            min = min.min(p_local);
-            max = max.max(p_local);
+        let mut rot_min_x = f64::INFINITY;
+        let mut rot_min_y = f64::INFINITY;
+        let mut rot_min_z = f64::INFINITY;
+        let mut rot_max_x = f64::NEG_INFINITY;
+        let mut rot_max_y = f64::NEG_INFINITY;
+        let mut rot_max_z = f64::NEG_INFINITY;
+        for &(cx, cy, cz) in &orig_corners {
+            let p = nalgebra::Vector4::new(cx, cy, cz, 1.0);
+            let rp = r * p;
+            rot_min_x = rot_min_x.min(rp.x);
+            rot_min_y = rot_min_y.min(rp.y);
+            rot_min_z = rot_min_z.min(rp.z);
+            rot_max_x = rot_max_x.max(rp.x);
+            rot_max_y = rot_max_y.max(rp.y);
+            rot_max_z = rot_max_z.max(rp.z);
         }
 
-        let size = max - min;
-        let dx = draw_area.x_range().span() / size.x;
-        let dy = draw_area.y_range().span() / size.y;
-        let pixels_per_meter = dx.min(dy);
-        self.set_pixels_per_meter(pixels_per_meter);
+        let rotated = surface.transform(&r).with_bounding_box((
+            rot_min_x, rot_min_y, rot_min_z, rot_max_x, rot_max_y, rot_max_z,
+        ));
+        if let Ok(surface_2d) = rotated.project_to_2d() {
+            // Use polygon contour geometry for tight bounding box instead of
+            // interval arithmetic (which overestimates due to large search ranges).
+            let (min_x, min_y, max_x, max_y) = match surface_2d.to_polygon() {
+                Ok(poly) => {
+                    use interpreter::geo::BoundingRect;
+                    if let Some(rect) = poly.0.bounding_rect() {
+                        let (min, max) = (rect.min(), rect.max());
+                        (min.x, min.y, max.x, max.y)
+                    } else {
+                        // Empty polygon, fall back to AABB
+                        fit_aabb_fallback(
+                            self,
+                            draw_area,
+                            camera_transform,
+                            toolbar_offset,
+                            surface.bounding_box_estimate(),
+                        );
+                        return;
+                    }
+                }
+                Err(_) => {
+                    // to_polygon failed, fall back to AABB
+                    fit_aabb_fallback(
+                        self,
+                        draw_area,
+                        camera_transform,
+                        toolbar_offset,
+                        surface.bounding_box_estimate(),
+                    );
+                    return;
+                }
+            };
 
-        self.offset = camera_rotation * ((min + max) / 2.0)
-            + camera_rotation * Vec3::new(0.0, toolbar_offset / pixels_per_meter / 2.0, 0.0);
+            let center_x = (min_x + max_x) / 2.0;
+            let center_y = (min_y + max_y) / 2.0;
+
+            // Z center from original shape's bounding box in camera space
+            let world_center = Vec3::new(
+                ((orig_min_x + orig_max_x) / 2.0) as f32,
+                ((orig_min_y + orig_max_y) / 2.0) as f32,
+                ((orig_min_z + orig_max_z) / 2.0) as f32,
+            );
+            let z_center = (camera_inverse * world_center).z;
+
+            let center_local = Vec3::new(center_x as f32, center_y as f32, z_center);
+
+            let size_x = (max_x - min_x) as f32;
+            let size_y = (max_y - min_y) as f32;
+            let dx = draw_area.x_range().span() / size_x.max(0.01);
+            let dy = draw_area.y_range().span() / size_y.max(0.01);
+            let pixels_per_meter = dx.min(dy);
+            self.set_pixels_per_meter(pixels_per_meter);
+
+            self.offset = camera_rotation
+                * (center_local + Vec3::new(0.0, toolbar_offset / pixels_per_meter / 2.0, 0.0));
+        } else {
+            // Fall back to AABB-based fit
+            fit_aabb_fallback(
+                self,
+                draw_area,
+                camera_transform,
+                toolbar_offset,
+                surface.bounding_box_estimate(),
+            );
+        }
     }
 
     pub fn snap_to_axis_view(&mut self, axis: AxisView) {
@@ -265,6 +366,47 @@ impl ViewState3d {
                 .clamp(-std::f32::consts::PI, std::f32::consts::PI);
         }
     }
+}
+
+/// AABB-based fit-to-screen fallback for implicit surfaces.
+fn fit_aabb_fallback(
+    view_state: &mut ViewState3d,
+    draw_area: egui::Rect,
+    camera_transform: &Transform,
+    toolbar_offset: f32,
+    bbox: (f64, f64, f64, f64, f64, f64),
+) {
+    let (min_x, min_y, min_z, max_x, max_y, max_z) = bbox;
+    let camera_rotation = camera_transform.rotation;
+    let camera_inverse = camera_rotation.inverse();
+
+    let corners = [
+        Vec3::new(min_x as f32, min_y as f32, min_z as f32),
+        Vec3::new(max_x as f32, min_y as f32, min_z as f32),
+        Vec3::new(min_x as f32, max_y as f32, min_z as f32),
+        Vec3::new(max_x as f32, max_y as f32, min_z as f32),
+        Vec3::new(min_x as f32, min_y as f32, max_z as f32),
+        Vec3::new(max_x as f32, min_y as f32, max_z as f32),
+        Vec3::new(min_x as f32, max_y as f32, max_z as f32),
+        Vec3::new(max_x as f32, max_y as f32, max_z as f32),
+    ];
+
+    let mut min = Vec3::MAX;
+    let mut max = Vec3::MIN;
+    for corner in corners {
+        let p_local = camera_inverse * corner;
+        min = min.min(p_local);
+        max = max.max(p_local);
+    }
+
+    let size = max - min;
+    let dx = draw_area.x_range().span() / size.x.max(0.01);
+    let dy = draw_area.y_range().span() / size.y.max(0.01);
+    let pixels_per_meter = dx.min(dy);
+    view_state.set_pixels_per_meter(pixels_per_meter);
+
+    view_state.offset = camera_rotation * ((min + max) / 2.0)
+        + camera_rotation * Vec3::new(0.0, toolbar_offset / pixels_per_meter / 2.0, 0.0);
 }
 
 fn build_grid_mesh(world_step: f32, line_half_thickness: f32, grid_extent: f32) -> Mesh {

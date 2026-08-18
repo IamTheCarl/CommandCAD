@@ -142,6 +142,12 @@ impl Surface3D {
         self
     }
 
+    /// Create a copy of this surface with a custom bounding box for meshing.
+    pub fn with_bounding_box(mut self, bb: (f64, f64, f64, f64, f64, f64)) -> Self {
+        self.settings.bounding_box = Some(bb);
+        self
+    }
+
     /// Returns a reference to the underlying fidget Tree expression.
     pub fn tree(&self) -> &fidget::context::Tree {
         &self.tree
@@ -465,7 +471,9 @@ impl Surface3D {
             + y * Tree::constant(inv[(2, 1)])
             + z * Tree::constant(inv[(2, 2)])
             + Tree::constant(inv[(2, 3)]);
-        Self::new(self.tree.remap_xyz(new_x, new_y, new_z))
+        let mut result = Self::new(self.tree.remap_xyz(new_x, new_y, new_z));
+        result.settings = self.settings.clone();
+        result
     }
 
     /// Check if the shape is bounded along the z-axis.
@@ -536,6 +544,11 @@ impl Surface3D {
                 Ok(ProjectResult::Slicing(surface))
             }
         }
+    }
+
+    /// Convenience wrapper for `project()` that returns the resulting 2D surface.
+    pub fn project_to_2d(&self) -> Result<Surface2D, MeshingError> {
+        self.project().map(|r| r.into_surface())
     }
 }
 
