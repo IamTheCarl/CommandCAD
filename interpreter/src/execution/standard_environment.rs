@@ -160,6 +160,8 @@ fn build_types(context: &ExecutionContext) -> Dictionary {
         ("String".into(), ValueType::String.into()),
         ("ValueType".into(), ValueType::ValueType.into()),
         ("ManifoldMesh".into(), ValueType::ManifoldMesh3D.into()),
+        ("Surface2D".into(), ValueType::ImplicitSurface2D.into()),
+        ("Surface3D".into(), ValueType::ImplicitSurface3D.into()),
         ("Transform2d".into(), ValueType::Transform2d.into()),
         ("Transform3d".into(), ValueType::Transform3d.into()),
         ("Transform3d".into(), ValueType::Transform3d.into()),

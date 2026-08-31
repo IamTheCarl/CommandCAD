@@ -973,10 +973,13 @@ mod test {
     use super::*;
     use crate::{
         execution::{
-            test_context_custom_database, test_run,
+            run_assert_eq, test_context_custom_database, test_run,
             values::{self, SignedInteger, StructMember, UnsignedInteger},
         },
-        values::value_type::{MissmatchedField, TypeQualificationError},
+        values::{
+            value_type::{MissmatchedField, TypeQualificationError},
+            ValueNone,
+        },
     };
 
     use indexmap::IndexMap;
@@ -995,6 +998,40 @@ mod test {
                     signature: Arc::new(Signature {
                         argument_type: StructDefinition {
                             members: Arc::new(IndexMap::new()),
+                            variadic: false,
+                        },
+                        return_type: ValueType::UnsignedInteger,
+                    }),
+                    captured_values: IndexMap::new(),
+                    expression
+                })
+            }
+            .into()
+        );
+    }
+
+    #[test]
+    fn define_closure_with_captured_value_for_default() {
+        let product = test_run(
+            "let x = std.consts.None; in (input: std.types.Any = x) -> std.types.UInt: 1u",
+        )
+        .unwrap();
+
+        let expression = product.as_userclosure().unwrap().data.expression.clone();
+
+        assert_eq!(
+            product,
+            UserClosure {
+                data: Arc::new(UserClosureInternals {
+                    signature: Arc::new(Signature {
+                        argument_type: StructDefinition {
+                            members: Arc::new(IndexMap::from_iter([(
+                                ArgumentName::Named("input".into()),
+                                StructMember {
+                                    ty: ValueType::Any,
+                                    default: Some(Value::ValueNone(ValueNone)),
+                                },
+                            )])),
                             variadic: false,
                         },
                         return_type: ValueType::UnsignedInteger,
@@ -1079,6 +1116,14 @@ mod test {
         )
         .unwrap();
         assert_eq!(product, values::UnsignedInteger::from(5).into());
+    }
+
+    #[test]
+    fn call_closure_with_captured_value_for_default() {
+        run_assert_eq(
+            "let x = 1m; f = (input: std.scalar.Length = x) -> std.scalar.Length: input; in f()",
+            "1m",
+        );
     }
 
     #[test]

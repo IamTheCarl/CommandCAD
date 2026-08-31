@@ -84,6 +84,11 @@ pub fn find_all_variable_accesses_in_expression(
                 access_collector,
             )?;
             find_all_variable_accesses_in_closure_capture(&ast_node.node, access_collector)?;
+            for argument in ast_node.node.argument_type.node.members.iter() {
+                if let Some(default) = argument.node.default.as_ref() {
+                    find_all_variable_accesses_in_expression(&default.node, access_collector)?;
+                }
+            }
 
             Ok(())
         }
