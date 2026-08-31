@@ -198,11 +198,29 @@ pub fn find_all_variable_accesses_in_expression(
         Expression::ConstraintSet(constraint_set) => {
             find_all_captured_variables_in_constraint_set(&constraint_set.node, access_collector)
         }
+        Expression::Vector2(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node.x.node, access_collector)?;
+            find_all_variable_accesses_in_expression(&ast_node.node.y.node, access_collector)?;
+
+            Ok(())
+        }
+        Expression::Vector3(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node.x.node, access_collector)?;
+            find_all_variable_accesses_in_expression(&ast_node.node.y.node, access_collector)?;
+            find_all_variable_accesses_in_expression(&ast_node.node.z.node, access_collector)?;
+
+            Ok(())
+        }
+        Expression::Vector4(ast_node) => {
+            find_all_variable_accesses_in_expression(&ast_node.node.x.node, access_collector)?;
+            find_all_variable_accesses_in_expression(&ast_node.node.y.node, access_collector)?;
+            find_all_variable_accesses_in_expression(&ast_node.node.z.node, access_collector)?;
+            find_all_variable_accesses_in_expression(&ast_node.node.w.node, access_collector)?;
+
+            Ok(())
+        }
         Expression::Boolean(_)
         | Expression::Scalar(_)
-        | Expression::Vector2(_)
-        | Expression::Vector3(_)
-        | Expression::Vector4(_)
         | Expression::SignedInteger(_)
         | Expression::String(_)
         | Expression::UnsignedInteger(_)

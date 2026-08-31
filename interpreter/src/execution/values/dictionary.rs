@@ -295,7 +295,7 @@ impl Display for DuplicateMemberError {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::execution::{test_run, values};
+    use crate::execution::{run_assert_eq, test_run, values};
 
     #[test]
     fn build_dictionary() {
@@ -420,5 +420,11 @@ mod test {
         assert_eq!(keys[0], &ArgumentName::Positional(0));
         assert_eq!(keys[1], &ArgumentName::Positional(1));
         assert_eq!(keys[2], &ArgumentName::Named("b".into()));
+    }
+
+    #[test]
+    fn dictionary_construction_with_closure_that_captures_value() {
+        run_assert_eq("let positions = [1m, 2m, 3m]; y = 2m; positions = positions::iter()::map((c: std.scalar.Length) -> std.vector2.Length: let x = c; in {x, y}); in positions::collect_list()",
+        "[{1m, 2m}, {2m, 2m}, {3m, 2m}]");
     }
 }
