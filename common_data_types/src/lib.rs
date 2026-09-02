@@ -301,7 +301,7 @@ pub struct ConversionFactor {
 
 impl ConversionFactor {
     pub fn convert_to_base_unit(&self, input: Float) -> Float {
-        input * self.coefficient + self.constant
+        (input + self.constant) * self.coefficient
     }
 
     pub fn convert_from_base_unit(&self, input: Float) -> Float {
