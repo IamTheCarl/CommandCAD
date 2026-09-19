@@ -276,7 +276,7 @@ fn build_implicits(context: &ExecutionContext) -> Dictionary {
         // 3D shapes
         ("sphere".into(), BuiltinFunction::new::<Sphere>().into()),
         ("cube".into(), BuiltinFunction::new::<Cube>().into()),
-        ("box".into(), BuiltinFunction::new::<Box>().into()),
+        ("box".into(), BuiltinFunction::new::<BuildBox>().into()),
         ("cylinder".into(), BuiltinFunction::new::<Cylinder>().into()),
         ("cone".into(), BuiltinFunction::new::<Cone>().into()),
         ("torus".into(), BuiltinFunction::new::<Torus>().into()),

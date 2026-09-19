@@ -9,6 +9,7 @@ use fidget::mesh::{Octree, Settings};
 use fidget::render::CancelToken;
 use fidget::render::ThreadPool;
 use fidget::shape::Shape;
+use nalgebra::Translation3;
 
 use crate::execution::errors::{ExecutionResult, Raise, StrError};
 use crate::execution::values::{
@@ -18,6 +19,7 @@ use crate::execution::values::{
     UnsignedInteger, Value, ValueNone, ValueType, Vector3,
 };
 use crate::execution::ExecutionContext;
+use crate::values::Boolean;
 
 enum ArithmeticInput {
     Vector(Vector3),
@@ -1414,7 +1416,7 @@ pub mod implicits {
     pub struct Cone;
     pub struct Torus;
     pub struct RoundedCube;
-    pub struct Box;
+    pub struct BuildBox;
 }
 
 /// Register builtin implicit shape functions.
@@ -1559,20 +1561,23 @@ pub fn register_implicits(database: &mut BuiltinCallableDatabase) {
 
     build_function!(
         database,
-        implicits::Box, "std.implicits.box", (
+        implicits::BuildBox, "std.implicits.box", (
             context: &ExecutionContext,
-            size: Length3
+            size: Length3,
+            center: Boolean = Boolean(false).into()
         ) -> Value
         {
             let s = size.0.raw_value();
-            // SDF for axis-aligned box centered at origin with per-axis sizes.
-            let half_x = Tree::constant(s.x / 2.0);
-            let half_y = Tree::constant(s.y / 2.0);
-            let half_z = Tree::constant(s.z / 2.0);
             let x = Tree::x().abs();
             let y = Tree::y().abs();
             let z = Tree::z().abs();
-            let tree = (x.clone() - half_x).max(y.clone() - half_y.clone()).max(z.clone() - half_z);
+            let tree = (x.clone() - Tree::constant(s.x / 2.0)).max(y.clone() - Tree::constant(s.y / 2.0)).max(z.clone() - Tree::constant(s.z / 2.0));
+
+            let tree = if center.0 {
+                tree
+            } else {
+                tree.remap_affine(nalgebra::geometry::Affine3(Translation3::from(nalgebra::Vector3::new(s.x, s.y, s.z)).to_homogeneous()))
+            };
             Ok(Surface3D::new(tree).into())
         }
     );
