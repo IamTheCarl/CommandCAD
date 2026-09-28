@@ -8,6 +8,7 @@ use fidget::context::TreeOp;
 use fidget::mesh::{Octree, Settings};
 use fidget::render::CancelToken;
 use fidget::render::ThreadPool;
+use fidget::shape::BoundShape;
 use fidget::shape::Shape;
 use nalgebra::Translation3;
 
@@ -263,6 +264,8 @@ impl Surface3D {
         let node = ctx.import(&scaled_tree);
         let shape: Shape<fidget::jit::JitFunction> = Shape::new(&ctx, node)
             .map_err(|e| MeshingError(format!("Failed to create shape for critical z: {e}")))?;
+        let bound = BoundShape::try_from(shape)
+            .map_err(|e| MeshingError(format!("Failed to bind shape for critical z: {e}")))?;
 
         let settings = Settings {
             depth: self.settings.depth,
@@ -270,7 +273,7 @@ impl Surface3D {
             threads: Some(&ThreadPool::Global),
             cancel: CancelToken::new(),
         };
-        let octree = Octree::build(&shape, &settings)
+        let octree = Octree::build(&bound, &settings)
             .ok_or_else(|| MeshingError("Octree build cancelled or failed".into()))?;
         let mesh = octree.walk_dual();
 
@@ -381,6 +384,8 @@ impl Surface3D {
         let node = ctx.import(&scaled_tree);
         let shape: Shape<fidget::jit::JitFunction> = Shape::new(&ctx, node)
             .map_err(|e| MeshingError(format!("Failed to create shape: {e}")))?;
+        let bound = BoundShape::try_from(shape)
+            .map_err(|e| MeshingError(format!("Failed to bind shape: {e}")))?;
 
         let settings = Settings {
             depth: self.settings.depth,
@@ -389,7 +394,7 @@ impl Surface3D {
             cancel: CancelToken::new(),
         };
 
-        let octree = Octree::build(&shape, &settings)
+        let octree = Octree::build(&bound, &settings)
             .ok_or_else(|| MeshingError("Octree build cancelled or failed".into()))?;
         let mesh = octree.walk_dual();
 
@@ -1576,7 +1581,10 @@ pub fn register_implicits(database: &mut BuiltinCallableDatabase) {
             let tree = if center.0 {
                 tree
             } else {
-                tree.remap_affine(nalgebra::geometry::Affine3(Translation3::from(nalgebra::Vector3::new(s.x, s.y, s.z)).to_homogeneous()))
+                let mat = Translation3::from(nalgebra::Vector3::new(s.x, s.y, s.z)).to_homogeneous();
+                let affine: nalgebra::geometry::Affine3<f64> =
+                    nalgebra::geometry::Transform::from_matrix_unchecked(mat);
+                tree.remap_affine(affine)
             };
             Ok(Surface3D::new(tree).into())
         }
